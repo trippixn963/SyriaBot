@@ -1,0 +1,28 @@
+# Environment
+.env
+*.env
+
+# Data and logs
+data/
+logs/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+ENV/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Temp files
+*.tmp
+*.temp
