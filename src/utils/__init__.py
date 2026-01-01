@@ -4,17 +4,15 @@ from src.utils.http import http_session, DOWNLOAD_TIMEOUT
 from src.utils.footer import (
     FOOTER_TEXT,
     init_footer,
-    refresh_avatar,
     set_footer,
-    get_cached_avatar,
 )
+from src.utils.text import wrap_text
 
 __all__ = [
     "http_session",
     "DOWNLOAD_TIMEOUT",
     "FOOTER_TEXT",
     "init_footer",
-    "refresh_avatar",
     "set_footer",
-    "get_cached_avatar",
+    "wrap_text",
 ]

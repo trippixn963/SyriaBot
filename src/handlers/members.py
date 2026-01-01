@@ -10,10 +10,8 @@ Author: حَـــــنَّـــــا
 import discord
 from discord.ext import commands
 
+from src.core.config import config
 from src.core.logger import log
-
-
-AUTO_ROLE_ID = 1236824194722041876
 
 
 class MembersHandler(commands.Cog):
@@ -28,9 +26,12 @@ class MembersHandler(commands.Cog):
         if member.bot:
             return
 
-        role = member.guild.get_role(AUTO_ROLE_ID)
+        if not config.AUTO_ROLE_ID:
+            return  # Auto-role not configured
+
+        role = member.guild.get_role(config.AUTO_ROLE_ID)
         if not role:
-            log.error(f"Auto-role {AUTO_ROLE_ID} not found")
+            log.error(f"Auto-role {config.AUTO_ROLE_ID} not found")
             return
 
         try:

@@ -27,12 +27,18 @@ _bot_ref: Optional[discord.Client] = None
 
 
 async def _get_developer_avatar(bot: discord.Client) -> Optional[str]:
-    """Fetch developer avatar URL from the configured guild."""
-    if not config.OWNER_ID or not config.GUILD_ID:
+    """Fetch developer avatar URL from the configured or first guild."""
+    if not config.OWNER_ID:
         return None
 
     try:
-        guild = bot.get_guild(config.GUILD_ID)
+        # Use configured guild or fallback to first guild
+        guild = None
+        if config.GUILD_ID:
+            guild = bot.get_guild(config.GUILD_ID)
+        if not guild and bot.guilds:
+            guild = bot.guilds[0]
+
         if not guild:
             return None
 
@@ -42,8 +48,10 @@ async def _get_developer_avatar(bot: discord.Client) -> Optional[str]:
 
         if member:
             return member.display_avatar.url
-    except Exception:
-        pass
+    except Exception as e:
+        log.tree("Avatar Fetch Failed", [
+            ("Error", str(e)[:50]),
+        ], emoji="⚠️")
 
     return None
 
@@ -68,29 +76,6 @@ async def init_footer(bot: discord.Client) -> None:
         _cached_avatar_url = None
 
 
-async def refresh_avatar() -> None:
-    """
-    Refresh the cached avatar URL.
-    Called daily at midnight EST by the scheduler.
-    """
-    global _cached_avatar_url
-    if not _bot_ref:
-        log.tree("Footer Avatar Refresh Skipped", [
-            ("Reason", "Bot reference not set"),
-        ], emoji="⚠️")
-        return
-
-    old_url = _cached_avatar_url
-    try:
-        _cached_avatar_url = await _get_developer_avatar(_bot_ref)
-        changed = old_url != _cached_avatar_url
-        log.tree("Footer Avatar Refreshed", [
-            ("Changed", "Yes" if changed else "No"),
-        ], emoji="REFRESH")
-    except Exception as e:
-        log.error(f"Footer Avatar Refresh Failed: {e}")
-
-
 def set_footer(embed: discord.Embed, avatar_url: Optional[str] = None) -> discord.Embed:
     """
     Set the standard footer on an embed.
@@ -107,15 +92,8 @@ def set_footer(embed: discord.Embed, avatar_url: Optional[str] = None) -> discor
     return embed
 
 
-def get_cached_avatar() -> Optional[str]:
-    """Get the cached avatar URL."""
-    return _cached_avatar_url
-
-
 __all__ = [
     "FOOTER_TEXT",
     "init_footer",
-    "refresh_avatar",
     "set_footer",
-    "get_cached_avatar",
 ]
