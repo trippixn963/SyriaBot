@@ -7,20 +7,20 @@ from typing import TYPE_CHECKING
 import discord
 from discord import ui
 
-from src.core.config import config
+from src.core.colors import COLOR_SUCCESS, COLOR_ERROR, COLOR_WARNING, COLOR_NEUTRAL
 from src.core.logger import log
 from src.services.database import db
+from src.services.webhook_logger import webhook_logger
 from src.utils.footer import set_footer
+from .utils import (
+    is_booster,
+    generate_channel_name,
+    MAX_ALLOWED_USERS_FREE,
+    COLOR_BOOST,
+)
 
 if TYPE_CHECKING:
     from .service import TempVoiceService
-
-
-# Consistent colors
-COLOR_SUCCESS = 0x43b581  # Green
-COLOR_ERROR = 0xf04747    # Red
-COLOR_WARNING = 0xfaa61a  # Orange
-COLOR_NEUTRAL = 0x95a5a6  # Gray
 
 
 class ConfirmView(ui.View):
@@ -32,15 +32,25 @@ class ConfirmView(ui.View):
         self.channel = channel
         self.target = target
         self.confirmed = False
+        self.message: discord.Message = None
 
     async def on_timeout(self):
-        """Handle timeout - cancel by default."""
+        """Handle timeout - disable buttons and update message."""
+        for item in self.children:
+            item.disabled = True
+        if self.message:
+            try:
+                embed = discord.Embed(description="⏳ Confirmation expired", color=COLOR_NEUTRAL)
+                set_footer(embed)
+                await self.message.edit(embed=embed, view=None)
+            except discord.HTTPException:
+                pass
         log.tree("Confirm View Expired", [
             ("Action", self.action),
             ("Channel", self.channel.name if self.channel else "Unknown"),
         ], emoji="⏳")
 
-    @ui.button(label="Confirm", style=discord.ButtonStyle.danger)
+    @ui.button(label="Confirm", style=discord.ButtonStyle.secondary, emoji="<:allow:1455709499792031744>")
     async def confirm(self, interaction: discord.Interaction, button: ui.Button):
         self.confirmed = True
         self.stop()
@@ -71,6 +81,9 @@ class ConfirmView(ui.View):
                     ("By", str(interaction.user)),
                 ], emoji="🗑️")
 
+                # Webhook logging
+                webhook_logger.log_tempvoice(interaction.user, "Delete", channel_name)
+
             elif self.action == "transfer" and self.target:
                 # Validate target still in guild
                 target = interaction.guild.get_member(self.target.id)
@@ -99,21 +112,31 @@ class ConfirmView(ui.View):
                 old_owner = interaction.guild.get_member(channel_info["owner_id"])
                 if old_owner:
                     await channel.set_permissions(old_owner, overwrite=None)
-                await channel.set_permissions(target, connect=True, manage_channels=True, move_members=True, send_messages=True, read_message_history=True)
+                await channel.set_permissions(target, connect=True, manage_channels=True, send_messages=True, read_message_history=True)
                 db.transfer_ownership(channel.id, target.id)
 
+                # Generate channel name for new owner (uses shared utility)
+                channel_name, name_source = generate_channel_name(target, interaction.guild)
+
+                await channel.edit(name=channel_name)
+                db.update_temp_channel(channel.id, name=channel_name)
+
                 embed = discord.Embed(
-                    description=f"🔄 Transferred to **{target.display_name}**",
+                    description=f"🔄 Transferred to **{target.display_name}**\nChannel renamed to `{channel_name}`",
                     color=COLOR_SUCCESS
                 )
                 embed.set_thumbnail(url=target.display_avatar.url)
                 set_footer(embed)
                 await interaction.response.edit_message(embed=embed, view=None)
                 log.tree("Channel Transferred", [
-                    ("Channel", channel.name),
+                    ("Channel", channel_name),
                     ("From", str(interaction.user)),
                     ("To", str(target)),
+                    ("Name Source", name_source),
                 ], emoji="🔄")
+
+                # Webhook logging
+                webhook_logger.log_tempvoice(interaction.user, "Transfer", channel_name, target=target)
 
         except discord.HTTPException as e:
             log.tree("Confirm Action Failed", [
@@ -158,10 +181,20 @@ class UserSelectView(ui.View):
         self.channel = channel
         self.action = action
         self.service = service
+        self.message: discord.Message = None
         self.add_item(UserSelect(channel, action, service))
 
     async def on_timeout(self):
-        """Handle timeout."""
+        """Handle timeout - disable dropdown and update message."""
+        for item in self.children:
+            item.disabled = True
+        if self.message:
+            try:
+                embed = discord.Embed(description="⏳ Selection expired", color=COLOR_NEUTRAL)
+                set_footer(embed)
+                await self.message.edit(embed=embed, view=None)
+            except discord.HTTPException:
+                pass
         log.tree("User Select Expired", [
             ("Action", self.action),
             ("Channel", self.channel.name if self.channel else "Unknown"),
@@ -267,6 +300,58 @@ class UserSelect(ui.UserSelect):
             ], emoji="⚠️")
             return
 
+        # Check if user is already trusted (allow removing)
+        current_trusted = db.get_trusted_list(owner_id)
+        is_already_trusted = user.id in current_trusted
+
+        # Check max allowed limit for non-boosters (only when adding, not removing)
+        if not is_already_trusted and not is_booster(interaction.user):
+            if len(current_trusted) >= MAX_ALLOWED_USERS_FREE:
+                # Build list of currently allowed users
+                allowed_list = []
+                for uid in current_trusted[:5]:  # Show max 5
+                    member = interaction.guild.get_member(uid)
+                    if member:
+                        allowed_list.append(f"• {member.mention}")
+                    else:
+                        allowed_list.append(f"• <@{uid}>")
+
+                allowed_text = "\n".join(allowed_list) if allowed_list else "None"
+
+                embed = discord.Embed(
+                    title="💎 Booster Feature",
+                    description="You've reached the limit for allowed users.",
+                    color=COLOR_BOOST
+                )
+                embed.add_field(
+                    name="📊 Your Usage",
+                    value=f"`{len(current_trusted)}/{MAX_ALLOWED_USERS_FREE}` users allowed",
+                    inline=True
+                )
+                embed.add_field(
+                    name="🔊 Channel",
+                    value=channel.mention,
+                    inline=True
+                )
+                embed.add_field(
+                    name="👥 Currently Allowed",
+                    value=allowed_text,
+                    inline=False
+                )
+                embed.add_field(
+                    name="💎 Want Unlimited?",
+                    value="**Boost the server** to unlock unlimited allowed users and custom channel names!",
+                    inline=False
+                )
+                set_footer(embed)
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                log.tree("Permit Blocked", [
+                    ("Channel", channel.name),
+                    ("User", str(interaction.user)),
+                    ("Reason", f"Max {MAX_ALLOWED_USERS_FREE} reached"),
+                ], emoji="💎")
+                return
+
         # Remove from blocked if was blocked
         db.remove_blocked(owner_id, user.id)
         if db.add_trusted(owner_id, user.id):
@@ -292,6 +377,9 @@ class UserSelect(ui.UserSelect):
                 ("Total Allowed", str(total_allowed)),
                 ("Text Access", "Granted"),
             ], emoji="✅")
+
+            # Webhook logging
+            webhook_logger.log_tempvoice(interaction.user, "Permit", channel.name, target=user)
         else:
             # Already permitted - remove them
             db.remove_trusted(owner_id, user.id)
@@ -321,6 +409,9 @@ class UserSelect(ui.UserSelect):
                 ("Total Allowed", str(total_allowed)),
                 ("Text Access", text_status),
             ], emoji="❌")
+
+            # Webhook logging
+            webhook_logger.log_tempvoice(interaction.user, "Unpermit", channel.name, target=user)
 
         # Update panel to reflect new counts
         if self.service:
@@ -397,6 +488,9 @@ class UserSelect(ui.UserSelect):
                 ("By", str(interaction.user)),
                 ("Total Blocked", str(total_blocked)),
             ], emoji="🚫")
+
+            # Webhook logging
+            webhook_logger.log_tempvoice(interaction.user, "Block", channel.name, target=user)
         else:
             # Already blocked - unblock them
             db.remove_blocked(owner_id, user.id)
@@ -415,6 +509,9 @@ class UserSelect(ui.UserSelect):
                 ("By", str(interaction.user)),
                 ("Total Blocked", str(total_blocked)),
             ], emoji="🔓")
+
+            # Webhook logging
+            webhook_logger.log_tempvoice(interaction.user, "Unblock", channel.name, target=user)
 
         # Update panel to reflect new counts
         if self.service:
@@ -440,6 +537,18 @@ class UserSelect(ui.UserSelect):
             ], emoji="⚠️")
             return
 
+        # Protect moderators from being kicked
+        if config.MOD_ROLE_ID and any(role.id == config.MOD_ROLE_ID for role in user.roles):
+            embed = discord.Embed(description="⚠️ Can't kick moderators", color=COLOR_WARNING)
+            set_footer(embed)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            log.tree("Kick Rejected", [
+                ("Channel", channel.name),
+                ("User", str(user)),
+                ("Reason", "Target is moderator"),
+            ], emoji="⚠️")
+            return
+
         if user.voice and user.voice.channel == channel:
             await user.move_to(None)
             embed = discord.Embed(
@@ -454,6 +563,9 @@ class UserSelect(ui.UserSelect):
                 ("User", str(user)),
                 ("By", str(interaction.user)),
             ], emoji="👢")
+
+            # Webhook logging
+            webhook_logger.log_tempvoice(interaction.user, "Kick", channel.name, target=user)
         else:
             embed = discord.Embed(
                 description=f"⚠️ **{user.display_name}** is not in channel",

@@ -2,18 +2,21 @@
 SyriaBot - Message Handler
 ==========================
 
-Handles message events including the "convert" reply feature.
+Handles message events including the "convert" and "quote" reply features.
 Optimized for speed and efficiency.
 
-Author: Unknown
+Author: حَـــــنَّـــــا
 """
 
-import asyncio
+import io
 import discord
 from discord.ext import commands
 
 from src.core.logger import log
 from src.services.convert_service import convert_service
+from src.services.quote_service import quote_service
+from src.services.rate_limiter import check_rate_limit
+from src.services.webhook_logger import webhook_logger
 from src.views.convert_view import start_convert_editor
 
 # Size limits (bytes)
@@ -29,6 +32,10 @@ class MessageHandler(commands.Cog):
 
     async def _handle_reply_convert(self, message: discord.Message) -> None:
         """Handle replying 'convert' to an image/video - opens interactive editor."""
+        # Check rate limit
+        if not await check_rate_limit(message.author, "convert", message=message):
+            return
+
         ref = message.reference
         if not ref or not ref.message_id:
             return
@@ -60,7 +67,11 @@ class MessageHandler(commands.Cog):
                     source_name = attachment.filename
                     is_video = False
                     break
-                except Exception:
+                except Exception as e:
+                    log.tree("Attachment Read Failed", [
+                        ("File", attachment.filename),
+                        ("Error", str(e)[:50]),
+                    ], emoji="⚠️")
                     continue
 
             elif content_type.startswith("video/"):
@@ -72,7 +83,11 @@ class MessageHandler(commands.Cog):
                     source_name = attachment.filename
                     is_video = True
                     break
-                except Exception:
+                except Exception as e:
+                    log.tree("Attachment Read Failed", [
+                        ("File", attachment.filename),
+                        ("Error", str(e)[:50]),
+                    ], emoji="⚠️")
                     continue
 
             # Fallback: Check by extension
@@ -85,7 +100,11 @@ class MessageHandler(commands.Cog):
                     source_name = attachment.filename
                     is_video = False
                     break
-                except Exception:
+                except Exception as e:
+                    log.tree("Attachment Read Failed", [
+                        ("File", attachment.filename),
+                        ("Error", str(e)[:50]),
+                    ], emoji="⚠️")
                     continue
 
             elif convert_service.is_video(attachment.filename):
@@ -97,7 +116,11 @@ class MessageHandler(commands.Cog):
                     source_name = attachment.filename
                     is_video = True
                     break
-                except Exception:
+                except Exception as e:
+                    log.tree("Attachment Read Failed", [
+                        ("File", attachment.filename),
+                        ("Error", str(e)[:50]),
+                    ], emoji="⚠️")
                     continue
 
         # Check embeds only if no attachment found
@@ -140,6 +163,113 @@ class MessageHandler(commands.Cog):
             original_message=original,
         )
 
+    async def _handle_reply_quote(self, message: discord.Message) -> None:
+        """Handle replying 'quote' to a message - generates quote image."""
+        # Check rate limit
+        if not await check_rate_limit(message.author, "quote", message=message):
+            return
+
+        ref = message.reference
+        if not ref or not ref.message_id:
+            return
+
+        # Use cached message if available (faster)
+        original = ref.cached_message
+        if not original:
+            try:
+                original = await message.channel.fetch_message(ref.message_id)
+            except (discord.NotFound, discord.Forbidden):
+                await message.reply("Couldn't access that message.", mention_author=False)
+                return
+
+        # Check if message has content
+        if not original.content or not original.content.strip():
+            await message.reply("That message has no text to quote.", mention_author=False)
+            return
+
+        # Get author info
+        author = original.author
+        avatar_url = str(author.display_avatar.url)
+
+        # Convert mentions to readable @username format
+        import re
+        content = original.content
+
+        # Replace user mentions <@123> or <@!123> with @username
+        def replace_user_mention(match):
+            user_id = int(match.group(1))
+            if message.guild:
+                member = message.guild.get_member(user_id)
+                if member:
+                    return f"@{member.display_name}"
+            return match.group(0)  # Keep original if not found
+
+        content = re.sub(r'<@!?(\d+)>', replace_user_mention, content)
+
+        # Replace role mentions <@&123> with @rolename
+        def replace_role_mention(match):
+            role_id = int(match.group(1))
+            if message.guild:
+                role = message.guild.get_role(role_id)
+                if role:
+                    return f"@{role.name}"
+            return match.group(0)
+
+        content = re.sub(r'<@&(\d+)>', replace_role_mention, content)
+
+        # Replace channel mentions <#123> with #channelname
+        def replace_channel_mention(match):
+            channel_id = int(match.group(1))
+            channel = self.bot.get_channel(channel_id)
+            if channel:
+                return f"#{channel.name}"
+            return match.group(0)
+
+        content = re.sub(r'<#(\d+)>', replace_channel_mention, content)
+
+        # Get server banner if available
+        banner_url = None
+        guild_id = None
+        if message.guild:
+            guild_id = message.guild.id
+            if message.guild.banner:
+                banner_url = str(message.guild.banner.url)
+
+        log.tree("Quote", [
+            ("User", str(message.author)),
+            ("Author", str(author)),
+            ("Length", f"{len(original.content)} chars"),
+            ("Banner", "Yes" if banner_url else "No"),
+        ], emoji="💬")
+
+        # Format timestamp
+        timestamp = original.created_at.strftime("%b %d, %Y")
+
+        # Generate quote image
+        result = await quote_service.generate_quote(
+            message_content=content,  # Use processed content with readable mentions
+            author_name=author.display_name,
+            avatar_url=avatar_url,
+            username=author.name,
+            guild_id=guild_id,
+            banner_url=banner_url,
+            timestamp=timestamp,
+        )
+
+        if not result.success:
+            await message.reply(f"Failed to generate quote: {result.error}", mention_author=False)
+            return
+
+        # Send the quote image
+        file = discord.File(
+            fp=io.BytesIO(result.image_bytes),
+            filename="discord.gg-syria.png"
+        )
+        await message.reply(file=file, mention_author=False)
+
+        # Webhook logging
+        webhook_logger.log_quote(message.author, str(author), len(original.content))
+
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message) -> None:
         """Handle incoming messages."""
@@ -159,13 +289,15 @@ class MessageHandler(commands.Cog):
         if not message.reference:
             return
 
-        # Quick check: is it "convert"?
-        content = message.content
+        # Quick check: is it "convert" or "quote"?
+        content = message.content.strip().lower()
         if len(content) > 10:  # "convert" is 7 chars, allow some whitespace
             return
 
-        if content.strip().lower() == "convert":
+        if content == "convert":
             await self._handle_reply_convert(message)
+        elif content == "quote":
+            await self._handle_reply_quote(message)
 
 
 async def setup(bot):

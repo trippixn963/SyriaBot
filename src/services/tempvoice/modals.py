@@ -5,16 +5,12 @@ TempVoice - Input Modals
 import discord
 from discord import ui
 
+from src.core.colors import COLOR_SUCCESS, COLOR_ERROR, COLOR_WARNING
 from src.core.logger import log
 from src.services.database import db
+from src.services.webhook_logger import webhook_logger
 from src.utils.footer import set_footer
 from .utils import to_roman
-
-
-# Consistent colors
-COLOR_SUCCESS = 0x43b581  # Green
-COLOR_ERROR = 0xf04747    # Red
-COLOR_WARNING = 0xfaa61a  # Orange
 
 
 class NameModal(ui.Modal, title="Rename Channel"):
@@ -56,6 +52,9 @@ class NameModal(ui.Modal, title="Rename Channel"):
                     ("By", str(interaction.user)),
                     ("Default Saved", "Yes"),
                 ], emoji="✏️")
+
+                # Webhook logging
+                webhook_logger.log_tempvoice(interaction.user, "Rename", new_name)
             else:
                 # Reset to auto-generated name
                 existing_channels = db.get_all_temp_channels(interaction.guild.id)
@@ -80,6 +79,9 @@ class NameModal(ui.Modal, title="Rename Channel"):
                     ("By", str(interaction.user)),
                     ("Default Cleared", "Yes"),
                 ], emoji="🔄")
+
+                # Webhook logging
+                webhook_logger.log_tempvoice(interaction.user, "Name Reset", auto_name)
         except discord.HTTPException as e:
             log.tree("Channel Rename Failed", [
                 ("Channel", self.channel.name),
@@ -130,6 +132,9 @@ class LimitModal(ui.Modal, title="Set User Limit"):
                 ("Limit", limit_text),
                 ("By", str(interaction.user)),
             ], emoji="👥")
+
+            # Webhook logging
+            webhook_logger.log_tempvoice(interaction.user, "Limit", self.channel.name, Limit=limit_text)
         except ValueError:
             log.tree("Limit Change Rejected", [
                 ("Channel", self.channel.name),

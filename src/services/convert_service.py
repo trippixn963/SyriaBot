@@ -32,6 +32,7 @@ except ImportError:
 
 from src.core.logger import log
 from src.utils.http import http_session, DOWNLOAD_TIMEOUT
+from src.utils.text import wrap_text
 
 
 # =============================================================================
@@ -130,6 +131,10 @@ class ConvertService:
                 return font_path
             except (OSError, IOError):
                 continue
+        log.tree("Font Not Found", [
+            ("Searched", ", ".join([p.split("/")[-1] for p in FONT_PATHS])),
+            ("Fallback", "Default bitmap font"),
+        ], emoji="⚠️")
         return None
 
     def _get_font(self, size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
@@ -173,32 +178,6 @@ class ConvertService:
 
         return 12  # Minimum size
 
-    def _wrap_text(self, text: str, font: ImageFont.FreeTypeFont, max_width: int) -> list[str]:
-        """Wrap text to fit within max_width, returning list of lines."""
-        words = text.split()
-        lines = []
-        current_line = []
-
-        for word in words:
-            # Try adding this word to the current line
-            test_line = ' '.join(current_line + [word])
-            bbox = font.getbbox(test_line)
-            line_width = bbox[2] - bbox[0]
-
-            if line_width <= max_width:
-                current_line.append(word)
-            else:
-                # Line is too long, save current line and start new one
-                if current_line:
-                    lines.append(' '.join(current_line))
-                current_line = [word]
-
-        # Add the last line
-        if current_line:
-            lines.append(' '.join(current_line))
-
-        return lines if lines else [text]
-
     def _calculate_font_size_multiline(self, text: str, max_width: int, max_height: int) -> tuple[int, list[str]]:
         """Calculate optimal font size with text wrapping. Returns (font_size, wrapped_lines)."""
         # Start with a large font and decrease until it fits
@@ -206,7 +185,7 @@ class ConvertService:
             font = self._get_font(size)
 
             # Wrap text at this font size
-            lines = self._wrap_text(text, font, max_width)
+            lines = wrap_text(text, font, max_width)
 
             # Calculate total height needed
             line_height = font.getbbox("Ay")[3] - font.getbbox("Ay")[1]
@@ -218,7 +197,7 @@ class ConvertService:
 
         # If nothing fits, use minimum size
         font = self._get_font(12)
-        lines = self._wrap_text(text, font, max_width)
+        lines = wrap_text(text, font, max_width)
         return 12, lines
 
     def _calculate_dynamic_layout(self, text: str, img_width: int, img_height: int) -> tuple[ImageFont.FreeTypeFont, list[str], int, int]:
@@ -243,7 +222,7 @@ class ConvertService:
 
         # Wrap text at this font size
         max_text_width = img_width - (text_padding * 2)
-        lines = self._wrap_text(text, font, max_text_width)
+        lines = wrap_text(text, font, max_text_width)
 
         # If text wraps to multiple lines, we may need to expand bar height
         line_height = font.getbbox("Ay")[3] - font.getbbox("Ay")[1]

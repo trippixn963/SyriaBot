@@ -9,9 +9,11 @@ from discord import ui
 
 from src.core.logger import log
 from src.services.database import db
+from src.services.webhook_logger import webhook_logger
 from src.utils.footer import set_footer
 from .modals import NameModal, LimitModal
 from .selects import UserSelectView, ConfirmView
+from .utils import is_booster, COLOR_BOOST
 
 if TYPE_CHECKING:
     from .service import TempVoiceService
@@ -62,7 +64,7 @@ class ClaimApprovalView(ui.View):
                 ("Error", str(e)),
             ], emoji="❌")
 
-    @ui.button(label="Approve", style=discord.ButtonStyle.success, emoji="✅")
+    @ui.button(label="Approve", style=discord.ButtonStyle.secondary, emoji="<:allow:1455709499792031744>")
     async def approve(self, interaction: discord.Interaction, button: ui.Button):
         try:
             # Only owner can approve
@@ -126,8 +128,8 @@ class ClaimApprovalView(ui.View):
             if old_owner:
                 await channel.set_permissions(old_owner, overwrite=None)
 
-            # Give new owner full permissions
-            await channel.set_permissions(requester, connect=True, manage_channels=True, move_members=True, send_messages=True, read_message_history=True)
+            # Give new owner full permissions (no move_members - use kick button instead)
+            await channel.set_permissions(requester, connect=True, manage_channels=True, send_messages=True, read_message_history=True)
             db.transfer_ownership(channel.id, requester.id)
 
             embed = discord.Embed(
@@ -143,6 +145,9 @@ class ClaimApprovalView(ui.View):
                 ("New Owner", str(requester)),
                 ("Approved By", str(self.owner)),
             ], emoji="👑")
+
+            # Webhook logging
+            webhook_logger.log_tempvoice_claim(requester, self.owner, channel.name, approved=True)
 
             # Update panel
             if self.service:
@@ -176,7 +181,7 @@ class ClaimApprovalView(ui.View):
 
         self.stop()
 
-    @ui.button(label="Deny", style=discord.ButtonStyle.danger, emoji="❌")
+    @ui.button(label="Deny", style=discord.ButtonStyle.secondary, emoji="<:block:1455709662316986539>")
     async def deny(self, interaction: discord.Interaction, button: ui.Button):
         try:
             # Only owner can deny
@@ -203,6 +208,9 @@ class ClaimApprovalView(ui.View):
                 ("Requester", str(self.requester)),
                 ("Denied By", str(self.owner)),
             ], emoji="🚫")
+
+            # Webhook logging
+            webhook_logger.log_tempvoice_claim(self.requester, self.owner, self.channel.name, approved=False)
 
         except discord.HTTPException as e:
             log.tree("Claim Deny Failed", [
@@ -324,6 +332,13 @@ class TempVoiceControlPanel(ui.View):
                 ("By", str(interaction.user)),
             ], emoji="🔒" if new_locked else "🔓")
 
+            # Webhook logging
+            webhook_logger.log_tempvoice(
+                interaction.user,
+                "Lock" if new_locked else "Unlock",
+                channel.name
+            )
+
             # Update panel to reflect new state
             try:
                 await self.service._update_panel(channel)
@@ -381,8 +396,48 @@ class TempVoiceControlPanel(ui.View):
 
     @ui.button(label="Rename", emoji="<:rename:1455709387711578394>", style=discord.ButtonStyle.secondary, custom_id="tv_rename", row=0)
     async def rename_button(self, interaction: discord.Interaction, button: ui.Button):
-        """Rename channel."""
+        """Rename channel - Booster only."""
         try:
+            # Check if user is a booster
+            if not is_booster(interaction.user):
+                # Get their channel info for context
+                channel_id = db.get_owner_channel(interaction.user.id, interaction.guild.id)
+                channel = interaction.guild.get_channel(channel_id) if channel_id else None
+                current_name = channel.name if channel else "No channel"
+
+                embed = discord.Embed(
+                    title="💎 Booster Feature",
+                    description="Channel renaming is a **booster-only** feature!",
+                    color=COLOR_BOOST
+                )
+                if channel:
+                    embed.add_field(
+                        name="🔊 Your Channel",
+                        value=channel.mention,
+                        inline=True
+                    )
+                    embed.add_field(
+                        name="📝 Current Name",
+                        value=f"`{current_name}`",
+                        inline=True
+                    )
+                embed.add_field(
+                    name="💎 Boost to Unlock",
+                    value=(
+                        "• Custom channel names\n"
+                        "• Unlimited allowed users\n"
+                        "• Support the community!"
+                    ),
+                    inline=False
+                )
+                set_footer(embed)
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                log.tree("Rename Blocked", [
+                    ("User", str(interaction.user)),
+                    ("Reason", "Not a booster"),
+                ], emoji="💎")
+                return
+
             channel = await self._get_user_channel(interaction, "Rename")
             if channel:
                 await interaction.response.send_modal(NameModal(channel, interaction.user))
@@ -548,7 +603,7 @@ class TempVoiceControlPanel(ui.View):
 
             # If owner left the server, allow instant claim
             if not owner:
-                await channel.set_permissions(interaction.user, connect=True, manage_channels=True, move_members=True, send_messages=True, read_message_history=True)
+                await channel.set_permissions(interaction.user, connect=True, manage_channels=True, send_messages=True, read_message_history=True)
                 db.transfer_ownership(channel.id, interaction.user.id)
                 embed = discord.Embed(
                     description=f"👑 You now own **{channel.name}**\nPrevious owner left the server",
@@ -561,6 +616,9 @@ class TempVoiceControlPanel(ui.View):
                     ("New Owner", str(interaction.user)),
                     ("Previous Owner", f"User ID {owner_id} (left server)"),
                 ], emoji="👑")
+
+                # Webhook logging
+                webhook_logger.log_tempvoice(interaction.user, "Instant Claim", channel.name)
 
                 if self.service:
                     try:
@@ -600,6 +658,9 @@ class TempVoiceControlPanel(ui.View):
                 ("Requester", str(interaction.user)),
                 ("Owner", str(owner)),
             ], emoji="📨")
+
+            # Webhook logging
+            webhook_logger.log_tempvoice_claim(interaction.user, owner, channel.name, approved=None)
 
         except discord.HTTPException as e:
             log.tree("Claim Button Failed", [

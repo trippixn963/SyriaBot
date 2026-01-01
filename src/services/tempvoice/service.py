@@ -13,7 +13,7 @@ from src.core.config import config
 from src.core.logger import log
 from src.services.database import db
 from src.utils.footer import set_footer
-from .utils import to_roman
+from .utils import generate_channel_name, is_booster
 from .views import TempVoiceControlPanel
 
 if TYPE_CHECKING:
@@ -27,7 +27,7 @@ JOIN_COOLDOWN = 5
 OWNER_LEAVE_TRANSFER_DELAY = 30
 
 # Number of messages before re-sending sticky control panel
-STICKY_PANEL_MESSAGE_THRESHOLD = 5
+STICKY_PANEL_MESSAGE_THRESHOLD = 20
 
 
 class TempVoiceService:
@@ -456,9 +456,9 @@ class TempVoiceService:
         if message.author.bot or not message.guild:
             return
 
-        # Check if this is a temp voice channel
+        # Check if this is a voice channel (handles VoiceChannel and StageChannel)
         channel = message.channel
-        if not isinstance(channel, discord.VoiceChannel):
+        if not hasattr(channel, 'voice_states'):
             return
 
         if not db.is_temp_channel(channel.id):
@@ -469,6 +469,8 @@ class TempVoiceService:
 
         # Check if we've hit the threshold
         if self._message_counts[channel.id] >= STICKY_PANEL_MESSAGE_THRESHOLD:
+            # Reset count immediately to prevent spam if resend fails
+            self._message_counts[channel.id] = 0
             await self._resend_sticky_panel(channel)
 
     async def _resend_sticky_panel(self, channel: discord.VoiceChannel) -> None:
@@ -484,9 +486,6 @@ class TempVoiceService:
                 ("Reason", "Owner not found"),
             ], emoji="⚠️")
             return
-
-        # Reset message count
-        self._message_counts[channel.id] = 0
 
         # Try to delete old panel using cached message ID
         panel_message_id = channel_info.get("panel_message_id")
@@ -653,7 +652,7 @@ class TempVoiceService:
                     new_owner = other_members[0]
                     try:
                         await channel.set_permissions(member, overwrite=None)
-                        await channel.set_permissions(new_owner, connect=True, manage_channels=True, move_members=True, send_messages=True, read_message_history=True)
+                        await channel.set_permissions(new_owner, connect=True, manage_channels=True, send_messages=True, read_message_history=True)
                         db.transfer_ownership(channel.id, new_owner.id)
                         log.tree("Auto-Transfer", [
                             ("Channel", channel.name),
@@ -699,23 +698,12 @@ class TempVoiceService:
                 ("Reason", "Users left server"),
             ], emoji="🧹")
 
-        # Get user settings
+        # Get user settings for default limit
         settings = db.get_user_settings(member.id)
-        default_name = settings.get("default_name") if settings else None
         default_limit = settings.get("default_limit", 0) if settings else 0
 
-        # Generate channel name
-        if default_name:
-            channel_name = default_name
-            name_source = "saved"
-        else:
-            existing_channels = db.get_all_temp_channels(guild.id)
-            channel_num = len(existing_channels) + 1
-            roman = to_roman(channel_num)
-            # Truncate display name if too long (Discord limit is 100 chars)
-            display_name = member.display_name[:80]
-            channel_name = f"{roman}・{display_name}"
-            name_source = "generated"
+        # Generate channel name (uses shared utility)
+        channel_name, name_source = generate_channel_name(member, guild)
 
         log.tree("Creating Channel", [
             ("Owner", str(member)),
@@ -742,11 +730,10 @@ class TempVoiceService:
                     send_messages=False,
                     read_message_history=False,
                 ),
-                # Owner permissions (full access including text)
+                # Owner permissions (full access including text, no move_members - use kick button)
                 member: discord.PermissionOverwrite(
                     connect=True,
                     manage_channels=True,
-                    move_members=True,
                     send_messages=True,
                     read_message_history=True,
                 ),
@@ -994,12 +981,11 @@ class TempVoiceService:
             if old_owner_member:
                 await channel.set_permissions(old_owner_member, overwrite=None)
 
-            # Grant new owner full permissions
+            # Grant new owner full permissions (no move_members - use kick button)
             await channel.set_permissions(
                 new_owner,
                 connect=True,
                 manage_channels=True,
-                move_members=True,
                 send_messages=True,
                 read_message_history=True
             )
@@ -1007,22 +993,8 @@ class TempVoiceService:
             # Update DB ownership
             db.transfer_ownership(channel.id, new_owner.id)
 
-            # Get new owner's saved settings
-            new_settings = db.get_user_settings(new_owner.id)
-            new_name = new_settings.get("default_name") if new_settings else None
-
-            # Rename channel to new owner's saved name (or generate default)
-            if new_name:
-                channel_name = new_name
-                name_source = "saved"
-            else:
-                # Generate default name for new owner
-                existing_channels = db.get_all_temp_channels(guild.id)
-                channel_num = len(existing_channels)
-                roman = to_roman(channel_num)
-                display_name = new_owner.display_name[:80]
-                channel_name = f"{roman}・{display_name}"
-                name_source = "generated"
+            # Generate channel name for new owner (uses shared utility)
+            channel_name, name_source = generate_channel_name(new_owner, guild)
 
             await channel.edit(name=channel_name)
             db.update_temp_channel(channel.id, name=channel_name)

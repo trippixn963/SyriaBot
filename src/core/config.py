@@ -73,6 +73,14 @@ class Config:
 
     # Roles
     MOD_ROLE_ID: int = _get_env_int("SYRIA_MOD_ROLE_ID", 0)
+    AUTO_ROLE_ID: int = _get_env_int("SYRIA_AUTO_ROLE_ID", 0)
+    BOOSTER_ROLE_ID: int = _get_env_int("SYRIA_BOOSTER_ROLE_ID", 0)
+
+    # Webhooks
+    # SYRIA_LOGGING_WEBHOOK_URL - Interaction logging (buttons, commands)
+    # SYRIA_LIVE_LOGS_WEBHOOK_URL - Tree format console logs streaming
+    # SYRIA_ERROR_WEBHOOK_URL - Error-only logs
+    LOGGING_WEBHOOK_URL: str = os.getenv("SYRIA_LOGGING_WEBHOOK_URL", "")
 
     # Database
     DATABASE_PATH: str = str(DATA_DIR / "syria.db")

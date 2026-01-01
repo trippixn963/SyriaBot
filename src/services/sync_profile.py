@@ -8,7 +8,7 @@ Author: حَـــــنَّـــــا
 """
 
 import asyncio
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 import discord
@@ -56,7 +56,7 @@ class ProfileSyncService:
             # Calculate next midnight
             tomorrow = now.date()
             if now.time() >= SYNC_TIME:
-                tomorrow = now.date().replace(day=now.day + 1)
+                tomorrow = now.date() + timedelta(days=1)
 
             next_run = datetime.combine(tomorrow, SYNC_TIME, TIMEZONE)
             wait_seconds = (next_run - now).total_seconds()

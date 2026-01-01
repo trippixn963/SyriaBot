@@ -8,20 +8,20 @@ Supports both images (with live preview) and videos (settings only).
 Author: Unknown
 """
 
+import asyncio
 import io
 import discord
 from discord import ui
 from typing import Optional
 from dataclasses import dataclass
+from PIL import Image, ImageDraw, ImageFont
 
+from src.core.colors import COLOR_SUCCESS, COLOR_ERROR, COLOR_WARNING
 from src.core.logger import log
+from src.services.convert_service import convert_service
+from src.services.webhook_logger import webhook_logger
 from src.utils.footer import set_footer
-
-
-# Consistent colors
-COLOR_SUCCESS = 0x43b581  # Green
-COLOR_ERROR = 0xf04747    # Red
-COLOR_WARNING = 0xfaa61a  # Orange
+from src.utils.text import wrap_text
 
 
 # =============================================================================
@@ -194,7 +194,6 @@ class ConvertView(ui.View):
 
     def _get_image_info(self) -> dict:
         """Get image information."""
-        from PIL import Image
         img = Image.open(io.BytesIO(self.image_data))
         is_animated = getattr(img, 'is_animated', False)
         n_frames = getattr(img, 'n_frames', 1) if is_animated else 1
@@ -210,8 +209,6 @@ class ConvertView(ui.View):
 
     def _process_preview(self) -> bytes:
         """Process image with current settings and return PNG bytes."""
-        from PIL import Image, ImageDraw, ImageFont
-
         # Constants - DYNAMIC sizing like NotSoBot
         BAR_HEIGHT_RATIO = 0.20  # Bar = 20% of image height
         MIN_BAR_HEIGHT = 80  # Minimum bar height
@@ -245,25 +242,6 @@ class ConvertView(ui.View):
                 except (OSError, IOError):
                     pass
             return ImageFont.load_default()
-
-        def wrap_text(text, font, max_width):
-            """Wrap text to fit within max_width, returning list of lines."""
-            words = text.split()
-            lines = []
-            current_line = []
-            for word in words:
-                test_line = ' '.join(current_line + [word])
-                bbox = font.getbbox(test_line)
-                line_width = bbox[2] - bbox[0]
-                if line_width <= max_width:
-                    current_line.append(word)
-                else:
-                    if current_line:
-                        lines.append(' '.join(current_line))
-                    current_line = [word]
-            if current_line:
-                lines.append(' '.join(current_line))
-            return lines if lines else [text]
 
         # Open image
         img = Image.open(io.BytesIO(self.image_data))
@@ -380,7 +358,6 @@ class ConvertView(ui.View):
         """Update the preview image and embed."""
         await interaction.response.defer()
 
-        import asyncio
         self._preview_bytes = await asyncio.to_thread(self._process_preview)
 
         # Create new embed
@@ -434,9 +411,6 @@ class ConvertView(ui.View):
             item.disabled = True
         await interaction.message.edit(view=self)
 
-        import asyncio
-        from src.services.convert_service import convert_service
-
         # Get image info for animated check
         info = self._get_image_info()
         is_animated = info.get("is_animated", False)
@@ -451,13 +425,22 @@ class ConvertView(ui.View):
             self.settings.text_color,
         )
         if not result.success:
+            # Re-enable buttons so user can retry
+            for item in self.children:
+                item.disabled = False
+            await interaction.message.edit(view=self)
+
             embed = discord.Embed(description=f"❌ Failed to process image: {result.error}", color=COLOR_ERROR)
             set_footer(embed)
             await interaction.followup.send(embed=embed, ephemeral=True)
+            log.tree("Convert Image Failed", [
+                ("User", str(interaction.user)),
+                ("Error", result.error[:50] if result.error else "Unknown"),
+            ], emoji="❌")
             return
 
         final_bytes = result.gif_bytes
-        filename = f"converted_{self.source_name.rsplit('.', 1)[0]}.gif"
+        filename = "discord.gg-syria.gif"
 
         file = discord.File(fp=io.BytesIO(final_bytes), filename=filename)
 
@@ -485,6 +468,13 @@ class ConvertView(ui.View):
             ("Color", self.settings.get_preset_name()),
             ("Animated", "Yes" if is_animated else "No"),
         ], emoji="OK")
+
+        # Webhook logging
+        webhook_logger.log_convert(
+            interaction.user,
+            self.source_name,
+            "Animated GIF" if is_animated else "Image"
+        )
 
         self.stop()
 
@@ -540,8 +530,6 @@ class VideoConvertView(ui.View):
         if not self.thumbnail_bytes:
             return None
 
-        from PIL import Image, ImageDraw, ImageFont
-
         # Constants - DYNAMIC sizing like NotSoBot
         BAR_HEIGHT_RATIO = 0.20  # Bar = 20% of image height
         MIN_BAR_HEIGHT = 40  # Minimum for thumbnail
@@ -574,25 +562,6 @@ class VideoConvertView(ui.View):
                 except (OSError, IOError):
                     pass
             return ImageFont.load_default()
-
-        def wrap_text(text, font, max_width):
-            """Wrap text to fit within max_width, returning list of lines."""
-            words = text.split()
-            lines = []
-            current_line = []
-            for word in words:
-                test_line = ' '.join(current_line + [word])
-                bbox = font.getbbox(test_line)
-                line_width = bbox[2] - bbox[0]
-                if line_width <= max_width:
-                    current_line.append(word)
-                else:
-                    if current_line:
-                        lines.append(' '.join(current_line))
-                    current_line = [word]
-            if current_line:
-                lines.append(' '.join(current_line))
-            return lines if lines else [text]
 
         try:
             # Open thumbnail
@@ -693,7 +662,6 @@ class VideoConvertView(ui.View):
         """Update the embed with current settings and regenerate preview."""
         await interaction.response.defer()
 
-        import asyncio
         embed = self.create_embed()
 
         # Regenerate preview with text overlay
@@ -753,8 +721,6 @@ class VideoConvertView(ui.View):
         await interaction.message.edit(view=self)
 
         # Convert video
-        from src.services.convert_service import convert_service
-
         result = await convert_service.convert_video_to_gif(
             video_data=self.video_data,
             text=self.settings.text,
@@ -764,22 +730,27 @@ class VideoConvertView(ui.View):
         )
 
         if not result.success:
-            # Show error
+            # Re-enable buttons so user can retry
+            self._processing = False
+            for item in self.children:
+                item.disabled = False
+
             embed = discord.Embed(
                 title="Conversion Failed",
-                description=result.error or "Unknown error occurred",
-                color=0xFF7BFF  # Pink brand color
+                description=f"{result.error or 'Unknown error occurred'}\n\n*You can try again with different settings.*",
+                color=COLOR_ERROR
             )
             set_footer(embed)
-            await interaction.message.edit(embed=embed, view=None)
+            await interaction.message.edit(embed=embed, view=self)
 
-            log.error(f"Video Convert Failed: {result.error}")
-
-            self.stop()
+            log.tree("Video Convert Failed", [
+                ("User", str(interaction.user)),
+                ("Error", result.error[:50] if result.error else "Unknown"),
+            ], emoji="❌")
             return
 
         # Success - send the GIF
-        filename = f"converted_{self.source_name.rsplit('.', 1)[0]}.gif"
+        filename = "discord.gg-syria.gif"
         file = discord.File(fp=io.BytesIO(result.gif_bytes), filename=filename)
 
         # Send result with user ping
@@ -805,6 +776,13 @@ class VideoConvertView(ui.View):
             ("Text", self.settings.text[:30] if self.settings.text else "(none)"),
             ("Color", self.settings.get_preset_name()),
         ], emoji="OK")
+
+        # Webhook logging
+        webhook_logger.log_convert(
+            interaction.user,
+            self.source_name,
+            "Video"
+        )
 
         self.stop()
 
@@ -848,8 +826,6 @@ async def start_convert_editor(
         is_video: Whether the input is a video file
         original_message: Original message with the media (for deletion if own message)
     """
-    import asyncio
-
     # Determine requester ID based on type
     if isinstance(interaction_or_message, discord.Interaction):
         requester_id = interaction_or_message.user.id
@@ -859,8 +835,6 @@ async def start_convert_editor(
         is_interaction = False
 
     if is_video:
-        from src.services.convert_service import convert_service
-
         # Get video duration to determine preview type
         # Short clips (< 10s) like Tenor/Giphy GIFs get single thumbnail
         # Longer videos get 5-frame preview strip
@@ -897,6 +871,11 @@ async def start_convert_editor(
                 msg = await interaction_or_message.reply(embed=embed, file=file, view=view, mention_author=False)
                 view.message = msg
         else:
+            # Add note about missing preview
+            embed.add_field(name="Preview", value="*Could not generate preview thumbnail*", inline=False)
+            log.tree("Video Preview Failed", [
+                ("Source", source_name[:30]),
+            ], emoji="⚠️")
             if is_interaction:
                 await interaction_or_message.followup.send(embed=embed, view=view)
             else:
