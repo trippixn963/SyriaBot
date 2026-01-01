@@ -106,6 +106,15 @@ class Database:
                 )
             """)
 
+            # Convert command usage tracking
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS convert_usage (
+                    user_id INTEGER PRIMARY KEY,
+                    uses_this_week INTEGER DEFAULT 0,
+                    week_start_timestamp INTEGER NOT NULL
+                )
+            """)
+
             log.success("Database initialized")
 
     # =========================================================================
@@ -386,6 +395,110 @@ class Database:
         with self._get_conn() as conn:
             cur = conn.cursor()
             cur.execute("DELETE FROM text_channels WHERE channel_id = ?", (channel_id,))
+
+    # =========================================================================
+    # Convert Usage Tracking
+    # =========================================================================
+
+    def get_convert_usage(self, user_id: int) -> tuple[int, int]:
+        """
+        Get user's convert usage for this week.
+
+        Returns:
+            (uses_remaining, week_start_timestamp)
+            If user has no record or week has reset, returns (3, current_week_start)
+        """
+        import time
+
+        # Calculate current week start (Monday 00:00 UTC)
+        now = int(time.time())
+        # Get current weekday (0=Monday, 6=Sunday)
+        from datetime import datetime, timezone
+        dt = datetime.fromtimestamp(now, tz=timezone.utc)
+        days_since_monday = dt.weekday()
+        # Set to Monday 00:00:00 UTC
+        week_start = now - (days_since_monday * 86400) - (dt.hour * 3600) - (dt.minute * 60) - dt.second
+
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT uses_this_week, week_start_timestamp FROM convert_usage WHERE user_id = ?", (user_id,))
+            row = cur.fetchone()
+
+            if not row:
+                # New user, hasn't used before
+                return (3, week_start)
+
+            stored_week_start = row["week_start_timestamp"]
+            uses_this_week = row["uses_this_week"]
+
+            # Check if we're in a new week
+            if week_start > stored_week_start:
+                # New week, reset uses
+                return (3, week_start)
+
+            # Same week, return remaining uses
+            return (max(0, 3 - uses_this_week), stored_week_start)
+
+    def record_convert_usage(self, user_id: int) -> int:
+        """
+        Record a convert usage for a user.
+
+        Returns:
+            Number of uses remaining after this use
+        """
+        import time
+        from datetime import datetime, timezone
+
+        now = int(time.time())
+        dt = datetime.fromtimestamp(now, tz=timezone.utc)
+        days_since_monday = dt.weekday()
+        week_start = now - (days_since_monday * 86400) - (dt.hour * 3600) - (dt.minute * 60) - dt.second
+
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+
+            # Check if user exists
+            cur.execute("SELECT uses_this_week, week_start_timestamp FROM convert_usage WHERE user_id = ?", (user_id,))
+            row = cur.fetchone()
+
+            if not row:
+                # New user
+                cur.execute("""
+                    INSERT INTO convert_usage (user_id, uses_this_week, week_start_timestamp)
+                    VALUES (?, 1, ?)
+                """, (user_id, week_start))
+                return 2  # 3 - 1 = 2 remaining
+
+            stored_week_start = row["week_start_timestamp"]
+
+            if week_start > stored_week_start:
+                # New week, reset and record new use
+                cur.execute("""
+                    UPDATE convert_usage SET uses_this_week = 1, week_start_timestamp = ?
+                    WHERE user_id = ?
+                """, (week_start, user_id))
+                return 2  # 3 - 1 = 2 remaining
+
+            # Same week, increment
+            new_uses = row["uses_this_week"] + 1
+            cur.execute("""
+                UPDATE convert_usage SET uses_this_week = ?
+                WHERE user_id = ?
+            """, (new_uses, user_id))
+            return max(0, 3 - new_uses)
+
+    def get_next_reset_timestamp(self) -> int:
+        """Get timestamp for next Monday 00:00 UTC."""
+        import time
+        from datetime import datetime, timezone, timedelta
+
+        now = datetime.now(timezone.utc)
+        days_until_monday = (7 - now.weekday()) % 7
+        if days_until_monday == 0:
+            days_until_monday = 7  # Next Monday, not today
+
+        next_monday = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=days_until_monday)
+        return int(next_monday.timestamp())
 
 
 # Global instance
