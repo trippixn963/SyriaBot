@@ -40,8 +40,8 @@ async def _get_developer_avatar(bot: discord.Client) -> Optional[str]:
         if not member:
             member = await guild.fetch_member(config.OWNER_ID)
 
-        if member and member.avatar:
-            return member.avatar.url
+        if member:
+            return member.display_avatar.url
     except Exception:
         pass
 
