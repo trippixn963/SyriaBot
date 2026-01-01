@@ -7,7 +7,14 @@ from discord import ui
 
 from src.core.logger import log
 from src.services.database import db
+from src.utils.footer import set_footer
 from .utils import to_roman
+
+
+# Consistent colors
+COLOR_SUCCESS = 0x43b581  # Green
+COLOR_ERROR = 0xf04747    # Red
+COLOR_WARNING = 0xfaa61a  # Orange
 
 
 class NameModal(ui.Modal, title="Rename Channel"):
@@ -37,10 +44,12 @@ class NameModal(ui.Modal, title="Rename Channel"):
                 await self.channel.edit(name=new_name)
                 db.update_temp_channel(self.channel.id, name=new_name)
                 db.save_user_settings(interaction.user.id, default_name=new_name)
-                await interaction.response.send_message(
-                    f"Renamed to **{new_name}**\nThis will be your default name for future VCs.",
-                    ephemeral=True
+                embed = discord.Embed(
+                    description=f"✏️ Renamed to **{new_name}**\nThis will be your default name for future VCs",
+                    color=COLOR_SUCCESS
                 )
+                set_footer(embed)
+                await interaction.response.send_message(embed=embed, ephemeral=True)
                 log.tree("Channel Renamed", [
                     ("From", old_name),
                     ("To", new_name),
@@ -59,10 +68,12 @@ class NameModal(ui.Modal, title="Rename Channel"):
                 db.update_temp_channel(self.channel.id, name=auto_name)
                 # Clear saved default name
                 db.save_user_settings(interaction.user.id, default_name=None)
-                await interaction.response.send_message(
-                    f"Reset to **{auto_name}**\nFuture VCs will use auto-naming.",
-                    ephemeral=True
+                embed = discord.Embed(
+                    description=f"🔄 Reset to **{auto_name}**\nFuture VCs will use auto-naming",
+                    color=COLOR_SUCCESS
                 )
+                set_footer(embed)
+                await interaction.response.send_message(embed=embed, ephemeral=True)
                 log.tree("Channel Name Reset", [
                     ("From", old_name),
                     ("To", auto_name),
@@ -75,7 +86,9 @@ class NameModal(ui.Modal, title="Rename Channel"):
                 ("By", str(interaction.user)),
                 ("Error", str(e)),
             ], emoji="❌")
-            await interaction.response.send_message(f"Failed: {e}", ephemeral=True)
+            embed = discord.Embed(description="❌ Failed to rename channel", color=COLOR_ERROR)
+            set_footer(embed)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
 class LimitModal(ui.Modal, title="Set User Limit"):
@@ -98,13 +111,20 @@ class LimitModal(ui.Modal, title="Set User Limit"):
         try:
             limit = int(self.limit_input.value)
             if limit < 0 or limit > 99:
-                await interaction.response.send_message("Must be 0-99", ephemeral=True)
+                embed = discord.Embed(description="⚠️ Must be 0-99", color=COLOR_WARNING)
+                set_footer(embed)
+                await interaction.response.send_message(embed=embed, ephemeral=True)
                 return
             await self.channel.edit(user_limit=limit)
             db.update_temp_channel(self.channel.id, user_limit=limit)
             db.save_user_settings(interaction.user.id, default_limit=limit)
-            limit_text = "**unlimited**" if limit == 0 else f"**{limit} users**"
-            await interaction.response.send_message(f"Limit set to {limit_text}\nThis will be your default for future VCs.", ephemeral=True)
+            limit_text = "unlimited" if limit == 0 else f"{limit} users"
+            embed = discord.Embed(
+                description=f"👥 Limit set to **{limit_text}**\nThis will be your default for future VCs",
+                color=COLOR_SUCCESS
+            )
+            set_footer(embed)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
             log.tree("Limit Changed", [
                 ("Channel", self.channel.name),
                 ("Limit", limit_text),
@@ -117,11 +137,15 @@ class LimitModal(ui.Modal, title="Set User Limit"):
                 ("Input", self.limit_input.value),
                 ("Reason", "Invalid number"),
             ], emoji="⚠️")
-            await interaction.response.send_message("Enter a valid number", ephemeral=True)
+            embed = discord.Embed(description="⚠️ Enter a valid number", color=COLOR_WARNING)
+            set_footer(embed)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
         except discord.HTTPException as e:
             log.tree("Limit Change Failed", [
                 ("Channel", self.channel.name),
                 ("By", str(interaction.user)),
                 ("Error", str(e)),
             ], emoji="❌")
-            await interaction.response.send_message(f"Failed: {e}", ephemeral=True)
+            embed = discord.Embed(description="❌ Failed to set limit", color=COLOR_ERROR)
+            set_footer(embed)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
