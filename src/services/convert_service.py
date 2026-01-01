@@ -425,7 +425,7 @@ class ConvertService:
         bar_color: tuple = BAR_COLOR,
         text_color: tuple = TEXT_COLOR,
     ) -> ConvertResult:
-        """Process animated GIF, preserving all frames."""
+        """Process animated GIF, preserving colors and quality."""
         try:
             frames = []
             durations = []
@@ -461,7 +461,10 @@ class ConvertService:
                 else:
                     start_y = orig_height + (bar_height - total_text_height) // 2
 
-            # Process each frame
+            # Calculate new dimensions
+            new_height = orig_height + bar_height if has_text else orig_height
+
+            # Process each frame - use RGBA to preserve colors better
             frame_count = 0
             try:
                 while True:
@@ -469,13 +472,13 @@ class ConvertService:
                     duration = img.info.get('duration', 100)
                     durations.append(duration)
 
-                    # Convert frame to RGB
-                    frame = img.convert("RGB")
+                    # Convert frame to RGBA (preserves colors better than RGB)
+                    frame = img.convert("RGBA")
 
                     if has_text:
-                        # Create new frame with bar
-                        new_height = orig_height + bar_height
-                        new_frame = Image.new("RGB", (orig_width, new_height), bar_color)
+                        # Create new frame with bar (use RGBA with full opacity bar)
+                        bar_color_rgba = bar_color + (255,)  # Add alpha
+                        new_frame = Image.new("RGBA", (orig_width, new_height), bar_color_rgba)
 
                         # Paste frame in correct position
                         if position == "top":
@@ -509,24 +512,31 @@ class ConvertService:
             if not frames:
                 return ConvertResult(success=False, error="No frames found in GIF")
 
-            # Save as animated GIF
+            # Convert RGBA frames to P (palette) mode with better quantization
+            # This preserves colors much better than direct RGB conversion
+            palette_frames = []
+            for frame in frames:
+                # Quantize with maximum colors and better dithering
+                p_frame = frame.convert("P", palette=Image.Palette.ADAPTIVE, colors=256)
+                palette_frames.append(p_frame)
+
+            # Save as animated GIF with proper disposal
             output = io.BytesIO()
-            frames[0].save(
+            palette_frames[0].save(
                 output,
                 format="GIF",
                 save_all=True,
-                append_images=frames[1:],
+                append_images=palette_frames[1:],
                 duration=durations,
                 loop=0,
-                optimize=False,
+                disposal=2,  # Clear frame before rendering next (prevents ghosting)
             )
             result_bytes = output.getvalue()
 
-            final_height = orig_height + bar_height if has_text else orig_height
             log.tree("Animated GIF Convert Complete", [
                 ("Frames", frame_count),
                 ("Size", f"{len(result_bytes) / 1024:.1f} KB"),
-                ("Dimensions", f"{orig_width}x{final_height}"),
+                ("Dimensions", f"{orig_width}x{new_height}"),
                 ("Has Text", "Yes" if has_text else "No"),
             ], emoji="OK")
 
