@@ -62,6 +62,12 @@ class Config:
         default_factory=lambda: _get_env_int_set("SYRIA_VC_PROTECTED_IDS", "")
     )
 
+    # Ignored channels (no permission changes) - comma-separated IDs
+    # Use for channels managed by other bots (e.g., Quran VC)
+    VC_IGNORED_CHANNELS: FrozenSet[int] = field(
+        default_factory=lambda: _get_env_int_set("SYRIA_VC_IGNORED_IDS", "1453386475457740860")
+    )
+
     # Cleanup settings
     VC_CLEANUP_INTERVAL: int = _get_env_int("SYRIA_VC_CLEANUP_INTERVAL", 300)  # 5 minutes
 

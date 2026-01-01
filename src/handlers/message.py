@@ -147,6 +147,13 @@ class MessageHandler(commands.Cog):
         if message.author.bot:
             return
 
+        # Handle TempVoice sticky panel (runs for all non-bot messages)
+        if hasattr(self.bot, 'tempvoice') and self.bot.tempvoice:
+            try:
+                await self.bot.tempvoice.on_message(message)
+            except Exception as e:
+                log.warning(f"TempVoice on_message error: {e}")
+
         if not message.reference:
             return
 
