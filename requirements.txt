@@ -1,2 +1,65 @@
-discord.py>=2.3.0
+# SyriaBot Requirements
+# =====================
+#
+# This file contains all Python dependencies required to run SyriaBot.
+# Install with: pip install -r requirements.txt
+#
+# Dependencies are organized by functionality for easy maintenance.
+
+# Core Discord API Library
+# =========================
+# Using latest master branch for reconnection fixes and latest features
+discord.py @ git+https://github.com/Rapptz/discord.py@master
+# Required for Discord voice functionality
+PyNaCl>=1.5.0
+
+# Environment Configuration
+# ==========================
+# Loads environment variables from .env file (DISCORD_TOKEN, etc.)
 python-dotenv>=1.0.0
+
+# Image Processing
+# =================
+# PIL/Pillow for image manipulation, text rendering, GIF frame processing
+# Used by convert command for adding text bars to images
+Pillow>=10.0.0
+
+# ImageMagick Bindings (Primary GIF Engine)
+# ==========================================
+# Wand provides Python bindings to ImageMagick
+# Used for high-quality animated GIF processing (NotSoBot method)
+# Preserves colors and quality much better than Pillow alone
+# Requires ImageMagick system package: apt install imagemagick libmagickwand-dev
+Wand>=0.6.0
+
+# HTTP Client for API Requests
+# =============================
+# Asynchronous HTTP client for fetching media from URLs
+# Used by convert command for URL-based image/video fetching
+aiohttp>=3.9.0
+
+# Enhanced Logging & Output
+# ==========================
+# Provides colored terminal output for better development experience
+# Used by the custom logger for visual distinction of log levels
+colorama>=0.4.6
+
+# Process Management & Instance Locking
+# =====================================
+# Used to prevent multiple bot instances from running
+# Provides process monitoring and PID-based locking
+psutil>=7.0.0
+
+# =============================================================================
+# System Dependencies (not pip installable)
+# =============================================================================
+#
+# The following must be installed via system package manager:
+#
+# FFmpeg (for video processing):
+#   apt install ffmpeg
+#
+# ImageMagick (for Wand/GIF processing):
+#   apt install imagemagick libmagickwand-dev
+#
+# =============================================================================
