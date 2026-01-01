@@ -109,7 +109,9 @@ class ConvertService:
                 self._font_cache[size] = ImageFont.truetype(self._font_path, size)
             log.success(f"Convert Service initialized (font: {Path(self._font_path).name})")
         else:
-            log.warning("Convert Service initialized (using default font)")
+            log.tree("Convert Service Initialized", [
+                ("Font", "Default (no custom font found)"),
+            ], emoji="⚠️")
 
     def _find_font(self) -> Optional[str]:
         """Find an available font on the system."""
@@ -262,7 +264,9 @@ class ConvertService:
 
                 return await resp.read()
         except Exception as e:
-            log.warning(f"Failed to fetch image: {e}")
+            log.tree("Fetch Image Failed", [
+                ("Error", str(e)),
+            ], emoji="❌")
             return None
 
     async def convert(
@@ -584,7 +588,9 @@ class ConvertService:
                 fps=fps
             )
         except Exception as e:
-            log.warning(f"Failed to get video info: {e}")
+            log.tree("Get Video Info Failed", [
+                ("Error", str(e)),
+            ], emoji="❌")
             return None
 
     # FFmpeg filter mappings for video effects
@@ -788,7 +794,9 @@ class ConvertService:
 
             result = subprocess.run(palette_cmd, capture_output=True, timeout=120)
             if result.returncode != 0:
-                log.warning(f"Palette generation failed: {result.stderr.decode()[:200]}")
+                log.tree("Palette Generation Failed", [
+                    ("Error", result.stderr.decode()[:100]),
+                ], emoji="⚠️")
                 # Fall back to no palette
                 palette_path.unlink(missing_ok=True)
 
@@ -874,7 +882,9 @@ class ConvertService:
             return None
 
         except Exception as e:
-            log.warning(f"Failed to extract thumbnail: {e}")
+            log.tree("Extract Thumbnail Failed", [
+                ("Error", str(e)),
+            ], emoji="❌")
             return None
         finally:
             # Cleanup
@@ -960,7 +970,9 @@ class ConvertService:
             return output.getvalue()
 
         except Exception as e:
-            log.warning(f"Failed to extract preview strip: {e}")
+            log.tree("Extract Preview Strip Failed", [
+                ("Error", str(e)),
+            ], emoji="❌")
             return None
         finally:
             # Cleanup
@@ -984,7 +996,9 @@ class ConvertService:
             info = self._get_video_info(str(input_path))
             return info.duration if info else None
         except Exception as e:
-            log.warning(f"Failed to get video duration: {e}")
+            log.tree("Get Video Duration Failed", [
+                ("Error", str(e)),
+            ], emoji="❌")
             return None
         finally:
             try:
@@ -1017,7 +1031,10 @@ class ConvertService:
 
                 return await resp.read()
         except Exception as e:
-            log.warning(f"Failed to fetch media: {e}")
+            log.tree("Fetch Media Failed", [
+                ("URL", url[:50]),
+                ("Error", str(e)),
+            ], emoji="❌")
             return None
 
 
