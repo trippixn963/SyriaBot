@@ -19,6 +19,13 @@ from discord.ext import commands
 from src.core.logger import log
 from src.services.convert_service import convert_service
 from src.views.convert_view import start_convert_editor
+from src.utils.footer import set_footer
+
+
+# Consistent colors
+COLOR_SUCCESS = 0x43b581  # Green
+COLOR_ERROR = 0xf04747    # Red
+COLOR_WARNING = 0xfaa61a  # Orange
 
 
 # =============================================================================
@@ -102,10 +109,9 @@ class ConvertCog(commands.Cog):
 
         # Validate input - need either attachment or URL
         if not media and not url:
-            await interaction.followup.send(
-                "Please provide an image/video attachment or URL.",
-                ephemeral=True
-            )
+            embed = discord.Embed(description="⚠️ Please provide an image/video attachment or URL", color=COLOR_WARNING)
+            set_footer(embed)
+            await interaction.followup.send(embed=embed, ephemeral=True)
             return
 
         # Get media data
@@ -126,30 +132,31 @@ class ConvertCog(commands.Cog):
                 elif convert_service.is_video(media.filename):
                     is_video = True
                 else:
-                    await interaction.followup.send(
-                        "The attachment must be an image (PNG, JPG, GIF, WebP) or video (MP4, MOV, WebM).",
-                        ephemeral=True
-                    )
+                    embed = discord.Embed(description="⚠️ Attachment must be an image (PNG, JPG, GIF, WebP) or video (MP4, MOV, WebM)", color=COLOR_WARNING)
+                    set_footer(embed)
+                    await interaction.followup.send(embed=embed, ephemeral=True)
                     return
 
             # Check file size
             max_size = 25 * 1024 * 1024 if is_video else 8 * 1024 * 1024
             if media.size > max_size:
-                await interaction.followup.send(
-                    f"File too large. Maximum size is {25 if is_video else 8}MB.",
-                    ephemeral=True
-                )
+                embed = discord.Embed(description=f"⚠️ File too large. Maximum size is {25 if is_video else 8}MB", color=COLOR_WARNING)
+                set_footer(embed)
+                await interaction.followup.send(embed=embed, ephemeral=True)
                 return
 
             try:
                 media_data = await media.read()
                 source_name = media.filename
             except Exception as e:
-                log.warning(f"Failed to read attachment: {e}")
-                await interaction.followup.send(
-                    "Failed to read the attachment. Please try again.",
-                    ephemeral=True
-                )
+                log.tree("Attachment Read Failed", [
+                    ("User", str(interaction.user)),
+                    ("File", media.filename),
+                    ("Error", str(e)),
+                ], emoji="❌")
+                embed = discord.Embed(description="❌ Failed to read attachment. Please try again", color=COLOR_ERROR)
+                set_footer(embed)
+                await interaction.followup.send(embed=embed, ephemeral=True)
                 return
 
         elif url:
@@ -166,11 +173,12 @@ class ConvertCog(commands.Cog):
 
             # Validate URL format
             if not is_direct_media and not is_supported_host:
-                await interaction.followup.send(
-                    "Invalid URL. Supported: direct media URLs (.png, .jpg, .gif, .mp4) "
-                    "or links from Tenor, Giphy, Imgur, Reddit, Discord, Twitter.",
-                    ephemeral=True
+                embed = discord.Embed(
+                    description="⚠️ Invalid URL\nSupported: direct media URLs (.png, .jpg, .gif, .mp4) or Tenor, Giphy, Imgur, Reddit, Discord, Twitter",
+                    color=COLOR_WARNING
                 )
+                set_footer(embed)
+                await interaction.followup.send(embed=embed, ephemeral=True)
                 return
 
             # Determine if it's a video URL (Tenor embeds as video)
@@ -178,10 +186,9 @@ class ConvertCog(commands.Cog):
 
             media_data = await convert_service.fetch_media(url)
             if not media_data:
-                await interaction.followup.send(
-                    "Failed to fetch media from URL. Make sure it's a valid, accessible file.",
-                    ephemeral=True
-                )
+                embed = discord.Embed(description="❌ Failed to fetch media from URL. Make sure it's valid and accessible", color=COLOR_ERROR)
+                set_footer(embed)
+                await interaction.followup.send(embed=embed, ephemeral=True)
                 return
 
             # Set friendly source name
@@ -217,17 +224,18 @@ class ConvertCog(commands.Cog):
     ) -> None:
         """Handle errors for the convert command."""
         if isinstance(error, app_commands.CommandOnCooldown):
-            await interaction.response.send_message(
-                f"Command on cooldown. Try again in {error.retry_after:.1f}s",
-                ephemeral=True
-            )
+            embed = discord.Embed(description=f"⏳ Command on cooldown. Try again in {error.retry_after:.1f}s", color=COLOR_WARNING)
+            set_footer(embed)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
         else:
-            log.error(f"Convert Command Error: {type(error).__name__}: {str(error)}")
+            log.tree("Convert Command Error", [
+                ("User", str(interaction.user)),
+                ("Error", f"{type(error).__name__}: {str(error)}"),
+            ], emoji="❌")
             if not interaction.response.is_done():
-                await interaction.response.send_message(
-                    "An error occurred while processing your request.",
-                    ephemeral=True
-                )
+                embed = discord.Embed(description="❌ An error occurred while processing your request", color=COLOR_ERROR)
+                set_footer(embed)
+                await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
 # =============================================================================

@@ -18,6 +18,12 @@ from src.core.logger import log
 from src.utils.footer import set_footer
 
 
+# Consistent colors
+COLOR_SUCCESS = 0x43b581  # Green
+COLOR_ERROR = 0xf04747    # Red
+COLOR_WARNING = 0xfaa61a  # Orange
+
+
 # =============================================================================
 # Data Classes
 # =============================================================================
@@ -392,10 +398,9 @@ class ConvertView(ui.View):
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         """Only allow the requester to use buttons."""
         if interaction.user.id != self.requester_id:
-            await interaction.response.send_message(
-                "Only the person who started this can use these buttons.",
-                ephemeral=True
-            )
+            embed = discord.Embed(description="⚠️ Only the person who started this can use these buttons", color=COLOR_WARNING)
+            set_footer(embed)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
             return False
         return True
 
@@ -446,7 +451,9 @@ class ConvertView(ui.View):
             self.settings.text_color,
         )
         if not result.success:
-            await interaction.followup.send(f"Failed to process image: {result.error}", ephemeral=True)
+            embed = discord.Embed(description=f"❌ Failed to process image: {result.error}", color=COLOR_ERROR)
+            set_footer(embed)
+            await interaction.followup.send(embed=embed, ephemeral=True)
             return
 
         final_bytes = result.gif_bytes
@@ -702,16 +709,14 @@ class VideoConvertView(ui.View):
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         """Only allow the requester to use buttons."""
         if interaction.user.id != self.requester_id:
-            await interaction.response.send_message(
-                "Only the person who started this can use these buttons.",
-                ephemeral=True
-            )
+            embed = discord.Embed(description="⚠️ Only the person who started this can use these buttons", color=COLOR_WARNING)
+            set_footer(embed)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
             return False
         if self._processing:
-            await interaction.response.send_message(
-                "Already processing video, please wait...",
-                ephemeral=True
-            )
+            embed = discord.Embed(description="⏳ Already processing video, please wait...", color=COLOR_WARNING)
+            set_footer(embed)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
             return False
         return True
 
