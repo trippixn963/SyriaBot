@@ -21,6 +21,15 @@ from typing import Optional, Literal
 
 from PIL import Image, ImageDraw, ImageFont
 
+# Try to import Wand for better GIF processing
+try:
+    from wand.image import Image as WandImage
+    from wand.drawing import Drawing
+    from wand.color import Color
+    WAND_AVAILABLE = True
+except ImportError:
+    WAND_AVAILABLE = False
+
 from src.core.logger import log
 from src.utils.http import http_session, DOWNLOAD_TIMEOUT
 
@@ -107,11 +116,11 @@ class ConvertService:
             # Pre-cache common font sizes for faster first-use
             for size in [24, 32, 48, 56, 64, 72, 80, 96, 112, 128, 140]:
                 self._font_cache[size] = ImageFont.truetype(self._font_path, size)
-            log.success(f"Convert Service initialized (font: {Path(self._font_path).name})")
-        else:
-            log.tree("Convert Service Initialized", [
-                ("Font", "Default (no custom font found)"),
-            ], emoji="⚠️")
+
+        log.tree("Convert Service Initialized", [
+            ("Font", Path(self._font_path).name if self._font_path else "Default"),
+            ("GIF Engine", "ImageMagick (Wand)" if WAND_AVAILABLE else "Pillow"),
+        ], emoji="✅" if WAND_AVAILABLE else "⚠️")
 
     def _find_font(self) -> Optional[str]:
         """Find an available font on the system."""
@@ -425,18 +434,123 @@ class ConvertService:
         bar_color: tuple = BAR_COLOR,
         text_color: tuple = TEXT_COLOR,
     ) -> ConvertResult:
-        """Process animated GIF, preserving colors and quality."""
+        """Process animated GIF, preserving colors and quality using Wand/ImageMagick."""
+
+        # Try Wand first (much better quality), fall back to Pillow
+        if WAND_AVAILABLE:
+            try:
+                return self._process_animated_gif_wand(img, text, position, bar_color, text_color)
+            except Exception as e:
+                log.tree("Wand GIF Processing Failed", [
+                    ("Error", str(e)),
+                    ("Fallback", "Using Pillow"),
+                ], emoji="⚠️")
+
+        # Fallback to Pillow-based processing
+        return self._process_animated_gif_pillow(img, text, position, bar_color, text_color)
+
+    def _process_animated_gif_wand(
+        self,
+        img: Image.Image,
+        text: str,
+        position: Literal["top", "bottom"],
+        bar_color: tuple = BAR_COLOR,
+        text_color: tuple = TEXT_COLOR,
+    ) -> ConvertResult:
+        """Process animated GIF using Wand/ImageMagick (NotSoBot method)."""
+        # Save PIL image to bytes for Wand to read
+        img_bytes = io.BytesIO()
+        img.save(img_bytes, format='GIF', save_all=True)
+        img_bytes.seek(0)
+
+        has_text = text and text.strip()
+
+        with WandImage(blob=img_bytes.getvalue()) as wand_img:
+            orig_width = wand_img.width
+            orig_height = wand_img.height
+            frame_count = len(wand_img.sequence)
+
+            # Calculate bar dimensions (NotSoBot style)
+            bar_height = max(MIN_BAR_HEIGHT, int(orig_height * BAR_HEIGHT_RATIO)) if has_text else 0
+            new_height = orig_height + bar_height
+
+            # Calculate font size (70% of bar height)
+            font_size = max(24, int(bar_height * FONT_SIZE_RATIO)) if has_text else 0
+
+            # Create output image
+            with WandImage() as output_img:
+                for frame in wand_img.sequence:
+                    # Clone the frame
+                    with frame.clone() as f:
+                        # Coalesce to handle frame disposal properly
+                        f.coalesce()
+
+                        if has_text:
+                            # Create new canvas with bar
+                            bar_color_hex = f'rgb({bar_color[0]},{bar_color[1]},{bar_color[2]})'
+
+                            with WandImage(width=orig_width, height=new_height, background=Color(bar_color_hex)) as new_frame:
+                                # Paste original frame in correct position
+                                if position == "top":
+                                    new_frame.composite(f, left=0, top=bar_height)
+                                else:
+                                    new_frame.composite(f, left=0, top=0)
+
+                                # Draw text on bar
+                                text_color_hex = f'rgb({text_color[0]},{text_color[1]},{text_color[2]})'
+
+                                with Drawing() as draw:
+                                    draw.font = self._font_path or 'DejaVu-Sans-Bold'
+                                    draw.font_size = font_size
+                                    draw.fill_color = Color(text_color_hex)
+                                    draw.text_alignment = 'center'
+                                    draw.gravity = 'north' if position == "top" else 'south'
+
+                                    # Calculate vertical center of bar
+                                    text_y = bar_height // 2 + font_size // 3
+
+                                    draw.text(orig_width // 2, text_y, text)
+                                    draw(new_frame)
+
+                                # Copy frame delay
+                                new_frame.delay = f.delay or 10
+                                output_img.sequence.append(new_frame.clone())
+                        else:
+                            # No text, just clone the frame
+                            f.delay = f.delay or 10
+                            output_img.sequence.append(f.clone())
+
+                # Optimize and save
+                output_img.type = 'optimize'
+                output_img.format = 'gif'
+                result_bytes = output_img.make_blob()
+
+        log.tree("Animated GIF Convert Complete (Wand)", [
+            ("Frames", frame_count),
+            ("Size", f"{len(result_bytes) / 1024:.1f} KB"),
+            ("Dimensions", f"{orig_width}x{new_height}"),
+            ("Has Text", "Yes" if has_text else "No"),
+            ("Engine", "ImageMagick"),
+        ], emoji="OK")
+
+        return ConvertResult(success=True, gif_bytes=result_bytes)
+
+    def _process_animated_gif_pillow(
+        self,
+        img: Image.Image,
+        text: str,
+        position: Literal["top", "bottom"],
+        bar_color: tuple = BAR_COLOR,
+        text_color: tuple = TEXT_COLOR,
+    ) -> ConvertResult:
+        """Fallback: Process animated GIF using Pillow."""
         try:
             frames = []
             durations = []
 
-            # Get original dimensions
             orig_width, orig_height = img.size
-
-            # Only add bar if text is provided
             has_text = text and text.strip()
 
-            # Pre-calculate font and text layout with DYNAMIC sizing (NotSoBot style)
             font = None
             lines = []
             line_height = 0
@@ -449,44 +563,33 @@ class ConvertService:
                 font, lines, bar_height, text_padding = self._calculate_dynamic_layout(
                     text, orig_width, orig_height
                 )
-
-                # Calculate line height and spacing
                 line_height = font.getbbox("Ay")[3] - font.getbbox("Ay")[1]
                 line_spacing = int(line_height * LINE_SPACING_RATIO)
                 total_text_height = (line_height * len(lines)) + (line_spacing * (len(lines) - 1))
 
-                # Calculate starting Y position (centered vertically in bar)
                 if position == "top":
                     start_y = (bar_height - total_text_height) // 2
                 else:
                     start_y = orig_height + (bar_height - total_text_height) // 2
 
-            # Calculate new dimensions
             new_height = orig_height + bar_height if has_text else orig_height
 
-            # Process each frame - use RGBA to preserve colors better
             frame_count = 0
             try:
                 while True:
-                    # Get frame duration
                     duration = img.info.get('duration', 100)
                     durations.append(duration)
-
-                    # Convert frame to RGBA (preserves colors better than RGB)
                     frame = img.convert("RGBA")
 
                     if has_text:
-                        # Create new frame with bar (use RGBA with full opacity bar)
-                        bar_color_rgba = bar_color + (255,)  # Add alpha
+                        bar_color_rgba = bar_color + (255,)
                         new_frame = Image.new("RGBA", (orig_width, new_height), bar_color_rgba)
 
-                        # Paste frame in correct position
                         if position == "top":
                             new_frame.paste(frame, (0, bar_height))
                         else:
                             new_frame.paste(frame, (0, 0))
 
-                        # Draw multiline text
                         draw = ImageDraw.Draw(new_frame)
                         current_y = start_y
                         for line in lines:
@@ -497,30 +600,23 @@ class ConvertService:
                             draw.text((text_x, text_y), line, font=font, fill=text_color)
                             current_y += line_height + line_spacing
                     else:
-                        # No text - just use the frame as-is
                         new_frame = frame
 
                     frames.append(new_frame)
                     frame_count += 1
-
-                    # Move to next frame
                     img.seek(img.tell() + 1)
 
             except EOFError:
-                pass  # End of frames
+                pass
 
             if not frames:
                 return ConvertResult(success=False, error="No frames found in GIF")
 
-            # Convert RGBA frames to P (palette) mode with better quantization
-            # This preserves colors much better than direct RGB conversion
             palette_frames = []
             for frame in frames:
-                # Quantize with maximum colors and better dithering
                 p_frame = frame.convert("P", palette=Image.Palette.ADAPTIVE, colors=256)
                 palette_frames.append(p_frame)
 
-            # Save as animated GIF with proper disposal
             output = io.BytesIO()
             palette_frames[0].save(
                 output,
@@ -529,27 +625,22 @@ class ConvertService:
                 append_images=palette_frames[1:],
                 duration=durations,
                 loop=0,
-                disposal=2,  # Clear frame before rendering next (prevents ghosting)
+                disposal=2,
             )
             result_bytes = output.getvalue()
 
-            log.tree("Animated GIF Convert Complete", [
+            log.tree("Animated GIF Convert Complete (Pillow)", [
                 ("Frames", frame_count),
                 ("Size", f"{len(result_bytes) / 1024:.1f} KB"),
                 ("Dimensions", f"{orig_width}x{new_height}"),
                 ("Has Text", "Yes" if has_text else "No"),
+                ("Engine", "Pillow (fallback)"),
             ], emoji="OK")
 
-            return ConvertResult(
-                success=True,
-                gif_bytes=result_bytes
-            )
+            return ConvertResult(success=True, gif_bytes=result_bytes)
 
         except Exception as e:
-            return ConvertResult(
-                success=False,
-                error=str(e)
-            )
+            return ConvertResult(success=False, error=str(e))
 
     # =========================================================================
     # Video Processing Methods
