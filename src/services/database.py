@@ -48,9 +48,16 @@ class Database:
                     user_limit INTEGER DEFAULT 0,
                     is_locked INTEGER DEFAULT 0,
                     is_hidden INTEGER DEFAULT 0,
+                    panel_message_id INTEGER,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+
+            # Add panel_message_id column if it doesn't exist (migration)
+            try:
+                cur.execute("ALTER TABLE temp_channels ADD COLUMN panel_message_id INTEGER")
+            except Exception:
+                pass  # Column already exists
 
             # User settings (remembered for next VC)
             cur.execute("""
