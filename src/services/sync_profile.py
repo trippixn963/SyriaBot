@@ -86,7 +86,9 @@ class ProfileSyncService:
                 changes.append(("Avatar", "Synced from server icon"))
             except discord.HTTPException as e:
                 if "rate" in str(e).lower():
-                    log.warning("Rate limited on avatar update, will retry next sync")
+                    log.tree("Avatar Update Rate Limited", [
+                        ("Action", "Will retry next sync"),
+                    ], emoji="⏳")
                 else:
                     log.error(f"Failed to sync avatar: {e}")
             except Exception as e:
@@ -102,7 +104,9 @@ class ProfileSyncService:
                 if "nitro" in str(e).lower() or "premium" in str(e).lower():
                     pass  # Bot doesn't have Nitro, skip silently
                 elif "rate" in str(e).lower():
-                    log.warning("Rate limited on banner update, will retry next sync")
+                    log.tree("Banner Update Rate Limited", [
+                        ("Action", "Will retry next sync"),
+                    ], emoji="⏳")
                 else:
                     log.error(f"Failed to sync banner: {e}")
             except Exception as e:

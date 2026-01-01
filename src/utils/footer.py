@@ -75,7 +75,9 @@ async def refresh_avatar() -> None:
     """
     global _cached_avatar_url
     if not _bot_ref:
-        log.warning("Footer avatar refresh skipped: bot reference not set")
+        log.tree("Footer Avatar Refresh Skipped", [
+            ("Reason", "Bot reference not set"),
+        ], emoji="⚠️")
         return
 
     old_url = _cached_avatar_url

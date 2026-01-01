@@ -152,7 +152,9 @@ class MessageHandler(commands.Cog):
             try:
                 await self.bot.tempvoice.on_message(message)
             except Exception as e:
-                log.warning(f"TempVoice on_message error: {e}")
+                log.tree("TempVoice Message Handler Error", [
+                    ("Error", str(e)),
+                ], emoji="❌")
 
         if not message.reference:
             return
