@@ -128,5 +128,12 @@ class Config:
         default_factory=lambda: _get_env_role_rewards("SYRIA_XP_ROLE_REWARDS")
     )
 
+    # Download System
+    DOWNLOAD_WEEKLY_LIMIT: int = _get_env_int("SYRIA_DOWNLOAD_WEEKLY_LIMIT", 5)
+
+    # Gallery Channel (media-only)
+    GALLERY_CHANNEL_ID: int = _get_env_int("SYRIA_GALLERY_CHANNEL_ID", 1408234733988483212)
+    GALLERY_HEART_EMOJI: str = "<:heart:1456779669805203539>"
+
 
 config = Config()
