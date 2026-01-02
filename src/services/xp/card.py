@@ -3,8 +3,11 @@ XP System - Rank Card Generator
 ===============================
 
 HTML/CSS based rank card rendered with Playwright for professional quality.
+Optimized with page pooling and caching for fast generation.
 """
 
+import asyncio
+import time
 from typing import Optional
 from playwright.async_api import async_playwright
 
@@ -25,6 +28,15 @@ _browser = None
 _context = None
 _playwright = None
 
+# Page pool for reuse (avoid creating/destroying pages)
+_page_pool: list = []
+_page_pool_lock = asyncio.Lock()
+_MAX_POOL_SIZE = 3
+
+# Card cache: {cache_key: (bytes, timestamp)}
+_card_cache: dict = {}
+_CACHE_TTL = 30  # Cache cards for 30 seconds
+
 
 async def _get_context():
     """Get or create browser context (reusable)."""
@@ -38,6 +50,14 @@ async def _get_context():
                 '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
                 '--disable-gpu',
+                '--disable-extensions',
+                '--disable-background-networking',
+                '--disable-sync',
+                '--disable-translate',
+                '--hide-scrollbars',
+                '--metrics-recording-only',
+                '--mute-audio',
+                '--no-first-run',
             ]
         )
         _context = await _browser.new_context(
@@ -45,6 +65,24 @@ async def _get_context():
             device_scale_factor=1,
         )
     return _context
+
+
+async def _get_page():
+    """Get a page from pool or create new one."""
+    async with _page_pool_lock:
+        if _page_pool:
+            return _page_pool.pop()
+    context = await _get_context()
+    return await context.new_page()
+
+
+async def _return_page(page):
+    """Return page to pool for reuse."""
+    async with _page_pool_lock:
+        if len(_page_pool) < _MAX_POOL_SIZE:
+            _page_pool.append(page)
+        else:
+            await page.close()
 
 
 def _generate_html(
@@ -494,11 +532,32 @@ async def generate_rank_card(
     banner_url: Optional[str] = None,
     status: str = "online",
 ) -> bytes:
-    """Generate rank card using Playwright."""
+    """Generate rank card using Playwright with caching and page pooling."""
+    global _card_cache
 
+    # Create cache key from data that affects appearance
+    cache_key = (
+        username, display_name, level, rank, current_xp,
+        xp_for_next, is_booster, status, avatar_url[:50]
+    )
+
+    # Check cache
+    now = time.time()
+    if cache_key in _card_cache:
+        cached_bytes, cached_time = _card_cache[cache_key]
+        if now - cached_time < _CACHE_TTL:
+            log.tree("Rank Card Cache Hit", [
+                ("User", display_name),
+            ], emoji="⚡")
+            return cached_bytes
+
+    # Clean old cache entries periodically
+    if len(_card_cache) > 100:
+        _card_cache.clear()
+
+    page = None
     try:
-        context = await _get_context()
-        page = await context.new_page()
+        page = await _get_page()
 
         # Generate HTML
         html = _generate_html(
@@ -519,22 +578,18 @@ async def generate_rank_card(
 
         await page.set_content(html, wait_until='domcontentloaded')
 
-        # Wait for avatar image to actually load (not just element visible)
+        # Wait for avatar with shorter timeout (2s instead of 5s)
         try:
             await page.wait_for_function(
                 '''() => {
                     const img = document.querySelector('img.avatar');
                     return img && img.complete && img.naturalWidth > 0;
                 }''',
-                timeout=5000
+                timeout=2000
             )
         except Exception:
-            # If image fails to load, add a fallback background
-            log.tree("Avatar Load Failed", [
-                ("User", display_name),
-                ("URL", avatar_url[:50] + "..." if len(avatar_url) > 50 else avatar_url),
-            ], emoji="⚠️")
-            await page.evaluate('''() => {
+            # Quick fallback - don't log every time
+            await page.evaluate('''(initial) => {
                 const img = document.querySelector('img.avatar');
                 if (img) {
                     img.style.display = 'none';
@@ -542,7 +597,7 @@ async def generate_rank_card(
                     if (wrapper) {
                         const fallback = document.createElement('div');
                         fallback.style.cssText = 'width:180px;height:180px;border-radius:50%;background:linear-gradient(135deg,#3a3a4a,#2a2a3a);display:flex;align-items:center;justify-content:center;font-size:64px;color:#fff;font-weight:700;';
-                        fallback.textContent = arguments[0];
+                        fallback.textContent = initial;
                         wrapper.insertBefore(fallback, img);
                     }
                 }
@@ -550,7 +605,13 @@ async def generate_rank_card(
 
         # Screenshot
         screenshot = await page.screenshot(type='png', omit_background=True)
-        await page.close()
+
+        # Return page to pool instead of closing
+        await _return_page(page)
+        page = None
+
+        # Cache the result
+        _card_cache[cache_key] = (screenshot, now)
 
         log.tree("Rank Card Generated", [
             ("User", display_name),
@@ -563,4 +624,50 @@ async def generate_rank_card(
         log.tree("Rank Card Failed", [
             ("Error", str(e)),
         ], emoji="❌")
+        if page:
+            try:
+                await page.close()
+            except Exception:
+                pass
         raise
+
+
+async def cleanup():
+    """Clean up browser resources. Call on bot shutdown."""
+    global _browser, _context, _playwright, _page_pool, _card_cache
+
+    # Close all pooled pages
+    async with _page_pool_lock:
+        for page in _page_pool:
+            try:
+                await page.close()
+            except Exception:
+                pass
+        _page_pool.clear()
+
+    # Close browser and playwright
+    if _context:
+        try:
+            await _context.close()
+        except Exception:
+            pass
+        _context = None
+
+    if _browser:
+        try:
+            await _browser.close()
+        except Exception:
+            pass
+        _browser = None
+
+    if _playwright:
+        try:
+            await _playwright.stop()
+        except Exception:
+            pass
+        _playwright = None
+
+    # Clear cache
+    _card_cache.clear()
+
+    log.tree("Rank Card Cleanup", [("Status", "Browser closed")], emoji="🧹")

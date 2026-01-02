@@ -500,4 +500,4 @@ class WeatherCog(commands.Cog):
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(WeatherCog(bot))
-    log.success("Loaded weather command")
+    log.tree("Command Loaded", [("Name", "weather")], emoji="✅")

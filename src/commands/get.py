@@ -518,4 +518,4 @@ class GetCog(commands.Cog):
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(GetCog(bot))
-    log.success("Loaded get command")
+    log.tree("Command Loaded", [("Name", "get")], emoji="✅")

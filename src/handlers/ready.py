@@ -34,7 +34,9 @@ class ReadyHandler(commands.Cog):
         # Initialize footer (cache developer avatar)
         try:
             await init_footer(self.bot)
-            log.success("Footer initialized")
+            log.tree("Footer Initialized", [
+                ("Status", "Developer avatar cached"),
+            ], emoji="✅")
         except Exception as e:
             log.error_tree("Footer Init Failed", e)
 
@@ -74,7 +76,9 @@ class ReadyHandler(commands.Cog):
                     name="voice channels"
                 )
             )
-            log.success("Presence set")
+            log.tree("Presence Set", [
+                ("Activity", "Watching voice channels"),
+            ], emoji="👀")
         except Exception as e:
             log.error_tree("Presence Set Failed", e)
 
@@ -82,4 +86,6 @@ class ReadyHandler(commands.Cog):
 async def setup(bot: commands.Bot) -> None:
     """Register the ready handler cog with the bot."""
     await bot.add_cog(ReadyHandler(bot))
-    log.success("Loaded ready handler")
+    log.tree("Handler Loaded", [
+        ("Name", "ReadyHandler"),
+    ], emoji="✅")

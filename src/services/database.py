@@ -76,7 +76,9 @@ class Database:
         """Get database connection context manager."""
         if not self._healthy:
             # DB is corrupted, return None-yielding context
-            log.warning("Database unhealthy, operation skipped")
+            log.tree("Database Unhealthy", [
+                ("Status", "Operation skipped"),
+            ], emoji="⚠️")
             yield None
             return
 
@@ -96,7 +98,10 @@ class Database:
 
     def _init_db(self) -> None:
         """Initialize database tables."""
-        log.info(f"Initializing database: {self.db_path}")
+        log.tree("Database Init", [
+            ("Path", self.db_path),
+            ("Status", "Starting"),
+        ], emoji="🗄️")
 
         # Check integrity on startup
         import os
@@ -107,15 +112,18 @@ class Database:
                 ("Action", "Backing up and recreating"),
                 ("Recovery", "User data will be lost!"),
             ], emoji="🚨")
-            log.critical("=" * 60)
-            log.critical("DATABASE CORRUPTION - ALL XP DATA MAY BE LOST")
-            log.critical("Check backup file for data recovery options")
-            log.critical("=" * 60)
+            log.tree("CRITICAL DATABASE ERROR", [
+                ("Message", "DATABASE CORRUPTION - ALL XP DATA MAY BE LOST"),
+                ("Recovery", "Check backup file for data recovery options"),
+            ], emoji="💀")
             self._backup_corrupted()
             # Delete corrupted file to recreate
             try:
                 os.remove(self.db_path)
-                log.info("Corrupted database removed, will recreate")
+                log.tree("Corrupted DB Removed", [
+                    ("Path", self.db_path),
+                    ("Action", "Will recreate"),
+                ], emoji="🗑️")
             except OSError as e:
                 log.error_tree("Failed to remove corrupted DB", e)
                 self._healthy = False
@@ -123,7 +131,9 @@ class Database:
 
         with self._get_conn() as conn:
             if conn is None:
-                log.error("Failed to initialize database connection")
+                log.tree("Database Init Failed", [
+                    ("Reason", "Could not establish connection"),
+                ], emoji="❌")
                 return
             cur = conn.cursor()
 
@@ -243,6 +253,8 @@ class Database:
                 ("commands_used", "INTEGER DEFAULT 0"),
                 ("reactions_given", "INTEGER DEFAULT 0"),
                 ("images_shared", "INTEGER DEFAULT 0"),
+                ("activity_hours", "TEXT DEFAULT '{}'"),  # JSON: {"0": 5, "14": 20, ...}
+                ("invited_by", "INTEGER DEFAULT 0"),  # User ID who invited them
             ]
             for col_name, col_type in new_columns:
                 try:
@@ -264,7 +276,65 @@ class Database:
                 ON temp_channels(guild_id)
             """)
 
-            log.success("Database initialized")
+            # =================================================================
+            # Server-Level Stats Tables
+            # =================================================================
+
+            # Daily server stats (one row per day)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS server_daily_stats (
+                    date TEXT PRIMARY KEY,
+                    guild_id INTEGER NOT NULL,
+                    unique_users INTEGER DEFAULT 0,
+                    total_messages INTEGER DEFAULT 0,
+                    voice_peak_users INTEGER DEFAULT 0,
+                    new_members INTEGER DEFAULT 0
+                )
+            """)
+
+            # Channel activity tracking
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS channel_stats (
+                    channel_id INTEGER PRIMARY KEY,
+                    guild_id INTEGER NOT NULL,
+                    channel_name TEXT,
+                    total_messages INTEGER DEFAULT 0,
+                    last_message_at INTEGER DEFAULT 0
+                )
+            """)
+
+            # Server-wide hourly activity patterns
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS server_hourly_activity (
+                    guild_id INTEGER NOT NULL,
+                    hour INTEGER NOT NULL,
+                    message_count INTEGER DEFAULT 0,
+                    voice_joins INTEGER DEFAULT 0,
+                    PRIMARY KEY (guild_id, hour)
+                )
+            """)
+
+            # Boost history
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS boost_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    guild_id INTEGER NOT NULL,
+                    action TEXT NOT NULL,
+                    timestamp INTEGER NOT NULL
+                )
+            """)
+
+            # Index for boost history queries
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_boost_history_guild
+                ON boost_history(guild_id, timestamp DESC)
+            """)
+
+            log.tree("Database Initialized", [
+                ("Tables", "All created/verified"),
+                ("Status", "Ready"),
+            ], emoji="✅")
 
     # =========================================================================
     # Temp Channels
@@ -1002,6 +1072,317 @@ class Database:
             """, (new_streak, today_date, user_id, guild_id))
 
             return new_streak
+
+    def increment_activity_hour(self, user_id: int, guild_id: int, hour: int) -> None:
+        """
+        Increment activity count for a specific hour (0-23).
+
+        Args:
+            user_id: User's Discord ID
+            guild_id: Guild's Discord ID
+            hour: Hour of day (0-23)
+        """
+        import json
+
+        self.ensure_user_xp(user_id, guild_id)
+
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT activity_hours FROM user_xp
+                WHERE user_id = ? AND guild_id = ?
+            """, (user_id, guild_id))
+            row = cur.fetchone()
+
+            hours_data = {}
+            if row and row["activity_hours"]:
+                try:
+                    hours_data = json.loads(row["activity_hours"])
+                except json.JSONDecodeError:
+                    hours_data = {}
+
+            hour_key = str(hour)
+            hours_data[hour_key] = hours_data.get(hour_key, 0) + 1
+
+            cur.execute("""
+                UPDATE user_xp SET activity_hours = ?
+                WHERE user_id = ? AND guild_id = ?
+            """, (json.dumps(hours_data), user_id, guild_id))
+
+    def get_peak_activity_hour(self, user_id: int, guild_id: int) -> tuple[int, int]:
+        """
+        Get user's peak activity hour.
+
+        Returns:
+            (hour, count) tuple, or (-1, 0) if no data
+        """
+        import json
+
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT activity_hours FROM user_xp
+                WHERE user_id = ? AND guild_id = ?
+            """, (user_id, guild_id))
+            row = cur.fetchone()
+
+            if not row or not row["activity_hours"]:
+                return (-1, 0)
+
+            try:
+                hours_data = json.loads(row["activity_hours"])
+                if not hours_data:
+                    return (-1, 0)
+
+                peak_hour = max(hours_data, key=lambda h: hours_data[h])
+                return (int(peak_hour), hours_data[peak_hour])
+            except (json.JSONDecodeError, ValueError):
+                return (-1, 0)
+
+    def set_invited_by(self, user_id: int, guild_id: int, inviter_id: int) -> None:
+        """Set who invited this user."""
+        self.ensure_user_xp(user_id, guild_id)
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                UPDATE user_xp SET invited_by = ?
+                WHERE user_id = ? AND guild_id = ?
+            """, (inviter_id, user_id, guild_id))
+
+    def get_invite_count(self, user_id: int, guild_id: int) -> int:
+        """Get how many users this person has invited."""
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT COUNT(*) as count FROM user_xp
+                WHERE guild_id = ? AND invited_by = ?
+            """, (guild_id, user_id))
+            row = cur.fetchone()
+            return row["count"] if row else 0
+
+    # =========================================================================
+    # Server-Level Stats
+    # =========================================================================
+
+    def record_daily_activity(self, guild_id: int, user_id: int, date: str) -> None:
+        """Record a user's activity for the day (for DAU tracking)."""
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            # Use a separate table to track unique users per day
+            cur.execute("""
+                INSERT INTO server_daily_stats (date, guild_id, unique_users, total_messages)
+                VALUES (?, ?, 1, 1)
+                ON CONFLICT(date) DO UPDATE SET
+                    total_messages = total_messages + 1
+            """, (date, guild_id))
+
+    def increment_daily_unique_user(self, guild_id: int, date: str) -> None:
+        """Increment unique user count for the day."""
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO server_daily_stats (date, guild_id, unique_users, total_messages)
+                VALUES (?, ?, 1, 0)
+                ON CONFLICT(date) DO UPDATE SET
+                    unique_users = unique_users + 1
+            """, (date, guild_id))
+
+    def increment_daily_messages(self, guild_id: int, date: str) -> None:
+        """Increment total messages for the day."""
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO server_daily_stats (date, guild_id, total_messages)
+                VALUES (?, ?, 1)
+                ON CONFLICT(date) DO UPDATE SET
+                    total_messages = total_messages + 1
+            """, (date, guild_id))
+
+    def update_voice_peak(self, guild_id: int, date: str, current_users: int) -> None:
+        """Update voice peak if current is higher."""
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO server_daily_stats (date, guild_id, voice_peak_users)
+                VALUES (?, ?, ?)
+                ON CONFLICT(date) DO UPDATE SET
+                    voice_peak_users = MAX(voice_peak_users, ?)
+            """, (date, guild_id, current_users, current_users))
+
+    def increment_new_members(self, guild_id: int, date: str) -> None:
+        """Increment new members count for the day."""
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO server_daily_stats (date, guild_id, new_members)
+                VALUES (?, ?, 1)
+                ON CONFLICT(date) DO UPDATE SET
+                    new_members = new_members + 1
+            """, (date, guild_id))
+
+    def get_daily_stats(self, guild_id: int, days: int = 30) -> List[Dict[str, Any]]:
+        """Get daily stats for the last N days."""
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT * FROM server_daily_stats
+                WHERE guild_id = ?
+                ORDER BY date DESC
+                LIMIT ?
+            """, (guild_id, days))
+            return [dict(row) for row in cur.fetchall()]
+
+    # Channel Activity
+    def increment_channel_messages(self, channel_id: int, guild_id: int, channel_name: str) -> None:
+        """Increment message count for a channel."""
+        import time
+        now = int(time.time())
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO channel_stats (channel_id, guild_id, channel_name, total_messages, last_message_at)
+                VALUES (?, ?, ?, 1, ?)
+                ON CONFLICT(channel_id) DO UPDATE SET
+                    total_messages = total_messages + 1,
+                    last_message_at = ?,
+                    channel_name = ?
+            """, (channel_id, guild_id, channel_name, now, now, channel_name))
+
+    def get_channel_stats(self, guild_id: int, limit: int = 50) -> List[Dict[str, Any]]:
+        """Get channel activity stats sorted by message count."""
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT * FROM channel_stats
+                WHERE guild_id = ?
+                ORDER BY total_messages DESC
+                LIMIT ?
+            """, (guild_id, limit))
+            return [dict(row) for row in cur.fetchall()]
+
+    def get_inactive_channels(self, guild_id: int, days_inactive: int = 7) -> List[Dict[str, Any]]:
+        """Get channels with no activity in the last N days."""
+        import time
+        cutoff = int(time.time()) - (days_inactive * 86400)
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT * FROM channel_stats
+                WHERE guild_id = ? AND last_message_at < ?
+                ORDER BY last_message_at ASC
+            """, (guild_id, cutoff))
+            return [dict(row) for row in cur.fetchall()]
+
+    # Server Hourly Activity
+    def increment_server_hour_activity(self, guild_id: int, hour: int, activity_type: str = "message") -> None:
+        """Increment hourly activity counter."""
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            if activity_type == "message":
+                cur.execute("""
+                    INSERT INTO server_hourly_activity (guild_id, hour, message_count)
+                    VALUES (?, ?, 1)
+                    ON CONFLICT(guild_id, hour) DO UPDATE SET
+                        message_count = message_count + 1
+                """, (guild_id, hour))
+            else:  # voice
+                cur.execute("""
+                    INSERT INTO server_hourly_activity (guild_id, hour, voice_joins)
+                    VALUES (?, ?, 1)
+                    ON CONFLICT(guild_id, hour) DO UPDATE SET
+                        voice_joins = voice_joins + 1
+                """, (guild_id, hour))
+
+    def get_server_peak_hours(self, guild_id: int) -> List[Dict[str, Any]]:
+        """Get hourly activity breakdown sorted by message count."""
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT * FROM server_hourly_activity
+                WHERE guild_id = ?
+                ORDER BY message_count DESC
+            """, (guild_id,))
+            return [dict(row) for row in cur.fetchall()]
+
+    # Boost History
+    def record_boost(self, user_id: int, guild_id: int, action: str) -> None:
+        """Record a boost/unboost event."""
+        import time
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO boost_history (user_id, guild_id, action, timestamp)
+                VALUES (?, ?, ?, ?)
+            """, (user_id, guild_id, action, int(time.time())))
+
+    def get_boost_history(self, guild_id: int, limit: int = 50) -> List[Dict[str, Any]]:
+        """Get boost history for a guild."""
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT * FROM boost_history
+                WHERE guild_id = ?
+                ORDER BY timestamp DESC
+                LIMIT ?
+            """, (guild_id, limit))
+            return [dict(row) for row in cur.fetchall()]
+
+    def get_user_boost_count(self, user_id: int, guild_id: int) -> int:
+        """Get how many times a user has boosted."""
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT COUNT(*) as count FROM boost_history
+                WHERE user_id = ? AND guild_id = ? AND action = 'boost'
+            """, (user_id, guild_id))
+            row = cur.fetchone()
+            return row["count"] if row else 0
+
+    # Member Retention
+    def get_retention_stats(self, guild_id: int, days_ago: int = 7) -> Dict[str, Any]:
+        """
+        Get retention stats for members who joined N days ago.
+
+        Returns dict with:
+        - joined_count: How many joined N days ago
+        - still_active: How many have been active in last 3 days
+        - retention_rate: Percentage still active
+        """
+        import time
+        now = int(time.time())
+
+        # Members who joined approximately N days ago (within a day window)
+        join_start = now - ((days_ago + 1) * 86400)
+        join_end = now - (days_ago * 86400)
+        active_cutoff = now - (3 * 86400)  # Active in last 3 days
+
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+
+            # Count members who joined in that window
+            cur.execute("""
+                SELECT COUNT(*) as count FROM user_xp
+                WHERE guild_id = ? AND first_message_at BETWEEN ? AND ?
+            """, (guild_id, join_start, join_end))
+            joined = cur.fetchone()["count"]
+
+            # Count how many of those are still active
+            cur.execute("""
+                SELECT COUNT(*) as count FROM user_xp
+                WHERE guild_id = ?
+                    AND first_message_at BETWEEN ? AND ?
+                    AND last_active_at > ?
+            """, (guild_id, join_start, join_end, active_cutoff))
+            active = cur.fetchone()["count"]
+
+            retention = (active / joined * 100) if joined > 0 else 0
+
+            return {
+                "days_ago": days_ago,
+                "joined_count": joined,
+                "still_active": active,
+                "retention_rate": round(retention, 1),
+            }
 
 
 # Global instance

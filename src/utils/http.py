@@ -29,7 +29,9 @@ class HTTPSessionManager:
         """Get or create the HTTP session."""
         if self._session is None or self._session.closed:
             self._session = aiohttp.ClientSession()
-            log.info("HTTP session created")
+            log.tree("HTTP Session", [
+                ("Status", "Created"),
+            ], emoji="🌐")
         return self._session
 
     def get(self, url: str, **kwargs):
@@ -41,7 +43,9 @@ class HTTPSessionManager:
         if self._session and not self._session.closed:
             await self._session.close()
             self._session = None
-            log.info("HTTP session closed")
+            log.tree("HTTP Session", [
+                ("Status", "Closed"),
+            ], emoji="🔌")
 
 
 # Global instance

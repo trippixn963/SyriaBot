@@ -72,7 +72,9 @@ async def init_footer(bot: discord.Client) -> None:
             ("Refresh Schedule", "Daily at 00:00 EST"),
         ], emoji="OK")
     except Exception as e:
-        log.error(f"Footer Init Failed: {e}")
+        log.tree("Footer Init Failed", [
+            ("Error", str(e)[:50]),
+        ], emoji="❌")
         _cached_avatar_url = None
 
 
