@@ -133,6 +133,7 @@ class Config:
 
     # Gallery Channel (media-only)
     GALLERY_CHANNEL_ID: int = _get_env_int("SYRIA_GALLERY_CHANNEL_ID", 1408234733988483212)
+    MEMES_CHANNEL_ID: int = _get_env_int("SYRIA_MEMES_CHANNEL_ID", 1442153997610913812)
     GALLERY_HEART_EMOJI: str = "<:heart:1456779669805203539>"
 
 
