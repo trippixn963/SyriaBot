@@ -1,0 +1,567 @@
+"""
+XP System - Rank Card Generator
+===============================
+
+HTML/CSS based rank card rendered with Playwright for professional quality.
+"""
+
+import asyncio
+from typing import Optional
+from playwright.async_api import async_playwright
+
+from src.core.logger import log
+
+
+# Status colors
+STATUS_COLORS = {
+    "online": "#3ba55c",
+    "idle": "#faa61a",
+    "dnd": "#ed4245",
+    "offline": "#747f8d",
+    "streaming": "#9146ff",
+}
+
+# Keep browser and context alive for performance
+_browser = None
+_context = None
+_playwright = None
+
+
+async def _get_context():
+    """Get or create browser context (reusable)."""
+    global _browser, _context, _playwright
+    if _context is None:
+        _playwright = await async_playwright().start()
+        _browser = await _playwright.chromium.launch(
+            headless=True,
+            args=[
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-gpu',
+            ]
+        )
+        _context = await _browser.new_context(
+            viewport={'width': 940, 'height': 290},
+            device_scale_factor=1,
+        )
+    return _context
+
+
+def _generate_html(
+    display_name: str,
+    username: str,
+    avatar_url: str,
+    level: int,
+    rank: int,
+    current_xp: int,
+    xp_for_next: int,
+    xp_progress: float,
+    total_messages: int,
+    voice_minutes: int,
+    is_booster: bool,
+    banner_url: Optional[str],
+    status: str,
+) -> str:
+    """Generate HTML for rank card."""
+
+    status_color = STATUS_COLORS.get(status, STATUS_COLORS["online"])
+    progress_percent = int(xp_progress * 100)
+
+    # Background style
+    bg_style = f'url({banner_url})' if banner_url else 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)'
+
+    # Booster badge HTML
+    booster_badge = ""
+    if is_booster:
+        booster_badge = '''
+                        <div class="badge booster-badge">
+                            <span class="badge-label">Booster</span>
+                            <span class="badge-value booster">2x</span>
+                        </div>
+        '''
+
+    html = f'''
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        * {{
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }}
+
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans', Ubuntu, sans-serif;
+            background: transparent;
+        }}
+
+        .card-wrapper {{
+            padding: 3px;
+            background: linear-gradient(135deg, #43b581, #57f287, #f5d55a, #e6a83a);
+            border-radius: 24px;
+            position: relative;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4), 0 0 60px rgba(67, 181, 129, 0.2), 0 0 60px rgba(245, 213, 90, 0.15);
+        }}
+
+        .card-wrapper::before {{
+            content: '';
+            position: absolute;
+            inset: -8px;
+            border-radius: 32px;
+            background: linear-gradient(135deg, #43b58155, #57f28744, #f5d55a55, #e6a83a44);
+            filter: blur(20px);
+            opacity: 0.8;
+            z-index: -1;
+        }}
+
+        .card {{
+            width: 934px;
+            height: 280px;
+            background: {bg_style};
+            background-size: cover;
+            background-position: center;
+            border-radius: 21px;
+            position: relative;
+            overflow: hidden;
+        }}
+
+        .card::before {{
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(15, 15, 25, 0.85) 0%, rgba(20, 20, 35, 0.8) 100%);
+            backdrop-filter: blur(16px);
+        }}
+
+        .card-content {{
+            position: relative;
+            z-index: 1;
+            display: flex;
+            height: 100%;
+            padding: 32px 40px;
+            gap: 36px;
+        }}
+
+        /* Avatar Section */
+        .avatar-section {{
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }}
+
+        .avatar-wrapper {{
+            position: relative;
+            width: 180px;
+            height: 180px;
+        }}
+
+        .avatar-ring {{
+            position: absolute;
+            inset: -6px;
+            border-radius: 50%;
+            border: 6px solid {status_color};
+            background: transparent;
+        }}
+
+        .avatar-ring::before {{
+            content: '';
+            position: absolute;
+            inset: -12px;
+            border-radius: 50%;
+            background: {status_color};
+            filter: blur(20px);
+            opacity: 0.4;
+            z-index: -1;
+        }}
+
+        .avatar {{
+            width: 180px;
+            height: 180px;
+            border-radius: 50%;
+            object-fit: cover;
+            position: relative;
+            z-index: 1;
+        }}
+
+        .status-dot {{
+            position: absolute;
+            bottom: 5px;
+            right: 5px;
+            width: 44px;
+            height: 44px;
+            background: {status_color};
+            border: 8px solid #14141f;
+            border-radius: 50%;
+            z-index: 3;
+            box-shadow: 0 0 12px {status_color}66;
+        }}
+
+        /* Info Section */
+        .info-section {{
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 24px;
+        }}
+
+        /* Top Row - Name and Badges */
+        .top-row {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }}
+
+        .names {{
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }}
+
+        .display-name {{
+            font-family: 'Amiri', 'Noto Sans Arabic', 'Noto Sans', serif;
+            font-size: 56px;
+            font-weight: 700;
+            color: #fff;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.4);
+            line-height: 1.1;
+        }}
+
+        .username {{
+            font-size: 24px;
+            font-weight: 500;
+            color: #8a8a9a;
+        }}
+
+        .badges {{
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }}
+
+        .badge {{
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            border-radius: 14px;
+            padding: 10px 20px;
+            min-width: 85px;
+            position: relative;
+            overflow: hidden;
+        }}
+
+        .badge.rank-badge {{
+            background: linear-gradient(145deg, #4a4a5a, #3a3a4a, #5a5a6a);
+            border: 1px solid rgba(255,255,255,0.15);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.1);
+        }}
+
+        .badge.rank-badge::after {{
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -50%;
+            width: 30%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+            transform: skewX(-20deg);
+        }}
+
+        .badge.level-badge {{
+            background: linear-gradient(145deg, #f5d55a, #e6a83a, #d4982a);
+            border: 1px solid rgba(255,255,255,0.3);
+            box-shadow: 0 4px 16px rgba(230, 168, 58, 0.4), inset 0 1px 0 rgba(255,255,255,0.3);
+        }}
+
+        .badge.level-badge::after {{
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 20%;
+            width: 30%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            transform: skewX(-20deg);
+        }}
+
+        .badge.booster-badge {{
+            background: linear-gradient(145deg, #ff73fa, #c850ff, #a855f7);
+            border: 1px solid rgba(255,255,255,0.3);
+            box-shadow: 0 4px 16px rgba(200, 80, 255, 0.5), inset 0 1px 0 rgba(255,255,255,0.3);
+        }}
+
+        .badge.booster-badge::after {{
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 20%;
+            width: 30%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+            transform: skewX(-20deg);
+        }}
+
+        .badge-label {{
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            margin-bottom: 2px;
+        }}
+
+        .badge.rank-badge .badge-label {{
+            color: #9a9aaa;
+        }}
+
+        .badge.level-badge .badge-label {{
+            color: rgba(0,0,0,0.5);
+        }}
+
+        .badge.booster-badge .badge-label {{
+            color: rgba(255,255,255,0.8);
+        }}
+
+        .badge-value {{
+            font-size: 26px;
+            font-weight: 900;
+        }}
+
+        .badge-value.rank {{
+            color: #fff;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }}
+
+        .badge-value.level {{
+            color: #1a1a2e;
+            text-shadow: 0 1px 0 rgba(255,255,255,0.3);
+        }}
+
+        .badge-value.booster {{
+            color: #fff;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }}
+
+        /* Progress Section */
+        .progress-section {{
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }}
+
+        .progress-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }}
+
+        .xp-text {{
+            font-size: 18px;
+            font-weight: 600;
+            color: #b0b0c0;
+        }}
+
+        .xp-text span {{
+            color: #57f287;
+            font-weight: 700;
+        }}
+
+        .progress-percent {{
+            font-size: 22px;
+            font-weight: 800;
+            color: #57f287;
+        }}
+
+        .progress-bar {{
+            height: 28px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 14px;
+            overflow: hidden;
+            position: relative;
+            border: 1px solid rgba(255,255,255,0.05);
+        }}
+
+        .progress-fill {{
+            height: 100%;
+            width: {progress_percent}%;
+            background: linear-gradient(90deg,
+                #2d9f5e 0%,
+                #43b581 25%,
+                #57f287 50%,
+                #43b581 75%,
+                #2d9f5e 100%
+            );
+            background-size: 200% 100%;
+            border-radius: 14px;
+            position: relative;
+            min-width: 28px;
+            box-shadow: 0 0 24px rgba(87, 242, 135, 0.5);
+            overflow: hidden;
+        }}
+
+        .progress-fill::before {{
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -20%;
+            width: 40%;
+            height: 200%;
+            background: linear-gradient(
+                105deg,
+                transparent 40%,
+                rgba(255,255,255,0.5) 50%,
+                transparent 60%
+            );
+            transform: skewX(-25deg);
+        }}
+
+        .progress-fill::after {{
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 50%;
+            background: linear-gradient(180deg, rgba(255,255,255,0.25) 0%, transparent 100%);
+            border-radius: 14px 14px 0 0;
+        }}
+    </style>
+</head>
+<body>
+    <div class="card-wrapper">
+    <div class="card">
+        <div class="card-content">
+            <div class="avatar-section">
+                <div class="avatar-wrapper">
+                    <div class="avatar-ring"></div>
+                    <img class="avatar" src="{avatar_url}" alt="avatar">
+                    <div class="status-dot"></div>
+                </div>
+            </div>
+
+            <div class="info-section">
+                <div class="top-row">
+                    <div class="names">
+                        <div class="display-name">{display_name}</div>
+                        <div class="username">@{username}</div>
+                    </div>
+                    <div class="badges">
+                        <div class="badge rank-badge">
+                            <span class="badge-label">Rank</span>
+                            <span class="badge-value rank">#{rank}</span>
+                        </div>
+                        <div class="badge level-badge">
+                            <span class="badge-label">Level</span>
+                            <span class="badge-value level">{level}</span>
+                        </div>
+                        {booster_badge}
+                    </div>
+                </div>
+
+                <div class="progress-section">
+                    <div class="progress-header">
+                        <span class="xp-text"><span>{current_xp:,}</span> / {xp_for_next:,} XP</span>
+                        <span class="progress-percent">{progress_percent}%</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div>
+</body>
+</html>
+'''
+    return html
+
+
+async def generate_rank_card(
+    username: str,
+    display_name: str,
+    avatar_url: str,
+    level: int,
+    rank: int,
+    current_xp: int,
+    xp_for_next: int,
+    xp_progress: float,
+    total_messages: int,
+    voice_minutes: int,
+    is_booster: bool = False,
+    guild_id: Optional[int] = None,
+    banner_url: Optional[str] = None,
+    status: str = "online",
+) -> bytes:
+    """Generate rank card using Playwright."""
+
+    try:
+        context = await _get_context()
+        page = await context.new_page()
+
+        # Generate HTML
+        html = _generate_html(
+            display_name=display_name[:20] + "..." if len(display_name) > 20 else display_name,
+            username=username,
+            avatar_url=avatar_url,
+            level=level,
+            rank=rank,
+            current_xp=current_xp,
+            xp_for_next=xp_for_next,
+            xp_progress=xp_progress,
+            total_messages=total_messages,
+            voice_minutes=voice_minutes,
+            is_booster=is_booster,
+            banner_url=banner_url,
+            status=status,
+        )
+
+        await page.set_content(html, wait_until='domcontentloaded')
+
+        # Wait for avatar image to actually load (not just element visible)
+        try:
+            await page.wait_for_function(
+                '''() => {
+                    const img = document.querySelector('img.avatar');
+                    return img && img.complete && img.naturalWidth > 0;
+                }''',
+                timeout=5000
+            )
+        except Exception:
+            # If image fails to load, add a fallback background
+            log.tree("Avatar Load Failed", [
+                ("User", display_name),
+                ("URL", avatar_url[:50] + "..." if len(avatar_url) > 50 else avatar_url),
+            ], emoji="⚠️")
+            await page.evaluate('''() => {
+                const img = document.querySelector('img.avatar');
+                if (img) {
+                    img.style.display = 'none';
+                    const wrapper = document.querySelector('.avatar-wrapper');
+                    if (wrapper) {
+                        const fallback = document.createElement('div');
+                        fallback.style.cssText = 'width:180px;height:180px;border-radius:50%;background:linear-gradient(135deg,#3a3a4a,#2a2a3a);display:flex;align-items:center;justify-content:center;font-size:64px;color:#fff;font-weight:700;';
+                        fallback.textContent = arguments[0];
+                        wrapper.insertBefore(fallback, img);
+                    }
+                }
+            }''', display_name[0].upper() if display_name else "?")
+
+        # Screenshot
+        screenshot = await page.screenshot(type='png', omit_background=True)
+        await page.close()
+
+        log.tree("Rank Card Generated", [
+            ("User", display_name),
+            ("Level", str(level)),
+        ], emoji="🎨")
+
+        return screenshot
+
+    except Exception as e:
+        log.tree("Rank Card Failed", [
+            ("Error", str(e)),
+        ], emoji="❌")
+        raise

@@ -10,7 +10,7 @@ Author: حَـــــنَّـــــا
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import FrozenSet
+from typing import Dict, FrozenSet
 
 
 ROOT_DIR = Path(__file__).parent.parent.parent
@@ -43,6 +43,26 @@ def _get_env_int_set(key: str, default: str = "") -> FrozenSet[int]:
         return frozenset()
 
 
+def _get_env_role_rewards(key: str) -> Dict[int, int]:
+    """Get environment variable as level:role_id mapping.
+
+    Format: "5:123456,10:789012,20:345678"
+    Returns: {5: 123456, 10: 789012, 20: 345678}
+    """
+    value = os.getenv(key, "")
+    if not value:
+        return {}
+    rewards = {}
+    try:
+        for pair in value.split(","):
+            if ":" in pair:
+                level, role_id = pair.strip().split(":")
+                rewards[int(level)] = int(role_id)
+        return rewards
+    except ValueError:
+        return {}
+
+
 @dataclass(frozen=True)
 class Config:
     """Bot configuration from environment variables."""
@@ -62,10 +82,10 @@ class Config:
         default_factory=lambda: _get_env_int_set("SYRIA_VC_PROTECTED_IDS", "")
     )
 
-    # Ignored channels (no permission changes) - comma-separated IDs
+    # Ignored channels (no permission changes, no voice XP) - comma-separated IDs
     # Use for channels managed by other bots (e.g., Quran VC)
     VC_IGNORED_CHANNELS: FrozenSet[int] = field(
-        default_factory=lambda: _get_env_int_set("SYRIA_VC_IGNORED_IDS", "1453386475457740860")
+        default_factory=lambda: _get_env_int_set("SYRIA_VC_IGNORED_IDS", "")
     )
 
     # Cleanup settings
@@ -78,6 +98,7 @@ class Config:
 
     # APIs
     OPENWEATHER_API_KEY: str = os.getenv("OPENWEATHER_API_KEY", "")
+    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
 
     # Webhooks (read directly by logger from env vars)
     # SYRIA_LIVE_LOGS_WEBHOOK_URL - Tree format console logs streaming
@@ -85,6 +106,23 @@ class Config:
 
     # Database
     DATABASE_PATH: str = str(DATA_DIR / "syria.db")
+
+    # XP System
+    XP_MESSAGE_MIN: int = _get_env_int("SYRIA_XP_MESSAGE_MIN", 15)
+    XP_MESSAGE_MAX: int = _get_env_int("SYRIA_XP_MESSAGE_MAX", 25)
+    XP_VOICE_PER_MIN: int = _get_env_int("SYRIA_XP_VOICE_PER_MIN", 5)
+    XP_MESSAGE_COOLDOWN: int = _get_env_int("SYRIA_XP_MESSAGE_COOLDOWN", 60)
+    XP_BOOSTER_MULTIPLIER: float = float(os.getenv("SYRIA_XP_BOOSTER_MULTIPLIER", "2.0"))
+
+    # XP Ignored Channels - no message XP (e.g., prison)
+    XP_IGNORED_CHANNELS: FrozenSet[int] = field(
+        default_factory=lambda: _get_env_int_set("SYRIA_XP_IGNORED_CHANNELS", "")
+    )
+
+    # XP Role Rewards (level:role_id pairs)
+    XP_ROLE_REWARDS: Dict[int, int] = field(
+        default_factory=lambda: _get_env_role_rewards("SYRIA_XP_ROLE_REWARDS")
+    )
 
 
 config = Config()

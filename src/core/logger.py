@@ -10,6 +10,7 @@ Features:
 - Unique run ID generation for tracking bot sessions
 - EST/EDT timezone timestamp formatting (auto-adjusts)
 - Tree-style log formatting for structured data
+- Nested tree support for hierarchical data
 - Console and file output simultaneously
 - Daily log folders with separate log and error files
 - Automatic cleanup of old logs (7+ days)
@@ -34,11 +35,12 @@ import os
 import re
 import shutil
 import uuid
+import traceback
 import asyncio
 import aiohttp
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import List, Tuple, Optional, Any
+from typing import List, Tuple, Optional, Any, Dict
 from zoneinfo import ZoneInfo
 
 
@@ -51,16 +53,6 @@ TIMEZONE = ZoneInfo("America/New_York")
 
 # Log retention period in days
 LOG_RETENTION_DAYS = 7
-
-# ANSI colors for console output
-RESET = "\033[0m"
-BOLD = "\033[1m"
-RED = "\033[91m"
-GREEN = "\033[92m"
-YELLOW = "\033[93m"
-BLUE = "\033[94m"
-CYAN = "\033[96m"
-GRAY = "\033[90m"
 
 # Regex to match emojis (for stripping from file logs)
 EMOJI_PATTERN = re.compile(
@@ -253,14 +245,8 @@ class Logger:
         else:
             full_message = f"{emoji} {clean_message}" if emoji else clean_message
 
-        # Console output with colors
-        if include_timestamp:
-            console_msg = f"{GRAY}{self._get_timestamp()}{RESET} {emoji} {BOLD}{clean_message}{RESET}"
-        else:
-            console_msg = f"{emoji} {clean_message}" if emoji else clean_message
-        print(console_msg)
+        print(full_message)
 
-        # File output without colors
         try:
             with open(self.log_file, "a", encoding="utf-8") as f:
                 f.write(f"{full_message}\n")
@@ -269,7 +255,7 @@ class Logger:
 
     def _write_raw(self, message: str, also_to_error: bool = False) -> None:
         """Write raw message without timestamp (for tree branches)."""
-        print(f"{CYAN}{message}{RESET}")
+        print(message)
         try:
             with open(self.log_file, "a", encoding="utf-8") as f:
                 f.write(f"{message}\n")
@@ -291,14 +277,8 @@ class Logger:
         else:
             full_message = f"{emoji} {clean_message}" if emoji else clean_message
 
-        # Console output with colors
-        if include_timestamp:
-            console_msg = f"{GRAY}{self._get_timestamp()}{RESET} {emoji} {RED}{clean_message}{RESET}"
-        else:
-            console_msg = f"{emoji} {RED}{clean_message}{RESET}"
-        print(console_msg)
+        print(full_message)
 
-        # File output
         try:
             with open(self.log_file, "a", encoding="utf-8") as f:
                 f.write(f"{full_message}\n")
@@ -464,6 +444,31 @@ class Logger:
                 self._write(message, "🔍")
                 self._last_was_tree = False
 
+    def critical(self, message: str, details: Optional[List[Tuple[str, Any]]] = None) -> None:
+        """Log a critical/fatal error message (also writes to error log and live logs)."""
+        if details:
+            self._tree_error(message, details, emoji="🚨")
+        else:
+            self._write_error(message, "🚨")
+            self._last_was_tree = False
+
+    def exception(self, message: str, details: Optional[List[Tuple[str, Any]]] = None) -> None:
+        """Log an exception with full traceback (also writes to error log and live logs)."""
+        if details:
+            self._tree_error(message, details, emoji="💥")
+        else:
+            self._write_error(message, "💥")
+        try:
+            tb = traceback.format_exc()
+            with open(self.log_file, "a", encoding="utf-8") as f:
+                f.write(tb)
+                f.write("\n")
+            with open(self.error_file, "a", encoding="utf-8") as f:
+                f.write(tb)
+                f.write("\n")
+        except (OSError, IOError):
+            pass
+
     # =========================================================================
     # Public Methods - Tree Formatting
     # =========================================================================
@@ -505,6 +510,204 @@ class Logger:
         # Send to live logs Discord webhook
         formatted = self._format_tree_for_live(title, items, emoji)
         self._send_live_log(formatted)
+
+    def tree_nested(
+        self,
+        title: str,
+        data: Dict[str, Any],
+        emoji: str = "📦",
+        indent: int = 0
+    ) -> None:
+        """
+        Log nested/hierarchical data in tree format.
+
+        Example output:
+            [12:00:00 PM EST] 📦 Channel State
+              ├─ Voice
+              │   ├─ Connected: True
+              │   └─ Members: 5
+              └─ Settings
+                  ├─ Locked: False
+                  └─ Limit: 10
+
+        Args:
+            title: Tree title/header
+            data: Nested dictionary
+            emoji: Emoji prefix for title
+            indent: Current indentation level
+        """
+        if indent == 0:
+            if not self._last_was_tree:
+                self._write_raw("")
+            self._write(title, emoji)
+
+        items = list(data.items())
+        for i, (key, value) in enumerate(items):
+            is_last = i == len(items) - 1
+            prefix = TreeSymbols.LAST if is_last else TreeSymbols.BRANCH
+            indent_str = "  " * (indent + 1)
+
+            if isinstance(value, dict):
+                self._write_raw(f"{indent_str}{prefix} {key}")
+                self._render_nested(value, indent + 1, is_last)
+            else:
+                self._write_raw(f"{indent_str}{prefix} {key}: {value}")
+
+        if indent == 0:
+            self._write_raw("")
+            self._last_was_tree = True
+
+    def _render_nested(self, data: Dict[str, Any], indent: int, parent_is_last: bool) -> None:
+        """Recursively render nested tree data."""
+        items = list(data.items())
+        for i, (key, value) in enumerate(items):
+            is_last = i == len(items) - 1
+            prefix = TreeSymbols.LAST if is_last else TreeSymbols.BRANCH
+            indent_str = "  " * indent
+
+            if isinstance(value, dict):
+                self._write_raw(f"{indent_str}  {prefix} {key}")
+                self._render_nested(value, indent + 1, is_last)
+            else:
+                self._write_raw(f"{indent_str}  {prefix} {key}: {value}")
+
+    def tree_list(
+        self,
+        title: str,
+        items: List[str],
+        emoji: str = "📋"
+    ) -> None:
+        """
+        Log a simple list in tree format.
+
+        Example output:
+            [12:00:00 PM EST] 📋 Trusted Users
+              ├─ John#1234
+              ├─ Jane#5678
+              └─ Bob#9012
+
+        Args:
+            title: Tree title/header
+            items: List of string items
+            emoji: Emoji prefix for title
+        """
+        if not self._last_was_tree:
+            self._write_raw("")
+
+        self._write(title, emoji)
+
+        for i, item in enumerate(items):
+            is_last = i == len(items) - 1
+            prefix = TreeSymbols.LAST if is_last else TreeSymbols.BRANCH
+            self._write_raw(f"  {prefix} {item}")
+
+        self._write_raw("")
+        self._last_was_tree = True
+
+    def tree_section(
+        self,
+        title: str,
+        sections: Dict[str, List[Tuple[str, Any]]],
+        emoji: str = "📊"
+    ) -> None:
+        """
+        Log multiple sections in tree format.
+
+        Example output:
+            [12:00:00 PM EST] 📊 Bot Stats
+              ├─ TempVoice
+              │   ├─ Active Channels: 5
+              │   └─ Total Created: 100
+              └─ XP System
+                  ├─ Users: 500
+                  └─ Total XP: 1.2M
+
+        Args:
+            title: Tree title/header
+            sections: Dict of section_name -> [(key, value), ...]
+            emoji: Emoji prefix for title
+        """
+        if not self._last_was_tree:
+            self._write_raw("")
+
+        self._write(title, emoji)
+
+        section_names = list(sections.keys())
+        for si, section_name in enumerate(section_names):
+            section_is_last = si == len(section_names) - 1
+            section_prefix = TreeSymbols.LAST if section_is_last else TreeSymbols.BRANCH
+            self._write_raw(f"  {section_prefix} {section_name}")
+
+            items = sections[section_name]
+            for ii, (key, value) in enumerate(items):
+                item_is_last = ii == len(items) - 1
+                item_prefix = TreeSymbols.LAST if item_is_last else TreeSymbols.BRANCH
+                continuation = TreeSymbols.SPACE if section_is_last else TreeSymbols.PIPE
+                self._write_raw(f"  {continuation} {item_prefix} {key}: {value}")
+
+        self._write_raw("")
+        self._last_was_tree = True
+
+    def error_tree(
+        self,
+        title: str,
+        error: Exception,
+        context: Optional[List[Tuple[str, Any]]] = None
+    ) -> None:
+        """
+        Log an error with context in tree format.
+
+        Example output:
+            [12:00:00 PM EST] ❌ Channel Error
+              ├─ Type: PermissionError
+              ├─ Message: Cannot modify channel
+              ├─ Channel: 123456789
+              └─ User: John#1234
+
+        Args:
+            title: Error title/description
+            error: The exception that occurred
+            context: Additional context as (key, value) tuples
+        """
+        items: List[Tuple[str, Any]] = [
+            ("Type", type(error).__name__),
+            ("Message", str(error)),
+        ]
+
+        if context:
+            items.extend(context)
+
+        self._tree_error(title, items, emoji="❌")
+
+    def startup_tree(
+        self,
+        bot_name: str,
+        bot_id: int,
+        guilds: int,
+        latency: float,
+        extra: Optional[List[Tuple[str, Any]]] = None
+    ) -> None:
+        """
+        Log bot startup information in tree format.
+
+        Args:
+            bot_name: Name of the bot
+            bot_id: Discord bot ID
+            guilds: Number of guilds
+            latency: WebSocket latency in ms
+            extra: Additional startup info
+        """
+        items: List[Tuple[str, Any]] = [
+            ("Bot ID", bot_id),
+            ("Guilds", guilds),
+            ("Latency", f"{latency:.0f}ms"),
+            ("Run ID", self.run_id),
+        ]
+
+        if extra:
+            items.extend(extra)
+
+        self.tree(f"Bot Ready: {bot_name}", items, emoji="🤖")
 
 
 # =============================================================================

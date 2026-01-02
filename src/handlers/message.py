@@ -13,14 +13,17 @@ import discord
 from discord.ext import commands
 
 from src.core.logger import log
+from src.core.config import config
+from src.core.constants import MAX_IMAGE_SIZE, MAX_VIDEO_SIZE
+from src.core.colors import COLOR_ERROR, COLOR_WARNING
 from src.services.convert_service import convert_service
 from src.services.quote_service import quote_service
+from src.services.translate_service import translate_service, find_similar_language
+from src.services.database import db
 from src.services.rate_limiter import check_rate_limit
 from src.views.convert_view import start_convert_editor
-
-# Size limits (bytes)
-MAX_IMAGE_SIZE = 8 * 1024 * 1024  # 8MB
-MAX_VIDEO_SIZE = 25 * 1024 * 1024  # 25MB
+from src.views.translate_view import TranslateView, create_translate_embed
+from src.utils.footer import set_footer
 
 
 class MessageHandler(commands.Cog):
@@ -210,7 +213,8 @@ class MessageHandler(commands.Cog):
         content = original.content
 
         # Replace user mentions <@123> or <@!123> with @username
-        def replace_user_mention(match):
+        def replace_user_mention(match) -> str:
+            """Convert user mention to @username format."""
             user_id = int(match.group(1))
             if message.guild:
                 member = message.guild.get_member(user_id)
@@ -221,7 +225,8 @@ class MessageHandler(commands.Cog):
         content = re.sub(r'<@!?(\d+)>', replace_user_mention, content)
 
         # Replace role mentions <@&123> with @rolename
-        def replace_role_mention(match):
+        def replace_role_mention(match) -> str:
+            """Convert role mention to @rolename format."""
             role_id = int(match.group(1))
             if message.guild:
                 role = message.guild.get_role(role_id)
@@ -232,7 +237,8 @@ class MessageHandler(commands.Cog):
         content = re.sub(r'<@&(\d+)>', replace_role_mention, content)
 
         # Replace channel mentions <#123> with #channelname
-        def replace_channel_mention(match):
+        def replace_channel_mention(match) -> str:
+            """Convert channel mention to #channelname format."""
             channel_id = int(match.group(1))
             channel = self.bot.get_channel(channel_id)
             if channel:
@@ -283,6 +289,109 @@ class MessageHandler(commands.Cog):
         )
         await message.reply(file=file, mention_author=False)
 
+    async def _handle_reply_translate(self, message: discord.Message, target_lang: str) -> None:
+        """Handle replying 'translate to X' to a message - translates the text."""
+        # Check rate limit
+        if not await check_rate_limit(message.author, "translate", message=message):
+            return
+
+        ref = message.reference
+        if not ref or not ref.message_id:
+            return
+
+        # Use cached message if available (faster)
+        original = ref.cached_message
+        if not original:
+            try:
+                original = await message.channel.fetch_message(ref.message_id)
+            except (discord.NotFound, discord.Forbidden) as e:
+                log.tree("Translate Fetch Failed", [
+                    ("User", str(message.author)),
+                    ("Message ID", str(ref.message_id)),
+                    ("Error", type(e).__name__),
+                ], emoji="⚠️")
+                await message.reply("Couldn't access that message.", mention_author=False)
+                return
+
+        # Check if message has content
+        if not original.content or not original.content.strip():
+            log.tree("Translate No Content", [
+                ("User", str(message.author)),
+                ("Target Message", str(ref.message_id)),
+            ], emoji="⚠️")
+            await message.reply("That message has no text to translate.", mention_author=False)
+            return
+
+        text = original.content.strip()
+
+        log.tree("Translate Reply", [
+            ("User", f"{message.author.name} ({message.author.display_name})"),
+            ("User ID", str(message.author.id)),
+            ("Text", text[:50] + "..." if len(text) > 50 else text),
+            ("To", target_lang),
+        ], emoji="🌐")
+
+        result = await translate_service.translate(text, target_lang=target_lang)
+
+        if not result.success:
+            error_msg = "Translation failed. Please try again."
+            if result.error:
+                if "Unknown language" in result.error or "No support for the provided language" in result.error:
+                    similar = find_similar_language(target_lang)
+                    if similar:
+                        code, name, flag = similar
+                        error_msg = f"Language `{target_lang}` is not supported. Did you mean {flag} **{name}** (`{code}`)?"
+                    else:
+                        error_msg = f"Language `{target_lang}` is not supported."
+                elif len(result.error) < 100:
+                    error_msg = result.error
+
+            embed = discord.Embed(description=f"❌ {error_msg}", color=COLOR_ERROR)
+            set_footer(embed)
+            await message.reply(embed=embed, mention_author=False)
+
+            log.tree("Translation Failed", [
+                ("User", f"{message.author.name}"),
+                ("User ID", str(message.author.id)),
+                ("Target", target_lang),
+                ("Error", result.error[:50] if result.error else "Unknown"),
+            ], emoji="❌")
+            return
+
+        if result.source_lang == result.target_lang:
+            embed = discord.Embed(
+                title="🌐 Already in Target Language",
+                description=f"This text is already in {result.target_name}.",
+                color=COLOR_WARNING
+            )
+            set_footer(embed)
+            await message.reply(embed=embed, mention_author=False)
+            log.tree("Translation Skipped", [
+                ("User", f"{message.author.name}"),
+                ("User ID", str(message.author.id)),
+                ("Reason", f"Already in {result.target_name}"),
+            ], emoji="⚠️")
+            return
+
+        embed = create_translate_embed(result)
+
+        view = TranslateView(
+            original_text=text,
+            requester_id=message.author.id,
+            current_lang=result.target_lang,
+            source_lang=result.source_lang,
+        )
+
+        msg = await message.reply(embed=embed, view=view, mention_author=False)
+        view.message = msg
+
+        log.tree("Translation Sent", [
+            ("User", f"{message.author.name} ({message.author.display_name})"),
+            ("User ID", str(message.author.id)),
+            ("From", f"{result.source_name} ({result.source_lang})"),
+            ("To", f"{result.target_name} ({result.target_lang})"),
+        ], emoji="✅")
+
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message) -> None:
         """Handle incoming messages."""
@@ -299,19 +408,60 @@ class MessageHandler(commands.Cog):
                     ("Error", str(e)),
                 ], emoji="❌")
 
+        # Handle XP gain from messages
+        if hasattr(self.bot, 'xp_service') and self.bot.xp_service:
+            try:
+                await self.bot.xp_service.on_message(message)
+            except Exception as e:
+                log.tree("XP Message Handler Error", [
+                    ("Error", str(e)),
+                ], emoji="❌")
+
+        # Track images shared (only in main server)
+        if message.guild and message.guild.id == config.GUILD_ID and message.attachments:
+            try:
+                db.increment_images_shared(message.author.id, message.guild.id)
+            except Exception:
+                pass  # Silent fail for tracking
+
         if not message.reference:
             return
 
-        # Quick check: is it "convert" or "quote"?
+        # Quick check: is it "convert", "quote", or "translate to X"?
         content = message.content.strip().lower()
-        if len(content) > 10:  # "convert" is 7 chars, allow some whitespace
-            return
 
         if content == "convert":
             await self._handle_reply_convert(message)
         elif content == "quote":
             await self._handle_reply_quote(message)
+        elif content.startswith("translate to ") or content.startswith("translate "):
+            # Extract target language
+            if content.startswith("translate to "):
+                target_lang = content[13:].strip()  # len("translate to ") = 13
+            else:
+                target_lang = content[10:].strip()  # len("translate ") = 10
+
+            if target_lang:
+                await self._handle_reply_translate(message, target_lang)
 
 
-async def setup(bot):
+    @commands.Cog.listener()
+    async def on_reaction_add(self, reaction: discord.Reaction, user: discord.User) -> None:
+        """Track reactions given by users."""
+        if user.bot:
+            return
+
+        # Only track in main server
+        if not reaction.message.guild or reaction.message.guild.id != config.GUILD_ID:
+            return
+
+        try:
+            db.increment_reactions_given(user.id, reaction.message.guild.id)
+        except Exception:
+            pass  # Silent fail for tracking
+
+
+async def setup(bot: commands.Bot) -> None:
+    """Register the message handler cog with the bot."""
     await bot.add_cog(MessageHandler(bot))
+    log.success("Loaded message handler")

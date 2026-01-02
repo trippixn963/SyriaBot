@@ -54,7 +54,8 @@ class NameModal(ui.Modal, title="Rename Channel"):
             base_name = extract_base_name(channel.name)
         self.name_input.default = base_name
 
-    async def on_submit(self, interaction: discord.Interaction):
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        """Handle channel rename submission."""
         new_base_name = self.name_input.value.strip() if self.name_input.value else None
 
         try:
@@ -131,7 +132,8 @@ class LimitModal(ui.Modal, title="Set User Limit"):
         current = channel.user_limit
         self.limit_input.default = str(current) if current > 0 else "0"
 
-    async def on_submit(self, interaction: discord.Interaction):
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        """Handle user limit submission."""
         try:
             limit = int(self.limit_input.value)
             if limit < 0 or limit > 99:

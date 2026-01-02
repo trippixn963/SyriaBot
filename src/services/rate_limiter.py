@@ -19,44 +19,24 @@ import discord
 from datetime import datetime, timedelta
 from threading import Lock
 from typing import Optional, Tuple, Set
-from zoneinfo import ZoneInfo
 
+from src.core.colors import COLOR_GOLD, COLOR_BOOST
+from src.core.constants import (
+    TIMEZONE_EST,
+    WEEKLY_LIMITS,
+    RATE_LIMIT_ACTION_NAMES,
+    RATE_LIMIT_ACTION_EMOJIS,
+)
 from src.core.logger import log
 from src.core.config import config
 from src.services.database import db
 from src.utils.footer import set_footer
 
-
-# =============================================================================
-# Constants
-# =============================================================================
-
-EST = ZoneInfo("America/New_York")
-
-# Weekly limits for non-privileged users
-WEEKLY_LIMITS = {
-    "convert": 5,
-    "quote": 5,
-    "weather": 5,
-}
-
-# Action display names
-ACTION_NAMES = {
-    "convert": "Conversions",
-    "quote": "Quotes",
-    "weather": "Weather lookups",
-}
-
-# Action emojis
-ACTION_EMOJIS = {
-    "convert": "🖼️",
-    "quote": "💬",
-    "weather": "🌤️",
-}
-
-# Embed color for limit reached
-COLOR_LIMIT = 0xE6B84A  # Gold/warning color
-COLOR_BOOST = 0xFF73FA  # Pink boost color
+# Aliases for backwards compatibility
+EST = TIMEZONE_EST
+ACTION_NAMES = RATE_LIMIT_ACTION_NAMES
+ACTION_EMOJIS = RATE_LIMIT_ACTION_EMOJIS
+COLOR_LIMIT = COLOR_GOLD
 
 
 # =============================================================================

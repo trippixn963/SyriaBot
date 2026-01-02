@@ -31,48 +31,34 @@ except ImportError:
     WAND_AVAILABLE = False
 
 from src.core.logger import log
+from src.core.constants import (
+    FONT_PATHS,
+    MAX_IMAGE_SIZE,
+    MAX_VIDEO_SIZE,
+    MAX_DIMENSION,
+    MAX_VIDEO_DURATION,
+    GIF_FPS,
+    GIF_MAX_WIDTH,
+    BAR_HEIGHT_RATIO,
+    MIN_BAR_HEIGHT,
+    FONT_SIZE_RATIO,
+    LINE_SPACING_RATIO,
+    BAR_PADDING_RATIO,
+    TEXT_PADDING_RATIO,
+    DEFAULT_BAR_COLOR,
+    DEFAULT_TEXT_COLOR,
+    IMAGE_EXTENSIONS,
+    VIDEO_EXTENSIONS,
+)
 from src.utils.http import http_session, DOWNLOAD_TIMEOUT
 from src.utils.text import wrap_text
-
-
-# =============================================================================
-# Constants
-# =============================================================================
-
-# Text bar settings - DYNAMIC sizing like NotSoBot
-BAR_HEIGHT_RATIO = 0.20  # Bar height = 20% of image height (NotSoBot style)
-MIN_BAR_HEIGHT = 80  # Minimum bar height in pixels
-FONT_SIZE_RATIO = 0.70  # Font size = 70% of bar height
-LINE_SPACING_RATIO = 0.25  # 25% of line height for spacing
-BAR_PADDING_RATIO = 0.10  # Padding = 10% of bar height
-BAR_COLOR = (255, 255, 255)  # Pure white
-TEXT_COLOR = (0, 0, 0)  # Black
-TEXT_PADDING_RATIO = 0.05  # Horizontal padding = 5% of image width
-
-# Image constraints
-MAX_IMAGE_SIZE = 8 * 1024 * 1024  # 8MB max input
-MAX_VIDEO_SIZE = 25 * 1024 * 1024  # 25MB max video input
-MAX_DIMENSION = 2000  # Max width/height
-
-# Video constraints
-MAX_VIDEO_DURATION = 15  # Max video duration in seconds
-GIF_FPS = 15  # Frames per second for output GIF
-GIF_MAX_WIDTH = 480  # Max GIF width (height scaled proportionally)
-
-# Font settings - use system fonts
-FONT_PATHS = [
-    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",  # Linux
-    "/System/Library/Fonts/Helvetica.ttc",  # macOS
-    "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",  # Arch Linux
-    "arial.ttf",  # Windows fallback
-]
 
 # Temp directory for processing
 TEMP_DIR = Path(tempfile.gettempdir()) / "syria_convert"
 
-# Supported media types
-IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".jfif", ".bmp", ".tiff", ".tif"}
-VIDEO_EXTENSIONS = {".mp4", ".mov", ".webm", ".avi", ".mkv", ".m4v", ".flv", ".wmv", ".3gp"}
+# Aliases for backwards compatibility
+BAR_COLOR = DEFAULT_BAR_COLOR
+TEXT_COLOR = DEFAULT_TEXT_COLOR
 
 
 # =============================================================================
