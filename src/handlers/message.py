@@ -16,7 +16,6 @@ from src.core.logger import log
 from src.services.convert_service import convert_service
 from src.services.quote_service import quote_service
 from src.services.rate_limiter import check_rate_limit
-from src.services.webhook_logger import webhook_logger
 from src.views.convert_view import start_convert_editor
 
 # Size limits (bytes)
@@ -45,7 +44,12 @@ class MessageHandler(commands.Cog):
         if not original:
             try:
                 original = await message.channel.fetch_message(ref.message_id)
-            except (discord.NotFound, discord.Forbidden):
+            except (discord.NotFound, discord.Forbidden) as e:
+                log.tree("Convert Fetch Failed", [
+                    ("User", str(message.author)),
+                    ("Message ID", str(ref.message_id)),
+                    ("Error", type(e).__name__),
+                ], emoji="⚠️")
                 await message.reply("Couldn't access that message.", mention_author=False)
                 return
 
@@ -149,7 +153,8 @@ class MessageHandler(commands.Cog):
             return
 
         log.tree("Convert", [
-            ("User", str(message.author)),
+            ("User", f"{message.author.name} ({message.author.display_name})"),
+            ("ID", str(message.author.id)),
             ("Type", "Video" if is_video else "Image"),
             ("Size", f"{len(media_data) // 1024}KB"),
         ], emoji="CONVERT")
@@ -178,12 +183,21 @@ class MessageHandler(commands.Cog):
         if not original:
             try:
                 original = await message.channel.fetch_message(ref.message_id)
-            except (discord.NotFound, discord.Forbidden):
+            except (discord.NotFound, discord.Forbidden) as e:
+                log.tree("Quote Fetch Failed", [
+                    ("User", str(message.author)),
+                    ("Message ID", str(ref.message_id)),
+                    ("Error", type(e).__name__),
+                ], emoji="⚠️")
                 await message.reply("Couldn't access that message.", mention_author=False)
                 return
 
         # Check if message has content
         if not original.content or not original.content.strip():
+            log.tree("Quote No Content", [
+                ("User", str(message.author)),
+                ("Target Message", str(ref.message_id)),
+            ], emoji="⚠️")
             await message.reply("That message has no text to quote.", mention_author=False)
             return
 
@@ -236,8 +250,10 @@ class MessageHandler(commands.Cog):
                 banner_url = str(message.guild.banner.url)
 
         log.tree("Quote", [
-            ("User", str(message.author)),
-            ("Author", str(author)),
+            ("User", f"{message.author.name} ({message.author.display_name})"),
+            ("User ID", str(message.author.id)),
+            ("Author", f"{author.name} ({author.display_name})"),
+            ("Author ID", str(author.id)),
             ("Length", f"{len(original.content)} chars"),
             ("Banner", "Yes" if banner_url else "No"),
         ], emoji="💬")
@@ -266,9 +282,6 @@ class MessageHandler(commands.Cog):
             filename="discord.gg-syria.png"
         )
         await message.reply(file=file, mention_author=False)
-
-        # Webhook logging
-        webhook_logger.log_quote(message.author, str(author), len(original.content))
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message) -> None:

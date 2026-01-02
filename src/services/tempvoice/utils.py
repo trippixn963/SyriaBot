@@ -130,9 +130,67 @@ def is_booster(member: discord.Member) -> bool:
 # Channel Name Generation
 # =============================================================================
 
+# Pattern to match Roman numeral prefix: "III・Name" or "III Name" or "III-Name"
+NUMERAL_PREFIX_PATTERN = re.compile(r'^([IVXLCDM]+)[・·\-\s]+(.+)$')
+
+
+def extract_base_name(full_name: str) -> str:
+    """
+    Extract base name from a full channel name (removes numeral prefix).
+
+    "III・Trippixn" -> "Trippixn"
+    "Custom Name" -> "Custom Name" (no prefix found)
+    """
+    match = NUMERAL_PREFIX_PATTERN.match(full_name)
+    if match:
+        return match.group(2)
+    return full_name
+
+
+def build_full_name(position: int, base_name: str) -> str:
+    """
+    Build a full channel name from position and base name.
+
+    (1, "Trippixn") -> "I・Trippixn"
+    (4, "Custom Name") -> "IV・Custom Name"
+    """
+    roman = to_roman(position)
+    # Truncate base name if too long (Discord limit is 100 chars, leave room for numeral)
+    max_base_len = 95 - len(roman)
+    truncated_base = base_name[:max_base_len]
+    return f"{roman}・{truncated_base}"
+
+
+def generate_base_name(member: discord.Member) -> Tuple[str, str]:
+    """
+    Generate a base name for a member (without numeral prefix).
+
+    Args:
+        member: The channel owner
+
+    Returns:
+        Tuple of (base_name, source)
+        source is "saved (booster)" or "display_name"
+    """
+    # Get user's saved settings
+    settings = db.get_user_settings(member.id)
+    saved_name = settings.get("default_name") if settings else None
+
+    # Boosters can use custom names
+    if saved_name and is_booster(member):
+        # Strip any existing numeral prefix from saved name
+        return extract_base_name(saved_name), "saved (booster)"
+
+    # Use display name
+    return member.display_name[:80], "display_name"
+
+
 def generate_channel_name(member: discord.Member, guild: discord.Guild) -> Tuple[str, str]:
     """
     Generate a channel name for a member.
+
+    DEPRECATED: Use generate_base_name + build_full_name for new code.
+    Kept for backwards compatibility.
 
     Args:
         member: The channel owner
@@ -142,25 +200,16 @@ def generate_channel_name(member: discord.Member, guild: discord.Guild) -> Tuple
         Tuple of (channel_name, source)
         source is "saved (booster)" or "generated"
     """
-    # Get user's saved settings
-    settings = db.get_user_settings(member.id)
-    saved_name = settings.get("default_name") if settings else None
+    # Get base name
+    base_name, source = generate_base_name(member)
 
-    # Boosters can use custom names
-    if saved_name and is_booster(member):
-        return saved_name, "saved (booster)"
-
-    # Generate default name with unique number
+    # For backwards compat, still find next available number
     existing_channels = db.get_all_temp_channels(guild.id)
-    existing_names = [ch.get("name", "") for ch in existing_channels.values()]
+    existing_names = [ch.get("name", "") for ch in existing_channels]
     channel_num = get_next_available_number(existing_names)
-    roman = to_roman(channel_num)
 
-    # Truncate display name if too long (Discord limit is 100 chars)
-    display_name = member.display_name[:80]
-    channel_name = f"{roman}・{display_name}"
-
-    return channel_name, "generated"
+    full_name = build_full_name(channel_num, base_name)
+    return full_name, source if source == "saved (booster)" else "generated"
 
 
 # =============================================================================
@@ -171,6 +220,7 @@ __all__ = [
     # Constants
     "MAX_ALLOWED_USERS_FREE",
     "COLOR_BOOST",
+    "NUMERAL_PREFIX_PATTERN",
     # Roman numerals
     "to_roman",
     "from_roman",
@@ -180,5 +230,8 @@ __all__ = [
     # Booster check
     "is_booster",
     # Channel name
+    "extract_base_name",
+    "build_full_name",
+    "generate_base_name",
     "generate_channel_name",
 ]

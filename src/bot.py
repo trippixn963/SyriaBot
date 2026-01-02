@@ -46,6 +46,8 @@ class SyriaBot(commands.Bot):
 
         # Load commands
         await self.load_extension("src.commands.convert")
+        await self.load_extension("src.commands.weather")
+        await self.load_extension("src.commands.get")
 
     async def _init_services(self) -> None:
         """Initialize bot services."""

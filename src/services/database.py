@@ -59,6 +59,12 @@ class Database:
             except Exception:
                 pass  # Column already exists
 
+            # Add base_name column if it doesn't exist (migration for positional numbering)
+            try:
+                cur.execute("ALTER TABLE temp_channels ADD COLUMN base_name TEXT")
+            except Exception:
+                pass  # Column already exists
+
             # User settings (remembered for next VC)
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS user_settings (

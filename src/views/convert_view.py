@@ -16,10 +16,13 @@ from typing import Optional
 from dataclasses import dataclass
 from PIL import Image, ImageDraw, ImageFont
 
-from src.core.colors import COLOR_SUCCESS, COLOR_ERROR, COLOR_WARNING
+from src.core.colors import (
+    COLOR_SUCCESS, COLOR_ERROR, COLOR_WARNING, COLOR_GOLD,
+    EMOJI_WHITE, EMOJI_BLACK, EMOJI_RED, EMOJI_BLUE,
+    EMOJI_GREEN, EMOJI_YELLOW, EMOJI_PURPLE, EMOJI_PINK,
+)
 from src.core.logger import log
 from src.services.convert_service import convert_service
-from src.services.webhook_logger import webhook_logger
 from src.utils.footer import set_footer
 from src.utils.text import wrap_text
 
@@ -116,14 +119,14 @@ class ColorSelect(ui.Select):
     def __init__(self, view: "ConvertView"):
         self.convert_view = view
         options = [
-            discord.SelectOption(label="White", value="white", description="White bar, black text"),
-            discord.SelectOption(label="Black", value="black", description="Black bar, white text"),
-            discord.SelectOption(label="Red", value="red", description="Red bar, white text"),
-            discord.SelectOption(label="Blue", value="blue", description="Blue bar, white text"),
-            discord.SelectOption(label="Green", value="green", description="Green bar, white text"),
-            discord.SelectOption(label="Yellow", value="yellow", description="Yellow bar, black text"),
-            discord.SelectOption(label="Purple", value="purple", description="Purple bar, white text"),
-            discord.SelectOption(label="Pink", value="pink", description="Pink bar, white text"),
+            discord.SelectOption(label="White", value="white", description="White bar, black text", emoji=EMOJI_WHITE),
+            discord.SelectOption(label="Black", value="black", description="Black bar, white text", emoji=EMOJI_BLACK),
+            discord.SelectOption(label="Red", value="red", description="Red bar, white text", emoji=EMOJI_RED),
+            discord.SelectOption(label="Blue", value="blue", description="Blue bar, white text", emoji=EMOJI_BLUE),
+            discord.SelectOption(label="Green", value="green", description="Green bar, white text", emoji=EMOJI_GREEN),
+            discord.SelectOption(label="Yellow", value="yellow", description="Yellow bar, black text", emoji=EMOJI_YELLOW),
+            discord.SelectOption(label="Purple", value="purple", description="Purple bar, white text", emoji=EMOJI_PURPLE),
+            discord.SelectOption(label="Pink", value="pink", description="Pink bar, white text", emoji=EMOJI_PINK),
         ]
         super().__init__(
             placeholder="Bar Color",
@@ -143,14 +146,14 @@ class VideoColorSelect(ui.Select):
     def __init__(self, view: "VideoConvertView"):
         self.convert_view = view
         options = [
-            discord.SelectOption(label="White", value="white", description="White bar, black text"),
-            discord.SelectOption(label="Black", value="black", description="Black bar, white text"),
-            discord.SelectOption(label="Red", value="red", description="Red bar, white text"),
-            discord.SelectOption(label="Blue", value="blue", description="Blue bar, white text"),
-            discord.SelectOption(label="Green", value="green", description="Green bar, white text"),
-            discord.SelectOption(label="Yellow", value="yellow", description="Yellow bar, black text"),
-            discord.SelectOption(label="Purple", value="purple", description="Purple bar, white text"),
-            discord.SelectOption(label="Pink", value="pink", description="Pink bar, white text"),
+            discord.SelectOption(label="White", value="white", description="White bar, black text", emoji=EMOJI_WHITE),
+            discord.SelectOption(label="Black", value="black", description="Black bar, white text", emoji=EMOJI_BLACK),
+            discord.SelectOption(label="Red", value="red", description="Red bar, white text", emoji=EMOJI_RED),
+            discord.SelectOption(label="Blue", value="blue", description="Blue bar, white text", emoji=EMOJI_BLUE),
+            discord.SelectOption(label="Green", value="green", description="Green bar, white text", emoji=EMOJI_GREEN),
+            discord.SelectOption(label="Yellow", value="yellow", description="Yellow bar, black text", emoji=EMOJI_YELLOW),
+            discord.SelectOption(label="Purple", value="purple", description="Purple bar, white text", emoji=EMOJI_PURPLE),
+            discord.SelectOption(label="Pink", value="pink", description="Pink bar, white text", emoji=EMOJI_PINK),
         ]
         super().__init__(
             placeholder="Bar Color",
@@ -335,7 +338,7 @@ class ConvertView(ui.View):
         embed = discord.Embed(
             title=title,
             description=description,
-            color=0x00CFFF  # Cyan brand color
+            color=COLOR_GOLD
         )
 
         # Current settings
@@ -388,8 +391,15 @@ class ConvertView(ui.View):
         if self.message:
             try:
                 await self.message.edit(view=self)
-            except Exception:
-                pass
+            except Exception as e:
+                log.tree("Image Convert Timeout Edit Failed", [
+                    ("Source", self.source_name[:30]),
+                    ("Error", str(e)[:50]),
+                ], emoji="⚠️")
+        log.tree("Image Convert View Expired", [
+            ("Source", self.source_name[:30]),
+            ("Requester ID", str(self.requester_id)),
+        ], emoji="⏳")
 
     # ==========================================================================
     # Buttons - Row 1
@@ -450,15 +460,21 @@ class ConvertView(ui.View):
         # Delete the editor embed
         try:
             await interaction.message.delete()
-        except Exception:
-            pass
+        except Exception as e:
+            log.tree("Editor Delete Failed", [
+                ("User", str(interaction.user)),
+                ("Error", str(e)[:50]),
+            ], emoji="⚠️")
 
         # Delete original message ONLY if it's the user's own message
         if self.original_message and self.original_message.author.id == self.requester_id:
             try:
                 await self.original_message.delete()
-            except Exception:
-                pass
+            except Exception as e:
+                log.tree("Original Message Delete Failed", [
+                    ("User", str(interaction.user)),
+                    ("Error", str(e)[:50]),
+                ], emoji="⚠️")
 
         log.tree("Convert Download", [
             ("User", str(interaction.user)),
@@ -468,13 +484,6 @@ class ConvertView(ui.View):
             ("Color", self.settings.get_preset_name()),
             ("Animated", "Yes" if is_animated else "No"),
         ], emoji="OK")
-
-        # Webhook logging
-        webhook_logger.log_convert(
-            interaction.user,
-            self.source_name,
-            "Animated GIF" if is_animated else "Image"
-        )
 
         self.stop()
 
@@ -490,8 +499,11 @@ class ConvertView(ui.View):
 
         try:
             await interaction.message.delete()
-        except Exception:
-            pass
+        except Exception as e:
+            log.tree("Cancel Delete Failed", [
+                ("User", str(interaction.user)),
+                ("Error", str(e)[:50]),
+            ], emoji="⚠️")
         self.stop()
 
 
@@ -639,7 +651,7 @@ class VideoConvertView(ui.View):
         embed = discord.Embed(
             title="Video to GIF Converter",
             description="Configure your GIF settings below, then click Save",
-            color=0xFF7BFF  # Pink brand color
+            color=COLOR_GOLD
         )
 
         # Current settings
@@ -695,8 +707,15 @@ class VideoConvertView(ui.View):
         if self.message:
             try:
                 await self.message.edit(view=self)
-            except Exception:
-                pass
+            except Exception as e:
+                log.tree("Video Convert Timeout Edit Failed", [
+                    ("Source", self.source_name[:30]),
+                    ("Error", str(e)[:50]),
+                ], emoji="⚠️")
+        log.tree("Video Convert View Expired", [
+            ("Source", self.source_name[:30]),
+            ("Requester ID", str(self.requester_id)),
+        ], emoji="⏳")
 
     # ==========================================================================
     # Buttons - Row 1
@@ -759,15 +778,21 @@ class VideoConvertView(ui.View):
         # Delete the editor embed
         try:
             await interaction.message.delete()
-        except Exception:
-            pass
+        except Exception as e:
+            log.tree("Video Editor Delete Failed", [
+                ("User", str(interaction.user)),
+                ("Error", str(e)[:50]),
+            ], emoji="⚠️")
 
         # Delete original message ONLY if it's the user's own message
         if self.original_message and self.original_message.author.id == self.requester_id:
             try:
                 await self.original_message.delete()
-            except Exception:
-                pass
+            except Exception as e:
+                log.tree("Video Original Delete Failed", [
+                    ("User", str(interaction.user)),
+                    ("Error", str(e)[:50]),
+                ], emoji="⚠️")
 
         log.tree("Video Convert Complete", [
             ("User", str(interaction.user)),
@@ -776,13 +801,6 @@ class VideoConvertView(ui.View):
             ("Text", self.settings.text[:30] if self.settings.text else "(none)"),
             ("Color", self.settings.get_preset_name()),
         ], emoji="OK")
-
-        # Webhook logging
-        webhook_logger.log_convert(
-            interaction.user,
-            self.source_name,
-            "Video"
-        )
 
         self.stop()
 
@@ -798,8 +816,11 @@ class VideoConvertView(ui.View):
 
         try:
             await interaction.message.delete()
-        except Exception:
-            pass
+        except Exception as e:
+            log.tree("Video Cancel Delete Failed", [
+                ("User", str(interaction.user)),
+                ("Error", str(e)[:50]),
+            ], emoji="⚠️")
         self.stop()
 
 

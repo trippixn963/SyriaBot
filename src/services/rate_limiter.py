@@ -37,18 +37,21 @@ EST = ZoneInfo("America/New_York")
 WEEKLY_LIMITS = {
     "convert": 5,
     "quote": 5,
+    "weather": 5,
 }
 
 # Action display names
 ACTION_NAMES = {
     "convert": "Conversions",
     "quote": "Quotes",
+    "weather": "Weather lookups",
 }
 
 # Action emojis
 ACTION_EMOJIS = {
     "convert": "🖼️",
     "quote": "💬",
+    "weather": "🌤️",
 }
 
 # Embed color for limit reached
@@ -100,28 +103,30 @@ class RateLimiter:
     def _init_db(self) -> None:
         """Initialize database table for rate limits."""
         try:
-            conn = db._get_connection()
-            cursor = conn.cursor()
+            with db._get_conn() as conn:
+                cursor = conn.cursor()
 
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS rate_limits (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER NOT NULL,
-                    action_type TEXT NOT NULL,
-                    week_start TEXT NOT NULL,
-                    usage_count INTEGER DEFAULT 1,
-                    last_used TEXT NOT NULL,
-                    UNIQUE(user_id, action_type, week_start)
-                )
-            """)
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS rate_limits (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL,
+                        action_type TEXT NOT NULL,
+                        week_start TEXT NOT NULL,
+                        usage_count INTEGER DEFAULT 1,
+                        last_used TEXT NOT NULL,
+                        UNIQUE(user_id, action_type, week_start)
+                    )
+                """)
 
-            cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_rate_limits_user_week
-                ON rate_limits(user_id, week_start)
-            """)
+                cursor.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_rate_limits_user_week
+                    ON rate_limits(user_id, week_start)
+                """)
 
-            conn.commit()
             self._initialized = True
+            log.tree("Rate Limiter DB Initialized", [
+                ("Table", "rate_limits"),
+            ], emoji="✅")
 
         except Exception as e:
             log.tree("Rate Limiter DB Init Failed", [
@@ -197,17 +202,17 @@ class RateLimiter:
 
         try:
             with self._db_lock:
-                conn = db._get_connection()
-                cursor = conn.cursor()
-                week_start = self._get_week_start()
+                with db._get_conn() as conn:
+                    cursor = conn.cursor()
+                    week_start = self._get_week_start()
 
-                cursor.execute("""
-                    SELECT usage_count FROM rate_limits
-                    WHERE user_id = ? AND action_type = ? AND week_start = ?
-                """, (user_id, action_type, week_start))
+                    cursor.execute("""
+                        SELECT usage_count FROM rate_limits
+                        WHERE user_id = ? AND action_type = ? AND week_start = ?
+                    """, (user_id, action_type, week_start))
 
-                row = cursor.fetchone()
-                return row[0] if row else 0
+                    row = cursor.fetchone()
+                    return row[0] if row else 0
 
         except Exception as e:
             log.tree("Rate Limit Get Usage Failed", [
@@ -249,19 +254,17 @@ class RateLimiter:
 
         try:
             with self._db_lock:
-                conn = db._get_connection()
-                cursor = conn.cursor()
-                week_start = self._get_week_start()
-                now = datetime.now(EST).isoformat()
+                with db._get_conn() as conn:
+                    cursor = conn.cursor()
+                    week_start = self._get_week_start()
+                    now = datetime.now(EST).isoformat()
 
-                cursor.execute("""
-                    INSERT INTO rate_limits (user_id, action_type, week_start, usage_count, last_used)
-                    VALUES (?, ?, ?, 1, ?)
-                    ON CONFLICT(user_id, action_type, week_start)
-                    DO UPDATE SET usage_count = usage_count + 1, last_used = ?
-                """, (user_id, action_type, week_start, now, now))
-
-                conn.commit()
+                    cursor.execute("""
+                        INSERT INTO rate_limits (user_id, action_type, week_start, usage_count, last_used)
+                        VALUES (?, ?, ?, 1, ?)
+                        ON CONFLICT(user_id, action_type, week_start)
+                        DO UPDATE SET usage_count = usage_count + 1, last_used = ?
+                    """, (user_id, action_type, week_start, now, now))
 
             return True
 
@@ -364,7 +367,8 @@ class RateLimiter:
                 ], emoji="❌")
 
         log.tree("Rate Limit Reached", [
-            ("User", str(member)),
+            ("User", f"{member.name} ({member.display_name})"),
+            ("ID", str(member.id)),
             ("Action", action_name),
             ("Limit", str(WEEKLY_LIMITS.get(action_type, 0))),
         ], emoji="🚫")
@@ -380,18 +384,17 @@ class RateLimiter:
 
         try:
             with self._db_lock:
-                conn = db._get_connection()
-                cursor = conn.cursor()
+                with db._get_conn() as conn:
+                    cursor = conn.cursor()
 
-                cutoff = datetime.now(EST) - timedelta(weeks=weeks_to_keep)
-                cutoff_str = cutoff.strftime("%Y-%m-%d")
+                    cutoff = datetime.now(EST) - timedelta(weeks=weeks_to_keep)
+                    cutoff_str = cutoff.strftime("%Y-%m-%d")
 
-                cursor.execute("""
-                    DELETE FROM rate_limits WHERE week_start < ?
-                """, (cutoff_str,))
+                    cursor.execute("""
+                        DELETE FROM rate_limits WHERE week_start < ?
+                    """, (cutoff_str,))
 
-                deleted = cursor.rowcount
-                conn.commit()
+                    deleted = cursor.rowcount
 
             if deleted > 0:
                 log.tree("Rate Limit Cleanup", [

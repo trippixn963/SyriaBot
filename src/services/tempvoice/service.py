@@ -13,7 +13,13 @@ from src.core.config import config
 from src.core.logger import log
 from src.services.database import db
 from src.utils.footer import set_footer
-from .utils import generate_channel_name, is_booster
+from .utils import (
+    generate_channel_name,
+    generate_base_name,
+    build_full_name,
+    extract_base_name,
+    is_booster,
+)
 from .views import TempVoiceControlPanel
 
 if TYPE_CHECKING:
@@ -29,6 +35,9 @@ OWNER_LEAVE_TRANSFER_DELAY = 30
 # Number of messages before re-sending sticky control panel
 STICKY_PANEL_MESSAGE_THRESHOLD = 20
 
+# Delay before reordering channels (debounce for bulk deletions)
+REORDER_DEBOUNCE_DELAY = 2.0
+
 
 class TempVoiceService:
     """Service for managing temporary voice channels."""
@@ -41,6 +50,9 @@ class TempVoiceService:
         self._member_join_times: Dict[int, Dict[int, float]] = {}  # channel_id -> {user_id: join_time}
         self._pending_transfers: Dict[int, asyncio.Task] = {}  # channel_id -> pending transfer task
         self._message_counts: Dict[int, int] = {}  # channel_id -> message count since last panel
+        self._create_lock = asyncio.Lock()  # Prevents race conditions when multiple users join at once
+        self._pending_reorders: Dict[int, asyncio.Task] = {}  # guild_id -> pending reorder task (debounced)
+        self._panel_locks: Dict[int, asyncio.Lock] = {}  # channel_id -> lock for panel updates
 
     async def setup(self) -> None:
         """Set up the TempVoice service."""
@@ -103,6 +115,7 @@ class TempVoiceService:
         """Scan and delete empty temp channels (handles missed deletions)."""
         channels = db.get_all_temp_channels()
         cleaned = 0
+        guilds_affected: set[int] = set()  # Track guilds that need reordering
 
         # Build protected set: creator channel + any configured protected channels
         protected = set(config.VC_PROTECTED_CHANNELS)
@@ -111,6 +124,7 @@ class TempVoiceService:
 
         for channel_data in channels:
             channel_id = channel_data["channel_id"]
+            guild_id = channel_data.get("guild_id")
 
             # Skip protected channels
             if channel_id in protected:
@@ -122,6 +136,8 @@ class TempVoiceService:
             if not channel:
                 db.delete_temp_channel(channel_id)
                 cleaned += 1
+                if guild_id:
+                    guilds_affected.add(guild_id)
                 log.tree("Orphan Channel Cleaned", [
                     ("Channel ID", str(channel_id)),
                     ("Reason", "Channel not in Discord"),
@@ -135,6 +151,7 @@ class TempVoiceService:
                     db.delete_temp_channel(channel_id)
                     await channel.delete(reason="Empty channel cleanup")
                     cleaned += 1
+                    guilds_affected.add(channel.guild.id)
                     log.tree("Empty Channel Cleaned", [
                         ("Channel", channel_name),
                         ("Reason", "Periodic cleanup"),
@@ -149,6 +166,12 @@ class TempVoiceService:
             log.tree("Periodic Cleanup Complete", [
                 ("Channels Removed", str(cleaned)),
             ], emoji="🧹")
+
+            # Schedule reorder for affected guilds (debounced)
+            for guild_id in guilds_affected:
+                guild = self.bot.get_guild(guild_id)
+                if guild:
+                    self.schedule_reorder(guild)
 
     async def _cleanup_orphaned_channels(self) -> None:
         """Clean up temp channels that no longer exist."""
@@ -318,8 +341,21 @@ class TempVoiceService:
 
         return message
 
+    def _get_panel_lock(self, channel_id: int) -> asyncio.Lock:
+        """Get or create a lock for panel updates on a specific channel."""
+        if channel_id not in self._panel_locks:
+            self._panel_locks[channel_id] = asyncio.Lock()
+        return self._panel_locks[channel_id]
+
     async def _update_panel(self, channel: discord.VoiceChannel) -> None:
         """Update the control panel embed in the channel using cached message ID."""
+        # Use per-channel lock to prevent duplicate panels from concurrent updates
+        lock = self._get_panel_lock(channel.id)
+        async with lock:
+            await self._update_panel_inner(channel)
+
+    async def _update_panel_inner(self, channel: discord.VoiceChannel) -> None:
+        """Inner panel update logic (called with lock held)."""
         channel_info = db.get_temp_channel(channel.id)
         if not channel_info:
             log.tree("Panel Update Skipped", [
@@ -446,6 +482,9 @@ class TempVoiceService:
                             ("Status", "Transfer cancelled"),
                         ], emoji="↩️")
 
+                # Check if owner's channel needs renaming (lost booster status)
+                await self._check_booster_name(channel, member)
+
         # User joined the creator channel - create new temp VC
         if after.channel and after.channel.id == config.VC_CREATOR_CHANNEL_ID:
             await self._create_temp_channel(member)
@@ -475,54 +514,57 @@ class TempVoiceService:
 
     async def _resend_sticky_panel(self, channel: discord.VoiceChannel) -> None:
         """Delete old panel and resend as sticky message."""
-        channel_info = db.get_temp_channel(channel.id)
-        if not channel_info:
-            return
+        # Use per-channel lock to prevent races with _update_panel
+        lock = self._get_panel_lock(channel.id)
+        async with lock:
+            channel_info = db.get_temp_channel(channel.id)
+            if not channel_info:
+                return
 
-        owner = channel.guild.get_member(channel_info["owner_id"])
-        if not owner:
-            log.tree("Sticky Panel Skipped", [
-                ("Channel", channel.name),
-                ("Reason", "Owner not found"),
-            ], emoji="⚠️")
-            return
-
-        # Try to delete old panel using cached message ID
-        panel_message_id = channel_info.get("panel_message_id")
-        if panel_message_id:
-            try:
-                old_message = await channel.fetch_message(panel_message_id)
-                await old_message.delete()
-            except discord.NotFound:
-                log.tree("Sticky Panel Delete Skipped", [
+            owner = channel.guild.get_member(channel_info["owner_id"])
+            if not owner:
+                log.tree("Sticky Panel Skipped", [
                     ("Channel", channel.name),
-                    ("Reason", "Already deleted"),
+                    ("Reason", "Owner not found"),
                 ], emoji="⚠️")
+                return
+
+            # Try to delete old panel using cached message ID
+            panel_message_id = channel_info.get("panel_message_id")
+            if panel_message_id:
+                try:
+                    old_message = await channel.fetch_message(panel_message_id)
+                    await old_message.delete()
+                except discord.NotFound:
+                    log.tree("Sticky Panel Delete Skipped", [
+                        ("Channel", channel.name),
+                        ("Reason", "Already deleted"),
+                    ], emoji="⚠️")
+                except discord.HTTPException as e:
+                    log.tree("Sticky Panel Delete Failed", [
+                        ("Channel", channel.name),
+                        ("Error", str(e)),
+                    ], emoji="❌")
+
+            # Send new panel (preserves all stats like created_at from DB)
+            try:
+                is_locked = bool(channel_info.get("is_locked", 0))
+                embed = self._build_panel_embed(channel, owner, is_locked)
+                self._update_lock_button(is_locked)
+                new_message = await channel.send(embed=embed, view=self.control_panel)
+
+                # Cache new message ID
+                db.update_temp_channel(channel.id, panel_message_id=new_message.id)
+
+                log.tree("Sticky Panel Resent", [
+                    ("Channel", channel.name),
+                    ("Owner", str(owner)),
+                ], emoji="📌")
             except discord.HTTPException as e:
-                log.tree("Sticky Panel Delete Failed", [
+                log.tree("Sticky Panel Failed", [
                     ("Channel", channel.name),
                     ("Error", str(e)),
                 ], emoji="❌")
-
-        # Send new panel (preserves all stats like created_at from DB)
-        try:
-            is_locked = bool(channel_info.get("is_locked", 0))
-            embed = self._build_panel_embed(channel, owner, is_locked)
-            self._update_lock_button(is_locked)
-            new_message = await channel.send(embed=embed, view=self.control_panel)
-
-            # Cache new message ID
-            db.update_temp_channel(channel.id, panel_message_id=new_message.id)
-
-            log.tree("Sticky Panel Resent", [
-                ("Channel", channel.name),
-                ("Owner", str(owner)),
-            ], emoji="📌")
-        except discord.HTTPException as e:
-            log.tree("Sticky Panel Failed", [
-                ("Channel", channel.name),
-                ("Error", str(e)),
-            ], emoji="❌")
 
     async def _grant_text_access(self, channel: discord.VoiceChannel, member: discord.Member) -> None:
         """Grant text chat access to a member in a temp VC (includes dragged-in users)."""
@@ -554,6 +596,65 @@ class TempVoiceService:
             log.tree("Text Access Grant Error", [
                 ("Channel", channel.name),
                 ("User", str(member)),
+                ("Error", str(e)),
+            ], emoji="❌")
+
+    async def _check_booster_name(self, channel: discord.VoiceChannel, member: discord.Member) -> None:
+        """Check if owner lost booster status and needs channel renamed."""
+        try:
+            # Fast check: skip if not in temp voice category (no DB call needed)
+            if not channel.category or channel.category_id != config.VC_CATEGORY_ID:
+                return
+
+            channel_info = db.get_temp_channel(channel.id)
+            if not channel_info:
+                return
+
+            # Only check for the owner
+            if channel_info["owner_id"] != member.id:
+                return
+
+            # If they're still a booster, no action needed
+            if is_booster(member):
+                return
+
+            # Non-booster should have display_name as base name (not custom)
+            expected_base = member.display_name[:80]
+            current_base = channel_info.get("base_name") or extract_base_name(channel.name)
+
+            # If current base name matches expected, no rename needed
+            if current_base == expected_base:
+                return
+
+            # Build full name with position
+            position = self._get_channel_position(channel)
+            expected_name = build_full_name(position, expected_base)
+
+            # Non-booster with custom name - rename to generated name
+            old_name = channel.name
+            await channel.edit(name=expected_name)
+            db.update_temp_channel(channel.id, name=expected_name, base_name=expected_base)
+
+            log.tree("Channel Renamed (Lost Booster)", [
+                ("Channel", channel.name),
+                ("From", old_name),
+                ("To", expected_name),
+                ("Base Name", expected_base),
+                ("Owner", f"{member.name} ({member.display_name})"),
+                ("Owner ID", str(member.id)),
+            ], emoji="💎")
+
+            # Update panel to reflect new name
+            await self._update_panel(channel)
+
+        except discord.HTTPException as e:
+            log.tree("Booster Name Check Failed", [
+                ("Channel", channel.name),
+                ("Error", str(e)),
+            ], emoji="❌")
+        except Exception as e:
+            log.tree("Booster Name Check Error", [
+                ("Channel", channel.name),
                 ("Error", str(e)),
             ], emoji="❌")
 
@@ -607,9 +708,265 @@ class TempVoiceService:
                 ("Error", str(e)),
             ], emoji="❌")
 
+    def schedule_reorder(self, guild: discord.Guild) -> None:
+        """
+        Schedule a debounced channel reorder for a guild.
+
+        If multiple deletions happen quickly (bulk cleanup), this ensures
+        we only reorder once after all deletions are done.
+
+        Non-blocking - fires and forgets the background task.
+        """
+        guild_id = guild.id
+
+        # Cancel any existing pending reorder for this guild
+        was_pending = guild_id in self._pending_reorders
+        if was_pending:
+            self._pending_reorders[guild_id].cancel()
+            log.tree("Reorder Rescheduled", [
+                ("Guild", guild.name),
+                ("Reason", "New deletion during debounce"),
+            ], emoji="🔄")
+
+        # Schedule new reorder after debounce delay
+        task = asyncio.create_task(self._debounced_reorder(guild))
+        self._pending_reorders[guild_id] = task
+
+        if not was_pending:
+            log.tree("Reorder Scheduled", [
+                ("Guild", guild.name),
+                ("Delay", f"{REORDER_DEBOUNCE_DELAY}s"),
+            ], emoji="📋")
+
+    async def _debounced_reorder(self, guild: discord.Guild) -> None:
+        """Wait for debounce delay, then execute reorder."""
+        try:
+            await asyncio.sleep(REORDER_DEBOUNCE_DELAY)
+            await self._reorder_channels(guild)
+        except asyncio.CancelledError:
+            # Another reorder was scheduled, this one is cancelled (already logged in schedule_reorder)
+            pass
+        except Exception as e:
+            log.tree("Debounced Reorder Error", [
+                ("Guild", guild.name),
+                ("Error", str(e)),
+            ], emoji="❌")
+        finally:
+            # Clean up the pending task reference
+            self._pending_reorders.pop(guild.id, None)
+
+    async def _reorder_channels(self, guild: discord.Guild) -> None:
+        """
+        Reorder all temp voice channels in the category by position.
+        Updates channel names to have sequential Roman numerals (I, II, III...).
+
+        Optimized with batch DB query for high-traffic servers.
+        """
+        if not config.VC_CATEGORY_ID:
+            return
+
+        category = guild.get_channel(config.VC_CATEGORY_ID)
+        if not category:
+            return
+
+        # Get all voice channels in category, sorted by position (top to bottom)
+        voice_channels = sorted(
+            [ch for ch in category.voice_channels if ch.id != config.VC_CREATOR_CHANNEL_ID],
+            key=lambda c: c.position
+        )
+
+        if not voice_channels:
+            return
+
+        # OPTIMIZATION: Batch fetch all temp channel data in one DB call
+        all_temp_channels = db.get_all_temp_channels(guild.id)
+        temp_channel_map = {tc["channel_id"]: tc for tc in all_temp_channels}
+
+        # Track channels that need renaming
+        channels_to_rename = []
+
+        # Track position separately - only increment for actual temp channels
+        position = 0
+        for channel in voice_channels:
+            channel_info = temp_channel_map.get(channel.id)
+            if not channel_info:
+                continue  # Skip non-temp channels without consuming a position
+
+            position += 1  # Only count actual temp channels
+
+            # Get or extract base name
+            base_name = channel_info.get("base_name")
+            if not base_name:
+                # Migration: extract from current channel name
+                base_name = extract_base_name(channel.name)
+                db.update_temp_channel(channel.id, base_name=base_name)
+
+            # Build expected name for this position
+            expected_name = build_full_name(position, base_name)
+
+            # Check if rename is needed
+            if channel.name != expected_name:
+                channels_to_rename.append((channel, expected_name, position, base_name))
+
+        if not channels_to_rename:
+            return
+
+        log.tree("Reordering Channels", [
+            ("Count", str(len(channels_to_rename))),
+            ("Total VCs", str(len(voice_channels))),
+            ("Category", category.name),
+        ], emoji="🔢")
+
+        # Rename channels with small delay to avoid rate limits
+        renamed_count = 0
+        for channel, new_name, position, base_name in channels_to_rename:
+            try:
+                old_name = channel.name
+                await channel.edit(name=new_name)
+                db.update_temp_channel(channel.id, name=new_name)
+                renamed_count += 1
+
+                # Only log individual renames if few channels (avoid log spam)
+                if len(channels_to_rename) <= 3:
+                    log.tree("Channel Renumbered", [
+                        ("From", old_name),
+                        ("To", new_name),
+                        ("Position", str(position)),
+                    ], emoji="🔢")
+
+                # Small delay to avoid rate limits
+                await asyncio.sleep(0.3)
+
+            except discord.HTTPException as e:
+                log.tree("Reorder Rename Failed", [
+                    ("Channel", channel.name),
+                    ("Target", new_name),
+                    ("Error", str(e)),
+                ], emoji="❌")
+            except Exception as e:
+                log.tree("Reorder Error", [
+                    ("Channel", channel.name),
+                    ("Error", str(e)),
+                ], emoji="❌")
+
+        # Summary log for bulk renames
+        if len(channels_to_rename) > 3:
+            log.tree("Reorder Complete", [
+                ("Renamed", f"{renamed_count}/{len(channels_to_rename)}"),
+                ("Category", category.name),
+            ], emoji="✅")
+
+    def _get_next_position(self, guild: discord.Guild) -> int:
+        """Get the next position number for a new temp channel."""
+        if not config.VC_CATEGORY_ID:
+            return 1
+
+        category = guild.get_channel(config.VC_CATEGORY_ID)
+        if not category:
+            return 1
+
+        # Count existing temp voice channels (excluding creator channel)
+        temp_channels = [
+            ch for ch in category.voice_channels
+            if ch.id != config.VC_CREATOR_CHANNEL_ID and db.is_temp_channel(ch.id)
+        ]
+
+        return len(temp_channels) + 1
+
+    def _get_channel_position(self, channel: discord.VoiceChannel) -> int:
+        """Get a channel's position number based on its position in the category."""
+        if not channel.category:
+            return 1
+
+        # Get all temp voice channels in category, sorted by position
+        voice_channels = sorted(
+            [ch for ch in channel.category.voice_channels
+             if ch.id != config.VC_CREATOR_CHANNEL_ID and db.is_temp_channel(ch.id)],
+            key=lambda c: c.position
+        )
+
+        # Find this channel's position (1-indexed)
+        for idx, ch in enumerate(voice_channels, start=1):
+            if ch.id == channel.id:
+                return idx
+
+        return 1  # Fallback
+
     async def _create_temp_channel(self, member: discord.Member) -> None:
         """Create a new temp voice channel for a member."""
+        # Check if lock is already held (someone else is creating)
+        if self._create_lock.locked():
+            log.tree("Create Queued", [
+                ("User", str(member)),
+                ("Status", "Waiting for previous creation to complete"),
+            ], emoji="⏳")
+
+        # Use lock to prevent race conditions when multiple users join at once
+        async with self._create_lock:
+            log.tree("Create Lock Acquired", [
+                ("User", str(member)),
+            ], emoji="🔓")
+            await self._create_temp_channel_inner(member)
+
+    async def _create_temp_channel_inner(self, member: discord.Member) -> None:
+        """Inner method for channel creation (called within lock)."""
         guild = member.guild
+        member_id = member.id
+
+        log.tree("Create Inner Started", [
+            ("User", str(member)),
+            ("Guild", guild.name),
+        ], emoji="🔧")
+
+        # Re-fetch member to get current voice state (cache may be stale after waiting for lock)
+        try:
+            member = guild.get_member(member_id)
+            if not member:
+                log.tree("Create Skipped", [
+                    ("User ID", str(member_id)),
+                    ("Reason", "Member not found in guild"),
+                ], emoji="⏭️")
+                return
+            # Build clean voice state info
+            if member.voice and member.voice.channel:
+                channel_name = member.voice.channel.name
+                states = []
+                if member.voice.self_mute:
+                    states.append("Muted")
+                if member.voice.self_deaf:
+                    states.append("Deafened")
+                state_str = ", ".join(states) if states else "Normal"
+            else:
+                channel_name = "None"
+                state_str = "N/A"
+
+            log.tree("Member Refetched", [
+                ("User", str(member)),
+                ("Channel", channel_name),
+                ("State", state_str),
+            ], emoji="🔍")
+        except Exception as e:
+            log.tree("Create Member Fetch Failed", [
+                ("User ID", str(member_id)),
+                ("Error", str(e)),
+            ], emoji="❌")
+            return
+
+        # Check if user is still in creator channel (they may have left while waiting for lock)
+        if not member.voice or not member.voice.channel:
+            log.tree("Create Skipped", [
+                ("User", str(member)),
+                ("Reason", "User no longer in any voice channel"),
+            ], emoji="⏭️")
+            return
+
+        if member.voice.channel.id != config.VC_CREATOR_CHANNEL_ID:
+            log.tree("Create Skipped", [
+                ("User", str(member)),
+                ("Current Channel", member.voice.channel.name),
+                ("Reason", "User moved to different channel while waiting"),
+            ], emoji="⏭️")
+            return
 
         # Check cooldown to prevent spam
         now = time.time()
@@ -702,12 +1059,17 @@ class TempVoiceService:
         settings = db.get_user_settings(member.id)
         default_limit = settings.get("default_limit", 0) if settings else 0
 
-        # Generate channel name (uses shared utility)
-        channel_name, name_source = generate_channel_name(member, guild)
+        # Generate channel name with position-based numbering
+        base_name, name_source = generate_base_name(member)
+        position = self._get_next_position(guild)
+        channel_name = build_full_name(position, base_name)
 
         log.tree("Creating Channel", [
-            ("Owner", str(member)),
+            ("Owner", f"{member.name} ({member.display_name})"),
+            ("Owner ID", str(member.id)),
             ("Name", channel_name),
+            ("Base Name", base_name),
+            ("Position", str(position)),
             ("Source", name_source),
         ], emoji="🔧")
 
@@ -797,9 +1159,9 @@ class TempVoiceService:
                 reason=f"TempVoice for {member}"
             )
 
-            # Store in database (locked by default)
+            # Store in database (locked by default, with base_name for reordering)
             db.create_temp_channel(channel.id, member.id, guild.id, channel_name)
-            db.update_temp_channel(channel.id, is_locked=1)
+            db.update_temp_channel(channel.id, is_locked=1, base_name=base_name)
 
             # Move user
             try:
@@ -826,7 +1188,8 @@ class TempVoiceService:
 
             log.tree("Channel Created", [
                 ("Channel", channel_name),
-                ("Owner", str(member)),
+                ("Owner", f"{member.name} ({member.display_name})"),
+                ("Owner ID", str(member.id)),
                 ("Allowed Applied", str(trusted_count)),
                 ("Blocked Applied", str(blocked_count)),
             ], emoji="🔊")
@@ -851,15 +1214,17 @@ class TempVoiceService:
             channel_name = channel.name
             channel_info = db.get_temp_channel(channel.id)
             owner_id = channel_info["owner_id"] if channel_info else "Unknown"
+            guild = channel.guild  # Save before deletion
 
             # Cancel any pending transfer
             if channel.id in self._pending_transfers:
                 self._pending_transfers[channel.id].cancel()
                 del self._pending_transfers[channel.id]
 
-            # Clean up join times and message counts
+            # Clean up all tracking for this channel
             self._member_join_times.pop(channel.id, None)
             self._message_counts.pop(channel.id, None)
+            self._panel_locks.pop(channel.id, None)
 
             db.delete_temp_channel(channel.id)
             try:
@@ -868,6 +1233,10 @@ class TempVoiceService:
                     ("Channel", channel_name),
                     ("Owner ID", str(owner_id)),
                 ], emoji="🗑️")
+
+                # Schedule reorder (debounced, non-blocking)
+                self.schedule_reorder(guild)
+
             except discord.HTTPException as e:
                 log.tree("Empty Channel Delete Failed", [
                     ("Channel", channel_name),
@@ -993,11 +1362,13 @@ class TempVoiceService:
             # Update DB ownership
             db.transfer_ownership(channel.id, new_owner.id)
 
-            # Generate channel name for new owner (uses shared utility)
-            channel_name, name_source = generate_channel_name(new_owner, guild)
+            # Generate channel name for new owner (keeps same position)
+            base_name, name_source = generate_base_name(new_owner)
+            position = self._get_channel_position(channel)
+            channel_name = build_full_name(position, base_name)
 
             await channel.edit(name=channel_name)
-            db.update_temp_channel(channel.id, name=channel_name)
+            db.update_temp_channel(channel.id, name=channel_name, base_name=base_name)
 
             # Apply new owner's blocked list
             blocked_count = 0
