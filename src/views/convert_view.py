@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from PIL import Image, ImageDraw, ImageFont
 
 from src.core.colors import (
-    COLOR_SUCCESS, COLOR_ERROR, COLOR_WARNING, COLOR_GOLD,
+    COLOR_ERROR, COLOR_WARNING, COLOR_GOLD,
     EMOJI_WHITE, EMOJI_BLACK, EMOJI_RED, EMOJI_BLUE,
     EMOJI_GREEN, EMOJI_YELLOW, EMOJI_PURPLE, EMOJI_PINK,
 )

@@ -5,15 +5,16 @@ XP System - Utility Functions
 Level calculations and XP formulas.
 """
 
-import math
 from typing import Tuple
+
+from src.core.constants import XP_BASE_MULTIPLIER
 
 
 def xp_for_level(level: int) -> int:
     """
     Calculate total XP needed to reach a level.
 
-    Formula: 100 * level^1.5
+    Formula: XP_BASE_MULTIPLIER * level^1.5
 
     Examples:
         Level 1:   100 XP
@@ -23,18 +24,18 @@ def xp_for_level(level: int) -> int:
     """
     if level <= 0:
         return 0
-    return int(100 * (level ** 1.5))
+    return int(XP_BASE_MULTIPLIER * (level ** 1.5))
 
 
 def level_from_xp(xp: int) -> int:
     """
     Calculate level from total XP.
 
-    Inverse of xp_for_level: level = (xp / 100)^(2/3)
+    Inverse of xp_for_level: level = (xp / XP_BASE_MULTIPLIER)^(2/3)
     """
     if xp <= 0:
         return 0
-    return int((xp / 100) ** (2 / 3))
+    return int((xp / XP_BASE_MULTIPLIER) ** (2 / 3))
 
 
 def xp_progress(xp: int) -> Tuple[int, int, int, float]:

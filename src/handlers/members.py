@@ -14,9 +14,6 @@ from src.core.config import config
 from src.core.logger import log
 from src.utils.footer import set_footer
 
-# Channel for boost announcements
-GENERAL_CHANNEL_ID = 1350540215797940245
-
 
 class MembersHandler(commands.Cog):
     """Handles member events."""
@@ -64,12 +61,19 @@ class MembersHandler(commands.Cog):
         ], emoji="💎")
 
         # Get general channel
-        channel = member.guild.get_channel(GENERAL_CHANNEL_ID)
+        if not config.GENERAL_CHANNEL_ID:
+            log.tree("Boost Notification Skipped", [
+                ("User", str(member)),
+                ("Reason", "GENERAL_CHANNEL_ID not configured"),
+            ], emoji="⚠️")
+            return
+
+        channel = member.guild.get_channel(config.GENERAL_CHANNEL_ID)
         if not channel:
             log.tree("Boost Notification Failed", [
                 ("User", str(member)),
                 ("Reason", "General channel not found"),
-                ("Channel ID", str(GENERAL_CHANNEL_ID)),
+                ("Channel ID", str(config.GENERAL_CHANNEL_ID)),
             ], emoji="⚠️")
             return
 

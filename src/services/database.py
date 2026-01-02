@@ -101,7 +101,16 @@ class Database:
         # Check integrity on startup
         import os
         if os.path.exists(self.db_path) and not self._check_integrity():
-            log.critical("Database corrupted! Backing up and recreating...")
+            log.tree("DATABASE CORRUPTION DETECTED", [
+                ("Path", self.db_path),
+                ("Status", "INTEGRITY CHECK FAILED"),
+                ("Action", "Backing up and recreating"),
+                ("Recovery", "User data will be lost!"),
+            ], emoji="🚨")
+            log.critical("=" * 60)
+            log.critical("DATABASE CORRUPTION - ALL XP DATA MAY BE LOST")
+            log.critical("Check backup file for data recovery options")
+            log.critical("=" * 60)
             self._backup_corrupted()
             # Delete corrupted file to recreate
             try:
@@ -240,6 +249,20 @@ class Database:
                     cur.execute(f"ALTER TABLE user_xp ADD COLUMN {col_name} {col_type}")
                 except Exception:
                     pass  # Column already exists
+
+            # Create indexes for common queries (performance optimization)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_user_xp_leaderboard
+                ON user_xp(guild_id, xp DESC)
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_user_xp_user_guild
+                ON user_xp(user_id, guild_id)
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_temp_channels_guild
+                ON temp_channels(guild_id)
+            """)
 
             log.success("Database initialized")
 

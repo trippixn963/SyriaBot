@@ -96,6 +96,9 @@ class Config:
     AUTO_ROLE_ID: int = _get_env_int("SYRIA_AUTO_ROLE_ID", 0)
     BOOSTER_ROLE_ID: int = _get_env_int("SYRIA_BOOSTER_ROLE_ID", 0)
 
+    # Channels
+    GENERAL_CHANNEL_ID: int = _get_env_int("SYRIA_GENERAL_CHANNEL_ID", 0)
+
     # APIs
     OPENWEATHER_API_KEY: str = os.getenv("OPENWEATHER_API_KEY", "")
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")

@@ -16,7 +16,6 @@ import numpy as np
 from datetime import datetime
 from typing import Optional, Dict, Tuple
 from dataclasses import dataclass
-from zoneinfo import ZoneInfo
 
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 from pilmoji import Pilmoji

@@ -14,7 +14,7 @@ from typing import Optional
 
 from src.core.config import config
 from src.core.logger import log
-from src.core.colors import COLOR_SUCCESS, COLOR_ERROR, COLOR_WARNING, COLOR_GOLD
+from src.core.colors import COLOR_ERROR, COLOR_WARNING, COLOR_GOLD
 from src.utils.footer import set_footer
 
 

@@ -5,7 +5,6 @@ XP System - Rank Card Generator
 HTML/CSS based rank card rendered with Playwright for professional quality.
 """
 
-import asyncio
 from typing import Optional
 from playwright.async_api import async_playwright
 

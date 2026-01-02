@@ -20,7 +20,7 @@ from datetime import datetime, timedelta
 from threading import Lock
 from typing import Optional, Tuple, Set
 
-from src.core.colors import COLOR_GOLD, COLOR_BOOST
+from src.core.colors import COLOR_GOLD
 from src.core.constants import (
     TIMEZONE_EST,
     WEEKLY_LIMITS,
