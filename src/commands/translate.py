@@ -145,4 +145,4 @@ class TranslateCog(commands.Cog):
 async def setup(bot: commands.Bot) -> None:
     """Add the cog to the bot."""
     await bot.add_cog(TranslateCog(bot))
-    log.success("Loaded translate command")
+    log.tree("Command Loaded", [("Name", "translate")], emoji="✅")

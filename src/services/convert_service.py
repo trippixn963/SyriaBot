@@ -274,7 +274,7 @@ class ConvertService:
             )
             return result
         except Exception as e:
-            log.error(f"Convert Error: {type(e).__name__}: {str(e)}")
+            log.tree("Convert Error", [("Type", type(e).__name__), ("Error", str(e)[:50])], emoji="❌")
             return ConvertResult(
                 success=False,
                 error=f"Failed to convert image: {type(e).__name__}"
@@ -709,7 +709,7 @@ class ConvertService:
             )
             return result
         except Exception as e:
-            log.error(f"Video Convert Error: {type(e).__name__}: {str(e)}")
+            log.tree("Video Convert Error", [("Type", type(e).__name__), ("Error", str(e)[:50])], emoji="❌")
             return ConvertResult(
                 success=False,
                 error=f"Failed to convert video: {type(e).__name__}"
@@ -889,7 +889,7 @@ class ConvertService:
             result = subprocess.run(gif_cmd, capture_output=True, timeout=180)
             if result.returncode != 0:
                 error_msg = result.stderr.decode()[:200]
-                log.error(f"FFmpeg Error: {error_msg}")
+                log.tree("FFmpeg Error", [("Message", error_msg[:80] if error_msg else "Unknown")], emoji="❌")
                 return ConvertResult(success=False, error=f"FFmpeg error: {error_msg}")
 
             # Read output GIF

@@ -467,4 +467,6 @@ class MessageHandler(commands.Cog):
 async def setup(bot: commands.Bot) -> None:
     """Register the message handler cog with the bot."""
     await bot.add_cog(MessageHandler(bot))
-    log.success("Loaded message handler")
+    log.tree("Handler Loaded", [
+        ("Name", "MessageHandler"),
+    ], emoji="✅")

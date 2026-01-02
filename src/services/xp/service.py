@@ -52,6 +52,9 @@ class XPService:
         # Track last message content per user to prevent duplicate spam
         self._last_messages: Dict[tuple, str] = {}  # {(user_id, guild_id): content}
 
+        # Track daily unique users to avoid duplicate DAU counts
+        self._dau_cache: set = set()  # {(user_id, guild_id, date)}
+
         # Background task for voice XP
         self._voice_xp_task: Optional[asyncio.Task] = None
 
@@ -166,6 +169,43 @@ class XPService:
 
         # Add XP
         await self._grant_xp(member, xp_amount, "message")
+
+        # Track additional metrics (non-blocking)
+        try:
+            from datetime import datetime
+            from zoneinfo import ZoneInfo
+
+            est = ZoneInfo("America/New_York")
+            now_est = datetime.now(est)
+            today_date = now_est.strftime("%Y-%m-%d")
+            current_hour = now_est.hour
+
+            # User-level tracking
+            db.update_streak(user_id, guild_id, today_date)
+            db.set_first_message_at(user_id, guild_id, now)
+            db.increment_activity_hour(user_id, guild_id, current_hour)
+            db.update_last_active(user_id, guild_id, now)
+
+            # Server-level tracking
+            db.increment_daily_messages(guild_id, today_date)
+            db.increment_server_hour_activity(guild_id, current_hour, "message")
+            db.increment_channel_messages(
+                message.channel.id,
+                guild_id,
+                message.channel.name
+            )
+
+            # Track DAU (unique users) - use cache to avoid duplicate counts
+            dau_key = (user_id, guild_id, today_date)
+            if dau_key not in self._dau_cache:
+                self._dau_cache.add(dau_key)
+                db.increment_daily_unique_user(guild_id, today_date)
+
+                # Clean cache at midnight (when date changes)
+                if len(self._dau_cache) > 1000:
+                    self._dau_cache = {k for k in self._dau_cache if k[2] == today_date}
+        except Exception:
+            pass  # Non-critical tracking, don't break XP flow
 
     # =========================================================================
     # Voice XP

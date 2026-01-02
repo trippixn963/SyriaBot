@@ -320,10 +320,12 @@ class RateLimiter:
         message: Optional[discord.Message] = None,
     ) -> None:
         """Send limit reached response."""
+        import asyncio
+
         embed = self.create_limit_embed(member, action_type)
         action_name = ACTION_NAMES.get(action_type, action_type)
 
-        # Send via interaction
+        # Send via interaction (ephemeral - hidden from others)
         if interaction:
             try:
                 if interaction.response.is_done():
@@ -336,10 +338,31 @@ class RateLimiter:
                     ("Error", str(e)),
                 ], emoji="❌")
 
-        # Send via message reply
+        # Send via message reply (delete user's message, send temp response)
         elif message:
             try:
-                await message.reply(embed=embed, mention_author=False)
+                # Delete the user's message (e.g., "convert" or "quote")
+                try:
+                    await message.delete()
+                except discord.HTTPException:
+                    pass  # May not have permission
+
+                # Send rate limit embed, then delete after 10 seconds
+                response = await message.channel.send(
+                    content=member.mention,
+                    embed=embed,
+                )
+
+                # Schedule deletion after 10 seconds (non-blocking)
+                async def delete_after_delay():
+                    await asyncio.sleep(10)
+                    try:
+                        await response.delete()
+                    except discord.HTTPException:
+                        pass
+
+                asyncio.create_task(delete_after_delay())
+
             except discord.HTTPException as e:
                 log.tree("Rate Limit Reply Failed", [
                     ("User", str(member)),
@@ -351,6 +374,7 @@ class RateLimiter:
             ("ID", str(member.id)),
             ("Action", action_name),
             ("Limit", str(WEEKLY_LIMITS.get(action_type, 0))),
+            ("Source", "Slash Command" if interaction else "Reply"),
         ], emoji="🚫")
 
     # =========================================================================

@@ -7,10 +7,15 @@ Handles voice state updates for TempVoice.
 Author: حَـــــنَّـــــا
 """
 
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 import discord
 from discord.ext import commands
 
+from src.core.config import config
 from src.core.logger import log
+from src.services.database import db
 
 
 class VoiceHandler(commands.Cog):
@@ -51,8 +56,30 @@ class VoiceHandler(commands.Cog):
                     ("Error", str(e)),
                 ], emoji="❌")
 
+        # Track server-level voice stats (main server only)
+        if member.guild.id == config.GUILD_ID:
+            try:
+                # Track voice joins for hourly stats
+                if after.channel and (not before.channel or before.channel.id != after.channel.id):
+                    est = ZoneInfo("America/New_York")
+                    current_hour = datetime.now(est).hour
+                    db.increment_server_hour_activity(member.guild.id, current_hour, "voice")
+
+                # Track peak concurrent voice users
+                if after.channel:
+                    total_voice_users = sum(
+                        len([m for m in vc.members if not m.bot])
+                        for vc in member.guild.voice_channels
+                    )
+                    today = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
+                    db.update_voice_peak(member.guild.id, today, total_voice_users)
+            except Exception:
+                pass  # Non-critical
+
 
 async def setup(bot: commands.Bot) -> None:
     """Register the voice handler cog with the bot."""
     await bot.add_cog(VoiceHandler(bot))
-    log.success("Loaded voice handler")
+    log.tree("Handler Loaded", [
+        ("Name", "VoiceHandler"),
+    ], emoji="✅")

@@ -244,4 +244,4 @@ class ConvertCog(commands.Cog):
 async def setup(bot: commands.Bot) -> None:
     """Load the Convert cog."""
     await bot.add_cog(ConvertCog(bot))
-    log.success("Convert Cog loaded")
+    log.tree("Command Loaded", [("Name", "convert")], emoji="✅")

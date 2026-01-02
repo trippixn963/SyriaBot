@@ -37,7 +37,10 @@ class ProfileSyncService:
 
         # Start scheduler
         self._task = asyncio.create_task(self._scheduler())
-        log.success("Profile sync service initialized")
+        log.tree("Profile Sync Initialized", [
+            ("Guild ID", str(guild_id)),
+            ("Schedule", "Daily at midnight EST"),
+        ], emoji="✅")
 
     async def stop(self) -> None:
         """Stop the sync service."""
@@ -61,7 +64,10 @@ class ProfileSyncService:
             next_run = datetime.combine(tomorrow, SYNC_TIME, TIMEZONE)
             wait_seconds = (next_run - now).total_seconds()
 
-            log.info(f"Next profile sync in {wait_seconds / 3600:.1f} hours")
+            log.tree("Profile Sync Scheduled", [
+                ("Next Run", next_run.strftime("%Y-%m-%d %H:%M EST")),
+                ("Wait Time", f"{wait_seconds / 3600:.1f} hours"),
+            ], emoji="⏰")
 
             await asyncio.sleep(wait_seconds)
             await self._sync_profile()
@@ -125,4 +131,6 @@ class ProfileSyncService:
         if changes:
             log.tree("Bot Profile Synced", changes, emoji="🔄")
         else:
-            log.info("Profile sync: No changes needed")
+            log.tree("Profile Sync", [
+                ("Status", "No changes needed"),
+            ], emoji="ℹ️")

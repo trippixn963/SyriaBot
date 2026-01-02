@@ -17,6 +17,7 @@ from src.core.logger import log
 from src.services.tempvoice import TempVoiceService
 from src.services.sync_profile import ProfileSyncService
 from src.services.xp import XPService
+from src.services.xp import card as rank_card
 from src.services.stats_api import SyriaAPI
 from src.services.database import db
 from src.utils.http import http_session
@@ -46,7 +47,9 @@ class SyriaBot(commands.Bot):
 
     async def setup_hook(self) -> None:
         """Called when the bot is starting up."""
-        log.info("Running setup_hook...")
+        log.tree("Setup Hook", [
+            ("Status", "Starting"),
+        ], emoji="🔧")
 
         # Load handlers
         handlers = [
@@ -55,10 +58,11 @@ class SyriaBot(commands.Bot):
             "src.handlers.members",
             "src.handlers.message",
         ]
+        loaded_handlers = []
         for handler in handlers:
             try:
                 await self.load_extension(handler)
-                log.success(f"Loaded handler: {handler.split('.')[-1]}")
+                loaded_handlers.append(handler.split('.')[-1])
             except Exception as e:
                 log.error_tree("Handler Load Failed", e, [
                     ("Handler", handler),
@@ -72,16 +76,20 @@ class SyriaBot(commands.Bot):
             "src.commands.rank",
             "src.commands.translate",
         ]
+        loaded_commands = []
         for cmd in commands_list:
             try:
                 await self.load_extension(cmd)
-                log.success(f"Loaded command: {cmd.split('.')[-1]}")
+                loaded_commands.append(cmd.split('.')[-1])
             except Exception as e:
                 log.error_tree("Command Load Failed", e, [
                     ("Command", cmd),
                 ])
 
-        log.info("Setup hook complete")
+        log.tree("Setup Hook Complete", [
+            ("Handlers", ", ".join(loaded_handlers)),
+            ("Commands", ", ".join(loaded_commands)),
+        ], emoji="✅")
 
         # Set up app command completion tracking
         self.tree.on_error = self._on_app_command_error
@@ -122,13 +130,17 @@ class SyriaBot(commands.Bot):
 
     async def _init_services(self) -> None:
         """Initialize bot services."""
-        log.info("Initializing services...")
+        log.tree("Services Init", [
+            ("Status", "Starting"),
+        ], emoji="🔧")
+
+        initialized = []
 
         # TempVoice
         try:
             self.tempvoice = TempVoiceService(self)
             await self.tempvoice.setup()
-            log.success("TempVoice service initialized")
+            initialized.append("TempVoice")
         except Exception as e:
             log.error_tree("TempVoice Init Failed", e)
 
@@ -138,7 +150,7 @@ class SyriaBot(commands.Bot):
             try:
                 self.profile_sync = ProfileSyncService(self)
                 await self.profile_sync.setup(guild_id)
-                log.success("Profile sync service initialized")
+                initialized.append("ProfileSync")
             except Exception as e:
                 log.error_tree("Profile Sync Init Failed", e)
 
@@ -146,7 +158,7 @@ class SyriaBot(commands.Bot):
         try:
             self.xp_service = XPService(self)
             await self.xp_service.setup()
-            log.success("XP service initialized")
+            initialized.append("XP")
         except Exception as e:
             log.error_tree("XP Service Init Failed", e)
 
@@ -155,51 +167,66 @@ class SyriaBot(commands.Bot):
             self.stats_api = SyriaAPI()
             self.stats_api.set_bot(self)
             await self.stats_api.start()
-            log.success("Stats API initialized")
+            initialized.append("StatsAPI")
         except Exception as e:
             log.error_tree("Stats API Init Failed", e)
 
-        log.info("All services initialized")
+        log.tree("Services Init Complete", [
+            ("Services", ", ".join(initialized)),
+            ("Count", f"{len(initialized)}/4"),
+        ], emoji="✅")
 
     async def close(self) -> None:
         """Clean up when bot is shutting down."""
         log.tree("Bot Shutdown", [
-            ("Reason", "close() called"),
+            ("Status", "Starting cleanup"),
         ], emoji="🛑")
+
+        stopped = []
 
         if self.stats_api:
             try:
                 await self.stats_api.stop()
-                log.info("Stats API stopped")
+                stopped.append("StatsAPI")
             except Exception as e:
                 log.error_tree("Stats API Stop Error", e)
 
         if self.tempvoice:
             try:
                 await self.tempvoice.stop()
-                log.info("TempVoice stopped")
+                stopped.append("TempVoice")
             except Exception as e:
                 log.error_tree("TempVoice Stop Error", e)
 
         if self.profile_sync:
             try:
                 await self.profile_sync.stop()
-                log.info("Profile sync stopped")
+                stopped.append("ProfileSync")
             except Exception as e:
                 log.error_tree("Profile Sync Stop Error", e)
 
         if self.xp_service:
             try:
                 await self.xp_service.stop()
-                log.info("XP service stopped")
+                stopped.append("XP")
             except Exception as e:
                 log.error_tree("XP Service Stop Error", e)
 
         # Close HTTP session
         try:
             await http_session.close()
+            stopped.append("HTTP")
         except Exception as e:
             log.error_tree("HTTP Session Close Error", e)
 
+        # Clean up rank card browser
+        try:
+            await rank_card.cleanup()
+            stopped.append("RankCard")
+        except Exception as e:
+            log.error_tree("Rank Card Cleanup Error", e)
+
         await super().close()
-        log.success("Bot shutdown complete")
+        log.tree("Bot Shutdown Complete", [
+            ("Services Stopped", ", ".join(stopped)),
+        ], emoji="✅")
