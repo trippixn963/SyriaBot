@@ -18,6 +18,8 @@ from discord.ext import commands, tasks
 
 from src.core.logger import log
 from src.core.config import config
+from src.core.colors import COLOR_GOLD
+from src.utils.footer import set_footer
 
 
 class GalleryService:
@@ -224,14 +226,12 @@ class GalleryService:
             embed = discord.Embed(
                 title="🔔 New Gallery Post",
                 description=f"Posted a new {media_type}",
-                color=0x00CFFF,
-                timestamp=datetime.now()
+                color=COLOR_GOLD
             )
             embed.set_author(name=message.author.display_name)
-            embed.set_thumbnail(url=message.author.display_avatar.url)
             if thumbnail_url:
                 embed.set_image(url=thumbnail_url)
-            embed.set_footer(text="Don't forget to show some love!")
+            set_footer(embed)
 
             # Create view with comment button if thread exists
             view = None
