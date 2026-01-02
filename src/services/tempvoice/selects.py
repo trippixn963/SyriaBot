@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 import discord
 from discord import ui
 
-from src.core.colors import COLOR_SUCCESS, COLOR_ERROR, COLOR_WARNING, COLOR_NEUTRAL
+from src.core.colors import COLOR_SUCCESS, COLOR_ERROR, COLOR_WARNING, COLOR_NEUTRAL, COLOR_BOOST
 from src.core.logger import log
 from src.services.database import db
 from src.utils.footer import set_footer
@@ -15,7 +15,7 @@ from .utils import (
     is_booster,
     generate_channel_name,
     MAX_ALLOWED_USERS_FREE,
-    COLOR_BOOST,
+    set_owner_permissions,
 )
 
 if TYPE_CHECKING:
@@ -114,7 +114,7 @@ class ConfirmView(ui.View):
                 old_owner = interaction.guild.get_member(channel_info["owner_id"])
                 if old_owner:
                     await channel.set_permissions(old_owner, overwrite=None)
-                await channel.set_permissions(target, connect=True, manage_channels=True, send_messages=True, read_message_history=True)
+                await set_owner_permissions(channel, target)
                 db.transfer_ownership(channel.id, target.id)
 
                 # Generate channel name for new owner (uses shared utility)

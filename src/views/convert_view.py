@@ -21,6 +21,7 @@ from src.core.colors import (
     EMOJI_WHITE, EMOJI_BLACK, EMOJI_RED, EMOJI_BLUE,
     EMOJI_GREEN, EMOJI_YELLOW, EMOJI_PURPLE, EMOJI_PINK,
 )
+from src.core.constants import FONT_PATHS
 from src.core.logger import log
 from src.services.convert_service import convert_service
 from src.utils.footer import set_footer
@@ -83,7 +84,8 @@ class TextInputModal(ui.Modal, title="Edit Caption Text"):
         self.view = view
         self.text_input.default = current_text
 
-    async def on_submit(self, interaction: discord.Interaction):
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        """Handle text input submission and update preview."""
         self.view.settings.text = self.text_input.value.strip()
         await self.view.update_preview(interaction)
 
@@ -104,7 +106,8 @@ class VideoTextInputModal(ui.Modal, title="Edit Caption Text"):
         self.view = view
         self.text_input.default = current_text
 
-    async def on_submit(self, interaction: discord.Interaction):
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        """Handle text input submission and update embed."""
         self.view.settings.text = self.text_input.value.strip()
         await self.view.update_embed(interaction)
 
@@ -135,7 +138,8 @@ class ColorSelect(ui.Select):
             row=0,
         )
 
-    async def callback(self, interaction: discord.Interaction):
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Handle color selection and update image preview."""
         self.convert_view.settings.apply_preset(self.values[0])
         await self.convert_view.update_preview(interaction)
 
@@ -162,7 +166,8 @@ class VideoColorSelect(ui.Select):
             row=0,
         )
 
-    async def callback(self, interaction: discord.Interaction):
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Handle color selection and update video embed."""
         self.convert_view.settings.apply_preset(self.values[0])
         await self.convert_view.update_embed(interaction)
 
@@ -221,15 +226,8 @@ class ConvertView(ui.View):
         TEXT_PADDING_RATIO = 0.05
         MAX_DIMENSION = 2000
 
-        # Font paths
-        FONT_PATHS = [
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-            "/System/Library/Fonts/Helvetica.ttc",
-            "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",
-            "arial.ttf",
-        ]
-
-        def find_font():
+        def find_font() -> Optional[str]:
+            """Find first available system font from predefined paths."""
             for font_path in FONT_PATHS:
                 try:
                     ImageFont.truetype(font_path, 20)
@@ -238,7 +236,8 @@ class ConvertView(ui.View):
                     continue
             return None
 
-        def get_font(font_path, size):
+        def get_font(font_path: Optional[str], size: int) -> ImageFont.FreeTypeFont:
+            """Load font from path or fall back to default."""
             if font_path:
                 try:
                     return ImageFont.truetype(font_path, size)
@@ -550,15 +549,8 @@ class VideoConvertView(ui.View):
         BAR_PADDING_RATIO = 0.10
         TEXT_PADDING_RATIO = 0.05
 
-        # Font paths
-        FONT_PATHS = [
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-            "/System/Library/Fonts/Helvetica.ttc",
-            "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",
-            "arial.ttf",
-        ]
-
-        def find_font():
+        def find_font() -> Optional[str]:
+            """Find first available system font from predefined paths."""
             for font_path in FONT_PATHS:
                 try:
                     ImageFont.truetype(font_path, 20)
@@ -567,7 +559,8 @@ class VideoConvertView(ui.View):
                     continue
             return None
 
-        def get_font(font_path, size):
+        def get_font(font_path: Optional[str], size: int) -> ImageFont.FreeTypeFont:
+            """Load font from path or fall back to default."""
             if font_path:
                 try:
                     return ImageFont.truetype(font_path, size)

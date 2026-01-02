@@ -14,21 +14,15 @@ from typing import Set, Tuple, TYPE_CHECKING
 import discord
 
 from src.core.config import config
+from src.core.constants import TEMPVOICE_MAX_ALLOWED_USERS_FREE
+from src.core.colors import COLOR_BOOST
 from src.services.database import db
 
 if TYPE_CHECKING:
     pass
 
-
-# =============================================================================
-# Constants
-# =============================================================================
-
-# Limits for non-boosters
-MAX_ALLOWED_USERS_FREE = 3
-
-# Colors
-COLOR_BOOST = 0xFF73FA  # Pink boost color
+# Alias for backwards compatibility
+MAX_ALLOWED_USERS_FREE = TEMPVOICE_MAX_ALLOWED_USERS_FREE
 
 
 # =============================================================================
@@ -213,6 +207,54 @@ def generate_channel_name(member: discord.Member, guild: discord.Guild) -> Tuple
 
 
 # =============================================================================
+# Permission Helpers
+# =============================================================================
+
+def get_owner_overwrite() -> discord.PermissionOverwrite:
+    """Get standard permission overwrite for channel owner."""
+    return discord.PermissionOverwrite(
+        connect=True,
+        manage_channels=True,
+        send_messages=True,
+        read_message_history=True,
+    )
+
+
+async def set_owner_permissions(channel: discord.VoiceChannel, member: discord.Member) -> None:
+    """Set owner permissions on a channel."""
+    await channel.set_permissions(
+        member,
+        connect=True,
+        manage_channels=True,
+        send_messages=True,
+        read_message_history=True,
+    )
+
+
+def get_trusted_overwrite() -> discord.PermissionOverwrite:
+    """Get standard permission overwrite for trusted users."""
+    return discord.PermissionOverwrite(
+        connect=True,
+        send_messages=True,
+        read_message_history=True,
+    )
+
+
+def get_blocked_overwrite() -> discord.PermissionOverwrite:
+    """Get standard permission overwrite for blocked users."""
+    return discord.PermissionOverwrite(connect=False)
+
+
+def get_locked_overwrite() -> discord.PermissionOverwrite:
+    """Get permission overwrite for @everyone when channel is locked."""
+    return discord.PermissionOverwrite(
+        connect=False,
+        send_messages=False,
+        read_message_history=False,
+    )
+
+
+# =============================================================================
 # Exports
 # =============================================================================
 
@@ -234,4 +276,10 @@ __all__ = [
     "build_full_name",
     "generate_base_name",
     "generate_channel_name",
+    # Permissions
+    "get_owner_overwrite",
+    "set_owner_permissions",
+    "get_trusted_overwrite",
+    "get_blocked_overwrite",
+    "get_locked_overwrite",
 ]

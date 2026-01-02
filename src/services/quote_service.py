@@ -22,41 +22,38 @@ from PIL import Image, ImageDraw, ImageFont, ImageFilter
 from pilmoji import Pilmoji
 
 from src.core.logger import log
+from src.core.constants import (
+    TIMEZONE_EST,
+    FONT_ITALIC_PATHS,
+    QUOTE_IMAGE_WIDTH,
+    QUOTE_IMAGE_HEIGHT,
+    QUOTE_THEME_COLOR,
+    QUOTE_ACCENT_GOLD,
+    QUOTE_BG_COLOR,
+    QUOTE_TEXT_COLOR,
+    QUOTE_SUBTEXT_COLOR,
+    QUOTE_AVATAR_SECTION_WIDTH_RATIO,
+    QUOTE_MAX_BANNER_CACHE_SIZE,
+)
 from src.utils.text import wrap_text
 
+# Aliases for backwards compatibility
+EASTERN_TZ = TIMEZONE_EST
+MAX_BANNER_CACHE_SIZE = QUOTE_MAX_BANNER_CACHE_SIZE
+IMAGE_WIDTH = QUOTE_IMAGE_WIDTH
+IMAGE_HEIGHT = QUOTE_IMAGE_HEIGHT
+THEME_COLOR = QUOTE_THEME_COLOR
+ACCENT_GOLD = QUOTE_ACCENT_GOLD
+BG_COLOR = QUOTE_BG_COLOR
+TEXT_COLOR = QUOTE_TEXT_COLOR
+SUBTEXT_COLOR = QUOTE_SUBTEXT_COLOR
+AVATAR_SECTION_WIDTH = int(IMAGE_WIDTH * QUOTE_AVATAR_SECTION_WIDTH_RATIO)
 
-# =============================================================================
-# Constants
-# =============================================================================
-
-# Timezone for banner caching
-EASTERN_TZ = ZoneInfo("America/New_York")
-
-# Dimensions (same aspect ratio as Make it a Quote)
-IMAGE_WIDTH = 1200
-IMAGE_HEIGHT = 630
-
-# Colors - Syria Green & Gold theme
-THEME_COLOR = (15, 81, 50)           # Syria green
-ACCENT_GOLD = (212, 175, 55)         # Gold accent
-BG_COLOR = (0, 0, 0)                 # Black
-TEXT_COLOR = (255, 255, 255)         # White
-SUBTEXT_COLOR = (156, 156, 156)      # Gray for username
-
-# Layout
-AVATAR_SECTION_WIDTH = int(IMAGE_WIDTH * 0.38)  # 38% for avatar side
-
-# Font paths - Premium fonts with Arabic support
+# Font paths - Premium fonts with Arabic support (quote-specific)
 FONT_PATHS = [
     "/usr/share/fonts/opentype/fonts-hosny-amiri/Amiri-Regular.ttf",
     "/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf",
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-    "/System/Library/Fonts/Helvetica.ttc",
-]
-
-FONT_ITALIC_PATHS = [
-    "/usr/share/fonts/opentype/fonts-hosny-amiri/Amiri-Italic.ttf",
-    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf",
     "/System/Library/Fonts/Helvetica.ttc",
 ]
 
@@ -160,6 +157,12 @@ class QuoteService:
             cached_img, cache_date = self._banner_cache[guild_id]
             if cache_date == today:
                 return cached_img.copy()
+
+        # Evict oldest entries if cache is full (simple LRU)
+        if len(self._banner_cache) >= MAX_BANNER_CACHE_SIZE:
+            # Remove first (oldest) entry
+            oldest_key = next(iter(self._banner_cache))
+            del self._banner_cache[oldest_key]
 
         # Fetch fresh
         banner_img = await self._fetch_image(banner_url)

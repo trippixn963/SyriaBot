@@ -10,6 +10,12 @@ import discord
 from discord import ui
 
 from src.core.config import config
+from src.core.constants import (
+    TEMPVOICE_JOIN_COOLDOWN,
+    TEMPVOICE_OWNER_LEAVE_TRANSFER_DELAY,
+    TEMPVOICE_STICKY_PANEL_THRESHOLD,
+    TEMPVOICE_REORDER_DEBOUNCE_DELAY,
+)
 from src.core.logger import log
 from src.services.database import db
 from src.utils.footer import set_footer
@@ -19,24 +25,22 @@ from .utils import (
     build_full_name,
     extract_base_name,
     is_booster,
+    get_owner_overwrite,
+    set_owner_permissions,
+    get_trusted_overwrite,
+    get_blocked_overwrite,
+    get_locked_overwrite,
 )
 from .views import TempVoiceControlPanel
 
 if TYPE_CHECKING:
     from src.bot import SyriaBot
 
-
-# Cooldown between join-to-create attempts (seconds)
-JOIN_COOLDOWN = 5
-
-# Delay before auto-transfer when owner leaves (seconds)
-OWNER_LEAVE_TRANSFER_DELAY = 30
-
-# Number of messages before re-sending sticky control panel
-STICKY_PANEL_MESSAGE_THRESHOLD = 20
-
-# Delay before reordering channels (debounce for bulk deletions)
-REORDER_DEBOUNCE_DELAY = 2.0
+# Aliases for backwards compatibility
+JOIN_COOLDOWN = TEMPVOICE_JOIN_COOLDOWN
+OWNER_LEAVE_TRANSFER_DELAY = TEMPVOICE_OWNER_LEAVE_TRANSFER_DELAY
+STICKY_PANEL_MESSAGE_THRESHOLD = TEMPVOICE_STICKY_PANEL_THRESHOLD
+REORDER_DEBOUNCE_DELAY = TEMPVOICE_REORDER_DEBOUNCE_DELAY
 
 
 class TempVoiceService:
@@ -107,9 +111,7 @@ class TempVoiceService:
             try:
                 await self._cleanup_empty_channels()
             except Exception as e:
-                log.tree("Periodic Cleanup Failed", [
-                    ("Error", str(e)),
-                ], emoji="❌")
+                log.error_tree("Periodic Cleanup Failed", e)
 
     async def _cleanup_empty_channels(self) -> None:
         """Scan and delete empty temp channels (handles missed deletions)."""
@@ -157,10 +159,9 @@ class TempVoiceService:
                         ("Reason", "Periodic cleanup"),
                     ], emoji="🧹")
                 except discord.HTTPException as e:
-                    log.tree("Empty Channel Delete Failed", [
+                    log.error_tree("Empty Channel Delete Failed", e, [
                         ("Channel ID", str(channel_id)),
-                        ("Error", str(e)),
-                    ], emoji="❌")
+                    ])
 
         if cleaned > 0:
             log.tree("Periodic Cleanup Complete", [
@@ -200,19 +201,14 @@ class TempVoiceService:
         channel_info = db.get_temp_channel(channel.id)
         owner_id = channel_info["owner_id"] if channel_info else owner.id
 
-        # Get lists from owner's PERSISTENT lists (not channel-specific)
-        trusted_list = db.get_trusted_list(owner_id)
-        blocked_list = db.get_blocked_list(owner_id)
+        # Get both lists in single DB call (optimization)
+        trusted_list, blocked_list = db.get_user_access_lists(owner_id)
 
-        # Validate trusted users still exist in guild, clean up stale entries
-        valid_trusted = []
-        for user_id in trusted_list:
-            member = channel.guild.get_member(user_id)
-            if member:
-                valid_trusted.append((user_id, member))
-
-        # Validate blocked users still exist
-        valid_blocked_count = sum(1 for uid in blocked_list if channel.guild.get_member(uid))
+        # Validate trusted users still exist in guild
+        valid_trusted = [
+            (uid, m) for uid in trusted_list
+            if (m := channel.guild.get_member(uid))
+        ]
 
         member_count = len(channel.members)
         limit = channel.user_limit or "∞"
@@ -390,10 +386,9 @@ class TempVoiceService:
                     ("Action", "Will recreate"),
                 ], emoji="⚠️")
             except discord.HTTPException as e:
-                log.tree("Panel Update Failed", [
+                log.error_tree("Panel Update Failed", e, [
                     ("Channel", channel.name),
-                    ("Error", str(e)),
-                ], emoji="❌")
+                ])
 
         # Fallback: Search through recent messages (slow path)
         panel_found = False
@@ -408,10 +403,9 @@ class TempVoiceService:
                     panel_found = True
                     break
         except discord.HTTPException as e:
-            log.tree("Panel History Search Failed", [
+            log.error_tree("Panel History Search Failed", e, [
                 ("Channel", channel.name),
-                ("Error", str(e)),
-            ], emoji="❌")
+            ])
 
         # Panel was deleted - recreate it
         if not panel_found:
@@ -425,10 +419,9 @@ class TempVoiceService:
                     ("Owner", str(owner)),
                 ], emoji="🔧")
             except discord.HTTPException as e:
-                log.tree("Panel Recovery Failed", [
+                log.error_tree("Panel Recovery Failed", e, [
                     ("Channel", channel.name),
-                    ("Error", str(e)),
-                ], emoji="❌")
+                ])
 
     async def on_voice_state_update(
         self,
@@ -444,8 +437,12 @@ class TempVoiceService:
             ], emoji="⚠️")
             return
 
+        # Determine if user actually changed channels (ignore mute/deafen/stream changes)
+        left_channel = before.channel and (not after.channel or before.channel.id != after.channel.id)
+        joined_channel = after.channel and (not before.channel or after.channel.id != before.channel.id)
+
         # User left a VC - revoke text permissions
-        if before.channel and before.channel.id != config.VC_CREATOR_CHANNEL_ID:
+        if left_channel and before.channel.id != config.VC_CREATOR_CHANNEL_ID:
             # Skip ignored channels (managed by other bots, e.g. Quran VC)
             if before.channel.id not in config.VC_IGNORED_CHANNELS:
                 # Re-fetch channel to ensure it still exists
@@ -462,7 +459,7 @@ class TempVoiceService:
                             await self._check_empty_channel(channel)
 
         # User joined a VC - grant text permissions (works for dragged-in users too)
-        if after.channel and after.channel.id != config.VC_CREATOR_CHANNEL_ID:
+        if joined_channel and after.channel.id != config.VC_CREATOR_CHANNEL_ID:
             # Skip ignored channels (managed by other bots, e.g. Quran VC)
             if after.channel.id in config.VC_IGNORED_CHANNELS:
                 return
@@ -486,7 +483,7 @@ class TempVoiceService:
                 await self._check_booster_name(channel, member)
 
         # User joined the creator channel - create new temp VC
-        if after.channel and after.channel.id == config.VC_CREATOR_CHANNEL_ID:
+        if joined_channel and after.channel.id == config.VC_CREATOR_CHANNEL_ID:
             await self._create_temp_channel(member)
 
     async def on_message(self, message: discord.Message) -> None:
@@ -541,10 +538,9 @@ class TempVoiceService:
                         ("Reason", "Already deleted"),
                     ], emoji="⚠️")
                 except discord.HTTPException as e:
-                    log.tree("Sticky Panel Delete Failed", [
+                    log.error_tree("Sticky Panel Delete Failed", e, [
                         ("Channel", channel.name),
-                        ("Error", str(e)),
-                    ], emoji="❌")
+                    ])
 
             # Send new panel (preserves all stats like created_at from DB)
             try:
@@ -561,10 +557,9 @@ class TempVoiceService:
                     ("Owner", str(owner)),
                 ], emoji="📌")
             except discord.HTTPException as e:
-                log.tree("Sticky Panel Failed", [
+                log.error_tree("Sticky Panel Failed", e, [
                     ("Channel", channel.name),
-                    ("Error", str(e)),
-                ], emoji="❌")
+                ])
 
     async def _grant_text_access(self, channel: discord.VoiceChannel, member: discord.Member) -> None:
         """Grant text chat access to a member in a temp VC (includes dragged-in users)."""
@@ -587,17 +582,15 @@ class TempVoiceService:
             # Update panel to show new member
             await self._update_panel(channel)
         except discord.HTTPException as e:
-            log.tree("Text Access Grant Failed", [
+            log.error_tree("Text Access Grant Failed", e, [
                 ("Channel", channel.name),
                 ("User", str(member)),
-                ("Error", str(e)),
-            ], emoji="❌")
+            ])
         except Exception as e:
-            log.tree("Text Access Grant Error", [
+            log.error_tree("Text Access Grant Error", e, [
                 ("Channel", channel.name),
                 ("User", str(member)),
-                ("Error", str(e)),
-            ], emoji="❌")
+            ])
 
     async def _check_booster_name(self, channel: discord.VoiceChannel, member: discord.Member) -> None:
         """Check if owner lost booster status and needs channel renamed."""
@@ -648,15 +641,13 @@ class TempVoiceService:
             await self._update_panel(channel)
 
         except discord.HTTPException as e:
-            log.tree("Booster Name Check Failed", [
+            log.error_tree("Booster Name Check Failed", e, [
                 ("Channel", channel.name),
-                ("Error", str(e)),
-            ], emoji="❌")
+            ])
         except Exception as e:
-            log.tree("Booster Name Check Error", [
+            log.error_tree("Booster Name Check Error", e, [
                 ("Channel", channel.name),
-                ("Error", str(e)),
-            ], emoji="❌")
+            ])
 
     async def _revoke_text_access(self, channel: discord.VoiceChannel, member: discord.Member) -> None:
         """Revoke text chat access from a member who left a VC."""
@@ -696,17 +687,15 @@ class TempVoiceService:
                 # For non-temp channels - just remove the text permissions we granted
                 await channel.set_permissions(member, overwrite=None)
         except discord.HTTPException as e:
-            log.tree("Text Access Revoke Failed", [
+            log.error_tree("Text Access Revoke Failed", e, [
                 ("Channel", channel.name),
                 ("User", str(member)),
-                ("Error", str(e)),
-            ], emoji="❌")
+            ])
         except Exception as e:
-            log.tree("Text Access Revoke Error", [
+            log.error_tree("Text Access Revoke Error", e, [
                 ("Channel", channel.name),
                 ("User", str(member)),
-                ("Error", str(e)),
-            ], emoji="❌")
+            ])
 
     def schedule_reorder(self, guild: discord.Guild) -> None:
         """
@@ -747,10 +736,9 @@ class TempVoiceService:
             # Another reorder was scheduled, this one is cancelled (already logged in schedule_reorder)
             pass
         except Exception as e:
-            log.tree("Debounced Reorder Error", [
+            log.error_tree("Debounced Reorder Error", e, [
                 ("Guild", guild.name),
-                ("Error", str(e)),
-            ], emoji="❌")
+            ])
         finally:
             # Clean up the pending task reference
             self._pending_reorders.pop(guild.id, None)
@@ -838,16 +826,14 @@ class TempVoiceService:
                 await asyncio.sleep(0.3)
 
             except discord.HTTPException as e:
-                log.tree("Reorder Rename Failed", [
+                log.error_tree("Reorder Rename Failed", e, [
                     ("Channel", channel.name),
                     ("Target", new_name),
-                    ("Error", str(e)),
-                ], emoji="❌")
+                ])
             except Exception as e:
-                log.tree("Reorder Error", [
+                log.error_tree("Reorder Error", e, [
                     ("Channel", channel.name),
-                    ("Error", str(e)),
-                ], emoji="❌")
+                ])
 
         # Summary log for bulk renames
         if len(channels_to_rename) > 3:
@@ -946,10 +932,9 @@ class TempVoiceService:
                 ("State", state_str),
             ], emoji="🔍")
         except Exception as e:
-            log.tree("Create Member Fetch Failed", [
+            log.error_tree("Create Member Fetch Failed", e, [
                 ("User ID", str(member_id)),
-                ("Error", str(e)),
-            ], emoji="❌")
+            ])
             return
 
         # Check if user is still in creator channel (they may have left while waiting for lock)
@@ -981,10 +966,9 @@ class TempVoiceService:
             try:
                 await member.move_to(None)
             except discord.HTTPException as e:
-                log.tree("Cooldown Disconnect Failed", [
+                log.error_tree("Cooldown Disconnect Failed", e, [
                     ("User", str(member)),
-                    ("Error", str(e)),
-                ], emoji="❌")
+                ])
             return
 
         # Update cooldown timestamp
@@ -1009,7 +993,7 @@ class TempVoiceService:
                     new_owner = other_members[0]
                     try:
                         await channel.set_permissions(member, overwrite=None)
-                        await channel.set_permissions(new_owner, connect=True, manage_channels=True, send_messages=True, read_message_history=True)
+                        await set_owner_permissions(channel, new_owner)
                         db.transfer_ownership(channel.id, new_owner.id)
                         log.tree("Auto-Transfer", [
                             ("Channel", channel.name),
@@ -1017,12 +1001,11 @@ class TempVoiceService:
                             ("To", str(new_owner)),
                         ], emoji="🔄")
                     except discord.HTTPException as e:
-                        log.tree("Auto-Transfer Failed", [
+                        log.error_tree("Auto-Transfer Failed", e, [
                             ("Channel", channel.name),
                             ("From", str(member)),
                             ("To", str(new_owner)),
-                            ("Error", str(e)),
-                        ], emoji="❌")
+                        ])
                 else:
                     # Channel is empty, delete it
                     try:
@@ -1033,11 +1016,10 @@ class TempVoiceService:
                             ("Reason", "Owner creating new VC"),
                         ], emoji="🗑️")
                     except discord.HTTPException as e:
-                        log.tree("Auto-Delete Failed", [
+                        log.error_tree("Auto-Delete Failed", e, [
                             ("Channel", channel.name),
                             ("Owner", str(member)),
-                            ("Error", str(e)),
-                        ], emoji="❌")
+                        ])
             else:
                 db.delete_temp_channel(existing)
                 log.tree("Orphan DB Entry Cleaned", [
@@ -1087,18 +1069,9 @@ class TempVoiceService:
             # Build all overwrites upfront (single API call instead of multiple)
             overwrites = {
                 # Lock by default + deny text access for everyone
-                guild.default_role: discord.PermissionOverwrite(
-                    connect=False,
-                    send_messages=False,
-                    read_message_history=False,
-                ),
+                guild.default_role: get_locked_overwrite(),
                 # Owner permissions (full access including text, no move_members - use kick button)
-                member: discord.PermissionOverwrite(
-                    connect=True,
-                    manage_channels=True,
-                    send_messages=True,
-                    read_message_history=True,
-                ),
+                member: get_owner_overwrite(),
             }
 
             # Mod role gets full access (except developer's channels)
@@ -1135,7 +1108,7 @@ class TempVoiceService:
                             ("Reason", "Is moderator"),
                         ], emoji="⚠️")
                         continue
-                    overwrites[blocked_user] = discord.PermissionOverwrite(connect=False)
+                    overwrites[blocked_user] = get_blocked_overwrite()
                     blocked_count += 1
 
             # Pre-build trusted user overwrites (with permanent text access)
@@ -1143,11 +1116,7 @@ class TempVoiceService:
             for trusted_id in db.get_trusted_list(member.id):
                 trusted_user = guild.get_member(trusted_id)
                 if trusted_user:
-                    overwrites[trusted_user] = discord.PermissionOverwrite(
-                        connect=True,
-                        send_messages=True,
-                        read_message_history=True
-                    )
+                    overwrites[trusted_user] = get_trusted_overwrite()
                     trusted_count += 1
 
             # Create channel with ALL permissions in one API call
@@ -1167,11 +1136,10 @@ class TempVoiceService:
             try:
                 await member.move_to(channel)
             except discord.HTTPException as e:
-                log.tree("Move User Failed", [
+                log.error_tree("Move User Failed", e, [
                     ("Channel", channel_name),
                     ("User", str(member)),
-                    ("Error", str(e)),
-                ], emoji="❌")
+                ])
                 # Channel was created but move failed - clean up
                 db.delete_temp_channel(channel.id)
                 await channel.delete(reason="Failed to move user")
@@ -1181,10 +1149,9 @@ class TempVoiceService:
             try:
                 await self._send_channel_interface(channel, member, trusted_count, blocked_count)
             except Exception as e:
-                log.tree("Panel Send Failed", [
+                log.error_tree("Panel Send Failed", e, [
                     ("Channel", channel_name),
-                    ("Error", str(e)),
-                ], emoji="⚠️")
+                ])
 
             log.tree("Channel Created", [
                 ("Channel", channel_name),
@@ -1195,15 +1162,13 @@ class TempVoiceService:
             ], emoji="🔊")
 
         except discord.HTTPException as e:
-            log.tree("Channel Creation Failed", [
+            log.error_tree("Channel Creation Failed", e, [
                 ("Owner", str(member)),
-                ("Error", str(e)),
-            ], emoji="❌")
+            ])
         except Exception as e:
-            log.tree("Channel Creation Error", [
+            log.error_tree("Channel Creation Error", e, [
                 ("Owner", str(member)),
-                ("Error", str(e)),
-            ], emoji="❌")
+            ])
 
     async def _check_empty_channel(self, channel: discord.VoiceChannel) -> None:
         """Check if channel is empty and should be deleted."""
@@ -1238,10 +1203,9 @@ class TempVoiceService:
                 self.schedule_reorder(guild)
 
             except discord.HTTPException as e:
-                log.tree("Empty Channel Delete Failed", [
+                log.error_tree("Empty Channel Delete Failed", e, [
                     ("Channel", channel_name),
-                    ("Error", str(e)),
-                ], emoji="❌")
+                ])
 
     async def _schedule_owner_transfer(self, channel: discord.VoiceChannel, old_owner: discord.Member) -> None:
         """Schedule a delayed owner transfer when owner leaves the channel."""
@@ -1327,10 +1291,9 @@ class TempVoiceService:
                 ("Reason", "Task cancelled (owner likely rejoined)"),
             ], emoji="↩️")
         except Exception as e:
-            log.tree("Transfer Error", [
+            log.error_tree("Transfer Error", e, [
                 ("Channel", channel.name if channel else "Unknown"),
-                ("Error", str(e)),
-            ], emoji="❌")
+            ])
         finally:
             # Clean up the pending transfer entry
             self._pending_transfers.pop(channel.id, None)
@@ -1385,11 +1348,10 @@ class TempVoiceService:
                         try:
                             await blocked_user.move_to(None)
                         except discord.HTTPException as e:
-                            log.tree("Blocked User Kick Failed", [
+                            log.error_tree("Blocked User Kick Failed", e, [
                                 ("Channel", channel.name),
                                 ("User", str(blocked_user)),
-                                ("Error", str(e)),
-                            ], emoji="❌")
+                            ])
                     blocked_count += 1
 
             # Apply new owner's trusted list (with text permissions)
@@ -1416,16 +1378,14 @@ class TempVoiceService:
                 try:
                     await notification.delete()
                 except discord.HTTPException as e:
-                    log.tree("Notification Delete Failed", [
+                    log.error_tree("Notification Delete Failed", e, [
                         ("Channel", channel.name),
-                        ("Error", str(e)),
-                    ], emoji="⚠️")
+                    ])
             except discord.HTTPException as e:
-                log.tree("Transfer Notification Failed", [
+                log.error_tree("Transfer Notification Failed", e, [
                     ("Channel", channel.name),
                     ("New Owner", str(new_owner)),
-                    ("Error", str(e)),
-                ], emoji="❌")
+                ])
 
             # Update the control panel
             await self._update_panel(channel)
@@ -1440,14 +1400,12 @@ class TempVoiceService:
             ], emoji="🔄")
 
         except discord.HTTPException as e:
-            log.tree("Auto-Transfer Failed", [
+            log.error_tree("Auto-Transfer Failed", e, [
                 ("Channel", channel.name),
                 ("From", str(old_owner)),
                 ("To", str(new_owner)),
-                ("Error", str(e)),
-            ], emoji="❌")
+            ])
         except Exception as e:
-            log.tree("Auto-Transfer Error", [
+            log.error_tree("Auto-Transfer Error", e, [
                 ("Channel", channel.name),
-                ("Error", str(e)),
-            ], emoji="❌")
+            ])
