@@ -10,16 +10,17 @@ from __future__ import annotations
 import asyncio
 import random
 import time
-from typing import TYPE_CHECKING, Dict, Set, Optional
+from typing import TYPE_CHECKING, Dict, Optional
 
 import discord
 
 from src.core.config import config
-from src.core.colors import COLOR_SUCCESS, COLOR_GOLD
+from src.core.colors import COLOR_GOLD
+from src.core.constants import XP_COOLDOWN_CACHE_THRESHOLD
 from src.core.logger import log
 from src.services.database import db
 from src.utils.footer import set_footer
-from .utils import level_from_xp, xp_for_level, xp_progress, progress_bar, format_xp
+from .utils import level_from_xp, format_xp
 
 if TYPE_CHECKING:
     from src.bot import SyriaBot
@@ -59,13 +60,14 @@ class XPService:
         # Start voice XP background task
         self._voice_xp_task = asyncio.create_task(self._voice_xp_loop())
 
-        # Initialize voice sessions for users already in voice
-        for guild in self.bot.guilds:
-            self._voice_sessions[guild.id] = {}
-            for vc in guild.voice_channels:
+        # Initialize voice sessions for users already in voice (main server only)
+        main_guild = self.bot.get_guild(config.GUILD_ID)
+        if main_guild:
+            self._voice_sessions[main_guild.id] = {}
+            for vc in main_guild.voice_channels:
                 for member in vc.members:
                     if not member.bot:
-                        self._voice_sessions[guild.id][member.id] = time.time()
+                        self._voice_sessions[main_guild.id][member.id] = time.time()
 
         log.tree("XP Service Started", [
             ("Message XP", f"{config.XP_MESSAGE_MIN}-{config.XP_MESSAGE_MAX}"),
@@ -136,7 +138,7 @@ class XPService:
         self._message_cooldowns[cache_key] = now
 
         # Periodically clean old entries (every ~100 users)
-        if len(self._message_cooldowns) > 500:
+        if len(self._message_cooldowns) > XP_COOLDOWN_CACHE_THRESHOLD:
             old_count = len(self._message_cooldowns)
             cutoff = now - config.XP_MESSAGE_COOLDOWN
             self._message_cooldowns = {

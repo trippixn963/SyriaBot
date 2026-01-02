@@ -7,6 +7,7 @@ Discord bot with TempVoice system.
 Author: حَـــــنَّـــــا
 """
 
+import asyncio
 import discord
 from discord.ext import commands
 from typing import Optional
@@ -18,6 +19,7 @@ from src.services.sync_profile import ProfileSyncService
 from src.services.xp import XPService
 from src.services.stats_api import SyriaAPI
 from src.services.database import db
+from src.utils.http import http_session
 
 
 class SyriaBot(commands.Bot):
@@ -98,7 +100,12 @@ class SyriaBot(commands.Bot):
             return
 
         try:
-            db.increment_commands_used(interaction.user.id, interaction.guild.id)
+            # Run DB operation in thread pool to avoid blocking event loop
+            await asyncio.to_thread(
+                db.increment_commands_used,
+                interaction.user.id,
+                interaction.guild.id
+            )
         except Exception:
             pass  # Silent fail for tracking
 
@@ -187,6 +194,12 @@ class SyriaBot(commands.Bot):
                 log.info("XP service stopped")
             except Exception as e:
                 log.error_tree("XP Service Stop Error", e)
+
+        # Close HTTP session
+        try:
+            await http_session.close()
+        except Exception as e:
+            log.error_tree("HTTP Session Close Error", e)
 
         await super().close()
         log.success("Bot shutdown complete")

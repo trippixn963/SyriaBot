@@ -175,3 +175,28 @@ XP_STATUS_COLORS = {
     "dnd": (240, 71, 71),        # Red
     "offline": (116, 127, 141),  # Gray
 }
+
+
+# =============================================================================
+# Discord View/Component Timeouts
+# =============================================================================
+
+VIEW_TIMEOUT_DEFAULT = 300      # 5 minutes for interactive views
+SELECT_TIMEOUT_DEFAULT = 60     # 1 minute for select menus
+CLAIM_APPROVAL_TIMEOUT = 300    # 5 minutes for claim approval
+
+
+# =============================================================================
+# XP System Formula Constants
+# =============================================================================
+
+XP_BASE_MULTIPLIER = 100        # Base for XP formula: 100 * level^1.5
+XP_COOLDOWN_CACHE_THRESHOLD = 500   # Clean cache when exceeding this size
+
+
+# =============================================================================
+# Processing Timeouts
+# =============================================================================
+
+VIDEO_PROCESS_TIMEOUT = 30      # FFmpeg command timeout in seconds
+QUOTE_FETCH_TIMEOUT = 15        # Banner/avatar fetch timeout

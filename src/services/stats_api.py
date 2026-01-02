@@ -140,6 +140,27 @@ async def rate_limit_middleware(request: web.Request, handler) -> web.Response:
 
 
 @web.middleware
+async def cors_middleware(request: web.Request, handler) -> web.Response:
+    """Middleware to add CORS headers to all responses."""
+    # Handle preflight OPTIONS requests
+    if request.method == "OPTIONS":
+        return web.Response(
+            status=204,
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type",
+                "Access-Control-Max-Age": "86400",
+            }
+        )
+
+    response = await handler(request)
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+    return response
+
+
+@web.middleware
 async def security_headers_middleware(request: web.Request, handler) -> web.Response:
     """Middleware to add security headers to all responses."""
     response = await handler(request)
@@ -154,9 +175,11 @@ async def security_headers_middleware(request: web.Request, handler) -> web.Resp
 # Stats API
 # =============================================================================
 
-# Avatar cache: {user_id: (avatar_url, display_name)}
+# Avatar cache: {user_id: (avatar_url, display_name, username, joined_at)}
+# Limited to 500 entries to prevent unbounded growth
 _avatar_cache: dict[int, tuple[Optional[str], str]] = {}
 _avatar_cache_date: Optional[str] = None
+_AVATAR_CACHE_MAX_SIZE = 500
 
 # EST timezone for cache refresh
 EST_TZ = TIMEZONE_EST
@@ -169,6 +192,7 @@ class SyriaAPI:
         self._bot: Optional["SyriaBot"] = None
         self._start_time: Optional[datetime] = None
         self.app = web.Application(middlewares=[
+            cors_middleware,
             rate_limit_middleware,
             security_headers_middleware,
         ])
@@ -198,13 +222,18 @@ class SyriaAPI:
         return f"{mins}m"
 
     def _check_cache_refresh(self) -> None:
-        """Clear avatar cache if it's a new day in EST."""
+        """Clear avatar cache if it's a new day in EST or exceeds max size."""
         global _avatar_cache, _avatar_cache_date
         today_est = datetime.now(EST_TZ).strftime("%Y-%m-%d")
 
         if _avatar_cache_date != today_est:
             _avatar_cache.clear()
             _avatar_cache_date = today_est
+        elif len(_avatar_cache) >= _AVATAR_CACHE_MAX_SIZE:
+            # Evict oldest half when cache is full
+            keys_to_remove = list(_avatar_cache.keys())[:len(_avatar_cache) // 2]
+            for key in keys_to_remove:
+                del _avatar_cache[key]
 
     async def _fetch_user_data(self, uid: int) -> tuple[Optional[str], str, Optional[str], Optional[int]]:
         """Fetch avatar, display name, username, and join date for a user."""

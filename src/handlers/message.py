@@ -9,6 +9,7 @@ Author: حَـــــنَّـــــا
 """
 
 import io
+import re
 import discord
 from discord.ext import commands
 
@@ -23,6 +24,7 @@ from src.services.database import db
 from src.services.rate_limiter import check_rate_limit
 from src.views.convert_view import start_convert_editor
 from src.views.translate_view import TranslateView, create_translate_embed
+from src.views.quote_view import QuoteView
 from src.utils.footer import set_footer
 
 
@@ -209,7 +211,6 @@ class MessageHandler(commands.Cog):
         avatar_url = str(author.display_avatar.url)
 
         # Convert mentions to readable @username format
-        import re
         content = original.content
 
         # Replace user mentions <@123> or <@!123> with @username
@@ -282,18 +283,20 @@ class MessageHandler(commands.Cog):
             await message.reply(f"Failed to generate quote: {result.error}", mention_author=False)
             return
 
-        # Send the quote image
+        # Create view with Save button
+        view = QuoteView(image_bytes=result.image_bytes)
+
+        # Send the quote image with Save button
         file = discord.File(
             fp=io.BytesIO(result.image_bytes),
             filename="discord.gg-syria.png"
         )
-        await message.reply(file=file, mention_author=False)
+        msg = await message.reply(file=file, view=view, mention_author=False)
+        view.message = msg
 
     async def _handle_reply_translate(self, message: discord.Message, target_lang: str) -> None:
         """Handle replying 'translate to X' to a message - translates the text."""
-        # Check rate limit
-        if not await check_rate_limit(message.author, "translate", message=message):
-            return
+        # Translate is free for everyone - no rate limit
 
         ref = message.reference
         if not ref or not ref.message_id:

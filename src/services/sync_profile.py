@@ -70,7 +70,10 @@ class ProfileSyncService:
         """Sync bot avatar and banner with server."""
         guild = self.bot.get_guild(self.guild_id)
         if not guild:
-            log.error(f"Could not find guild {self.guild_id}")
+            log.tree("Profile Sync Skipped", [
+                ("Guild ID", str(self.guild_id)),
+                ("Reason", "Guild not found or unavailable"),
+            ], emoji="⚠️")
             return
 
         changes = []
@@ -79,7 +82,6 @@ class ProfileSyncService:
         if guild.icon:
             try:
                 icon_bytes = await guild.icon.read()
-                current_avatar = self.bot.user.avatar
 
                 # Check if different (compare by updating anyway, Discord handles dedup)
                 await self.bot.user.edit(avatar=icon_bytes)
@@ -90,9 +92,13 @@ class ProfileSyncService:
                         ("Action", "Will retry next sync"),
                     ], emoji="⏳")
                 else:
-                    log.error(f"Failed to sync avatar: {e}")
+                    log.tree("Avatar Sync Failed", [
+                        ("Error", str(e)[:100]),
+                    ], emoji="❌")
             except Exception as e:
-                log.error(f"Failed to sync avatar: {e}")
+                log.tree("Avatar Sync Failed", [
+                    ("Error", str(e)[:100]),
+                ], emoji="❌")
 
         # Sync banner with server banner (requires Nitro)
         if guild.banner:
@@ -108,9 +114,13 @@ class ProfileSyncService:
                         ("Action", "Will retry next sync"),
                     ], emoji="⏳")
                 else:
-                    log.error(f"Failed to sync banner: {e}")
+                    log.tree("Banner Sync Failed", [
+                        ("Error", str(e)[:100]),
+                    ], emoji="❌")
             except Exception as e:
-                log.error(f"Failed to sync banner: {e}")
+                log.tree("Banner Sync Failed", [
+                    ("Error", str(e)[:100]),
+                ], emoji="❌")
 
         if changes:
             log.tree("Bot Profile Synced", changes, emoji="🔄")

@@ -11,7 +11,6 @@ Author: Unknown
 
 import asyncio
 import io
-import os
 import subprocess
 import tempfile
 import uuid

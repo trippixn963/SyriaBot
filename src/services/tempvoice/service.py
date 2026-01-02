@@ -20,7 +20,6 @@ from src.core.logger import log
 from src.services.database import db
 from src.utils.footer import set_footer
 from .utils import (
-    generate_channel_name,
     generate_base_name,
     build_full_name,
     extract_base_name,
@@ -92,16 +91,36 @@ class TempVoiceService:
 
     async def stop(self) -> None:
         """Stop the TempVoice service."""
+        cancelled_tasks = []
+
+        # Cancel cleanup task
         if self._cleanup_task:
             self._cleanup_task.cancel()
             try:
                 await self._cleanup_task
             except asyncio.CancelledError:
-                log.tree("TempVoice Cleanup", [
-                    ("Status", "Task cancelled"),
-                ], emoji="🔇")
-        log.tree("TempVoice Service", [
-            ("Status", "Stopped"),
+                cancelled_tasks.append("cleanup")
+
+        # Cancel all pending transfer tasks
+        for channel_id, task in list(self._pending_transfers.items()):
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                cancelled_tasks.append(f"transfer-{channel_id}")
+        self._pending_transfers.clear()
+
+        # Cancel all pending reorder tasks
+        for guild_id, task in list(self._pending_reorders.items()):
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                cancelled_tasks.append(f"reorder-{guild_id}")
+        self._pending_reorders.clear()
+
+        log.tree("TempVoice Service Stopped", [
+            ("Cancelled Tasks", str(len(cancelled_tasks))),
         ], emoji="🔇")
 
     async def _periodic_cleanup(self) -> None:

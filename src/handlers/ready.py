@@ -38,12 +38,24 @@ class ReadyHandler(commands.Cog):
         except Exception as e:
             log.error_tree("Footer Init Failed", e)
 
-        # Sync slash commands
+        # Sync slash commands (global + guild-specific)
         try:
-            synced = await self.bot.tree.sync()
+            from src.core.config import config
+
+            # Sync global commands
+            global_synced = await self.bot.tree.sync()
+
+            # Sync guild-specific commands (rank, translate use @guilds decorator)
+            guild_synced = []
+            if config.GUILD_ID:
+                guild_obj = discord.Object(id=config.GUILD_ID)
+                guild_synced = await self.bot.tree.sync(guild=guild_obj)
+
+            all_commands = set(c.name for c in global_synced) | set(c.name for c in guild_synced)
             log.tree("Commands Synced", [
-                ("Count", str(len(synced))),
-                ("Commands", ", ".join(c.name for c in synced)),
+                ("Global", str(len(global_synced))),
+                ("Guild", str(len(guild_synced))),
+                ("Commands", ", ".join(sorted(all_commands))),
             ], emoji="🔄")
         except Exception as e:
             log.error_tree("Command Sync Failed", e)

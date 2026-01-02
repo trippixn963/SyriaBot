@@ -265,6 +265,17 @@ class Logger:
         except (OSError, IOError):
             pass
 
+    def _write_to_file_only(self, message: str) -> None:
+        """Write to log file only (no console, no webhook - avoids recursion)."""
+        self._check_date_rotation()
+        timestamp = self._get_timestamp()
+        full_message = f"{timestamp} {message}"
+        try:
+            with open(self.log_file, "a", encoding="utf-8") as f:
+                f.write(f"{full_message}\n")
+        except (OSError, IOError):
+            pass
+
     def _write_error(self, message: str, emoji: str = "", include_timestamp: bool = True) -> None:
         """Write error message to both main log and error log file."""
         self._check_date_rotation()
@@ -346,9 +357,17 @@ class Logger:
                     json=payload,
                     timeout=aiohttp.ClientTimeout(total=5)
                 ) as response:
-                    pass
-        except Exception:
-            pass
+                    if response.status >= 400:
+                        # Log to file only (avoid recursion)
+                        self._write_to_file_only(
+                            f"[WEBHOOK] HTTP {response.status} sending to webhook"
+                        )
+        except asyncio.TimeoutError:
+            self._write_to_file_only("[WEBHOOK] Timeout sending to webhook")
+        except aiohttp.ClientError as e:
+            self._write_to_file_only(f"[WEBHOOK] Client error: {type(e).__name__}")
+        except Exception as e:
+            self._write_to_file_only(f"[WEBHOOK] Error: {type(e).__name__}: {e}")
 
     def _format_tree_for_live(
         self,
