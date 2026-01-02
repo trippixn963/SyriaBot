@@ -32,11 +32,9 @@ class ReadyHandler(commands.Cog):
         )
 
         # Initialize footer (cache developer avatar)
+        # Note: init_footer() logs its own status with Avatar Cached: Yes/No
         try:
             await init_footer(self.bot)
-            log.tree("Footer Initialized", [
-                ("Status", "Developer avatar cached"),
-            ], emoji="✅")
         except Exception as e:
             log.error_tree("Footer Init Failed", e)
 

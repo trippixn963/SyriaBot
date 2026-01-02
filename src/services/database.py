@@ -82,19 +82,39 @@ class Database:
             yield None
             return
 
+        conn = None
         try:
             conn = sqlite3.connect(self.db_path)
             conn.row_factory = sqlite3.Row
-            try:
-                yield conn
-                conn.commit()
-            finally:
-                conn.close()
+            yield conn
+            conn.commit()
         except sqlite3.DatabaseError as e:
-            self._healthy = False
-            log.error_tree("Database Corruption Detected", e)
-            self._backup_corrupted()
-            yield None
+            # Only treat actual I/O or file corruption as unhealthy
+            # NOT application errors like IntegrityError or wrong types
+            error_msg = str(e).lower()
+            is_corruption = any(x in error_msg for x in [
+                "disk i/o error",
+                "database disk image is malformed",
+                "file is not a database",
+                "file is encrypted",
+                "unable to open database",
+            ])
+            if is_corruption:
+                self._healthy = False
+                log.error_tree("Database Corruption Detected", e)
+                self._backup_corrupted()
+            else:
+                # Log but don't mark as corrupted for app-level errors
+                log.tree("Database Error", [
+                    ("Type", type(e).__name__),
+                    ("Message", str(e)[:100]),
+                ], emoji="⚠️")
+        finally:
+            if conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
 
     def _init_db(self) -> None:
         """Initialize database tables."""
@@ -109,25 +129,17 @@ class Database:
             log.tree("DATABASE CORRUPTION DETECTED", [
                 ("Path", self.db_path),
                 ("Status", "INTEGRITY CHECK FAILED"),
-                ("Action", "Backing up and recreating"),
-                ("Recovery", "User data will be lost!"),
+                ("Action", "Creating backup - MANUAL INTERVENTION REQUIRED"),
             ], emoji="🚨")
-            log.tree("CRITICAL DATABASE ERROR", [
-                ("Message", "DATABASE CORRUPTION - ALL XP DATA MAY BE LOST"),
-                ("Recovery", "Check backup file for data recovery options"),
-            ], emoji="💀")
             self._backup_corrupted()
-            # Delete corrupted file to recreate
-            try:
-                os.remove(self.db_path)
-                log.tree("Corrupted DB Removed", [
-                    ("Path", self.db_path),
-                    ("Action", "Will recreate"),
-                ], emoji="🗑️")
-            except OSError as e:
-                log.error_tree("Failed to remove corrupted DB", e)
-                self._healthy = False
-                return
+            # DO NOT auto-delete - require manual intervention to prevent data loss
+            self._healthy = False
+            log.tree("MANUAL FIX REQUIRED", [
+                ("Backup", f"{self.db_path}.corrupted.*"),
+                ("Action", "Restore from backup or delete syria.db to recreate"),
+                ("Warning", "Bot will not function until database is fixed"),
+            ], emoji="⚠️")
+            return
 
         with self._get_conn() as conn:
             if conn is None:

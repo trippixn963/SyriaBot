@@ -19,7 +19,7 @@ from src.core.config import config
 # Footer text
 FOOTER_TEXT = "trippixn.com/Syria"
 
-# Cached avatar URL (refreshed daily at midnight EST)
+# Cached avatar URL (set once at startup)
 _cached_avatar_url: Optional[str] = None
 
 # Bot reference for refreshing avatar
@@ -29,6 +29,9 @@ _bot_ref: Optional[discord.Client] = None
 async def _get_developer_avatar(bot: discord.Client) -> Optional[str]:
     """Fetch developer avatar URL from the configured or first guild."""
     if not config.OWNER_ID:
+        log.tree("Avatar Fetch Skipped", [
+            ("Reason", "OWNER_ID not configured"),
+        ], emoji="⚠️")
         return None
 
     try:
@@ -40,20 +43,39 @@ async def _get_developer_avatar(bot: discord.Client) -> Optional[str]:
             guild = bot.guilds[0]
 
         if not guild:
+            log.tree("Avatar Fetch Skipped", [
+                ("Owner ID", str(config.OWNER_ID)),
+                ("Reason", "No guild available"),
+            ], emoji="⚠️")
             return None
 
         member = guild.get_member(config.OWNER_ID)
         if not member:
-            member = await guild.fetch_member(config.OWNER_ID)
+            try:
+                member = await guild.fetch_member(config.OWNER_ID)
+            except Exception:
+                log.tree("Avatar Fetch Skipped", [
+                    ("Owner ID", str(config.OWNER_ID)),
+                    ("Guild", guild.name),
+                    ("Reason", "Owner not found in guild"),
+                ], emoji="⚠️")
+                return None
 
         if member:
             return member.display_avatar.url
+
+        log.tree("Avatar Fetch Skipped", [
+            ("Owner ID", str(config.OWNER_ID)),
+            ("Reason", "Member object is None"),
+        ], emoji="⚠️")
+        return None
+
     except Exception as e:
         log.tree("Avatar Fetch Failed", [
+            ("Owner ID", str(config.OWNER_ID)),
             ("Error", str(e)[:50]),
         ], emoji="⚠️")
-
-    return None
+        return None
 
 
 async def init_footer(bot: discord.Client) -> None:
@@ -68,11 +90,12 @@ async def init_footer(bot: discord.Client) -> None:
         _cached_avatar_url = await _get_developer_avatar(bot)
         log.tree("Footer Initialized", [
             ("Text", FOOTER_TEXT),
+            ("Owner ID", str(config.OWNER_ID) if config.OWNER_ID else "Not set"),
             ("Avatar Cached", "Yes" if _cached_avatar_url else "No"),
-            ("Refresh Schedule", "Daily at 00:00 EST"),
-        ], emoji="OK")
+        ], emoji="✅" if _cached_avatar_url else "⚠️")
     except Exception as e:
         log.tree("Footer Init Failed", [
+            ("Owner ID", str(config.OWNER_ID) if config.OWNER_ID else "Not set"),
             ("Error", str(e)[:50]),
         ], emoji="❌")
         _cached_avatar_url = None
