@@ -10,7 +10,6 @@ from discord import ui
 from src.core.colors import COLOR_SUCCESS, COLOR_ERROR, COLOR_WARNING, COLOR_NEUTRAL
 from src.core.logger import log
 from src.services.database import db
-from src.services.webhook_logger import webhook_logger
 from src.utils.footer import set_footer
 from .utils import (
     is_booster,
@@ -71,6 +70,7 @@ class ConfirmView(ui.View):
 
             if self.action == "delete":
                 channel_name = channel.name
+                guild = interaction.guild
                 db.delete_temp_channel(channel.id)
                 await channel.delete(reason="Deleted by owner")
                 embed = discord.Embed(description="🗑️ Channel deleted", color=COLOR_NEUTRAL)
@@ -78,11 +78,13 @@ class ConfirmView(ui.View):
                 await interaction.response.edit_message(embed=embed, view=None)
                 log.tree("Channel Deleted", [
                     ("Channel", channel_name),
-                    ("By", str(interaction.user)),
+                    ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                    ("ID", str(interaction.user.id)),
                 ], emoji="🗑️")
 
-                # Webhook logging
-                webhook_logger.log_tempvoice(interaction.user, "Delete", channel_name)
+                # Schedule reorder (debounced, non-blocking)
+                if hasattr(interaction.client, 'tempvoice') and interaction.client.tempvoice:
+                    interaction.client.tempvoice.schedule_reorder(guild)
 
             elif self.action == "transfer" and self.target:
                 # Validate target still in guild
@@ -130,13 +132,11 @@ class ConfirmView(ui.View):
                 await interaction.response.edit_message(embed=embed, view=None)
                 log.tree("Channel Transferred", [
                     ("Channel", channel_name),
-                    ("From", str(interaction.user)),
-                    ("To", str(target)),
-                    ("Name Source", name_source),
+                    ("From", f"{interaction.user.name} ({interaction.user.display_name})"),
+                    ("From ID", str(interaction.user.id)),
+                    ("To", f"{target.name} ({target.display_name})"),
+                    ("To ID", str(target.id)),
                 ], emoji="🔄")
-
-                # Webhook logging
-                webhook_logger.log_tempvoice(interaction.user, "Transfer", channel_name, target=target)
 
         except discord.HTTPException as e:
             log.tree("Confirm Action Failed", [
@@ -372,14 +372,11 @@ class UserSelect(ui.UserSelect):
             await interaction.response.send_message(embed=embed, ephemeral=True)
             log.tree("User Permitted", [
                 ("Channel", channel.name),
-                ("User", str(user)),
-                ("By", str(interaction.user)),
-                ("Total Allowed", str(total_allowed)),
-                ("Text Access", "Granted"),
+                ("Target", f"{user.name} ({user.display_name})"),
+                ("Target ID", str(user.id)),
+                ("By", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("By ID", str(interaction.user.id)),
             ], emoji="✅")
-
-            # Webhook logging
-            webhook_logger.log_tempvoice(interaction.user, "Permit", channel.name, target=user)
         else:
             # Already permitted - remove them
             db.remove_trusted(owner_id, user.id)
@@ -404,14 +401,13 @@ class UserSelect(ui.UserSelect):
             await interaction.response.send_message(embed=embed, ephemeral=True)
             log.tree("User Unpermitted", [
                 ("Channel", channel.name),
-                ("User", str(user)),
-                ("By", str(interaction.user)),
+                ("Target", f"{user.name} ({user.display_name})"),
+                ("Target ID", str(user.id)),
+                ("By", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("By ID", str(interaction.user.id)),
                 ("Total Allowed", str(total_allowed)),
                 ("Text Access", text_status),
             ], emoji="❌")
-
-            # Webhook logging
-            webhook_logger.log_tempvoice(interaction.user, "Unpermit", channel.name, target=user)
 
         # Update panel to reflect new counts
         if self.service:
@@ -484,13 +480,11 @@ class UserSelect(ui.UserSelect):
             await interaction.response.send_message(embed=embed, ephemeral=True)
             log.tree("User Blocked", [
                 ("Channel", channel.name),
-                ("User", str(user)),
-                ("By", str(interaction.user)),
-                ("Total Blocked", str(total_blocked)),
+                ("Target", f"{user.name} ({user.display_name})"),
+                ("Target ID", str(user.id)),
+                ("By", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("By ID", str(interaction.user.id)),
             ], emoji="🚫")
-
-            # Webhook logging
-            webhook_logger.log_tempvoice(interaction.user, "Block", channel.name, target=user)
         else:
             # Already blocked - unblock them
             db.remove_blocked(owner_id, user.id)
@@ -505,13 +499,11 @@ class UserSelect(ui.UserSelect):
             await interaction.response.send_message(embed=embed, ephemeral=True)
             log.tree("User Unblocked", [
                 ("Channel", channel.name),
-                ("User", str(user)),
-                ("By", str(interaction.user)),
-                ("Total Blocked", str(total_blocked)),
+                ("Target", f"{user.name} ({user.display_name})"),
+                ("Target ID", str(user.id)),
+                ("By", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("By ID", str(interaction.user.id)),
             ], emoji="🔓")
-
-            # Webhook logging
-            webhook_logger.log_tempvoice(interaction.user, "Unblock", channel.name, target=user)
 
         # Update panel to reflect new counts
         if self.service:
@@ -560,12 +552,11 @@ class UserSelect(ui.UserSelect):
             await interaction.response.send_message(embed=embed, ephemeral=True)
             log.tree("User Kicked", [
                 ("Channel", channel.name),
-                ("User", str(user)),
-                ("By", str(interaction.user)),
+                ("Target", f"{user.name} ({user.display_name})"),
+                ("Target ID", str(user.id)),
+                ("By", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("By ID", str(interaction.user.id)),
             ], emoji="👢")
-
-            # Webhook logging
-            webhook_logger.log_tempvoice(interaction.user, "Kick", channel.name, target=user)
         else:
             embed = discord.Embed(
                 description=f"⚠️ **{user.display_name}** is not in channel",

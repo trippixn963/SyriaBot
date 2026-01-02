@@ -5,12 +5,32 @@ TempVoice - Input Modals
 import discord
 from discord import ui
 
+from src.core.config import config
 from src.core.colors import COLOR_SUCCESS, COLOR_ERROR, COLOR_WARNING
 from src.core.logger import log
 from src.services.database import db
-from src.services.webhook_logger import webhook_logger
 from src.utils.footer import set_footer
-from .utils import to_roman
+from .utils import extract_base_name, build_full_name
+
+
+def _get_channel_position(channel: discord.VoiceChannel) -> int:
+    """Get a channel's position number based on its position in the category."""
+    if not channel.category:
+        return 1
+
+    # Get all temp voice channels in category, sorted by position
+    voice_channels = sorted(
+        [ch for ch in channel.category.voice_channels
+         if ch.id != config.VC_CREATOR_CHANNEL_ID and db.is_temp_channel(ch.id)],
+        key=lambda c: c.position
+    )
+
+    # Find this channel's position (1-indexed)
+    for idx, ch in enumerate(voice_channels, start=1):
+        if ch.id == channel.id:
+            return idx
+
+    return 1  # Fallback
 
 
 class NameModal(ui.Modal, title="Rename Channel"):
@@ -19,7 +39,7 @@ class NameModal(ui.Modal, title="Rename Channel"):
     name_input = ui.TextInput(
         label="Channel Name (leave empty to reset)",
         placeholder="Enter new name or leave empty for auto-name",
-        max_length=100,
+        max_length=80,  # Leave room for numeral prefix
         required=False,
     )
 
@@ -27,44 +47,47 @@ class NameModal(ui.Modal, title="Rename Channel"):
         super().__init__()
         self.channel = channel
         self.member = member
-        self.name_input.default = channel.name
+        # Show only base name in the input (without numeral prefix)
+        channel_info = db.get_temp_channel(channel.id)
+        base_name = channel_info.get("base_name") if channel_info else None
+        if not base_name:
+            base_name = extract_base_name(channel.name)
+        self.name_input.default = base_name
 
     async def on_submit(self, interaction: discord.Interaction):
-        new_name = self.name_input.value.strip() if self.name_input.value else None
+        new_base_name = self.name_input.value.strip() if self.name_input.value else None
 
         try:
             old_name = self.channel.name
+            position = _get_channel_position(self.channel)
 
-            if new_name:
-                # User provided a custom name
-                await self.channel.edit(name=new_name)
-                db.update_temp_channel(self.channel.id, name=new_name)
-                db.save_user_settings(interaction.user.id, default_name=new_name)
+            if new_base_name:
+                # User provided a custom base name - build full name with numeral
+                full_name = build_full_name(position, new_base_name)
+                await self.channel.edit(name=full_name)
+                db.update_temp_channel(self.channel.id, name=full_name, base_name=new_base_name)
+                db.save_user_settings(interaction.user.id, default_name=new_base_name)
                 embed = discord.Embed(
-                    description=f"✏️ Renamed to **{new_name}**\nThis will be your default name for future VCs",
+                    description=f"✏️ Renamed to **{full_name}**\nThis will be your default name for future VCs",
                     color=COLOR_SUCCESS
                 )
                 set_footer(embed)
                 await interaction.response.send_message(embed=embed, ephemeral=True)
                 log.tree("Channel Renamed", [
                     ("From", old_name),
-                    ("To", new_name),
-                    ("By", str(interaction.user)),
-                    ("Default Saved", "Yes"),
+                    ("To", full_name),
+                    ("Base Name", new_base_name),
+                    ("Position", str(position)),
+                    ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                    ("ID", str(interaction.user.id)),
                 ], emoji="✏️")
-
-                # Webhook logging
-                webhook_logger.log_tempvoice(interaction.user, "Rename", new_name)
             else:
-                # Reset to auto-generated name
-                existing_channels = db.get_all_temp_channels(interaction.guild.id)
-                channel_num = len(existing_channels)
-                roman = to_roman(max(1, channel_num))
+                # Reset to auto-generated name (display name)
                 display_name = self.member.display_name[:80]
-                auto_name = f"{roman}・{display_name}"
+                auto_name = build_full_name(position, display_name)
 
                 await self.channel.edit(name=auto_name)
-                db.update_temp_channel(self.channel.id, name=auto_name)
+                db.update_temp_channel(self.channel.id, name=auto_name, base_name=display_name)
                 # Clear saved default name
                 db.save_user_settings(interaction.user.id, default_name=None)
                 embed = discord.Embed(
@@ -76,16 +99,15 @@ class NameModal(ui.Modal, title="Rename Channel"):
                 log.tree("Channel Name Reset", [
                     ("From", old_name),
                     ("To", auto_name),
-                    ("By", str(interaction.user)),
-                    ("Default Cleared", "Yes"),
+                    ("Base Name", display_name),
+                    ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                    ("ID", str(interaction.user.id)),
                 ], emoji="🔄")
-
-                # Webhook logging
-                webhook_logger.log_tempvoice(interaction.user, "Name Reset", auto_name)
         except discord.HTTPException as e:
             log.tree("Channel Rename Failed", [
                 ("Channel", self.channel.name),
-                ("By", str(interaction.user)),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("ID", str(interaction.user.id)),
                 ("Error", str(e)),
             ], emoji="❌")
             embed = discord.Embed(description="❌ Failed to rename channel", color=COLOR_ERROR)
@@ -130,15 +152,14 @@ class LimitModal(ui.Modal, title="Set User Limit"):
             log.tree("Limit Changed", [
                 ("Channel", self.channel.name),
                 ("Limit", limit_text),
-                ("By", str(interaction.user)),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("ID", str(interaction.user.id)),
             ], emoji="👥")
-
-            # Webhook logging
-            webhook_logger.log_tempvoice(interaction.user, "Limit", self.channel.name, Limit=limit_text)
         except ValueError:
             log.tree("Limit Change Rejected", [
                 ("Channel", self.channel.name),
-                ("By", str(interaction.user)),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("ID", str(interaction.user.id)),
                 ("Input", self.limit_input.value),
                 ("Reason", "Invalid number"),
             ], emoji="⚠️")
@@ -148,7 +169,8 @@ class LimitModal(ui.Modal, title="Set User Limit"):
         except discord.HTTPException as e:
             log.tree("Limit Change Failed", [
                 ("Channel", self.channel.name),
-                ("By", str(interaction.user)),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("ID", str(interaction.user.id)),
                 ("Error", str(e)),
             ], emoji="❌")
             embed = discord.Embed(description="❌ Failed to set limit", color=COLOR_ERROR)

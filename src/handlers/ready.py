@@ -32,6 +32,12 @@ class ReadyHandler(commands.Cog):
         # Initialize footer (cache developer avatar)
         await init_footer(self.bot)
 
+        # Sync slash commands
+        synced = await self.bot.tree.sync()
+        log.tree("Commands Synced", [
+            ("Count", str(len(synced))),
+        ], emoji="🔄")
+
         # Initialize services
         await self.bot._init_services()
 

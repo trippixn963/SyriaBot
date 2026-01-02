@@ -9,7 +9,6 @@ from discord import ui
 
 from src.core.logger import log
 from src.services.database import db
-from src.services.webhook_logger import webhook_logger
 from src.utils.footer import set_footer
 from .modals import NameModal, LimitModal
 from .selects import UserSelectView, ConfirmView
@@ -142,12 +141,11 @@ class ClaimApprovalView(ui.View):
 
             log.tree("Claim Approved", [
                 ("Channel", channel.name),
-                ("New Owner", str(requester)),
-                ("Approved By", str(self.owner)),
+                ("New Owner", f"{requester.name} ({requester.display_name})"),
+                ("New Owner ID", str(requester.id)),
+                ("Approved By", f"{self.owner.name} ({self.owner.display_name})"),
+                ("Approved By ID", str(self.owner.id)),
             ], emoji="👑")
-
-            # Webhook logging
-            webhook_logger.log_tempvoice_claim(requester, self.owner, channel.name, approved=True)
 
             # Update panel
             if self.service:
@@ -205,12 +203,11 @@ class ClaimApprovalView(ui.View):
 
             log.tree("Claim Denied", [
                 ("Channel", self.channel.name),
-                ("Requester", str(self.requester)),
-                ("Denied By", str(self.owner)),
+                ("Requester", f"{self.requester.name} ({self.requester.display_name})"),
+                ("Requester ID", str(self.requester.id)),
+                ("Denied By", f"{self.owner.name} ({self.owner.display_name})"),
+                ("Denied By ID", str(self.owner.id)),
             ], emoji="🚫")
-
-            # Webhook logging
-            webhook_logger.log_tempvoice_claim(self.requester, self.owner, self.channel.name, approved=False)
 
         except discord.HTTPException as e:
             log.tree("Claim Deny Failed", [
@@ -329,15 +326,9 @@ class TempVoiceControlPanel(ui.View):
             log.tree("Lock Toggled", [
                 ("Channel", channel.name),
                 ("Status", "Locked" if new_locked else "Unlocked"),
-                ("By", str(interaction.user)),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("ID", str(interaction.user.id)),
             ], emoji="🔒" if new_locked else "🔓")
-
-            # Webhook logging
-            webhook_logger.log_tempvoice(
-                interaction.user,
-                "Lock" if new_locked else "Unlock",
-                channel.name
-            )
 
             # Update panel to reflect new state
             try:
@@ -433,7 +424,8 @@ class TempVoiceControlPanel(ui.View):
                 set_footer(embed)
                 await interaction.response.send_message(embed=embed, ephemeral=True)
                 log.tree("Rename Blocked", [
-                    ("User", str(interaction.user)),
+                    ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                    ("ID", str(interaction.user.id)),
                     ("Reason", "Not a booster"),
                 ], emoji="💎")
                 return
@@ -617,9 +609,6 @@ class TempVoiceControlPanel(ui.View):
                     ("Previous Owner", f"User ID {owner_id} (left server)"),
                 ], emoji="👑")
 
-                # Webhook logging
-                webhook_logger.log_tempvoice(interaction.user, "Instant Claim", channel.name)
-
                 if self.service:
                     try:
                         await self.service._update_panel(channel)
@@ -655,12 +644,11 @@ class TempVoiceControlPanel(ui.View):
 
             log.tree("Claim Requested", [
                 ("Channel", channel.name),
-                ("Requester", str(interaction.user)),
-                ("Owner", str(owner)),
+                ("Requester", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("Requester ID", str(interaction.user.id)),
+                ("Owner", f"{owner.name} ({owner.display_name})"),
+                ("Owner ID", str(owner.id)),
             ], emoji="📨")
-
-            # Webhook logging
-            webhook_logger.log_tempvoice_claim(interaction.user, owner, channel.name, approved=None)
 
         except discord.HTTPException as e:
             log.tree("Claim Button Failed", [
