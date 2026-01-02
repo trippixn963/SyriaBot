@@ -106,6 +106,7 @@ class Config:
     # Webhooks (read directly by logger from env vars)
     # SYRIA_LIVE_LOGS_WEBHOOK_URL - Tree format console logs streaming
     # SYRIA_ERROR_WEBHOOK_URL - Error-only logs
+    STATUS_WEBHOOK_URL: str = os.getenv("SYRIA_STATUS_WEBHOOK_URL", "")
 
     # Database
     DATABASE_PATH: str = str(DATA_DIR / "syria.db")

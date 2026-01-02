@@ -214,7 +214,6 @@ def get_owner_overwrite() -> discord.PermissionOverwrite:
     """Get standard permission overwrite for channel owner."""
     return discord.PermissionOverwrite(
         connect=True,
-        manage_channels=True,
         send_messages=True,
         read_message_history=True,
     )
@@ -225,7 +224,6 @@ async def set_owner_permissions(channel: discord.VoiceChannel, member: discord.M
     await channel.set_permissions(
         member,
         connect=True,
-        manage_channels=True,
         send_messages=True,
         read_message_history=True,
     )

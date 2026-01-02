@@ -76,6 +76,7 @@ class TempVoiceService:
         self.bot.add_view(self.control_panel)
         await self._cleanup_orphaned_channels()
         await self._cleanup_empty_channels()  # Initial cleanup
+        await self._strip_manage_channels()  # One-time fix for existing channels
 
         # Start periodic cleanup task
         self._cleanup_task = asyncio.create_task(self._periodic_cleanup())
@@ -209,6 +210,61 @@ class TempVoiceService:
                 ("Channels Removed", str(cleaned)),
                 ("Reason", "Channel no longer exists"),
             ], emoji="🧹")
+
+    async def _strip_manage_channels(self) -> None:
+        """Strip manage_channels from all channel owners (one-time migration)."""
+        channels = db.get_all_temp_channels()
+        total = len(channels)
+        fixed = 0
+        skipped = 0
+        errors = 0
+
+        log.tree("Permission Migration Starting", [
+            ("Channels", str(total)),
+            ("Action", "Checking manage_channels permissions"),
+        ], emoji="🔒")
+
+        for channel_data in channels:
+            channel = self.bot.get_channel(channel_data["channel_id"])
+            if not channel or not isinstance(channel, discord.VoiceChannel):
+                skipped += 1
+                continue
+
+            owner = channel.guild.get_member(channel_data["owner_id"])
+            if not owner:
+                skipped += 1
+                continue
+
+            # Check if owner has manage_channels permission
+            current_overwrite = channel.overwrites_for(owner)
+            if current_overwrite.manage_channels is not True:
+                continue
+
+            # Strip manage_channels
+            try:
+                await set_owner_permissions(channel, owner)
+                fixed += 1
+                log.tree("Permission Fixed", [
+                    ("Channel", channel.name),
+                    ("Channel ID", str(channel.id)),
+                    ("Owner", f"{owner.name} ({owner.display_name})"),
+                    ("Owner ID", str(owner.id)),
+                    ("Action", "Removed manage_channels"),
+                ], emoji="🔧")
+            except discord.HTTPException as e:
+                errors += 1
+                log.error_tree("Permission Fix Failed", e, [
+                    ("Channel", channel.name),
+                    ("Channel ID", str(channel_data["channel_id"])),
+                    ("Owner ID", str(channel_data["owner_id"])),
+                ])
+
+        log.tree("Permission Migration Complete", [
+            ("Total Channels", str(total)),
+            ("Fixed", str(fixed)),
+            ("Skipped", str(skipped)),
+            ("Errors", str(errors)),
+        ], emoji="✅" if errors == 0 else "⚠️")
 
     def _build_panel_embed(
         self,
@@ -634,15 +690,13 @@ class TempVoiceService:
             expected_base = member.display_name[:80]
             current_base = channel_info.get("base_name") or extract_base_name(channel.name)
 
-            # If current base name matches expected, no rename needed
+            # If name is correct, no action needed
             if current_base == expected_base:
                 return
 
-            # Build full name with position
+            # Rename to display name
             position = self._get_channel_position(channel)
             expected_name = build_full_name(position, expected_base)
-
-            # Non-booster with custom name - rename to generated name
             old_name = channel.name
             await channel.edit(name=expected_name)
             db.update_temp_channel(channel.id, name=expected_name, base_name=expected_base)
@@ -651,21 +705,25 @@ class TempVoiceService:
                 ("Channel", channel.name),
                 ("From", old_name),
                 ("To", expected_name),
-                ("Base Name", expected_base),
                 ("Owner", f"{member.name} ({member.display_name})"),
                 ("Owner ID", str(member.id)),
             ], emoji="💎")
 
-            # Update panel to reflect new name
             await self._update_panel(channel)
 
         except discord.HTTPException as e:
             log.error_tree("Booster Name Check Failed", e, [
                 ("Channel", channel.name),
+                ("Channel ID", str(channel.id)),
+                ("Member", f"{member.name} ({member.display_name})"),
+                ("Member ID", str(member.id)),
             ])
         except Exception as e:
             log.error_tree("Booster Name Check Error", e, [
                 ("Channel", channel.name),
+                ("Channel ID", str(channel.id)),
+                ("Member", f"{member.name} ({member.display_name})"),
+                ("Member ID", str(member.id)),
             ])
 
     async def _revoke_text_access(self, channel: discord.VoiceChannel, member: discord.Member) -> None:
@@ -1089,7 +1147,7 @@ class TempVoiceService:
             overwrites = {
                 # Lock by default + deny text access for everyone
                 guild.default_role: get_locked_overwrite(),
-                # Owner permissions (full access including text, no move_members - use kick button)
+                # Owner permissions (no manage_channels - use bot's rename button)
                 member: get_owner_overwrite(),
             }
 
@@ -1332,14 +1390,8 @@ class TempVoiceService:
             if old_owner_member:
                 await channel.set_permissions(old_owner_member, overwrite=None)
 
-            # Grant new owner full permissions (no move_members - use kick button)
-            await channel.set_permissions(
-                new_owner,
-                connect=True,
-                manage_channels=True,
-                send_messages=True,
-                read_message_history=True
-            )
+            # Grant new owner permissions (boosters get manage_channels for renaming)
+            await set_owner_permissions(channel, new_owner)
 
             # Update DB ownership
             db.transfer_ownership(channel.id, new_owner.id)
