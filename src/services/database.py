@@ -232,6 +232,15 @@ class Database:
                 )
             """)
 
+            # Download Usage (weekly limit)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS download_usage (
+                    user_id INTEGER PRIMARY KEY,
+                    uses_this_week INTEGER DEFAULT 0,
+                    week_start_timestamp INTEGER NOT NULL
+                )
+            """)
+
             # XP System
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS user_xp (
@@ -341,6 +350,27 @@ class Database:
             cur.execute("""
                 CREATE INDEX IF NOT EXISTS idx_boost_history_guild
                 ON boost_history(guild_id, timestamp DESC)
+            """)
+
+            # AFK System
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS afk_users (
+                    user_id INTEGER NOT NULL,
+                    guild_id INTEGER NOT NULL,
+                    reason TEXT DEFAULT '',
+                    timestamp INTEGER NOT NULL,
+                    PRIMARY KEY (user_id, guild_id)
+                )
+            """)
+
+            # AFK Mentions (track pings while user is AFK)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS afk_mentions (
+                    user_id INTEGER NOT NULL,
+                    guild_id INTEGER NOT NULL,
+                    mention_count INTEGER DEFAULT 0,
+                    PRIMARY KEY (user_id, guild_id)
+                )
             """)
 
             log.tree("Database Initialized", [
@@ -758,6 +788,96 @@ class Database:
         """Get timestamp for next Monday 00:00 UTC."""
         # Current week start + 7 days = next Monday
         return _get_week_start_timestamp() + (7 * 86400)
+
+    # =========================================================================
+    # Download Usage (Weekly Limit)
+    # =========================================================================
+
+    def get_download_usage(self, user_id: int, weekly_limit: int = 5) -> tuple[int, int]:
+        """
+        Get user's download usage for this week.
+
+        Args:
+            user_id: The user's Discord ID
+            weekly_limit: Weekly limit for free users (default 5)
+
+        Returns:
+            (uses_remaining, week_start_timestamp)
+        """
+        week_start = _get_week_start_timestamp()
+
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT uses_this_week, week_start_timestamp FROM download_usage WHERE user_id = ?", (user_id,))
+            row = cur.fetchone()
+
+            if not row:
+                return (weekly_limit, week_start)
+
+            stored_week_start = row["week_start_timestamp"]
+            uses_this_week = row["uses_this_week"]
+
+            if week_start > stored_week_start:
+                return (weekly_limit, week_start)
+
+            return (max(0, weekly_limit - uses_this_week), stored_week_start)
+
+    def record_download_usage(self, user_id: int, weekly_limit: int = 5) -> int:
+        """
+        Record a download usage for a user.
+
+        Args:
+            user_id: The user's Discord ID
+            weekly_limit: Weekly limit for free users (default 5)
+
+        Returns:
+            Number of uses remaining after this use
+        """
+        week_start = _get_week_start_timestamp()
+
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT uses_this_week, week_start_timestamp FROM download_usage WHERE user_id = ?", (user_id,))
+            row = cur.fetchone()
+
+            if not row:
+                cur.execute("""
+                    INSERT INTO download_usage (user_id, uses_this_week, week_start_timestamp)
+                    VALUES (?, 1, ?)
+                """, (user_id, week_start))
+                log.tree("Download Usage Recorded", [
+                    ("User ID", str(user_id)),
+                    ("Uses", "1"),
+                    ("Remaining", str(weekly_limit - 1)),
+                ], emoji="📥")
+                return weekly_limit - 1
+
+            stored_week_start = row["week_start_timestamp"]
+
+            if week_start > stored_week_start:
+                cur.execute("""
+                    UPDATE download_usage SET uses_this_week = 1, week_start_timestamp = ?
+                    WHERE user_id = ?
+                """, (week_start, user_id))
+                log.tree("Download Usage Reset (New Week)", [
+                    ("User ID", str(user_id)),
+                    ("Uses", "1"),
+                    ("Remaining", str(weekly_limit - 1)),
+                ], emoji="📥")
+                return weekly_limit - 1
+
+            new_uses = row["uses_this_week"] + 1
+            cur.execute("""
+                UPDATE download_usage SET uses_this_week = ?
+                WHERE user_id = ?
+            """, (new_uses, user_id))
+            remaining = max(0, weekly_limit - new_uses)
+            log.tree("Download Usage Recorded", [
+                ("User ID", str(user_id)),
+                ("Uses", str(new_uses)),
+                ("Remaining", str(remaining)),
+            ], emoji="📥")
+            return remaining
 
 
     # =========================================================================
@@ -1395,6 +1515,118 @@ class Database:
                 "still_active": active,
                 "retention_rate": round(retention, 1),
             }
+
+
+    # =========================================================================
+    # AFK System
+    # =========================================================================
+
+    def set_afk(self, user_id: int, guild_id: int, reason: str = "") -> None:
+        """Set a user as AFK."""
+        import time
+        now = int(time.time())
+
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO afk_users (user_id, guild_id, reason, timestamp)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(user_id, guild_id) DO UPDATE SET
+                    reason = ?, timestamp = ?
+            """, (user_id, guild_id, reason, now, reason, now))
+
+        log.tree("AFK Set", [
+            ("User ID", str(user_id)),
+            ("Guild ID", str(guild_id)),
+            ("Reason", reason[:50] if reason else "None"),
+        ], emoji="💤")
+
+    def remove_afk(self, user_id: int, guild_id: int) -> bool:
+        """Remove AFK status. Returns True if was AFK."""
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                DELETE FROM afk_users WHERE user_id = ? AND guild_id = ?
+            """, (user_id, guild_id))
+            removed = cur.rowcount > 0
+
+        if removed:
+            log.tree("AFK Removed", [
+                ("User ID", str(user_id)),
+                ("Guild ID", str(guild_id)),
+            ], emoji="👋")
+
+        return removed
+
+    def get_afk(self, user_id: int, guild_id: int) -> Optional[Dict[str, Any]]:
+        """Get user's AFK status. Returns None if not AFK."""
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT * FROM afk_users WHERE user_id = ? AND guild_id = ?
+            """, (user_id, guild_id))
+            row = cur.fetchone()
+            return dict(row) if row else None
+
+    def get_afk_users(self, user_ids: List[int], guild_id: int) -> List[Dict[str, Any]]:
+        """Get AFK status for multiple users (for mention checking)."""
+        if not user_ids:
+            return []
+
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            placeholders = ",".join("?" * len(user_ids))
+            cur.execute(f"""
+                SELECT * FROM afk_users
+                WHERE user_id IN ({placeholders}) AND guild_id = ?
+            """, user_ids + [guild_id])
+            return [dict(row) for row in cur.fetchall()]
+
+    def increment_afk_mentions(self, user_id: int, guild_id: int) -> None:
+        """Increment mention count for an AFK user."""
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO afk_mentions (user_id, guild_id, mention_count)
+                VALUES (?, ?, 1)
+                ON CONFLICT(user_id, guild_id) DO UPDATE SET
+                    mention_count = mention_count + 1
+            """, (user_id, guild_id))
+
+        log.tree("AFK Mention Tracked", [
+            ("User ID", str(user_id)),
+            ("Guild ID", str(guild_id)),
+        ], emoji="📬")
+
+    def get_and_clear_afk_mentions(self, user_id: int, guild_id: int) -> int:
+        """Get mention count and clear it. Returns 0 if no mentions."""
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+
+            # Get current count
+            cur.execute("""
+                SELECT mention_count FROM afk_mentions
+                WHERE user_id = ? AND guild_id = ?
+            """, (user_id, guild_id))
+            row = cur.fetchone()
+
+            if not row or row["mention_count"] == 0:
+                return 0
+
+            count = row["mention_count"]
+
+            # Clear the count
+            cur.execute("""
+                DELETE FROM afk_mentions WHERE user_id = ? AND guild_id = ?
+            """, (user_id, guild_id))
+
+            log.tree("AFK Mentions Cleared", [
+                ("User ID", str(user_id)),
+                ("Guild ID", str(guild_id)),
+                ("Count", str(count)),
+            ], emoji="📭")
+
+            return count
 
 
 # Global instance

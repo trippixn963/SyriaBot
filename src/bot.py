@@ -20,6 +20,8 @@ from src.services.xp import XPService
 from src.services.xp import card as rank_card
 from src.services.stats_api import SyriaAPI
 from src.services.status_webhook import get_status_service
+from src.services.afk import AFKService
+from src.services.gallery import GalleryService
 from src.services.database import db
 from src.utils.http import http_session
 
@@ -46,6 +48,8 @@ class SyriaBot(commands.Bot):
         self.xp_service: Optional[XPService] = None
         self.stats_api: Optional[SyriaAPI] = None
         self.status_webhook = None
+        self.afk_service: Optional[AFKService] = None
+        self.gallery_service: Optional[GalleryService] = None
 
     async def setup_hook(self) -> None:
         """Called when the bot is starting up."""
@@ -77,6 +81,8 @@ class SyriaBot(commands.Bot):
             "src.commands.get",
             "src.commands.rank",
             "src.commands.translate",
+            "src.commands.download",
+            "src.commands.afk",
         ]
         loaded_commands = []
         for cmd in commands_list:
@@ -184,9 +190,23 @@ class SyriaBot(commands.Bot):
             except Exception as e:
                 log.error_tree("Status Webhook Init Failed", e)
 
+        # AFK Service
+        try:
+            self.afk_service = AFKService(self)
+            initialized.append("AFK")
+        except Exception as e:
+            log.error_tree("AFK Service Init Failed", e)
+
+        # Gallery Service
+        try:
+            self.gallery_service = GalleryService(self)
+            initialized.append("Gallery")
+        except Exception as e:
+            log.error_tree("Gallery Service Init Failed", e)
+
         log.tree("Services Init Complete", [
             ("Services", ", ".join(initialized)),
-            ("Count", f"{len(initialized)}/5"),
+            ("Count", f"{len(initialized)}/7"),
         ], emoji="✅")
 
     async def close(self) -> None:
@@ -233,6 +253,13 @@ class SyriaBot(commands.Bot):
                 stopped.append("XP")
             except Exception as e:
                 log.error_tree("XP Service Stop Error", e)
+
+        if self.gallery_service:
+            try:
+                self.gallery_service.stop()
+                stopped.append("Gallery")
+            except Exception as e:
+                log.error_tree("Gallery Service Stop Error", e)
 
         # Close HTTP session
         try:
