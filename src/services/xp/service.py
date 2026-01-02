@@ -80,6 +80,9 @@ class XPService:
             ("Role Rewards", str(len(config.XP_ROLE_REWARDS))),
         ], emoji="⬆️")
 
+        # Sync roles on startup (fix any missed role assignments)
+        await self._sync_roles_on_startup()
+
     async def stop(self) -> None:
         """Cleanup XP service."""
         if self._voice_xp_task:
@@ -606,3 +609,120 @@ class XPService:
                 ("User ID", str(member.id)),
                 ("Level", str(new_level)),
             ])
+
+    # =========================================================================
+    # Role Sync on Startup
+    # =========================================================================
+
+    async def _sync_roles_on_startup(self) -> None:
+        """Sync XP roles on startup to fix any missed role assignments."""
+        if not config.XP_ROLE_REWARDS:
+            log.tree("Role Sync Skipped", [
+                ("Reason", "No role rewards configured"),
+            ], emoji="ℹ️")
+            return
+
+        guild = self.bot.get_guild(config.GUILD_ID)
+        if not guild:
+            log.tree("Role Sync Skipped", [
+                ("Reason", "Main guild not found"),
+            ], emoji="⚠️")
+            return
+
+        log.tree("Role Sync Started", [
+            ("Guild", guild.name),
+        ], emoji="🔄")
+
+        # Get all users with level >= 1 from database
+        users_data = db.get_all_users_with_levels(config.GUILD_ID)
+        if not users_data:
+            log.tree("Role Sync Complete", [
+                ("Users Checked", "0"),
+                ("Roles Fixed", "0"),
+            ], emoji="✅")
+            return
+
+        # Get all XP role IDs
+        all_xp_role_ids = set(config.XP_ROLE_REWARDS.values())
+
+        # Find the correct role for each level
+        def get_role_for_level(level: int) -> Optional[int]:
+            """Get the highest role ID the user should have for their level."""
+            applicable_role = None
+            for role_level, role_id in sorted(config.XP_ROLE_REWARDS.items()):
+                if role_level <= level:
+                    applicable_role = role_id
+                else:
+                    break
+            return applicable_role
+
+        fixed_count = 0
+        checked_count = 0
+
+        for user_id, level in users_data:
+            if level < 1:
+                continue
+
+            # Skip owner
+            if user_id == config.OWNER_ID:
+                continue
+
+            member = guild.get_member(user_id)
+            if not member:
+                continue
+
+            checked_count += 1
+
+            # Get the role they should have
+            correct_role_id = get_role_for_level(level)
+            if not correct_role_id:
+                continue
+
+            correct_role = guild.get_role(correct_role_id)
+            if not correct_role:
+                continue
+
+            # Check current roles
+            has_correct_role = correct_role in member.roles
+            roles_to_add = []
+            roles_to_remove = []
+
+            if not has_correct_role:
+                roles_to_add.append(correct_role)
+
+            # Check for old XP roles that should be removed
+            for member_role in member.roles:
+                if member_role.id in all_xp_role_ids and member_role.id != correct_role_id:
+                    roles_to_remove.append(member_role)
+
+            # Apply changes
+            if roles_to_add or roles_to_remove:
+                try:
+                    if roles_to_remove:
+                        await member.remove_roles(*roles_to_remove, reason="XP Role Sync - removing old roles")
+                    if roles_to_add:
+                        await member.add_roles(*roles_to_add, reason="XP Role Sync - adding missing role")
+
+                    fixed_count += 1
+                    log.tree("Role Sync Fixed", [
+                        ("User", f"{member.name} ({member.display_name})"),
+                        ("User ID", str(member.id)),
+                        ("Level", str(level)),
+                        ("Added", correct_role.name if roles_to_add else "None"),
+                        ("Removed", ", ".join(r.name for r in roles_to_remove) if roles_to_remove else "None"),
+                    ], emoji="🔧")
+
+                    # Small delay to avoid rate limits
+                    await asyncio.sleep(0.5)
+
+                except discord.HTTPException as e:
+                    log.tree("Role Sync Failed", [
+                        ("User", f"{member.name}"),
+                        ("User ID", str(member.id)),
+                        ("Error", str(e)[:50]),
+                    ], emoji="⚠️")
+
+        log.tree("Role Sync Complete", [
+            ("Users Checked", str(checked_count)),
+            ("Roles Fixed", str(fixed_count)),
+        ], emoji="✅")

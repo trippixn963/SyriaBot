@@ -895,6 +895,20 @@ class Database:
             row = cur.fetchone()
             return dict(row) if row else None
 
+    def get_all_users_with_levels(self, guild_id: int) -> list:
+        """Get all users with their levels for role sync.
+
+        Returns:
+            List of (user_id, level) tuples for users with level >= 1
+        """
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT user_id, level FROM user_xp WHERE guild_id = ? AND level >= 1",
+                (guild_id,)
+            )
+            return cur.fetchall()
+
     def ensure_user_xp(self, user_id: int, guild_id: int) -> Dict[str, Any]:
         """Get or create user's XP data."""
         import time
