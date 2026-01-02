@@ -13,6 +13,7 @@ from typing import Optional
 
 from src.core.logger import log
 from src.core.config import config
+from src.core.colors import COLOR_GOLD, COLOR_SUCCESS
 from src.services.translate_service import translate_service, LANGUAGES
 from src.utils.footer import set_footer
 
@@ -190,7 +191,7 @@ class TranslateView(ui.View):
                     "This premium feature is exclusively available to **Server Boosters** "
                     "as a thank you for supporting the community!"
                 ),
-                color=0x2ECC71  # Green
+                color=COLOR_SUCCESS  # Green
             )
             embed.add_field(
                 name="🏆 How to Unlock",
@@ -363,10 +364,10 @@ def create_translate_embed(result, is_ai: bool = False) -> discord.Embed:
     """Create a translation embed with code blocks."""
     if is_ai:
         title = f"{AI_EMOJI} {result.source_flag} → {result.target_flag} AI Translation"
-        color = 0x10A37F  # OpenAI green
+        color = COLOR_SUCCESS  # Green for AI
     else:
         title = f"{result.source_flag} → {result.target_flag} Translation"
-        color = 0x5865F2
+        color = COLOR_GOLD  # Gold for regular
 
     embed = discord.Embed(
         title=title,
