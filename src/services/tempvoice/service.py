@@ -469,6 +469,14 @@ class TempVoiceService:
         # Fallback: Search through recent messages (slow path)
         panel_found = False
         try:
+            # Safety check - bot.user can be None during startup
+            if not self.bot.user:
+                log.tree("Panel Update Skipped", [
+                    ("Channel", channel.name),
+                    ("Reason", "Bot not ready"),
+                ], emoji="⚠️")
+                return
+
             async for message in channel.history(limit=15):
                 if message.author.id == self.bot.user.id and message.embeds:
                     embed = self._build_panel_embed(channel, owner, is_locked)
