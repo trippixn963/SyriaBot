@@ -544,16 +544,26 @@ class XPService:
                     roles_to_add.append(role)
                     earned.append((level, role))
 
-        # Find old XP roles to remove (any XP role below new level)
-        for member_role in member.roles:
-            if member_role.id in all_xp_role_ids:
-                # Find what level this role is for
-                for level, role_id in config.XP_ROLE_REWARDS.items():
-                    if role_id == member_role.id and level < new_level:
-                        # This is an old level role, mark for removal
-                        if member_role not in roles_to_add:
-                            roles_to_remove.append(member_role)
-                        break
+        # Find the highest role level the user should have for their new level
+        highest_applicable_level = None
+        for level in sorted(config.XP_ROLE_REWARDS.keys()):
+            if level <= new_level:
+                highest_applicable_level = level
+            else:
+                break
+
+        # Only remove old XP roles if they're BELOW the highest applicable role
+        # (e.g., level 6 user keeps level 5 role until they reach level 10)
+        if highest_applicable_level is not None:
+            for member_role in member.roles:
+                if member_role.id in all_xp_role_ids:
+                    # Find what level this role is for
+                    for level, role_id in config.XP_ROLE_REWARDS.items():
+                        if role_id == member_role.id and level < highest_applicable_level:
+                            # This is an old level role below their current tier
+                            if member_role not in roles_to_add:
+                                roles_to_remove.append(member_role)
+                            break
 
         if roles_to_add or roles_to_remove:
             try:
