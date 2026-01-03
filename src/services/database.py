@@ -40,7 +40,8 @@ def _get_week_start_timestamp(timestamp: int = None) -> int:
 class Database:
     """SQLite database manager for TempVoice."""
 
-    def __init__(self):
+    def __init__(self) -> None:
+        """Initialize database connection and create tables if needed."""
         self.db_path = config.DATABASE_PATH
         self._healthy = True
         self._init_db()

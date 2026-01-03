@@ -20,9 +20,13 @@ DOWNLOAD_TIMEOUT = aiohttp.ClientTimeout(
 
 
 class HTTPSessionManager:
-    """Lazy-initialized HTTP session manager."""
+    """Lazy-initialized HTTP session manager for shared aiohttp sessions."""
 
     _session: aiohttp.ClientSession | None = None
+
+    def __init__(self) -> None:
+        """Initialize the session manager with no active session."""
+        pass
 
     @property
     def session(self) -> aiohttp.ClientSession:
@@ -34,7 +38,7 @@ class HTTPSessionManager:
             ], emoji="🌐")
         return self._session
 
-    def get(self, url: str, **kwargs):
+    def get(self, url: str, **kwargs) -> aiohttp.client._RequestContextManager:
         """Return a GET request context manager (use with async with)."""
         return self.session.get(url, **kwargs)
 

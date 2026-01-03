@@ -21,11 +21,10 @@ from src.core.colors import (
     EMOJI_WHITE, EMOJI_BLACK, EMOJI_RED, EMOJI_BLUE,
     EMOJI_GREEN, EMOJI_YELLOW, EMOJI_PURPLE, EMOJI_PINK,
 )
-from src.core.constants import FONT_PATHS
 from src.core.logger import log
 from src.services.convert_service import convert_service
 from src.utils.footer import set_footer
-from src.utils.text import wrap_text
+from src.utils.text import wrap_text, find_font, get_font
 
 
 # =============================================================================
@@ -65,11 +64,11 @@ class ConvertSettings:
 
 
 # =============================================================================
-# Text Input Modal
+# Text Input Modal (Unified)
 # =============================================================================
 
 class TextInputModal(ui.Modal, title="Edit Caption Text"):
-    """Modal for editing caption text."""
+    """Modal for editing caption text. Works with both image and video views."""
 
     text_input = ui.TextInput(
         label="Caption Text",
@@ -79,97 +78,163 @@ class TextInputModal(ui.Modal, title="Edit Caption Text"):
         max_length=200,
     )
 
-    def __init__(self, current_text: str, view: "ConvertView"):
+    def __init__(self, current_text: str, view, callback_method: str = "update_preview"):
         super().__init__()
         self.view = view
+        self.callback_method = callback_method
         self.text_input.default = current_text
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
-        """Handle text input submission and update preview."""
+        """Handle text input submission and call the appropriate update method."""
         self.view.settings.text = self.text_input.value.strip()
-        await self.view.update_preview(interaction)
-
-
-class VideoTextInputModal(ui.Modal, title="Edit Caption Text"):
-    """Modal for editing caption text (video version - no live preview)."""
-
-    text_input = ui.TextInput(
-        label="Caption Text",
-        placeholder="Enter the text for the caption bar...",
-        style=discord.TextStyle.paragraph,
-        required=False,
-        max_length=200,
-    )
-
-    def __init__(self, current_text: str, view: "VideoConvertView"):
-        super().__init__()
-        self.view = view
-        self.text_input.default = current_text
-
-    async def on_submit(self, interaction: discord.Interaction) -> None:
-        """Handle text input submission and update embed."""
-        self.view.settings.text = self.text_input.value.strip()
-        await self.view.update_embed(interaction)
+        callback = getattr(self.view, self.callback_method)
+        await callback(interaction)
 
 
 # =============================================================================
-# Color Select Menu
+# Color Select Menu (Unified)
 # =============================================================================
+
+# Shared color options - defined once
+COLOR_OPTIONS = [
+    discord.SelectOption(label="White", value="white", description="White bar, black text", emoji=EMOJI_WHITE),
+    discord.SelectOption(label="Black", value="black", description="Black bar, white text", emoji=EMOJI_BLACK),
+    discord.SelectOption(label="Red", value="red", description="Red bar, white text", emoji=EMOJI_RED),
+    discord.SelectOption(label="Blue", value="blue", description="Blue bar, white text", emoji=EMOJI_BLUE),
+    discord.SelectOption(label="Green", value="green", description="Green bar, white text", emoji=EMOJI_GREEN),
+    discord.SelectOption(label="Yellow", value="yellow", description="Yellow bar, black text", emoji=EMOJI_YELLOW),
+    discord.SelectOption(label="Purple", value="purple", description="Purple bar, white text", emoji=EMOJI_PURPLE),
+    discord.SelectOption(label="Pink", value="pink", description="Pink bar, white text", emoji=EMOJI_PINK),
+]
+
 
 class ColorSelect(ui.Select):
-    """Dropdown for selecting bar color preset."""
+    """Dropdown for selecting bar color preset. Works with both image and video views."""
 
-    def __init__(self, view: "ConvertView"):
+    def __init__(self, view, callback_method: str = "update_preview", custom_id: str = "color_select"):
         self.convert_view = view
-        options = [
-            discord.SelectOption(label="White", value="white", description="White bar, black text", emoji=EMOJI_WHITE),
-            discord.SelectOption(label="Black", value="black", description="Black bar, white text", emoji=EMOJI_BLACK),
-            discord.SelectOption(label="Red", value="red", description="Red bar, white text", emoji=EMOJI_RED),
-            discord.SelectOption(label="Blue", value="blue", description="Blue bar, white text", emoji=EMOJI_BLUE),
-            discord.SelectOption(label="Green", value="green", description="Green bar, white text", emoji=EMOJI_GREEN),
-            discord.SelectOption(label="Yellow", value="yellow", description="Yellow bar, black text", emoji=EMOJI_YELLOW),
-            discord.SelectOption(label="Purple", value="purple", description="Purple bar, white text", emoji=EMOJI_PURPLE),
-            discord.SelectOption(label="Pink", value="pink", description="Pink bar, white text", emoji=EMOJI_PINK),
-        ]
+        self.callback_method = callback_method
         super().__init__(
             placeholder="Bar Color",
-            options=options,
-            custom_id="color_select",
+            options=COLOR_OPTIONS.copy(),
+            custom_id=custom_id,
             row=0,
         )
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        """Handle color selection and update image preview."""
+        """Handle color selection and call the appropriate update method."""
         self.convert_view.settings.apply_preset(self.values[0])
-        await self.convert_view.update_preview(interaction)
+        callback = getattr(self.convert_view, self.callback_method)
+        await callback(interaction)
 
 
-class VideoColorSelect(ui.Select):
-    """Dropdown for selecting bar color preset (video version)."""
+# =============================================================================
+# Shared Image Processing Helper
+# =============================================================================
 
-    def __init__(self, view: "VideoConvertView"):
-        self.convert_view = view
-        options = [
-            discord.SelectOption(label="White", value="white", description="White bar, black text", emoji=EMOJI_WHITE),
-            discord.SelectOption(label="Black", value="black", description="Black bar, white text", emoji=EMOJI_BLACK),
-            discord.SelectOption(label="Red", value="red", description="Red bar, white text", emoji=EMOJI_RED),
-            discord.SelectOption(label="Blue", value="blue", description="Blue bar, white text", emoji=EMOJI_BLUE),
-            discord.SelectOption(label="Green", value="green", description="Green bar, white text", emoji=EMOJI_GREEN),
-            discord.SelectOption(label="Yellow", value="yellow", description="Yellow bar, black text", emoji=EMOJI_YELLOW),
-            discord.SelectOption(label="Purple", value="purple", description="Purple bar, white text", emoji=EMOJI_PURPLE),
-            discord.SelectOption(label="Pink", value="pink", description="Pink bar, white text", emoji=EMOJI_PINK),
-        ]
-        super().__init__(
-            placeholder="Bar Color",
-            options=options,
-            custom_id="video_color_select",
-            row=0,
-        )
+def add_text_bar_to_image(
+    image_data: bytes,
+    text: str,
+    bar_color: tuple[int, int, int],
+    text_color: tuple[int, int, int],
+    min_bar_height: int = 80,
+    min_font_size: int = 24,
+    min_text_padding: int = 20,
+    min_vertical_padding: int = 10,
+    max_dimension: int = 2000,
+    handle_rgba: bool = True,
+) -> bytes:
+    """
+    Add a text bar to an image. Shared by ConvertView and VideoConvertView.
 
-    async def callback(self, interaction: discord.Interaction) -> None:
-        """Handle color selection and update video embed."""
-        self.convert_view.settings.apply_preset(self.values[0])
-        await self.convert_view.update_embed(interaction)
+    Args:
+        image_data: Raw image bytes
+        text: Caption text to add
+        bar_color: RGB tuple for bar background
+        text_color: RGB tuple for text
+        min_bar_height: Minimum bar height in pixels
+        min_font_size: Minimum font size
+        min_text_padding: Minimum horizontal padding
+        min_vertical_padding: Minimum vertical padding
+        max_dimension: Max image dimension (resize if larger)
+        handle_rgba: Whether to handle RGBA -> RGB conversion with bar color background
+
+    Returns:
+        PNG bytes of processed image
+    """
+    BAR_HEIGHT_RATIO = 0.20
+    FONT_SIZE_RATIO = 0.70
+    LINE_SPACING_RATIO = 0.25
+    BAR_PADDING_RATIO = 0.10
+    TEXT_PADDING_RATIO = 0.05
+
+    img = Image.open(io.BytesIO(image_data))
+
+    # Convert to RGB
+    if handle_rgba and img.mode == "RGBA":
+        background = Image.new("RGB", img.size, bar_color)
+        background.paste(img, mask=img.split()[3])
+        img = background
+    elif img.mode != "RGB":
+        img = img.convert("RGB")
+
+    # Resize if too large
+    if max_dimension and (img.width > max_dimension or img.height > max_dimension):
+        img.thumbnail((max_dimension, max_dimension), Image.Resampling.LANCZOS)
+
+    # If no text, just return as PNG
+    if not text:
+        output = io.BytesIO()
+        img.save(output, format="PNG", optimize=True)
+        return output.getvalue()
+
+    # Calculate bar height
+    bar_height = max(min_bar_height, int(img.height * BAR_HEIGHT_RATIO))
+
+    # Calculate font size
+    font_size = max(min_font_size, int(bar_height * FONT_SIZE_RATIO))
+    font_path = find_font()
+    font = get_font(font_path, font_size)
+
+    # Calculate padding
+    text_padding = max(min_text_padding, int(img.width * TEXT_PADDING_RATIO))
+
+    # Wrap text
+    max_text_width = img.width - (text_padding * 2)
+    lines = wrap_text(text, font, max_text_width)
+
+    # Calculate text height
+    line_height = font.getbbox("Ay")[3] - font.getbbox("Ay")[1]
+    line_spacing = int(line_height * LINE_SPACING_RATIO)
+    total_text_height = (line_height * len(lines)) + (line_spacing * (len(lines) - 1))
+
+    # Expand bar if needed
+    vertical_padding = max(min_vertical_padding, int(bar_height * BAR_PADDING_RATIO))
+    min_bar_for_text = total_text_height + (vertical_padding * 2)
+    if min_bar_for_text > bar_height:
+        bar_height = min_bar_for_text
+
+    # Create new image with bar
+    new_height = img.height + bar_height
+    new_img = Image.new("RGB", (img.width, new_height), bar_color)
+    new_img.paste(img, (0, bar_height))
+
+    # Draw text
+    draw = ImageDraw.Draw(new_img)
+    start_y = (bar_height - total_text_height) // 2
+    current_y = start_y
+
+    for line in lines:
+        bbox = font.getbbox(line)
+        line_width = bbox[2] - bbox[0]
+        text_x = (img.width - line_width) // 2 - bbox[0]
+        text_y = current_y - bbox[1]
+        draw.text((text_x, text_y), line, font=font, fill=text_color)
+        current_y += line_height + line_spacing
+
+    output = io.BytesIO()
+    new_img.save(output, format="PNG", optimize=True)
+    return output.getvalue()
 
 
 # =============================================================================
@@ -217,110 +282,18 @@ class ConvertView(ui.View):
 
     def _process_preview(self) -> bytes:
         """Process image with current settings and return PNG bytes."""
-        # Constants - DYNAMIC sizing like NotSoBot
-        BAR_HEIGHT_RATIO = 0.20  # Bar = 20% of image height
-        MIN_BAR_HEIGHT = 80  # Minimum bar height
-        FONT_SIZE_RATIO = 0.70  # Font = 70% of bar height
-        LINE_SPACING_RATIO = 0.25
-        BAR_PADDING_RATIO = 0.10
-        TEXT_PADDING_RATIO = 0.05
-        MAX_DIMENSION = 2000
-
-        def find_font() -> Optional[str]:
-            """Find first available system font from predefined paths."""
-            for font_path in FONT_PATHS:
-                try:
-                    ImageFont.truetype(font_path, 20)
-                    return font_path
-                except (OSError, IOError):
-                    continue
-            return None
-
-        def get_font(font_path: Optional[str], size: int) -> ImageFont.FreeTypeFont:
-            """Load font from path or fall back to default."""
-            if font_path:
-                try:
-                    return ImageFont.truetype(font_path, size)
-                except (OSError, IOError):
-                    pass
-            return ImageFont.load_default()
-
-        # Open image
-        img = Image.open(io.BytesIO(self.image_data))
-
-        # Convert to RGB
-        if img.mode == "RGBA":
-            background = Image.new("RGB", img.size, self.settings.bar_color)
-            background.paste(img, mask=img.split()[3])
-            img = background
-        elif img.mode == "P":
-            img = img.convert("RGB")
-        elif img.mode != "RGB":
-            img = img.convert("RGB")
-
-        # Resize if too large
-        if img.width > MAX_DIMENSION or img.height > MAX_DIMENSION:
-            img.thumbnail((MAX_DIMENSION, MAX_DIMENSION), Image.Resampling.LANCZOS)
-
-        # If no text, just convert without bar
-        if not self.settings.text:
-            output = io.BytesIO()
-            img.save(output, format="PNG", optimize=True)
-            return output.getvalue()
-
-        # Calculate DYNAMIC bar height (20% of image, min 80px)
-        bar_height = max(MIN_BAR_HEIGHT, int(img.height * BAR_HEIGHT_RATIO))
-
-        # Calculate font size (70% of bar height)
-        font_size = max(24, int(bar_height * FONT_SIZE_RATIO))
-        font_path = find_font()
-        font = get_font(font_path, font_size)
-
-        # Calculate padding
-        text_padding = max(20, int(img.width * TEXT_PADDING_RATIO))
-
-        # Wrap text
-        max_text_width = img.width - (text_padding * 2)
-        lines = wrap_text(self.settings.text, font, max_text_width)
-
-        # Calculate text height
-        line_height = font.getbbox("Ay")[3] - font.getbbox("Ay")[1]
-        line_spacing = int(line_height * LINE_SPACING_RATIO)
-        total_text_height = (line_height * len(lines)) + (line_spacing * (len(lines) - 1))
-
-        # Expand bar if needed for multiline
-        vertical_padding = max(10, int(bar_height * BAR_PADDING_RATIO))
-        min_bar_for_text = total_text_height + (vertical_padding * 2)
-        if min_bar_for_text > bar_height:
-            bar_height = min_bar_for_text
-
-        # Create new image with bar
-        new_height = img.height + bar_height
-        new_img = Image.new("RGB", (img.width, new_height), self.settings.bar_color)
-
-        # Paste original image (bar always at top)
-        new_img.paste(img, (0, bar_height))
-
-        # Draw text
-        draw = ImageDraw.Draw(new_img)
-
-        # Calculate starting Y position (centered vertically in bar)
-        start_y = (bar_height - total_text_height) // 2
-
-        # Draw each line centered horizontally
-        current_y = start_y
-        for line in lines:
-            bbox = font.getbbox(line)
-            line_width = bbox[2] - bbox[0]
-            text_x = (img.width - line_width) // 2 - bbox[0]
-            text_y = current_y - bbox[1]
-            draw.text((text_x, text_y), line, font=font, fill=self.settings.text_color)
-            current_y += line_height + line_spacing
-
-        # Save as PNG
-        output = io.BytesIO()
-        new_img.save(output, format="PNG", optimize=True)
-        return output.getvalue()
+        return add_text_bar_to_image(
+            image_data=self.image_data,
+            text=self.settings.text,
+            bar_color=self.settings.bar_color,
+            text_color=self.settings.text_color,
+            min_bar_height=80,
+            min_font_size=24,
+            min_text_padding=20,
+            min_vertical_padding=10,
+            max_dimension=2000,
+            handle_rgba=True,
+        )
 
     def create_embed(self, preview_url: str = None) -> discord.Embed:
         """Create embed showing current settings and preview."""
@@ -534,108 +507,26 @@ class VideoConvertView(ui.View):
         self._processing = False
 
         # Add color select dropdown
-        self.add_item(VideoColorSelect(self))
+        self.add_item(ColorSelect(self, "update_embed", "video_color_select"))
 
     def _generate_preview_with_text(self) -> Optional[bytes]:
         """Generate preview thumbnail with text bar overlay."""
         if not self.thumbnail_bytes:
             return None
 
-        # Constants - DYNAMIC sizing like NotSoBot
-        BAR_HEIGHT_RATIO = 0.20  # Bar = 20% of image height
-        MIN_BAR_HEIGHT = 40  # Minimum for thumbnail
-        FONT_SIZE_RATIO = 0.70  # Font = 70% of bar height
-        LINE_SPACING_RATIO = 0.25
-        BAR_PADDING_RATIO = 0.10
-        TEXT_PADDING_RATIO = 0.05
-
-        def find_font() -> Optional[str]:
-            """Find first available system font from predefined paths."""
-            for font_path in FONT_PATHS:
-                try:
-                    ImageFont.truetype(font_path, 20)
-                    return font_path
-                except (OSError, IOError):
-                    continue
-            return None
-
-        def get_font(font_path: Optional[str], size: int) -> ImageFont.FreeTypeFont:
-            """Load font from path or fall back to default."""
-            if font_path:
-                try:
-                    return ImageFont.truetype(font_path, size)
-                except (OSError, IOError):
-                    pass
-            return ImageFont.load_default()
-
         try:
-            # Open thumbnail
-            img = Image.open(io.BytesIO(self.thumbnail_bytes))
-
-            # Convert to RGB
-            if img.mode != "RGB":
-                img = img.convert("RGB")
-
-            # If no text, return original thumbnail
-            if not self.settings.text:
-                output = io.BytesIO()
-                img.save(output, format="PNG", optimize=True)
-                return output.getvalue()
-
-            # Calculate DYNAMIC bar height (20% of image, min 40px for thumbnail)
-            bar_height = max(MIN_BAR_HEIGHT, int(img.height * BAR_HEIGHT_RATIO))
-
-            # Calculate font size (70% of bar height)
-            font_size = max(16, int(bar_height * FONT_SIZE_RATIO))
-            font_path = find_font()
-            font = get_font(font_path, font_size)
-
-            # Calculate padding
-            text_padding = max(10, int(img.width * TEXT_PADDING_RATIO))
-
-            # Wrap text
-            max_text_width = img.width - (text_padding * 2)
-            lines = wrap_text(self.settings.text, font, max_text_width)
-
-            # Calculate text height
-            line_height = font.getbbox("Ay")[3] - font.getbbox("Ay")[1]
-            line_spacing = int(line_height * LINE_SPACING_RATIO)
-            total_text_height = (line_height * len(lines)) + (line_spacing * (len(lines) - 1))
-
-            # Expand bar if needed for multiline
-            vertical_padding = max(5, int(bar_height * BAR_PADDING_RATIO))
-            min_bar_for_text = total_text_height + (vertical_padding * 2)
-            if min_bar_for_text > bar_height:
-                bar_height = min_bar_for_text
-
-            # Create new image with bar
-            new_height = img.height + bar_height
-            new_img = Image.new("RGB", (img.width, new_height), self.settings.bar_color)
-
-            # Paste original image (bar always at top)
-            new_img.paste(img, (0, bar_height))
-
-            # Draw text
-            draw = ImageDraw.Draw(new_img)
-
-            # Calculate starting Y position (centered vertically in bar)
-            start_y = (bar_height - total_text_height) // 2
-
-            # Draw each line centered horizontally
-            current_y = start_y
-            for line in lines:
-                bbox = font.getbbox(line)
-                line_width = bbox[2] - bbox[0]
-                text_x = (img.width - line_width) // 2 - bbox[0]
-                text_y = current_y - bbox[1]
-                draw.text((text_x, text_y), line, font=font, fill=self.settings.text_color)
-                current_y += line_height + line_spacing
-
-            # Save as PNG
-            output = io.BytesIO()
-            new_img.save(output, format="PNG", optimize=True)
-            return output.getvalue()
-
+            return add_text_bar_to_image(
+                image_data=self.thumbnail_bytes,
+                text=self.settings.text,
+                bar_color=self.settings.bar_color,
+                text_color=self.settings.text_color,
+                min_bar_height=40,
+                min_font_size=16,
+                min_text_padding=10,
+                min_vertical_padding=5,
+                max_dimension=0,  # No resize for thumbnails
+                handle_rgba=False,
+            )
         except Exception:
             return self.thumbnail_bytes
 
@@ -717,7 +608,7 @@ class VideoConvertView(ui.View):
     @ui.button(label="Edit", emoji="<:rename:1455709387711578394>", style=discord.ButtonStyle.secondary, row=1)
     async def edit_text_button(self, interaction: discord.Interaction, button: ui.Button):
         """Open modal to edit caption text."""
-        modal = VideoTextInputModal(self.settings.text, self)
+        modal = TextInputModal(self.settings.text, self, "update_embed")
         await interaction.response.send_modal(modal)
 
     @ui.button(label="Save", emoji="<:save:1455776703468273825>", style=discord.ButtonStyle.secondary, row=1)
@@ -849,19 +740,11 @@ async def start_convert_editor(
         is_interaction = False
 
     if is_video:
-        # Get video duration to determine preview type
-        # Short clips (< 10s) like Tenor/Giphy GIFs get single thumbnail
-        # Longer videos get 5-frame preview strip
-        duration = await asyncio.to_thread(convert_service.get_video_duration, image_data)
-        is_short_clip = duration is not None and duration < 10
-
-        if is_short_clip:
-            preview_strip_bytes = await asyncio.to_thread(convert_service.extract_thumbnail, image_data)
-        else:
-            preview_strip_bytes = await asyncio.to_thread(convert_service.extract_preview_strip, image_data, 5)
-            # Fall back to single thumbnail if strip fails
-            if not preview_strip_bytes:
-                preview_strip_bytes = await asyncio.to_thread(convert_service.extract_thumbnail, image_data)
+        # Get video duration and preview in a single batched operation
+        # (writes video to disk once instead of 2-3 times)
+        duration, preview_strip_bytes = await asyncio.to_thread(
+            convert_service.get_video_preview_data, image_data
+        )
 
         # Video: Use VideoConvertView with preview strip
         view = VideoConvertView(

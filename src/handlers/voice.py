@@ -21,7 +21,8 @@ from src.services.database import db
 class VoiceHandler(commands.Cog):
     """Handles voice state updates."""
 
-    def __init__(self, bot):
+    def __init__(self, bot: commands.Bot) -> None:
+        """Initialize the voice handler with bot reference."""
         self.bot = bot
 
     @commands.Cog.listener()
@@ -30,7 +31,7 @@ class VoiceHandler(commands.Cog):
         member: discord.Member,
         before: discord.VoiceState,
         after: discord.VoiceState
-    ):
+    ) -> None:
         """Called when a user's voice state changes."""
         # Skip bots
         if member.bot:
@@ -73,8 +74,11 @@ class VoiceHandler(commands.Cog):
                     )
                     today = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
                     db.update_voice_peak(member.guild.id, today, total_voice_users)
-            except Exception:
-                pass  # Non-critical
+            except Exception as e:
+                log.tree("Voice Stats Track Failed", [
+                    ("User", f"{member.name} ({member.id})"),
+                    ("Error", str(e)[:50]),
+                ], emoji="⚠️")
 
 
 async def setup(bot: commands.Bot) -> None:

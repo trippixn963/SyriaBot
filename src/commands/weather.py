@@ -20,8 +20,16 @@ from src.core.colors import COLOR_GOLD
 from src.utils.footer import set_footer
 
 
-def weather_cooldown(interaction: discord.Interaction) -> app_commands.Cooldown | None:
-    """Dynamic cooldown - None for mods/owners, 5 min for everyone else."""
+def weather_cooldown(interaction: discord.Interaction) -> Optional[app_commands.Cooldown]:
+    """
+    Dynamic cooldown - None for mods/owners, 5 min for everyone else.
+
+    Args:
+        interaction: The Discord interaction
+
+    Returns:
+        Cooldown object or None if user is exempt
+    """
     if interaction.user.id == config.OWNER_ID:
         return None
 
@@ -129,7 +137,17 @@ WEATHER_ICONS = {
 # =============================================================================
 
 def fuzzy_match(query: str, choices: List[str], limit: int = 25) -> List[str]:
-    """Fuzzy match query against choices."""
+    """
+    Fuzzy match query against choices.
+
+    Args:
+        query: Search string
+        choices: List of choices to match against
+        limit: Maximum number of results
+
+    Returns:
+        List of matched choices sorted by relevance
+    """
     if not query:
         return choices[:limit]
 
@@ -157,12 +175,28 @@ def fuzzy_match(query: str, choices: List[str], limit: int = 25) -> List[str]:
 
 
 def celsius_to_fahrenheit(celsius: float) -> float:
-    """Convert Celsius to Fahrenheit."""
+    """
+    Convert Celsius to Fahrenheit.
+
+    Args:
+        celsius: Temperature in Celsius
+
+    Returns:
+        Temperature in Fahrenheit
+    """
     return (celsius * 9/5) + 32
 
 
 def get_wind_direction(degrees: int) -> str:
-    """Convert wind degrees to compass direction."""
+    """
+    Convert wind degrees to compass direction.
+
+    Args:
+        degrees: Wind direction in degrees (0-360)
+
+    Returns:
+        Compass direction string (e.g., "N", "NE", "SW")
+    """
     directions = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
                   "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"]
     index = round(degrees / 22.5) % 16
@@ -176,14 +210,22 @@ def get_wind_direction(degrees: int) -> str:
 class WeatherView(discord.ui.View):
     """View with toggle button for temperature unit."""
 
-    def __init__(self, weather_data: dict, city: str, user_id: int):
+    def __init__(self, weather_data: dict, city: str, user_id: int) -> None:
+        """
+        Initialize the weather view.
+
+        Args:
+            weather_data: Weather API response data
+            city: City name for display
+            user_id: ID of user who invoked command
+        """
         super().__init__(timeout=300)
         self.weather_data = weather_data
         self.city = city
         self.user_id = user_id
         self.is_celsius = True
 
-    async def on_timeout(self):
+    async def on_timeout(self) -> None:
         """Disable button on timeout."""
         for item in self.children:
             item.disabled = True
@@ -193,7 +235,12 @@ class WeatherView(discord.ui.View):
         ], emoji="⏳")
 
     def build_embed(self) -> discord.Embed:
-        """Build a beautiful weather embed."""
+        """
+        Build a beautiful weather embed.
+
+        Returns:
+            Discord embed with weather information
+        """
         data = self.weather_data
         main = data["main"]
         weather = data["weather"][0]
@@ -330,12 +377,21 @@ class WeatherView(discord.ui.View):
 class WeatherCog(commands.Cog):
     """Weather command with fuzzy city search."""
 
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot) -> None:
+        """Initialize the weather cog with API key."""
         self.bot = bot
         self.api_key = config.OPENWEATHER_API_KEY
 
     async def fetch_weather(self, city: str) -> Optional[dict]:
-        """Fetch weather data from OpenWeatherMap API."""
+        """
+        Fetch weather data from OpenWeatherMap API.
+
+        Args:
+            city: City name to search for
+
+        Returns:
+            Weather data dict or None if not found
+        """
         if not self.api_key:
             return None
 
@@ -442,8 +498,19 @@ class WeatherCog(commands.Cog):
         ], emoji="✅")
 
     @weather.autocomplete("city")
-    async def city_autocomplete(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
-        """Autocomplete for city names with fuzzy matching."""
+    async def city_autocomplete(
+        self, interaction: discord.Interaction, current: str
+    ) -> List[app_commands.Choice[str]]:
+        """
+        Autocomplete for city names with fuzzy matching.
+
+        Args:
+            interaction: The Discord interaction
+            current: Current input string
+
+        Returns:
+            List of autocomplete choices
+        """
         matches = fuzzy_match(current, CITIES, limit=25)
         return [app_commands.Choice(name=city, value=city) for city in matches]
 
@@ -498,6 +565,7 @@ class WeatherCog(commands.Cog):
             pass
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: commands.Bot) -> None:
+    """Load the weather cog."""
     await bot.add_cog(WeatherCog(bot))
     log.tree("Command Loaded", [("Name", "weather")], emoji="✅")
