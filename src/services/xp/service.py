@@ -58,6 +58,10 @@ class XPService:
         # Track daily unique users to avoid duplicate DAU counts
         self._dau_cache: set = set()  # {(user_id, guild_id, date)}
 
+        # Track when users became muted (for anti-AFK farming)
+        # {user_id: mute_start_timestamp}
+        self._mute_timestamps: Dict[int, float] = {}
+
         # Background task for voice XP
         self._voice_xp_task: Optional[asyncio.Task] = None
 
@@ -261,6 +265,10 @@ class XPService:
             # User joined a voice channel - start tracking
             self._voice_sessions[guild_id][user_id] = time.time()
 
+            # If user joined already muted, start mute tracking
+            if after.self_mute or after.mute:
+                self._mute_timestamps[user_id] = time.time()
+
             # Track total voice sessions
             db.increment_voice_sessions(user_id, guild_id)
 
@@ -282,6 +290,8 @@ class XPService:
 
             # User left voice - remove from tracking (XP already awarded by loop)
             self._voice_sessions[guild_id].pop(user_id, None)
+            # Clear mute tracking
+            self._mute_timestamps.pop(user_id, None)
 
             # Calculate estimated XP earned (actual may vary based on channel conditions)
             base_xp = session_minutes * config.XP_VOICE_PER_MIN
@@ -299,6 +309,18 @@ class XPService:
                 ("Duration", f"{session_minutes} min"),
                 ("XP Earned", xp_display),
             ], emoji="🔇")
+
+        # Track mute state changes for anti-AFK (only if still in voice)
+        if after.channel:
+            is_muted = after.self_mute or after.mute  # Self-mute or server mute
+            was_muted = before.self_mute or before.mute
+
+            if is_muted and not was_muted:
+                # User just became muted - start tracking
+                self._mute_timestamps[user_id] = time.time()
+            elif not is_muted and was_muted:
+                # User unmuted - clear tracking
+                self._mute_timestamps.pop(user_id, None)
 
     async def _voice_xp_loop(self) -> None:
         """Background task that awards voice XP every minute."""
@@ -345,6 +367,13 @@ class XPService:
                         # Anti-abuse: No XP if server deafened (not participating)
                         if member.voice.deaf:
                             continue
+
+                        # Anti-abuse: No XP if muted for > 1 hour (AFK farming prevention)
+                        is_muted = member.voice.self_mute or member.voice.mute
+                        if is_muted:
+                            mute_start = self._mute_timestamps.get(user_id)
+                            if mute_start and (now - mute_start) > 3600:  # 1 hour
+                                continue
 
                         if now - join_time >= 60:
                             users_to_reward.append(member)
