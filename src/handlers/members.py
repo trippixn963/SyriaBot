@@ -21,13 +21,14 @@ from src.utils.footer import set_footer
 class MembersHandler(commands.Cog):
     """Handles member events."""
 
-    def __init__(self, bot):
+    def __init__(self, bot: commands.Bot) -> None:
+        """Initialize the members handler with bot reference and invite cache."""
         self.bot = bot
         # Cache invites for tracking: {invite_code: uses}
         self._invite_cache: Dict[str, int] = {}
 
     @commands.Cog.listener()
-    async def on_ready(self):
+    async def on_ready(self) -> None:
         """Cache invites on bot ready."""
         await self._cache_invites()
 
@@ -53,7 +54,15 @@ class MembersHandler(commands.Cog):
             ], emoji="⚠️")
 
     async def _find_used_invite(self, guild: discord.Guild) -> Optional[discord.Invite]:
-        """Find which invite was used by comparing with cache."""
+        """
+        Find which invite was used by comparing with cache.
+
+        Args:
+            guild: The guild to check invites for
+
+        Returns:
+            The invite that was used, or None if not found
+        """
         try:
             new_invites = await guild.invites()
             for invite in new_invites:
@@ -65,13 +74,16 @@ class MembersHandler(commands.Cog):
 
             # Update cache with any new invites
             self._invite_cache = {inv.code: inv.uses for inv in new_invites}
-        except discord.HTTPException:
-            pass
+        except discord.HTTPException as e:
+            log.tree("Invite Fetch Failed", [
+                ("Guild", guild.name),
+                ("Error", str(e)[:50]),
+            ], emoji="⚠️")
 
         return None
 
     @commands.Cog.listener()
-    async def on_member_join(self, member: discord.Member):
+    async def on_member_join(self, member: discord.Member) -> None:
         """Called when a member joins the server."""
         if member.bot:
             return
@@ -92,8 +104,12 @@ class MembersHandler(commands.Cog):
                     ("Invited By", f"{invite.inviter.name} ({inviter_id})"),
                     ("Invite Code", invite.code),
                 ], emoji="🔗")
-            except Exception:
-                pass  # Non-critical
+            except Exception as e:
+                log.tree("Invite Track Failed", [
+                    ("New Member", f"{member.name} ({member.id})"),
+                    ("Inviter ID", str(inviter_id)),
+                    ("Error", str(e)[:50]),
+                ], emoji="⚠️")
 
         # Track new member for daily stats
         try:
@@ -101,8 +117,11 @@ class MembersHandler(commands.Cog):
             from zoneinfo import ZoneInfo
             today = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
             db.increment_new_members(member.guild.id, today)
-        except Exception:
-            pass
+        except Exception as e:
+            log.tree("New Member Track Failed", [
+                ("Member", f"{member.name} ({member.id})"),
+                ("Error", str(e)[:50]),
+            ], emoji="⚠️")
 
         # Give auto-role
         if not config.AUTO_ROLE_ID:
@@ -132,7 +151,7 @@ class MembersHandler(commands.Cog):
             ], emoji="❌")
 
     @commands.Cog.listener()
-    async def on_member_update(self, before: discord.Member, after: discord.Member):
+    async def on_member_update(self, before: discord.Member, after: discord.Member) -> None:
         """Called when a member is updated - detects new boosts."""
         # Only track in main server
         if after.guild.id != config.GUILD_ID:
@@ -143,8 +162,12 @@ class MembersHandler(commands.Cog):
             # Record boost in history
             try:
                 db.record_boost(after.id, after.guild.id, "boost")
-            except Exception:
-                pass
+            except Exception as e:
+                log.tree("Boost Record Failed", [
+                    ("User", f"{after.name} ({after.id})"),
+                    ("Type", "boost"),
+                    ("Error", str(e)[:50]),
+                ], emoji="⚠️")
             # Invalidate API cache for this user
             self._invalidate_api_cache(after.id)
             await self._handle_new_boost(after)
@@ -157,8 +180,12 @@ class MembersHandler(commands.Cog):
                     ("User", f"{after.name} ({after.id})"),
                     ("Guild", after.guild.name),
                 ], emoji="💔")
-            except Exception:
-                pass
+            except Exception as e:
+                log.tree("Unboost Record Failed", [
+                    ("User", f"{after.name} ({after.id})"),
+                    ("Type", "unboost"),
+                    ("Error", str(e)[:50]),
+                ], emoji="⚠️")
             # Invalidate API cache for this user
             self._invalidate_api_cache(after.id)
 
@@ -175,8 +202,11 @@ class MembersHandler(commands.Cog):
                 ("User ID", str(user_id)),
                 ("Reason", "Boost status changed"),
             ], emoji="🔄")
-        except Exception:
-            pass  # Non-critical
+        except Exception as e:
+            log.tree("API Cache Invalidate Failed", [
+                ("User ID", str(user_id)),
+                ("Error", str(e)[:50]),
+            ], emoji="⚠️")
 
     async def _handle_new_boost(self, member: discord.Member) -> None:
         """Send thank you message when someone boosts."""

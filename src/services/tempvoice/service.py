@@ -45,7 +45,8 @@ REORDER_DEBOUNCE_DELAY = TEMPVOICE_REORDER_DEBOUNCE_DELAY
 class TempVoiceService:
     """Service for managing temporary voice channels."""
 
-    def __init__(self, bot: "SyriaBot"):
+    def __init__(self, bot: "SyriaBot") -> None:
+        """Initialize TempVoice service with bot reference and control panel."""
         self.bot = bot
         self.control_panel = TempVoiceControlPanel(self)
         self._cleanup_task: asyncio.Task = None

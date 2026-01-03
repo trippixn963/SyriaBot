@@ -13,6 +13,7 @@ import discord
 from discord.ext import commands
 
 from src.core.logger import log
+from src.core.colors import EMOJI_WAVE, EMOJI_MAILBOX, EMOJI_ZZZ
 from src.services.database import db
 
 
@@ -123,9 +124,9 @@ class AFKService:
                 ], emoji="⚠️")
 
         # Build welcome back message
-        welcome_msg = f"👋 Welcome back {message.author.mention}! Your AFK has been removed."
+        welcome_msg = f"{EMOJI_WAVE} Welcome back {message.author.mention}! Your AFK has been removed."
         if mention_count > 0:
-            welcome_msg += f"\n📬 You were mentioned **{mention_count}** time{'s' if mention_count != 1 else ''} while away."
+            welcome_msg += f"\n{EMOJI_MAILBOX} You were mentioned **{mention_count}** time{'s' if mention_count != 1 else ''} while away."
 
         try:
             await message.reply(
@@ -178,9 +179,9 @@ class AFKService:
 
             # Use Discord's relative timestamp format
             if reason:
-                afk_messages.append(f"💤 **{member.display_name}** is AFK: {reason} (<t:{timestamp}:R>)")
+                afk_messages.append(f"{EMOJI_ZZZ} **{member.display_name}** is AFK: {reason} (<t:{timestamp}:R>)")
             else:
-                afk_messages.append(f"💤 **{member.display_name}** is AFK (<t:{timestamp}:R>)")
+                afk_messages.append(f"{EMOJI_ZZZ} **{member.display_name}** is AFK (<t:{timestamp}:R>)")
 
             # Track this mention for the AFK user
             db.increment_afk_mentions(user_id, guild_id)

@@ -26,7 +26,7 @@ _cached_avatar_url: Optional[str] = None
 _bot_ref: Optional[discord.Client] = None
 
 
-async def _get_developer_avatar(bot: discord.Client) -> Optional[str]:
+async def _get_developer_avatar(bot: discord.Client) -> Optional[str]:  # noqa: C901
     """Fetch developer avatar URL from the configured or first guild."""
     if not config.OWNER_ID:
         log.tree("Avatar Fetch Skipped", [

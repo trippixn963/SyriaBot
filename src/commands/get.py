@@ -18,8 +18,16 @@ from src.core.colors import COLOR_ERROR, COLOR_WARNING, COLOR_GOLD
 from src.utils.footer import set_footer
 
 
-def get_cooldown(interaction: discord.Interaction) -> app_commands.Cooldown | None:
-    """Dynamic cooldown - None for mods/owners, 5 min for everyone else."""
+def get_cooldown(interaction: discord.Interaction) -> Optional[app_commands.Cooldown]:
+    """
+    Dynamic cooldown - None for mods/owners, 5 min for everyone else.
+
+    Args:
+        interaction: The Discord interaction
+
+    Returns:
+        Cooldown object or None if user is exempt
+    """
     if interaction.user.id == config.OWNER_ID:
         return None
 
@@ -38,18 +46,25 @@ COLOR_GET = COLOR_GOLD
 class DownloadView(ui.View):
     """View with download button."""
 
-    def __init__(self, url: str, label: str = "Download"):
+    def __init__(self, url: str, label: str = "Download") -> None:
+        """
+        Initialize the download view.
+
+        Args:
+            url: URL to provide for download
+            label: Label for logging purposes
+        """
         super().__init__(timeout=300)
         self.url = url
         self.label = label
 
-    async def on_timeout(self):
+    async def on_timeout(self) -> None:
         """Disable button on timeout."""
         for item in self.children:
             item.disabled = True
 
     @ui.button(label="Save", style=discord.ButtonStyle.secondary, emoji="<:save:1455776703468273825>")
-    async def save(self, interaction: discord.Interaction, button: ui.Button):
+    async def save(self, interaction: discord.Interaction, button: ui.Button) -> None:
         """Send download link."""
         await interaction.response.send_message(self.url, ephemeral=True)
         log.tree("Save Link Sent", [
@@ -62,7 +77,18 @@ class DownloadView(ui.View):
 class AvatarToggleView(ui.View):
     """View with save button and optional toggle between server/global avatar."""
 
-    def __init__(self, target: discord.Member, server_url: str, global_url: str, showing_server: bool = True):
+    def __init__(
+        self, target: discord.Member, server_url: str, global_url: str, showing_server: bool = True
+    ) -> None:
+        """
+        Initialize the avatar toggle view.
+
+        Args:
+            target: The member whose avatar is shown
+            server_url: URL to server avatar
+            global_url: URL to global avatar
+            showing_server: Whether to show server avatar first
+        """
         super().__init__(timeout=300)
         self.target = target
         self.server_url = server_url
@@ -70,7 +96,7 @@ class AvatarToggleView(ui.View):
         self.showing_server = showing_server
         self._update_toggle_button()
 
-    def _update_toggle_button(self):
+    def _update_toggle_button(self) -> None:
         """Update toggle button label based on current state."""
         if self.showing_server:
             self.toggle_btn.label = "View Global"
@@ -78,15 +104,16 @@ class AvatarToggleView(ui.View):
             self.toggle_btn.label = "View Server"
 
     def _get_current_url(self) -> str:
+        """Get the currently displayed avatar URL."""
         return self.server_url if self.showing_server else self.global_url
 
-    async def on_timeout(self):
+    async def on_timeout(self) -> None:
         """Disable buttons on timeout."""
         for item in self.children:
             item.disabled = True
 
     @ui.button(label="Save", style=discord.ButtonStyle.secondary, emoji="<:save:1455776703468273825>", row=0)
-    async def save(self, interaction: discord.Interaction, button: ui.Button):
+    async def save(self, interaction: discord.Interaction, button: ui.Button) -> None:
         """Send download link."""
         await interaction.response.send_message(self._get_current_url(), ephemeral=True)
         log.tree("Save Link Sent", [
@@ -96,7 +123,7 @@ class AvatarToggleView(ui.View):
         ], emoji="💾")
 
     @ui.button(label="View Global", style=discord.ButtonStyle.secondary, emoji="<:transfer:1455710226429902858>", row=0)
-    async def toggle_btn(self, interaction: discord.Interaction, button: ui.Button):
+    async def toggle_btn(self, interaction: discord.Interaction, button: ui.Button) -> None:
         """Toggle between server and global avatar."""
         self.showing_server = not self.showing_server
         self._update_toggle_button()
@@ -129,7 +156,8 @@ class AvatarToggleView(ui.View):
 class GetCog(commands.Cog):
     """Get avatar/banner command."""
 
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot) -> None:
+        """Initialize the get cog."""
         self.bot = bot
 
     @app_commands.command(name="get", description="Get avatars, banners, or server assets")
@@ -149,7 +177,7 @@ class GetCog(commands.Cog):
         interaction: discord.Interaction,
         option: app_commands.Choice[str],
         user: Optional[discord.Member] = None
-    ):
+    ) -> None:
         """Get a user's avatar/banner or server icon/banner."""
         await interaction.response.defer()
 
@@ -516,6 +544,7 @@ class GetCog(commands.Cog):
             pass
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: commands.Bot) -> None:
+    """Load the get cog."""
     await bot.add_cog(GetCog(bot))
     log.tree("Command Loaded", [("Name", "get")], emoji="✅")

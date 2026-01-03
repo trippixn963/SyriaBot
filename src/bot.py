@@ -29,7 +29,8 @@ from src.utils.http import http_session
 class SyriaBot(commands.Bot):
     """Main bot class for SyriaBot."""
 
-    def __init__(self):
+    def __init__(self) -> None:
+        """Initialize the bot with required intents and service placeholders."""
         intents = discord.Intents.default()
         intents.message_content = True
         intents.members = True
@@ -122,8 +123,12 @@ class SyriaBot(commands.Bot):
                 interaction.user.id,
                 interaction.guild.id
             )
-        except Exception:
-            pass  # Silent fail for tracking
+        except Exception as e:
+            log.tree("Command Usage Track Failed", [
+                ("User", str(interaction.user)),
+                ("Command", command.name if command else "Unknown"),
+                ("Error", str(e)[:50]),
+            ], emoji="⚠️")
 
     async def _on_app_command_error(
         self,

@@ -27,8 +27,16 @@ from src.services.xp.utils import (
 from src.services.xp.card import generate_rank_card
 
 
-def rank_cooldown(interaction: discord.Interaction) -> app_commands.Cooldown | None:
-    """Dynamic cooldown - None for mods/owners, 5 min for everyone else."""
+def rank_cooldown(interaction: discord.Interaction) -> Optional[app_commands.Cooldown]:
+    """
+    Dynamic cooldown - None for mods/owners, 5 min for everyone else.
+
+    Args:
+        interaction: The Discord interaction
+
+    Returns:
+        Cooldown object or None if user is exempt
+    """
     # Owner bypass
     if interaction.user.id == config.OWNER_ID:
         return None
@@ -47,7 +55,8 @@ def rank_cooldown(interaction: discord.Interaction) -> app_commands.Cooldown | N
 class LeaderboardView(discord.ui.View):
     """View with leaderboard link button."""
 
-    def __init__(self, user_id: int):
+    def __init__(self, user_id: int) -> None:
+        """Initialize the leaderboard view with user link button."""
         super().__init__(timeout=None)
         self.add_item(discord.ui.Button(
             label="Stats & Leaderboard",
@@ -59,7 +68,8 @@ class LeaderboardView(discord.ui.View):
 class RankCog(commands.Cog):
     """XP and ranking commands."""
 
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot) -> None:
+        """Initialize the rank cog."""
         self.bot = bot
 
     @app_commands.command(name="rank", description="View your XP and level")

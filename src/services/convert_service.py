@@ -1071,6 +1071,125 @@ class ConvertService:
             except Exception:
                 pass
 
+    def get_video_preview_data(self, video_data: bytes) -> tuple[Optional[float], Optional[bytes]]:
+        """
+        Get video duration and preview in a single operation.
+
+        Writes video to disk once and extracts both duration and preview.
+        Uses single thumbnail for short clips (<10s), preview strip for longer.
+
+        Returns:
+            Tuple of (duration, preview_bytes) - either can be None on failure
+        """
+        temp_id = uuid.uuid4().hex[:8]
+        input_path = TEMP_DIR / f"preview_data_{temp_id}.mp4"
+        output_path = TEMP_DIR / f"preview_out_{temp_id}.png"
+        frame_paths = [TEMP_DIR / f"preview_frame_{temp_id}_{i}.png" for i in range(5)]
+
+        try:
+            # Write video once
+            input_path.write_bytes(video_data)
+
+            # Get video info (duration)
+            info = self._get_video_info(str(input_path))
+            if not info:
+                return None, None
+
+            duration = info.duration
+            is_short_clip = duration is not None and duration < 10
+
+            preview_bytes = None
+
+            if is_short_clip:
+                # Short clip: extract single thumbnail
+                cmd = [
+                    "ffmpeg", "-y",
+                    "-i", str(input_path),
+                    "-vf", "scale=400:-2",
+                    "-frames:v", "1",
+                    "-q:v", "2",
+                    str(output_path)
+                ]
+                result = subprocess.run(cmd, capture_output=True, timeout=30)
+                if result.returncode == 0 and output_path.exists():
+                    preview_bytes = output_path.read_bytes()
+            else:
+                # Long video: extract preview strip
+                num_frames = 5
+                clip_duration = min(duration, MAX_VIDEO_DURATION)
+                timestamps = [clip_duration * i / (num_frames - 1) for i in range(num_frames)]
+
+                frames = []
+                for i, ts in enumerate(timestamps):
+                    cmd = [
+                        "ffmpeg", "-y",
+                        "-ss", str(ts),
+                        "-i", str(input_path),
+                        "-vf", "scale=160:-2",
+                        "-frames:v", "1",
+                        "-q:v", "2",
+                        str(frame_paths[i])
+                    ]
+                    result = subprocess.run(cmd, capture_output=True, timeout=15)
+                    if result.returncode == 0 and frame_paths[i].exists():
+                        img = Image.open(frame_paths[i])
+                        frames.append(img)
+
+                if len(frames) >= 2:
+                    # Stitch frames horizontally
+                    total_width = sum(f.width for f in frames) + (len(frames) - 1) * 4
+                    max_height = max(f.height for f in frames)
+                    strip = Image.new("RGB", (total_width, max_height), (30, 30, 30))
+
+                    x_offset = 0
+                    for frame in frames:
+                        y_offset = (max_height - frame.height) // 2
+                        strip.paste(frame, (x_offset, y_offset))
+                        x_offset += frame.width + 4
+
+                    output = io.BytesIO()
+                    strip.save(output, format="PNG", optimize=True)
+                    preview_bytes = output.getvalue()
+
+                    log.tree("Video Preview Data Generated", [
+                        ("Duration", f"{duration:.1f}s"),
+                        ("Type", "Strip" if len(frames) >= 2 else "Thumbnail"),
+                        ("Frames", str(len(frames))),
+                    ], emoji="PREVIEW")
+
+            # Fallback to single thumbnail if strip failed
+            if not preview_bytes and not is_short_clip:
+                cmd = [
+                    "ffmpeg", "-y",
+                    "-i", str(input_path),
+                    "-vf", "scale=400:-2",
+                    "-frames:v", "1",
+                    "-q:v", "2",
+                    str(output_path)
+                ]
+                result = subprocess.run(cmd, capture_output=True, timeout=30)
+                if result.returncode == 0 and output_path.exists():
+                    preview_bytes = output_path.read_bytes()
+                    log.tree("Video Preview Fallback", [
+                        ("Duration", f"{duration:.1f}s"),
+                        ("Type", "Single Thumbnail"),
+                    ], emoji="PREVIEW")
+
+            return duration, preview_bytes
+
+        except Exception as e:
+            log.tree("Get Video Preview Data Failed", [
+                ("Error", str(e)[:50]),
+            ], emoji="❌")
+            return None, None
+        finally:
+            # Cleanup all temp files
+            for path in [input_path, output_path] + frame_paths:
+                try:
+                    path.unlink(missing_ok=True)
+                except Exception:
+                    pass
+
     @staticmethod
     def is_video(filename: str) -> bool:
         """Check if filename is a video file."""

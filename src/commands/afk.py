@@ -10,6 +10,8 @@ Author: حَـــــنَّـــــا
 Server: discord.gg/syria
 """
 
+import time
+
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -62,7 +64,6 @@ class AFKCog(commands.Cog):
             await self.bot.afk_service.set_afk(interaction.user, reason or "")
 
         # Build response
-        import time
         now = int(time.time())
 
         if reason:

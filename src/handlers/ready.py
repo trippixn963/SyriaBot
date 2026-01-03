@@ -17,11 +17,12 @@ from src.utils.footer import init_footer
 class ReadyHandler(commands.Cog):
     """Handles bot ready event."""
 
-    def __init__(self, bot):
+    def __init__(self, bot: commands.Bot) -> None:
+        """Initialize the ready handler with bot reference."""
         self.bot = bot
 
     @commands.Cog.listener()
-    async def on_ready(self):
+    async def on_ready(self) -> None:
         """Called when the bot is ready."""
         # Use startup_tree for bot ready
         log.startup_tree(

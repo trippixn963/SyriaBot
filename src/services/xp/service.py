@@ -41,7 +41,8 @@ LEVEL_PERKS: Dict[int, str] = {
 class XPService:
     """Manages XP gains from messages and voice activity."""
 
-    def __init__(self, bot: "SyriaBot"):
+    def __init__(self, bot: "SyriaBot") -> None:
+        """Initialize XP service with bot reference and tracking caches."""
         self.bot = bot
 
         # Track users in voice channels: {guild_id: {user_id: join_timestamp}}
@@ -213,11 +214,19 @@ class XPService:
                 self._dau_cache.add(dau_key)
                 db.increment_daily_unique_user(guild_id, today_date)
 
-                # Clean cache at midnight (when date changes)
+                # Clean cache when it gets large (removes stale dates)
                 if len(self._dau_cache) > 1000:
+                    old_size = len(self._dau_cache)
                     self._dau_cache = {k for k in self._dau_cache if k[2] == today_date}
-        except Exception:
-            pass  # Non-critical tracking, don't break XP flow
+                    log.tree("DAU Cache Cleanup", [
+                        ("Before", str(old_size)),
+                        ("After", str(len(self._dau_cache))),
+                    ], emoji="🧹")
+        except Exception as e:
+            log.tree("Metrics Track Failed", [
+                ("User", str(member)),
+                ("Error", str(e)[:50]),
+            ], emoji="⚠️")
 
     # =========================================================================
     # Voice XP
@@ -305,7 +314,7 @@ class XPService:
                         member = guild.get_member(user_id)
                         # Validate user is still in voice (cleanup stale entries)
                         if not member or not member.voice or not member.voice.channel:
-                            stale_users.append(user_id)
+                            stale_users.append((user_id, member.name if member else "Unknown"))
                             continue
 
                         channel = member.voice.channel
@@ -331,8 +340,14 @@ class XPService:
                             users_to_reward.append(member)
 
                     # Remove stale entries (users who left but event was missed)
-                    for user_id in stale_users:
-                        sessions.pop(user_id, None)
+                    if stale_users:
+                        for user_id, user_name in stale_users:
+                            sessions.pop(user_id, None)
+                        log.tree("Stale Voice Sessions Cleaned", [
+                            ("Count", str(len(stale_users))),
+                            ("Users", ", ".join(name for _, name in stale_users[:5]) + ("..." if len(stale_users) > 5 else "")),
+                            ("Guild", guild.name),
+                        ], emoji="🧹")
 
                     # Award XP
                     for member in users_to_reward:
@@ -625,8 +640,18 @@ class XPService:
 
     @tasks.loop(time=dt_time(hour=5, minute=0))  # 5:00 UTC = Midnight EST
     async def midnight_role_sync(self) -> None:
-        """Run role sync at midnight EST to catch any missed assignments."""
-        log.tree("Midnight Role Sync Triggered", [], emoji="🕛")
+        """Run role sync and cache cleanup at midnight EST."""
+        log.tree("Midnight Tasks Triggered", [], emoji="🕛")
+
+        # Clear DAU cache (new day = new tracking)
+        old_dau_size = len(self._dau_cache)
+        self._dau_cache.clear()
+        if old_dau_size > 0:
+            log.tree("DAU Cache Reset", [
+                ("Cleared Entries", str(old_dau_size)),
+            ], emoji="🧹")
+
+        # Sync roles
         await self._sync_roles()
 
     @midnight_role_sync.before_loop

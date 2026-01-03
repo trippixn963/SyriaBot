@@ -82,7 +82,8 @@ TWITTER_MEDIA_PATTERN = re.compile(
 class ConvertCog(commands.Cog):
     """Cog for the /convert command."""
 
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot) -> None:
+        """Initialize the convert cog."""
         self.bot = bot
 
     @app_commands.command(

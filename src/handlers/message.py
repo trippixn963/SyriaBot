@@ -32,7 +32,8 @@ from src.commands.download import handle_download
 class MessageHandler(commands.Cog):
     """Handles message events."""
 
-    def __init__(self, bot):
+    def __init__(self, bot: commands.Bot) -> None:
+        """Initialize the message handler with bot reference."""
         self.bot = bot
 
     async def _handle_reply_convert(self, message: discord.Message) -> None:
@@ -457,8 +458,11 @@ class MessageHandler(commands.Cog):
         if message.guild and message.guild.id == config.GUILD_ID and message.attachments:
             try:
                 db.increment_images_shared(message.author.id, message.guild.id)
-            except Exception:
-                pass
+            except Exception as e:
+                log.tree("Image Track Failed", [
+                    ("User", str(message.author)),
+                    ("Error", str(e)[:50]),
+                ], emoji="⚠️")
 
         # AFK service
         if message.guild and hasattr(self.bot, 'afk_service') and self.bot.afk_service:
@@ -514,8 +518,11 @@ class MessageHandler(commands.Cog):
 
         try:
             db.increment_reactions_given(user.id, reaction.message.guild.id)
-        except Exception:
-            pass
+        except Exception as e:
+            log.tree("Reaction Track Failed", [
+                ("User", str(user)),
+                ("Error", str(e)[:50]),
+            ], emoji="⚠️")
 
 
 async def setup(bot: commands.Bot) -> None:
