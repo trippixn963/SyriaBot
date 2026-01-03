@@ -268,6 +268,13 @@ class XPService:
             # If user joined already muted, start mute tracking
             if after.self_mute or after.mute:
                 self._mute_timestamps[user_id] = time.time()
+                log.tree("Voice Mute Tracking Started", [
+                    ("User", f"{member.name} ({member.display_name})"),
+                    ("User ID", str(member.id)),
+                    ("Channel", after.channel.name),
+                    ("Type", "Server mute" if after.mute else "Self mute"),
+                    ("Note", "Joined already muted"),
+                ], emoji="🔇")
 
             # Track total voice sessions
             db.increment_voice_sessions(user_id, guild_id)
@@ -318,9 +325,24 @@ class XPService:
             if is_muted and not was_muted:
                 # User just became muted - start tracking
                 self._mute_timestamps[user_id] = time.time()
+                log.tree("Voice Mute Tracking Started", [
+                    ("User", f"{member.name} ({member.display_name})"),
+                    ("User ID", str(member.id)),
+                    ("Channel", after.channel.name),
+                    ("Type", "Server mute" if after.mute else "Self mute"),
+                ], emoji="🔇")
             elif not is_muted and was_muted:
                 # User unmuted - clear tracking
+                mute_duration = None
+                if user_id in self._mute_timestamps:
+                    mute_duration = int((time.time() - self._mute_timestamps[user_id]) / 60)
                 self._mute_timestamps.pop(user_id, None)
+                log.tree("Voice Mute Tracking Cleared", [
+                    ("User", f"{member.name} ({member.display_name})"),
+                    ("User ID", str(member.id)),
+                    ("Channel", after.channel.name),
+                    ("Muted For", f"{mute_duration} min" if mute_duration else "Unknown"),
+                ], emoji="🔊")
 
     async def _voice_xp_loop(self) -> None:
         """Background task that awards voice XP every minute."""
@@ -372,8 +394,16 @@ class XPService:
                         is_muted = member.voice.self_mute or member.voice.mute
                         if is_muted:
                             mute_start = self._mute_timestamps.get(user_id)
-                            if mute_start and (now - mute_start) > 3600:  # 1 hour
-                                continue
+                            if mute_start:
+                                mute_duration = now - mute_start
+                                if mute_duration > 3600:  # 1 hour
+                                    log.tree("Voice XP Blocked (AFK Mute)", [
+                                        ("User", f"{member.name} ({member.display_name})"),
+                                        ("User ID", str(member.id)),
+                                        ("Channel", channel.name),
+                                        ("Muted For", f"{int(mute_duration / 60)} min"),
+                                    ], emoji="🚫")
+                                    continue
 
                         if now - join_time >= 60:
                             users_to_reward.append(member)
