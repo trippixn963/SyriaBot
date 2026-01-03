@@ -22,6 +22,7 @@ from src.services.stats_api import SyriaAPI
 from src.services.status_webhook import get_status_service
 from src.services.afk import AFKService
 from src.services.gallery import GalleryService
+from src.services.presence import PresenceHandler
 from src.services.database import db
 from src.utils.http import http_session
 
@@ -51,6 +52,7 @@ class SyriaBot(commands.Bot):
         self.status_webhook = None
         self.afk_service: Optional[AFKService] = None
         self.gallery_service: Optional[GalleryService] = None
+        self.presence_handler: Optional[PresenceHandler] = None
 
     async def setup_hook(self) -> None:
         """Called when the bot is starting up."""
@@ -209,9 +211,17 @@ class SyriaBot(commands.Bot):
         except Exception as e:
             log.error_tree("Gallery Service Init Failed", e)
 
+        # Presence Handler
+        try:
+            self.presence_handler = PresenceHandler(self)
+            await self.presence_handler.start()
+            initialized.append("Presence")
+        except Exception as e:
+            log.error_tree("Presence Handler Init Failed", e)
+
         log.tree("Services Init Complete", [
             ("Services", ", ".join(initialized)),
-            ("Count", f"{len(initialized)}/7"),
+            ("Count", f"{len(initialized)}/8"),
         ], emoji="✅")
 
     async def close(self) -> None:
@@ -265,6 +275,13 @@ class SyriaBot(commands.Bot):
                 stopped.append("Gallery")
             except Exception as e:
                 log.error_tree("Gallery Service Stop Error", e)
+
+        if self.presence_handler:
+            try:
+                await self.presence_handler.stop()
+                stopped.append("Presence")
+            except Exception as e:
+                log.error_tree("Presence Handler Stop Error", e)
 
         # Close HTTP session
         try:

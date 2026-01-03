@@ -61,25 +61,11 @@ class ReadyHandler(commands.Cog):
         except Exception as e:
             log.error_tree("Command Sync Failed", e)
 
-        # Initialize services
+        # Initialize services (includes PresenceHandler which manages rotating presence)
         try:
             await self.bot._init_services()
         except Exception as e:
             log.error_tree("Service Init Failed", e)
-
-        # Set presence
-        try:
-            await self.bot.change_presence(
-                activity=discord.Activity(
-                    type=discord.ActivityType.watching,
-                    name="voice channels"
-                )
-            )
-            log.tree("Presence Set", [
-                ("Activity", "Watching voice channels"),
-            ], emoji="👀")
-        except Exception as e:
-            log.error_tree("Presence Set Failed", e)
 
 
 async def setup(bot: commands.Bot) -> None:
