@@ -39,7 +39,11 @@ SyriaBot is a feature-rich Discord bot providing XP leveling, temporary voice ch
 | **Media Convert** | Add captions to images and videos |
 | **Translation** | Google Translate + AI-powered translation (boosters) |
 | **Weather** | Real-time weather with fuzzy city search |
+| **AFK System** | Dyno-style AFK status with mention notifications |
+| **Media Download** | Download media from social platforms |
 | **Profile Sync** | Sync avatars and banners across the server |
+| **Gallery Mode** | Auto-delete non-media messages in gallery channels |
+| **Rich Presence** | Rotating status with live stats + hourly promo |
 | **Booster Perks** | 2x XP, no cooldowns, AI translation for boosters |
 | **Stats API** | REST API for leaderboard dashboard |
 
@@ -49,7 +53,8 @@ SyriaBot is a feature-rich Discord bot providing XP leveling, temporary voice ch
 
 ### Leveling
 - **Message XP**: 8-12 XP per message (60s cooldown)
-- **Voice XP**: 3 XP per minute (requires 2+ humans, not AFK)
+- **Voice XP**: 3 XP per minute (requires 2+ humans, not deafened)
+- **Anti-AFK**: No XP if muted for over 1 hour (prevents farming)
 - **Booster Bonus**: 2x multiplier on all XP
 
 ### Role Rewards
@@ -91,6 +96,8 @@ Create temporary voice channels with full control:
 | `/convert [media] [url]` | Add caption to image/video |
 | `/weather <city>` | Get current weather |
 | `/get <option> [user]` | Get avatar, banner, or server assets |
+| `/afk [reason]` | Set yourself as AFK |
+| `/download <url>` | Download media from social platforms |
 
 ### Reply Commands
 | Reply With | Action |
@@ -118,11 +125,14 @@ Create temporary voice channels with full control:
 ```
 SyriaBot/
 ├── src/
-│   ├── core/           # Config, logging, colors
+│   ├── core/           # Config, logging, colors, constants
 │   ├── services/
 │   │   ├── tempvoice/  # TempVoice system (modular)
 │   │   ├── xp/         # XP system (service, utils, card)
-│   │   └── ...         # Convert, quote, translate services
+│   │   ├── afk/        # AFK system
+│   │   ├── presence.py # Rich presence handler
+│   │   ├── gallery.py  # Gallery mode service
+│   │   └── ...         # Convert, quote, translate, download
 │   ├── handlers/       # Event handlers (voice, message, members)
 │   ├── commands/       # Slash commands
 │   ├── views/          # Discord UI components
@@ -142,6 +152,7 @@ SyriaBot/
 | `tempvoice_trusted` | Trusted users per channel |
 | `tempvoice_blocked` | Blocked users per channel |
 | `tempvoice_settings` | Channel-specific settings |
+| `afk_users` | Active AFK statuses with reasons |
 
 ---
 

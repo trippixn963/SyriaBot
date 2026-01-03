@@ -200,3 +200,12 @@ XP_COOLDOWN_CACHE_THRESHOLD = 500   # Clean cache when exceeding this size
 
 VIDEO_PROCESS_TIMEOUT = 30      # FFmpeg command timeout in seconds
 QUOTE_FETCH_TIMEOUT = 15        # Banner/avatar fetch timeout
+
+
+# =============================================================================
+# Presence System
+# =============================================================================
+
+PRESENCE_UPDATE_INTERVAL = 60   # Rotate presence status every 60 seconds
+PROMO_DURATION_MINUTES = 10     # Promo message duration at top of each hour
+PROMO_TEXT = "🌐 trippixn.com/syria"
