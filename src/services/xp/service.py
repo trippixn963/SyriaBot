@@ -283,11 +283,21 @@ class XPService:
             # User left voice - remove from tracking (XP already awarded by loop)
             self._voice_sessions[guild_id].pop(user_id, None)
 
+            # Calculate estimated XP earned (actual may vary based on channel conditions)
+            base_xp = session_minutes * config.XP_VOICE_PER_MIN
+            if member.premium_since is not None:
+                estimated_xp = int(base_xp * config.XP_BOOSTER_MULTIPLIER)
+                xp_display = f"~{estimated_xp} (2x boost)"
+            else:
+                estimated_xp = base_xp
+                xp_display = f"~{estimated_xp}"
+
             log.tree("Voice XP Session Ended", [
                 ("User", f"{member.name} ({member.display_name})"),
                 ("User ID", str(member.id)),
                 ("Channel", before.channel.name if before.channel else "Unknown"),
                 ("Duration", f"{session_minutes} min"),
+                ("XP Earned", xp_display),
             ], emoji="🔇")
 
     async def _voice_xp_loop(self) -> None:
