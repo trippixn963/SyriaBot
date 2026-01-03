@@ -10,9 +10,11 @@ from __future__ import annotations
 import asyncio
 import random
 import time
+from datetime import time as dt_time
 from typing import TYPE_CHECKING, Dict, Optional
 
 import discord
+from discord.ext import tasks
 
 from src.core.config import config
 from src.core.colors import COLOR_GOLD
@@ -72,16 +74,20 @@ class XPService:
                     if not member.bot:
                         self._voice_sessions[main_guild.id][member.id] = time.time()
 
+        # Start midnight sync task
+        self.midnight_role_sync.start()
+
         log.tree("XP Service Started", [
             ("Message XP", f"{config.XP_MESSAGE_MIN}-{config.XP_MESSAGE_MAX}"),
             ("Voice XP", f"{config.XP_VOICE_PER_MIN}/min"),
             ("Cooldown", f"{config.XP_MESSAGE_COOLDOWN}s"),
             ("Booster Multiplier", f"{config.XP_BOOSTER_MULTIPLIER}x"),
             ("Role Rewards", str(len(config.XP_ROLE_REWARDS))),
+            ("Midnight Sync", "Enabled (5:00 UTC)"),
         ], emoji="⬆️")
 
         # Sync roles on startup (fix any missed role assignments)
-        await self._sync_roles_on_startup()
+        await self._sync_roles()
 
     async def stop(self) -> None:
         """Cleanup XP service."""
@@ -91,6 +97,9 @@ class XPService:
                 await self._voice_xp_task
             except asyncio.CancelledError:
                 pass
+
+        # Stop midnight sync task
+        self.midnight_role_sync.cancel()
 
         log.tree("XP Service Stopped", [
             ("Active Voice Sessions", str(sum(len(s) for s in self._voice_sessions.values()))),
@@ -611,11 +620,22 @@ class XPService:
             ])
 
     # =========================================================================
-    # Role Sync on Startup
+    # Role Sync (Startup + Midnight)
     # =========================================================================
 
-    async def _sync_roles_on_startup(self) -> None:
-        """Sync XP roles on startup to fix any missed role assignments."""
+    @tasks.loop(time=dt_time(hour=5, minute=0))  # 5:00 UTC = Midnight EST
+    async def midnight_role_sync(self) -> None:
+        """Run role sync at midnight EST to catch any missed assignments."""
+        log.tree("Midnight Role Sync Triggered", [], emoji="🕛")
+        await self._sync_roles()
+
+    @midnight_role_sync.before_loop
+    async def before_midnight_sync(self) -> None:
+        """Wait for bot to be ready before starting midnight sync task."""
+        await self.bot.wait_until_ready()
+
+    async def _sync_roles(self) -> None:
+        """Sync XP roles - shared by startup and midnight sync."""
         if not config.XP_ROLE_REWARDS:
             log.tree("Role Sync Skipped", [
                 ("Reason", "No role rewards configured"),
