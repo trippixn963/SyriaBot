@@ -8,12 +8,11 @@ Author: حَـــــنَّـــــا
 """
 
 import discord
-import random
 from discord import ui
 from typing import Optional
 
 from src.core.logger import log
-from src.core.config import config
+from src.core.colors import COLOR_SUCCESS, COLOR_GOLD
 from src.services.image_service import ImageResult
 from src.utils.footer import set_footer
 
@@ -45,19 +44,15 @@ class ImageView(ui.View):
         log.tree("Image View Created", [
             ("Query", query[:50]),
             ("Images", str(len(images))),
-            ("Requester", str(requester_id)),
+            ("Requester ID", str(requester_id)),
         ], emoji="🖼️")
 
     def _update_buttons(self):
         """Update button disabled states based on current index."""
-        # First button (<<)
-        self.first_button.disabled = self.current_index == 0
-        # Previous button (<)
+        # Previous button
         self.prev_button.disabled = self.current_index == 0
-        # Next button (>)
+        # Next button
         self.next_button.disabled = self.current_index >= len(self.images) - 1
-        # Last button (>>)
-        self.last_button.disabled = self.current_index >= len(self.images) - 1
 
     def create_embed(self) -> discord.Embed:
         """Create embed for current image."""
@@ -65,7 +60,7 @@ class ImageView(ui.View):
             embed = discord.Embed(
                 title="No Images Found",
                 description=f"No results for: **{self.query}**",
-                color=0xFF0000
+                color=COLOR_GOLD
             )
             set_footer(embed)
             return embed
@@ -75,7 +70,7 @@ class ImageView(ui.View):
         embed = discord.Embed(
             title=image.title[:256] if len(image.title) > 256 else image.title,
             url=image.source_url,
-            color=0x5865F2
+            color=COLOR_SUCCESS
         )
         embed.set_image(url=image.url)
 
@@ -155,42 +150,29 @@ class ImageView(ui.View):
             ("Query", self.query[:30]),
         ], emoji="🔄")
 
-    @ui.button(label="", emoji="⏮️", style=discord.ButtonStyle.secondary, custom_id="first")
-    async def first_button(self, interaction: discord.Interaction, button: ui.Button):
-        """Go to first image."""
-        self.current_index = 0
-        await self._update_message(interaction, "first")
-
-    @ui.button(label="", emoji="◀️", style=discord.ButtonStyle.primary, custom_id="prev")
+    @ui.button(label="Previous", style=discord.ButtonStyle.secondary, custom_id="prev")
     async def prev_button(self, interaction: discord.Interaction, button: ui.Button):
         """Go to previous image."""
         if self.current_index > 0:
             self.current_index -= 1
         await self._update_message(interaction, "prev")
 
-    @ui.button(label="", emoji="🎲", style=discord.ButtonStyle.secondary, custom_id="random")
-    async def random_button(self, interaction: discord.Interaction, button: ui.Button):
-        """Go to a random image."""
-        if len(self.images) > 1:
-            # Pick a random index different from current
-            choices = [i for i in range(len(self.images)) if i != self.current_index]
-            self.current_index = random.choice(choices)
-        await self._update_message(interaction, "random")
+    @ui.button(label="", emoji="📥", style=discord.ButtonStyle.secondary, custom_id="download")
+    async def download_button(self, interaction: discord.Interaction, button: ui.Button):
+        """Send direct download link."""
+        image = self.images[self.current_index]
+        await interaction.response.send_message(
+            f"📥 **Direct Link:** {image.url}",
+            ephemeral=True
+        )
+        log.tree("Image Download", [
+            ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+            ("User ID", str(interaction.user.id)),
+            ("Query", self.query[:30]),
+            ("Position", f"{self.current_index + 1}/{len(self.images)}"),
+        ], emoji="📥")
 
-    @ui.button(label="", emoji="▶️", style=discord.ButtonStyle.primary, custom_id="next")
-    async def next_button(self, interaction: discord.Interaction, button: ui.Button):
-        """Go to next image."""
-        if self.current_index < len(self.images) - 1:
-            self.current_index += 1
-        await self._update_message(interaction, "next")
-
-    @ui.button(label="", emoji="⏭️", style=discord.ButtonStyle.secondary, custom_id="last")
-    async def last_button(self, interaction: discord.Interaction, button: ui.Button):
-        """Go to last image."""
-        self.current_index = len(self.images) - 1
-        await self._update_message(interaction, "last")
-
-    @ui.button(label="", emoji="🗑️", style=discord.ButtonStyle.danger, custom_id="delete")
+    @ui.button(label="", emoji="🗑️", style=discord.ButtonStyle.secondary, custom_id="delete")
     async def delete_button(self, interaction: discord.Interaction, button: ui.Button):
         """Delete the message."""
         log.tree("Image View Deleted", [
@@ -204,5 +186,14 @@ class ImageView(ui.View):
             await interaction.message.delete()
         except discord.HTTPException as e:
             log.tree("Image Delete Failed", [
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("User ID", str(interaction.user.id)),
                 ("Error", str(e)[:50]),
             ], emoji="❌")
+
+    @ui.button(label="Next", style=discord.ButtonStyle.secondary, custom_id="next")
+    async def next_button(self, interaction: discord.Interaction, button: ui.Button):
+        """Go to next image."""
+        if self.current_index < len(self.images) - 1:
+            self.current_index += 1
+        await self._update_message(interaction, "next")
