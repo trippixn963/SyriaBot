@@ -96,7 +96,8 @@ class ConfirmView(ui.View):
                     await interaction.response.edit_message(embed=embed, view=None)
                     log.tree("Transfer Failed", [
                         ("Channel", channel.name),
-                        ("Target", str(self.target)),
+                        ("Target", f"{self.target.name} ({self.target.display_name})"),
+                        ("Target ID", str(self.target.id)),
                         ("Reason", "Target left server"),
                     ], emoji="❌")
                     return
@@ -143,7 +144,8 @@ class ConfirmView(ui.View):
             log.tree("Confirm Action Failed", [
                 ("Action", self.action),
                 ("Channel", self.channel.name if self.channel else "Unknown"),
-                ("By", str(interaction.user)),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("User ID", str(interaction.user.id)),
                 ("Error", str(e)),
             ], emoji="❌")
             if not interaction.response.is_done():
@@ -170,7 +172,8 @@ class ConfirmView(ui.View):
         log.tree("Action Cancelled", [
             ("Action", self.action),
             ("Channel", self.channel.name if self.channel else "Unknown"),
-            ("By", str(interaction.user)),
+            ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+            ("User ID", str(interaction.user.id)),
         ], emoji="↩️")
 
 
@@ -260,7 +263,8 @@ class UserSelect(ui.UserSelect):
         except discord.HTTPException as e:
             log.tree("User Select Failed", [
                 ("Action", self.action),
-                ("User", str(user)),
+                ("User", f"{user.name} ({user.display_name})"),
+                ("User ID", str(user.id)),
                 ("Error", str(e)),
             ], emoji="❌")
             if not interaction.response.is_done():
@@ -270,7 +274,8 @@ class UserSelect(ui.UserSelect):
         except Exception as e:
             log.tree("User Select Error", [
                 ("Action", self.action),
-                ("User", str(user)),
+                ("User", f"{user.name} ({user.display_name})"),
+                ("User ID", str(user.id)),
                 ("Error", str(e)),
             ], emoji="❌")
             if not interaction.response.is_done():
@@ -286,7 +291,8 @@ class UserSelect(ui.UserSelect):
             await interaction.response.send_message(embed=embed, ephemeral=True)
             log.tree("Permit Rejected", [
                 ("Channel", channel.name),
-                ("User", str(user)),
+                ("User", f"{user.name} ({user.display_name})"),
+                ("User ID", str(user.id)),
                 ("Reason", "Self-permit"),
             ], emoji="⚠️")
             return
@@ -296,7 +302,8 @@ class UserSelect(ui.UserSelect):
             await interaction.response.send_message(embed=embed, ephemeral=True)
             log.tree("Permit Rejected", [
                 ("Channel", channel.name),
-                ("User", str(user)),
+                ("User", f"{user.name} ({user.display_name})"),
+                ("User ID", str(user.id)),
                 ("Reason", "Is bot"),
             ], emoji="⚠️")
             return
@@ -348,7 +355,8 @@ class UserSelect(ui.UserSelect):
                 await interaction.response.send_message(embed=embed, ephemeral=True)
                 log.tree("Permit Blocked", [
                     ("Channel", channel.name),
-                    ("User", str(interaction.user)),
+                    ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                    ("User ID", str(interaction.user.id)),
                     ("Reason", f"Max {MAX_ALLOWED_USERS_FREE} reached"),
                 ], emoji="💎")
                 return
@@ -429,7 +437,8 @@ class UserSelect(ui.UserSelect):
             await interaction.response.send_message(embed=embed, ephemeral=True)
             log.tree("Block Rejected", [
                 ("Channel", channel.name),
-                ("User", str(user)),
+                ("User", f"{user.name} ({user.display_name})"),
+                ("User ID", str(user.id)),
                 ("Reason", "Self-block"),
             ], emoji="⚠️")
             return
@@ -439,7 +448,8 @@ class UserSelect(ui.UserSelect):
             await interaction.response.send_message(embed=embed, ephemeral=True)
             log.tree("Block Rejected", [
                 ("Channel", channel.name),
-                ("User", str(user)),
+                ("User", f"{user.name} ({user.display_name})"),
+                ("User ID", str(user.id)),
                 ("Reason", "Is bot"),
             ], emoji="⚠️")
             return
@@ -452,8 +462,10 @@ class UserSelect(ui.UserSelect):
             await interaction.response.send_message(embed=embed, ephemeral=True)
             log.tree("Block Rejected", [
                 ("Channel", channel.name),
-                ("User", str(user)),
-                ("By", str(interaction.user)),
+                ("Target", f"{user.name} ({user.display_name})"),
+                ("Target ID", str(user.id)),
+                ("By", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("By ID", str(interaction.user.id)),
                 ("Reason", "Target is moderator"),
             ], emoji="⚠️")
             return
@@ -468,7 +480,8 @@ class UserSelect(ui.UserSelect):
                 except discord.HTTPException as e:
                     log.tree("Blocked User Disconnect Failed", [
                         ("Channel", channel.name),
-                        ("User", str(user)),
+                        ("User", f"{user.name} ({user.display_name})"),
+                        ("User ID", str(user.id)),
                         ("Error", str(e)),
                     ], emoji="❌")
             total_blocked = len(db.get_blocked_list(owner_id))
@@ -525,7 +538,8 @@ class UserSelect(ui.UserSelect):
             await interaction.response.send_message(embed=embed, ephemeral=True)
             log.tree("Kick Rejected", [
                 ("Channel", channel.name),
-                ("User", str(user)),
+                ("User", f"{user.name} ({user.display_name})"),
+                ("User ID", str(user.id)),
                 ("Reason", "Self-kick"),
             ], emoji="⚠️")
             return
@@ -537,7 +551,8 @@ class UserSelect(ui.UserSelect):
             await interaction.response.send_message(embed=embed, ephemeral=True)
             log.tree("Kick Rejected", [
                 ("Channel", channel.name),
-                ("User", str(user)),
+                ("User", f"{user.name} ({user.display_name})"),
+                ("User ID", str(user.id)),
                 ("Reason", "Target is moderator"),
             ], emoji="⚠️")
             return
@@ -568,8 +583,10 @@ class UserSelect(ui.UserSelect):
             await interaction.response.send_message(embed=embed, ephemeral=True)
             log.tree("Kick Rejected", [
                 ("Channel", channel.name),
-                ("User", str(user)),
-                ("By", str(interaction.user)),
+                ("Target", f"{user.name} ({user.display_name})"),
+                ("Target ID", str(user.id)),
+                ("By", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("By ID", str(interaction.user.id)),
                 ("Reason", "Not in channel"),
             ], emoji="⚠️")
 
@@ -581,7 +598,8 @@ class UserSelect(ui.UserSelect):
             await interaction.response.send_message(embed=embed, ephemeral=True)
             log.tree("Transfer Rejected", [
                 ("Channel", channel.name),
-                ("User", str(user)),
+                ("User", f"{user.name} ({user.display_name})"),
+                ("User ID", str(user.id)),
                 ("Reason", "Already owner"),
             ], emoji="⚠️")
             return
@@ -591,7 +609,8 @@ class UserSelect(ui.UserSelect):
             await interaction.response.send_message(embed=embed, ephemeral=True)
             log.tree("Transfer Rejected", [
                 ("Channel", channel.name),
-                ("User", str(user)),
+                ("User", f"{user.name} ({user.display_name})"),
+                ("User ID", str(user.id)),
                 ("Reason", "Is bot"),
             ], emoji="⚠️")
             return
@@ -606,6 +625,8 @@ class UserSelect(ui.UserSelect):
         await interaction.response.send_message(embed=embed, view=ConfirmView("transfer", channel, user), ephemeral=True)
         log.tree("Transfer Confirmation Shown", [
             ("Channel", channel.name),
-            ("Target", str(user)),
-            ("By", str(interaction.user)),
+            ("Target", f"{user.name} ({user.display_name})"),
+            ("Target ID", str(user.id)),
+            ("By", f"{interaction.user.name} ({interaction.user.display_name})"),
+            ("By ID", str(interaction.user.id)),
         ], emoji="🔄")

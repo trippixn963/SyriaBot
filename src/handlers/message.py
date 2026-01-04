@@ -51,7 +51,8 @@ class MessageHandler(commands.Cog):
                 original = await message.channel.fetch_message(ref.message_id)
             except (discord.NotFound, discord.Forbidden) as e:
                 log.tree("Convert Fetch Failed", [
-                    ("User", str(message.author)),
+                    ("User", f"{message.author.name} ({message.author.display_name})"),
+                    ("User ID", str(message.author.id)),
                     ("Message ID", str(ref.message_id)),
                     ("Error", type(e).__name__),
                 ], emoji="⚠️")
@@ -182,7 +183,8 @@ class MessageHandler(commands.Cog):
                 original = await message.channel.fetch_message(ref.message_id)
             except (discord.NotFound, discord.Forbidden) as e:
                 log.tree("Quote Fetch Failed", [
-                    ("User", str(message.author)),
+                    ("User", f"{message.author.name} ({message.author.display_name})"),
+                    ("User ID", str(message.author.id)),
                     ("Message ID", str(ref.message_id)),
                     ("Error", type(e).__name__),
                 ], emoji="⚠️")
@@ -191,7 +193,8 @@ class MessageHandler(commands.Cog):
 
         if not original.content or not original.content.strip():
             log.tree("Quote No Content", [
-                ("User", str(message.author)),
+                ("User", f"{message.author.name} ({message.author.display_name})"),
+                ("User ID", str(message.author.id)),
                 ("Target Message", str(ref.message_id)),
             ], emoji="⚠️")
             await message.reply("That message has no text to quote.", mention_author=False)
@@ -282,7 +285,8 @@ class MessageHandler(commands.Cog):
                 original = await message.channel.fetch_message(ref.message_id)
             except (discord.NotFound, discord.Forbidden) as e:
                 log.tree("Translate Fetch Failed", [
-                    ("User", str(message.author)),
+                    ("User", f"{message.author.name} ({message.author.display_name})"),
+                    ("User ID", str(message.author.id)),
                     ("Message ID", str(ref.message_id)),
                     ("Error", type(e).__name__),
                 ], emoji="⚠️")
@@ -291,7 +295,8 @@ class MessageHandler(commands.Cog):
 
         if not original.content or not original.content.strip():
             log.tree("Translate No Content", [
-                ("User", str(message.author)),
+                ("User", f"{message.author.name} ({message.author.display_name})"),
+                ("User ID", str(message.author.id)),
                 ("Target Message", str(ref.message_id)),
             ], emoji="⚠️")
             await message.reply("That message has no text to translate.", mention_author=False)
@@ -381,7 +386,8 @@ class MessageHandler(commands.Cog):
                 original = await message.channel.fetch_message(ref.message_id)
             except (discord.NotFound, discord.Forbidden) as e:
                 log.tree("Download Fetch Failed", [
-                    ("User", str(message.author)),
+                    ("User", f"{message.author.name} ({message.author.display_name})"),
+                    ("User ID", str(message.author.id)),
                     ("Message ID", str(ref.message_id)),
                     ("Error", type(e).__name__),
                 ], emoji="⚠️")
@@ -464,7 +470,8 @@ class MessageHandler(commands.Cog):
                 db.increment_images_shared(message.author.id, message.guild.id)
             except Exception as e:
                 log.tree("Image Track Failed", [
-                    ("User", str(message.author)),
+                    ("User", f"{message.author.name} ({message.author.display_name})"),
+                    ("User ID", str(message.author.id)),
                     ("Error", str(e)[:50]),
                 ], emoji="⚠️")
 
@@ -524,7 +531,8 @@ class MessageHandler(commands.Cog):
             db.increment_reactions_given(user.id, reaction.message.guild.id)
         except Exception as e:
             log.tree("Reaction Track Failed", [
-                ("User", str(user)),
+                ("User", f"{user.name} ({user.display_name})"),
+                ("User ID", str(user.id)),
                 ("Error", str(e)[:50]),
             ], emoji="⚠️")
 

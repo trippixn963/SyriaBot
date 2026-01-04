@@ -118,7 +118,7 @@ class ImageView(ui.View):
                 ephemeral=True
             )
             log.tree("Image View Unauthorized", [
-                ("User", str(interaction.user)),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("User ID", str(interaction.user.id)),
                 ("Requester ID", str(self.requester_id)),
             ], emoji="⚠️")
@@ -148,7 +148,8 @@ class ImageView(ui.View):
         await interaction.response.edit_message(embed=embed, view=self)
 
         log.tree("Image Navigation", [
-            ("User", str(interaction.user)),
+            ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+            ("User ID", str(interaction.user.id)),
             ("Action", nav_action),
             ("Position", f"{self.current_index + 1}/{len(self.images)}"),
             ("Query", self.query[:30]),
@@ -193,7 +194,7 @@ class ImageView(ui.View):
     async def delete_button(self, interaction: discord.Interaction, button: ui.Button):
         """Delete the message."""
         log.tree("Image View Deleted", [
-            ("User", str(interaction.user)),
+            ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("User ID", str(interaction.user.id)),
             ("Query", self.query[:30]),
         ], emoji="🗑️")

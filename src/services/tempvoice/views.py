@@ -42,8 +42,10 @@ class ClaimApprovalView(ui.View):
                         await message.edit(embed=embed, view=None)
                         log.tree("Claim Request Expired", [
                             ("Channel", self.channel.name),
-                            ("Requester", str(self.requester)),
-                            ("Owner", str(self.owner)),
+                            ("Requester", f"{self.requester.name} ({self.requester.display_name})"),
+                            ("Requester ID", str(self.requester.id)),
+                            ("Owner", f"{self.owner.name} ({self.owner.display_name})"),
+                            ("Owner ID", str(self.owner.id)),
                         ], emoji="⏳")
                         break
         except discord.HTTPException as e:
@@ -65,7 +67,8 @@ class ClaimApprovalView(ui.View):
                 await interaction.response.send_message(embed=embed, ephemeral=True)
                 log.tree("Claim Approve Rejected", [
                     ("Channel", self.channel.name),
-                    ("Attempted By", str(interaction.user)),
+                    ("Attempted By", f"{interaction.user.name} ({interaction.user.display_name})"),
+                    ("User ID", str(interaction.user.id)),
                     ("Reason", "Not owner"),
                 ], emoji="⚠️")
                 return
@@ -93,7 +96,8 @@ class ClaimApprovalView(ui.View):
                 await interaction.response.edit_message(embed=embed, view=None)
                 log.tree("Claim Approve Failed", [
                     ("Channel", channel.name),
-                    ("Requester", str(self.requester)),
+                    ("Requester", f"{self.requester.name} ({self.requester.display_name})"),
+                    ("Requester ID", str(self.requester.id)),
                     ("Reason", "Requester left channel"),
                 ], emoji="❌")
                 return
@@ -109,7 +113,8 @@ class ClaimApprovalView(ui.View):
                 await interaction.response.edit_message(embed=embed, view=None)
                 log.tree("Claim Approve Failed", [
                     ("Channel", channel.name),
-                    ("Requester", str(requester)),
+                    ("Requester", f"{requester.name} ({requester.display_name})"),
+                    ("Requester ID", str(requester.id)),
                     ("Reason", "Already owns channel"),
                 ], emoji="❌")
                 return
@@ -178,7 +183,8 @@ class ClaimApprovalView(ui.View):
                 await interaction.response.send_message(embed=embed, ephemeral=True)
                 log.tree("Claim Deny Rejected", [
                     ("Channel", self.channel.name),
-                    ("Attempted By", str(interaction.user)),
+                    ("Attempted By", f"{interaction.user.name} ({interaction.user.display_name})"),
+                    ("User ID", str(interaction.user.id)),
                     ("Reason", "Not owner"),
                 ], emoji="⚠️")
                 return
@@ -225,7 +231,8 @@ class TempVoiceControlPanel(ui.View):
             set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
             log.tree(f"{log_context} Rejected", [
-                ("User", str(interaction.user)),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("User ID", str(interaction.user.id)),
                 ("Reason", "No owned channel"),
             ], emoji="⚠️")
             return None
@@ -237,7 +244,8 @@ class TempVoiceControlPanel(ui.View):
             set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
             log.tree(f"{log_context} Failed", [
-                ("User", str(interaction.user)),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("User ID", str(interaction.user.id)),
                 ("Channel ID", str(channel_id)),
                 ("Reason", "Channel deleted"),
             ], emoji="❌")
@@ -257,7 +265,8 @@ class TempVoiceControlPanel(ui.View):
                 set_footer(embed)
                 await interaction.response.send_message(embed=embed, ephemeral=True)
                 log.tree("Lock Toggle Rejected", [
-                    ("User", str(interaction.user)),
+                    ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                    ("User ID", str(interaction.user.id)),
                     ("Reason", "No owned channel"),
                 ], emoji="⚠️")
                 return
@@ -269,7 +278,8 @@ class TempVoiceControlPanel(ui.View):
                 set_footer(embed)
                 await interaction.response.send_message(embed=embed, ephemeral=True)
                 log.tree("Lock Toggle Failed", [
-                    ("User", str(interaction.user)),
+                    ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                    ("User ID", str(interaction.user.id)),
                     ("Channel ID", str(channel_id)),
                     ("Reason", "Channel deleted"),
                 ], emoji="❌")
@@ -281,7 +291,8 @@ class TempVoiceControlPanel(ui.View):
                 set_footer(embed)
                 await interaction.response.send_message(embed=embed, ephemeral=True)
                 log.tree("Lock Toggle Failed", [
-                    ("User", str(interaction.user)),
+                    ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                    ("User ID", str(interaction.user.id)),
                     ("Channel", channel.name),
                     ("Reason", "No DB record"),
                 ], emoji="❌")
@@ -328,7 +339,8 @@ class TempVoiceControlPanel(ui.View):
 
         except discord.HTTPException as e:
             log.error_tree("Lock Toggle Failed", e, [
-                ("By", str(interaction.user)),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("User ID", str(interaction.user.id)),
             ])
             if not interaction.response.is_done():
                 embed = discord.Embed(description="❌ Failed to update channel", color=COLOR_ERROR)
@@ -336,7 +348,8 @@ class TempVoiceControlPanel(ui.View):
                 await interaction.response.send_message(embed=embed, ephemeral=True)
         except Exception as e:
             log.error_tree("Lock Toggle Error", e, [
-                ("By", str(interaction.user)),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("User ID", str(interaction.user.id)),
             ])
             if not interaction.response.is_done():
                 embed = discord.Embed(description="❌ An error occurred", color=COLOR_ERROR)
@@ -352,7 +365,8 @@ class TempVoiceControlPanel(ui.View):
                 await interaction.response.send_modal(LimitModal(channel))
         except discord.HTTPException as e:
             log.error_tree("Limit Button Failed", e, [
-                ("User", str(interaction.user)),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("User ID", str(interaction.user.id)),
             ])
             if not interaction.response.is_done():
                 embed = discord.Embed(description="❌ Failed to open limit modal", color=COLOR_ERROR)
@@ -360,7 +374,8 @@ class TempVoiceControlPanel(ui.View):
                 await interaction.response.send_message(embed=embed, ephemeral=True)
         except Exception as e:
             log.error_tree("Limit Button Error", e, [
-                ("User", str(interaction.user)),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("User ID", str(interaction.user.id)),
             ])
             if not interaction.response.is_done():
                 embed = discord.Embed(description="❌ An error occurred", color=COLOR_ERROR)
@@ -417,7 +432,8 @@ class TempVoiceControlPanel(ui.View):
                 await interaction.response.send_modal(NameModal(channel, interaction.user))
         except discord.HTTPException as e:
             log.error_tree("Rename Button Failed", e, [
-                ("User", str(interaction.user)),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("User ID", str(interaction.user.id)),
             ])
             if not interaction.response.is_done():
                 embed = discord.Embed(description="❌ Failed to open rename modal", color=COLOR_ERROR)
@@ -425,7 +441,8 @@ class TempVoiceControlPanel(ui.View):
                 await interaction.response.send_message(embed=embed, ephemeral=True)
         except Exception as e:
             log.error_tree("Rename Button Error", e, [
-                ("User", str(interaction.user)),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("User ID", str(interaction.user.id)),
             ])
             if not interaction.response.is_done():
                 embed = discord.Embed(description="❌ An error occurred", color=COLOR_ERROR)
@@ -444,7 +461,8 @@ class TempVoiceControlPanel(ui.View):
                 await interaction.response.send_message(embed=embed, view=UserSelectView(channel, "permit", self.service), ephemeral=True)
         except discord.HTTPException as e:
             log.error_tree("Allow Button Failed", e, [
-                ("User", str(interaction.user)),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("User ID", str(interaction.user.id)),
             ])
             if not interaction.response.is_done():
                 embed = discord.Embed(description="❌ Failed to show user select", color=COLOR_ERROR)
@@ -452,7 +470,8 @@ class TempVoiceControlPanel(ui.View):
                 await interaction.response.send_message(embed=embed, ephemeral=True)
         except Exception as e:
             log.error_tree("Allow Button Error", e, [
-                ("User", str(interaction.user)),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("User ID", str(interaction.user.id)),
             ])
             if not interaction.response.is_done():
                 embed = discord.Embed(description="❌ An error occurred", color=COLOR_ERROR)
@@ -470,7 +489,8 @@ class TempVoiceControlPanel(ui.View):
                 await interaction.response.send_message(embed=embed, view=UserSelectView(channel, "block", self.service), ephemeral=True)
         except discord.HTTPException as e:
             log.error_tree("Block Button Failed", e, [
-                ("User", str(interaction.user)),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("User ID", str(interaction.user.id)),
             ])
             if not interaction.response.is_done():
                 embed = discord.Embed(description="❌ Failed to show user select", color=COLOR_ERROR)
@@ -478,7 +498,8 @@ class TempVoiceControlPanel(ui.View):
                 await interaction.response.send_message(embed=embed, ephemeral=True)
         except Exception as e:
             log.error_tree("Block Button Error", e, [
-                ("User", str(interaction.user)),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("User ID", str(interaction.user.id)),
             ])
             if not interaction.response.is_done():
                 embed = discord.Embed(description="❌ An error occurred", color=COLOR_ERROR)
@@ -496,7 +517,8 @@ class TempVoiceControlPanel(ui.View):
                 await interaction.response.send_message(embed=embed, view=UserSelectView(channel, "kick"), ephemeral=True)
         except discord.HTTPException as e:
             log.error_tree("Kick Button Failed", e, [
-                ("User", str(interaction.user)),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("User ID", str(interaction.user.id)),
             ])
             if not interaction.response.is_done():
                 embed = discord.Embed(description="❌ Failed to show user select", color=COLOR_ERROR)
@@ -504,7 +526,8 @@ class TempVoiceControlPanel(ui.View):
                 await interaction.response.send_message(embed=embed, ephemeral=True)
         except Exception as e:
             log.error_tree("Kick Button Error", e, [
-                ("User", str(interaction.user)),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("User ID", str(interaction.user.id)),
             ])
             if not interaction.response.is_done():
                 embed = discord.Embed(description="❌ An error occurred", color=COLOR_ERROR)
@@ -521,7 +544,8 @@ class TempVoiceControlPanel(ui.View):
                 set_footer(embed)
                 await interaction.response.send_message(embed=embed, ephemeral=True)
                 log.tree("Claim Rejected", [
-                    ("User", str(interaction.user)),
+                    ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                    ("User ID", str(interaction.user.id)),
                     ("Reason", "Not in voice channel"),
                 ], emoji="⚠️")
                 return
@@ -534,7 +558,8 @@ class TempVoiceControlPanel(ui.View):
                 set_footer(embed)
                 await interaction.response.send_message(embed=embed, ephemeral=True)
                 log.tree("Claim Rejected", [
-                    ("User", str(interaction.user)),
+                    ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                    ("User ID", str(interaction.user.id)),
                     ("Channel", channel.name),
                     ("Reason", "Not a temp channel"),
                 ], emoji="⚠️")
@@ -549,7 +574,8 @@ class TempVoiceControlPanel(ui.View):
                 set_footer(embed)
                 await interaction.response.send_message(embed=embed, ephemeral=True)
                 log.tree("Claim Rejected", [
-                    ("User", str(interaction.user)),
+                    ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                    ("User ID", str(interaction.user.id)),
                     ("Channel", channel.name),
                     ("Reason", "Already owner"),
                 ], emoji="⚠️")
@@ -561,7 +587,8 @@ class TempVoiceControlPanel(ui.View):
                 set_footer(embed)
                 await interaction.response.send_message(embed=embed, ephemeral=True)
                 log.tree("Claim Rejected", [
-                    ("User", str(interaction.user)),
+                    ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                    ("User ID", str(interaction.user.id)),
                     ("Channel", channel.name),
                     ("Reason", "Owns another channel"),
                 ], emoji="⚠️")
@@ -579,7 +606,8 @@ class TempVoiceControlPanel(ui.View):
                 await interaction.response.send_message(embed=embed, ephemeral=True)
                 log.tree("Channel Claimed", [
                     ("Channel", channel.name),
-                    ("New Owner", str(interaction.user)),
+                    ("New Owner", f"{interaction.user.name} ({interaction.user.display_name})"),
+                    ("New Owner ID", str(interaction.user.id)),
                     ("Previous Owner", f"User ID {owner_id} (left server)"),
                 ], emoji="👑")
 
@@ -625,7 +653,8 @@ class TempVoiceControlPanel(ui.View):
 
         except discord.HTTPException as e:
             log.error_tree("Claim Button Failed", e, [
-                ("User", str(interaction.user)),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("User ID", str(interaction.user.id)),
             ])
             if not interaction.response.is_done():
                 embed = discord.Embed(description="❌ Failed to process claim", color=COLOR_ERROR)
@@ -633,7 +662,8 @@ class TempVoiceControlPanel(ui.View):
                 await interaction.response.send_message(embed=embed, ephemeral=True)
         except Exception as e:
             log.error_tree("Claim Button Error", e, [
-                ("User", str(interaction.user)),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("User ID", str(interaction.user.id)),
             ])
             if not interaction.response.is_done():
                 embed = discord.Embed(description="❌ An error occurred", color=COLOR_ERROR)
@@ -651,7 +681,8 @@ class TempVoiceControlPanel(ui.View):
                 await interaction.response.send_message(embed=embed, view=UserSelectView(channel, "transfer"), ephemeral=True)
         except discord.HTTPException as e:
             log.error_tree("Transfer Button Failed", e, [
-                ("User", str(interaction.user)),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("User ID", str(interaction.user.id)),
             ])
             if not interaction.response.is_done():
                 embed = discord.Embed(description="❌ Failed to show user select", color=COLOR_ERROR)
@@ -659,7 +690,8 @@ class TempVoiceControlPanel(ui.View):
                 await interaction.response.send_message(embed=embed, ephemeral=True)
         except Exception as e:
             log.error_tree("Transfer Button Error", e, [
-                ("User", str(interaction.user)),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("User ID", str(interaction.user.id)),
             ])
             if not interaction.response.is_done():
                 embed = discord.Embed(description="❌ An error occurred", color=COLOR_ERROR)
@@ -692,7 +724,8 @@ class TempVoiceControlPanel(ui.View):
 
         except discord.HTTPException as e:
             log.error_tree("Delete Button Failed", e, [
-                ("User", str(interaction.user)),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("User ID", str(interaction.user.id)),
             ])
             if not interaction.response.is_done():
                 embed = discord.Embed(description="❌ Failed to show confirmation", color=COLOR_ERROR)
@@ -700,7 +733,8 @@ class TempVoiceControlPanel(ui.View):
                 await interaction.response.send_message(embed=embed, ephemeral=True)
         except Exception as e:
             log.error_tree("Delete Button Error", e, [
-                ("User", str(interaction.user)),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("User ID", str(interaction.user.id)),
             ])
             if not interaction.response.is_done():
                 embed = discord.Embed(description="❌ An error occurred", color=COLOR_ERROR)

@@ -416,7 +416,8 @@ class ConvertView(ui.View):
             set_footer(embed)
             await interaction.followup.send(embed=embed, ephemeral=True)
             log.tree("Convert Image Failed", [
-                ("User", str(interaction.user)),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("User ID", str(interaction.user.id)),
                 ("Error", result.error[:50] if result.error else "Unknown"),
             ], emoji="❌")
             return
@@ -434,7 +435,8 @@ class ConvertView(ui.View):
             await interaction.message.delete()
         except Exception as e:
             log.tree("Editor Delete Failed", [
-                ("User", str(interaction.user)),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("User ID", str(interaction.user.id)),
                 ("Error", str(e)[:50]),
             ], emoji="⚠️")
 
@@ -444,12 +446,14 @@ class ConvertView(ui.View):
                 await self.original_message.delete()
             except Exception as e:
                 log.tree("Original Message Delete Failed", [
-                    ("User", str(interaction.user)),
+                    ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                    ("User ID", str(interaction.user.id)),
                     ("Error", str(e)[:50]),
                 ], emoji="⚠️")
 
         log.tree("Convert Download", [
-            ("User", str(interaction.user)),
+            ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+            ("User ID", str(interaction.user.id)),
             ("File", filename),
             ("Size", f"{len(final_bytes) / 1024:.1f} KB"),
             ("Text", self.settings.text[:30] if self.settings.text else "(none)"),
@@ -465,7 +469,8 @@ class ConvertView(ui.View):
         await interaction.response.defer()
 
         log.tree("Convert Cancelled", [
-            ("User", str(interaction.user)),
+            ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+            ("User ID", str(interaction.user.id)),
             ("Source", self.source_name[:30]),
         ], emoji="X")
 
@@ -473,7 +478,8 @@ class ConvertView(ui.View):
             await interaction.message.delete()
         except Exception as e:
             log.tree("Cancel Delete Failed", [
-                ("User", str(interaction.user)),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("User ID", str(interaction.user.id)),
                 ("Error", str(e)[:50]),
             ], emoji="⚠️")
         self.stop()
@@ -647,7 +653,8 @@ class VideoConvertView(ui.View):
             await interaction.message.edit(embed=embed, view=self)
 
             log.tree("Video Convert Failed", [
-                ("User", str(interaction.user)),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("User ID", str(interaction.user.id)),
                 ("Error", result.error[:50] if result.error else "Unknown"),
             ], emoji="❌")
             return
@@ -664,7 +671,8 @@ class VideoConvertView(ui.View):
             await interaction.message.delete()
         except Exception as e:
             log.tree("Video Editor Delete Failed", [
-                ("User", str(interaction.user)),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("User ID", str(interaction.user.id)),
                 ("Error", str(e)[:50]),
             ], emoji="⚠️")
 
@@ -674,12 +682,14 @@ class VideoConvertView(ui.View):
                 await self.original_message.delete()
             except Exception as e:
                 log.tree("Video Original Delete Failed", [
-                    ("User", str(interaction.user)),
+                    ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                    ("User ID", str(interaction.user.id)),
                     ("Error", str(e)[:50]),
                 ], emoji="⚠️")
 
         log.tree("Video Convert Complete", [
-            ("User", str(interaction.user)),
+            ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+            ("User ID", str(interaction.user.id)),
             ("File", filename),
             ("Size", f"{len(result.gif_bytes) / 1024:.1f} KB"),
             ("Text", self.settings.text[:30] if self.settings.text else "(none)"),
@@ -694,7 +704,8 @@ class VideoConvertView(ui.View):
         await interaction.response.defer()
 
         log.tree("Video Convert Cancelled", [
-            ("User", str(interaction.user)),
+            ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+            ("User ID", str(interaction.user.id)),
             ("Source", self.source_name[:30]),
         ], emoji="X")
 
@@ -702,7 +713,8 @@ class VideoConvertView(ui.View):
             await interaction.message.delete()
         except Exception as e:
             log.tree("Video Cancel Delete Failed", [
-                ("User", str(interaction.user)),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("User ID", str(interaction.user.id)),
                 ("Error", str(e)[:50]),
             ], emoji="⚠️")
         self.stop()
@@ -779,8 +791,10 @@ async def start_convert_editor(
                 msg = await interaction_or_message.reply(embed=embed, view=view, mention_author=False)
                 view.message = msg
 
+        user = interaction_or_message.user if is_interaction else interaction_or_message.author
         log.tree("Video Convert Editor Started", [
-            ("User", str(interaction_or_message.user if is_interaction else interaction_or_message.author)),
+            ("User", f"{user.name} ({user.display_name})"),
+            ("User ID", str(user.id)),
             ("Source", source_name[:30]),
             ("Initial Text", initial_text[:30] if initial_text else "(none)"),
             ("Preview Strip", "Yes" if preview_strip_bytes else "No"),
@@ -812,8 +826,10 @@ async def start_convert_editor(
             msg = await interaction_or_message.reply(embed=embed, file=file, view=view, mention_author=False)
             view.message = msg
 
+        user = interaction_or_message.user if is_interaction else interaction_or_message.author
         log.tree("Convert Editor Started", [
-            ("User", str(interaction_or_message.user if is_interaction else interaction_or_message.author)),
+            ("User", f"{user.name} ({user.display_name})"),
+            ("User ID", str(user.id)),
             ("Source", source_name[:30]),
             ("Initial Text", initial_text[:30] if initial_text else "(none)"),
         ], emoji="IMAGE")

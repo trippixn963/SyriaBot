@@ -138,8 +138,8 @@ class MembersHandler(commands.Cog):
         try:
             await member.add_roles(role, reason="Auto-role on join")
             log.tree("Member Joined", [
-                ("User", str(member)),
-                ("ID", str(member.id)),
+                ("User", f"{member.name} ({member.display_name})"),
+                ("User ID", str(member.id)),
                 ("Role Given", role.name),
                 ("Invited By", str(inviter_id) if inviter_id else "Unknown"),
             ], emoji="👋")
@@ -219,7 +219,8 @@ class MembersHandler(commands.Cog):
         # Get general channel
         if not config.GENERAL_CHANNEL_ID:
             log.tree("Boost Notification Skipped", [
-                ("User", str(member)),
+                ("User", f"{member.name} ({member.display_name})"),
+                ("User ID", str(member.id)),
                 ("Reason", "GENERAL_CHANNEL_ID not configured"),
             ], emoji="⚠️")
             return
@@ -227,7 +228,8 @@ class MembersHandler(commands.Cog):
         channel = member.guild.get_channel(config.GENERAL_CHANNEL_ID)
         if not channel:
             log.tree("Boost Notification Failed", [
-                ("User", str(member)),
+                ("User", f"{member.name} ({member.display_name})"),
+                ("User ID", str(member.id)),
                 ("Reason", "General channel not found"),
                 ("Channel ID", str(config.GENERAL_CHANNEL_ID)),
             ], emoji="⚠️")
@@ -281,7 +283,8 @@ class MembersHandler(commands.Cog):
             ], emoji="✅")
         except discord.HTTPException as e:
             log.tree("Boost Notification Failed", [
-                ("User", str(member)),
+                ("User", f"{member.name} ({member.display_name})"),
+                ("User ID", str(member.id)),
                 ("Error", str(e)[:100]),
             ], emoji="❌")
 

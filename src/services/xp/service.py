@@ -228,7 +228,8 @@ class XPService:
                     ], emoji="🧹")
         except Exception as e:
             log.tree("Metrics Track Failed", [
-                ("User", str(member)),
+                ("User", f"{member.name} ({member.display_name})"),
+                ("User ID", str(member.id)),
                 ("Error", str(e)[:50]),
             ], emoji="⚠️")
 
@@ -491,7 +492,8 @@ class XPService:
 
         except Exception as e:
             log.error_tree("XP Grant Error", e, [
-                ("User", str(member)),
+                ("User", f"{member.name} ({member.display_name})"),
+                ("User ID", str(member.id)),
                 ("Amount", str(amount)),
                 ("Source", source),
             ])
@@ -598,7 +600,7 @@ class XPService:
 
             except discord.HTTPException as e:
                 log.error_tree("Role Reward Failed", e, [
-                    ("User", str(member)),
+                    ("User", f"{member.name} ({member.display_name})"),
                     ("User ID", str(member.id)),
                     ("Roles to Add", ", ".join(r.name for r in roles_to_add)),
                     ("Roles to Remove", ", ".join(r.name for r in roles_to_remove)),
