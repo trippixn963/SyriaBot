@@ -20,6 +20,7 @@ from src.core.colors import COLOR_ERROR, COLOR_WARNING
 from src.services.convert_service import convert_service
 from src.services.quote_service import quote_service
 from src.services.translate_service import translate_service, find_similar_language
+from src.services.bump_service import bump_service
 from src.services.database import db
 from src.services.rate_limiter import check_rate_limit
 from src.views.convert_view import start_convert_editor
@@ -27,6 +28,9 @@ from src.views.translate_view import TranslateView, create_translate_embed
 from src.views.quote_view import QuoteView
 from src.utils.footer import set_footer
 from src.commands.download import handle_download
+
+# Disboard bot ID
+DISBOARD_BOT_ID = 302050872383242240
 
 
 class MessageHandler(commands.Cog):
@@ -433,6 +437,16 @@ class MessageHandler(commands.Cog):
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message) -> None:
         """Handle incoming messages."""
+        # Check for Disboard bump confirmation (before skipping bots)
+        if message.author.id == DISBOARD_BOT_ID:
+            if message.embeds:
+                for embed in message.embeds:
+                    desc = (embed.description or "").lower()
+                    if "bump done" in desc:
+                        bump_service.record_bump()
+                        break
+            return
+
         if message.author.bot:
             return
 

@@ -143,5 +143,9 @@ class Config:
     MEMES_CHANNEL_ID: int = _get_env_int("SYRIA_MEMES_CHANNEL_ID", 1442153997610913812)
     GALLERY_HEART_EMOJI: str = "<:heart:1456779669805203539>"
 
+    # Bump Reminder (Disboard)
+    BUMP_CHANNEL_ID: int = _get_env_int("SYRIA_BUMP_CHANNEL_ID", 0)
+    BUMP_ROLE_ID: int = _get_env_int("SYRIA_BUMP_ROLE_ID", 0)
+
 
 config = Config()

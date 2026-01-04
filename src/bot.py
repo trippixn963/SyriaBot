@@ -23,6 +23,7 @@ from src.services.status_webhook import get_status_service
 from src.services.afk import AFKService
 from src.services.gallery import GalleryService
 from src.services.presence import PresenceHandler
+from src.services.bump_service import bump_service
 from src.services.database import db
 from src.utils.http import http_session
 
@@ -222,9 +223,18 @@ class SyriaBot(commands.Bot):
         except Exception as e:
             log.error_tree("Presence Handler Init Failed", e)
 
+        # Bump Reminder (Disboard)
+        if config.BUMP_CHANNEL_ID and config.BUMP_ROLE_ID:
+            try:
+                bump_service.setup(self, config.BUMP_CHANNEL_ID, config.BUMP_ROLE_ID)
+                bump_service.start()
+                initialized.append("BumpReminder")
+            except Exception as e:
+                log.error_tree("Bump Reminder Init Failed", e)
+
         log.tree("Services Init Complete", [
             ("Services", ", ".join(initialized)),
-            ("Count", f"{len(initialized)}/8"),
+            ("Count", f"{len(initialized)}/9"),
         ], emoji="✅")
 
     async def close(self) -> None:
@@ -285,6 +295,14 @@ class SyriaBot(commands.Bot):
                 stopped.append("Presence")
             except Exception as e:
                 log.error_tree("Presence Handler Stop Error", e)
+
+        # Bump Reminder
+        if bump_service._running:
+            try:
+                bump_service.stop()
+                stopped.append("BumpReminder")
+            except Exception as e:
+                log.error_tree("Bump Reminder Stop Error", e)
 
         # Close HTTP session
         try:
