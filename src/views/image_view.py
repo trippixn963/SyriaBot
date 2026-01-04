@@ -14,7 +14,7 @@ from discord import ui
 from typing import Optional
 
 from src.core.logger import log
-from src.core.colors import COLOR_SUCCESS, COLOR_GOLD
+from src.core.colors import COLOR_SYRIA_GREEN, COLOR_SYRIA_GOLD
 from src.services.image_service import ImageResult
 from src.utils.footer import set_footer
 from src.utils.http import http_session
@@ -68,7 +68,7 @@ class ImageView(ui.View):
             embed = discord.Embed(
                 title="No Images Found",
                 description=f"No results for: **{self.query}**",
-                color=COLOR_GOLD
+                color=COLOR_SYRIA_GOLD
             )
             set_footer(embed)
             return embed
@@ -78,7 +78,7 @@ class ImageView(ui.View):
         embed = discord.Embed(
             title=image.title[:256] if len(image.title) > 256 else image.title,
             url=image.source_url,
-            color=COLOR_SUCCESS
+            color=COLOR_SYRIA_GREEN
         )
         embed.set_image(url=image.url)
 

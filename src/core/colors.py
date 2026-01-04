@@ -13,6 +13,10 @@ COLOR_NEUTRAL = 0x95a5a6   # Gray - neutral/cancelled
 COLOR_BOOST = 0xff73fa     # Pink - Nitro boosters
 COLOR_GOLD = 0xE6B84A      # Gold - primary brand color
 
+# Syria brand colors
+COLOR_SYRIA_GREEN = 0x1F5E2E  # Syria green
+COLOR_SYRIA_GOLD = 0xE6B84A   # Syria gold (same as COLOR_GOLD)
+
 # =============================================================================
 # Color Circle Emojis (for dropdowns)
 # =============================================================================
