@@ -153,6 +153,85 @@ class AvatarToggleView(ui.View):
         ], emoji="🔄")
 
 
+class BannerToggleView(ui.View):
+    """View with save button and optional toggle between server/global banner."""
+
+    def __init__(
+        self, target: discord.Member, server_url: str, global_url: str, showing_server: bool = True
+    ) -> None:
+        """
+        Initialize the banner toggle view.
+
+        Args:
+            target: The member whose banner is shown
+            server_url: URL to server banner
+            global_url: URL to global banner
+            showing_server: Whether to show server banner first
+        """
+        super().__init__(timeout=300)
+        self.target = target
+        self.server_url = server_url
+        self.global_url = global_url
+        self.showing_server = showing_server
+        self._update_toggle_button()
+
+    def _update_toggle_button(self) -> None:
+        """Update toggle button label based on current state."""
+        if self.showing_server:
+            self.toggle_btn.label = "View Global"
+        else:
+            self.toggle_btn.label = "View Server"
+
+    def _get_current_url(self) -> str:
+        """Get the currently displayed banner URL."""
+        return self.server_url if self.showing_server else self.global_url
+
+    async def on_timeout(self) -> None:
+        """Disable buttons on timeout."""
+        for item in self.children:
+            item.disabled = True
+
+    @ui.button(label="Save", style=discord.ButtonStyle.secondary, emoji="<:save:1455776703468273825>", row=0)
+    async def save(self, interaction: discord.Interaction, button: ui.Button) -> None:
+        """Send download link."""
+        await interaction.response.send_message(self._get_current_url(), ephemeral=True)
+        log.tree("Save Link Sent", [
+            ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+            ("ID", str(interaction.user.id)),
+            ("Type", "Banner"),
+        ], emoji="💾")
+
+    @ui.button(label="View Global", style=discord.ButtonStyle.secondary, emoji="<:transfer:1455710226429902858>", row=0)
+    async def toggle_btn(self, interaction: discord.Interaction, button: ui.Button) -> None:
+        """Toggle between server and global banner."""
+        self.showing_server = not self.showing_server
+        self._update_toggle_button()
+
+        # Build new embed
+        current_url = self._get_current_url()
+        banner_type = "Server" if self.showing_server else "Global"
+
+        embed = discord.Embed(
+            title=f"{self.target.name}'s Banner",
+            description=f"Account created <t:{int(self.target.created_at.timestamp())}:R>",
+            color=COLOR_GET
+        )
+        embed.set_image(url=current_url)
+        embed.add_field(name="Type", value=banner_type, inline=True)
+        embed.add_field(name="User", value=self.target.mention, inline=True)
+        set_footer(embed)
+
+        await interaction.response.edit_message(embed=embed, view=self)
+
+        log.tree("Banner Toggled", [
+            ("Target", f"{self.target.name} ({self.target.display_name})"),
+            ("Target ID", str(self.target.id)),
+            ("Now Showing", banner_type),
+            ("By", f"{interaction.user.name} ({interaction.user.display_name})"),
+            ("By ID", str(interaction.user.id)),
+        ], emoji="🔄")
+
+
 class GetCog(commands.Cog):
     """Get avatar/banner command."""
 
@@ -209,7 +288,8 @@ class GetCog(commands.Cog):
                 await self._handle_avatar(interaction, target, target_member)
             elif option.value == "banner":
                 target = user or interaction.user
-                await self._handle_banner(interaction, target)
+                target_member = interaction.guild.get_member(target.id) if interaction.guild else None
+                await self._handle_banner(interaction, target, target_member)
             elif option.value == "server_icon":
                 await self._handle_server_icon(interaction)
             elif option.value == "server_banner":
@@ -311,10 +391,11 @@ class GetCog(commands.Cog):
     async def _handle_banner(
         self,
         interaction: discord.Interaction,
-        target: discord.Member
+        target: discord.Member,
+        target_member: Optional[discord.Member]
     ) -> None:
-        """Handle banner request."""
-        # Need to fetch user to get banner (not cached by default)
+        """Handle banner request - shows toggle if user has both server and global banner."""
+        # Need to fetch user to get global banner (not cached by default)
         try:
             fetched_user = await self.bot.fetch_user(target.id)
         except discord.NotFound:
@@ -331,7 +412,12 @@ class GetCog(commands.Cog):
             await interaction.followup.send(embed=embed, ephemeral=True)
             return
 
-        if not fetched_user.banner:
+        # Check if user has both server and global banner
+        has_server_banner = target_member and target_member.guild_banner
+        has_global_banner = fetched_user.banner is not None
+
+        # If no banners at all
+        if not has_server_banner and not has_global_banner:
             log.tree("Get Banner No Banner", [
                 ("Target", f"{target.name} ({target.display_name})"),
                 ("Target ID", str(target.id)),
@@ -346,13 +432,33 @@ class GetCog(commands.Cog):
             await interaction.followup.send(embed=embed, ephemeral=True)
             return
 
-        banner_url = fetched_user.banner.url
-
-        # Get high quality URL
-        if "?" in banner_url:
-            banner_url = banner_url.split("?")[0] + "?size=4096"
+        # Get URLs
+        if has_server_banner:
+            server_url = target_member.guild_banner.url
+            if "?" in server_url:
+                server_url = server_url.split("?")[0] + "?size=4096"
+            else:
+                server_url = server_url + "?size=4096"
         else:
-            banner_url = banner_url + "?size=4096"
+            server_url = None
+
+        if has_global_banner:
+            global_url = fetched_user.banner.url
+            if "?" in global_url:
+                global_url = global_url.split("?")[0] + "?size=4096"
+            else:
+                global_url = global_url + "?size=4096"
+        else:
+            global_url = None
+
+        # Determine what to show first and if toggle is needed
+        has_both = has_server_banner and has_global_banner
+        if has_server_banner:
+            banner_url = server_url
+            banner_type = "Server"
+        else:
+            banner_url = global_url
+            banner_type = "Global"
 
         embed = discord.Embed(
             title=f"{target.name}'s Banner",
@@ -360,15 +466,23 @@ class GetCog(commands.Cog):
             color=COLOR_GET
         )
         embed.set_image(url=banner_url)
+        embed.add_field(name="Type", value=banner_type, inline=True)
         embed.add_field(name="User", value=target.mention, inline=True)
         set_footer(embed)
 
-        view = DownloadView(banner_url, "Banner")
+        # Use toggle view if both banners exist, otherwise just download view
+        if has_both:
+            view = BannerToggleView(target, server_url, global_url, showing_server=True)
+        else:
+            view = DownloadView(banner_url, "Banner")
+
         await interaction.followup.send(embed=embed, view=view)
 
         log.tree("Get Banner Complete", [
             ("Target", f"{target.name} ({target.display_name})"),
             ("Target ID", str(target.id)),
+            ("Type", banner_type),
+            ("Has Both", "Yes" if has_both else "No"),
             ("By", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("By ID", str(interaction.user.id)),
         ], emoji="✅")
