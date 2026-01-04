@@ -24,6 +24,9 @@ from src.core.logger import log
 # Get yt-dlp path from the same venv as the running Python
 YTDLP_PATH = str(Path(sys.executable).parent / "yt-dlp")
 
+# gallery-dl for image downloads (fallback when yt-dlp fails on images)
+GALLERY_DL_PATH = "/usr/bin/gallery-dl"
+
 # Cookies file for Instagram authentication
 COOKIES_FILE = Path(__file__).parent.parent.parent / "cookies.txt"
 
@@ -54,6 +57,9 @@ PLATFORM_PATTERNS = {
 
 # Video file extensions (frozen set for O(1) lookup)
 VIDEO_EXTENSIONS = frozenset({".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v"})
+
+# Image file extensions
+IMAGE_EXTENSIONS = frozenset({".jpg", ".jpeg", ".png", ".gif", ".webp"})
 
 # Platform styling
 PLATFORM_ICONS = {
@@ -208,6 +214,21 @@ class DownloaderService:
             stderr_text = stderr.decode(errors="ignore")
 
             if process.returncode != 0:
+                # Check if this is an image-only post - try gallery-dl fallback
+                if "No video formats found" in stderr_text:
+                    log.tree("Video Download Failed, Trying Image Fallback", [
+                        ("Platform", platform.title()),
+                        ("URL", url[:60]),
+                        ("Fallback", "gallery-dl"),
+                    ], emoji="🖼️")
+
+                    image_result = await self._download_images(url, download_dir, platform)
+                    if image_result.success:
+                        return image_result
+                    # If image fallback also failed, return the image error
+                    self.cleanup([download_dir])
+                    return image_result
+
                 error_msg = self._parse_error(stderr_text)
                 log.tree("Download Failed", [
                     ("Platform", platform.title()),
@@ -292,7 +313,9 @@ class DownloaderService:
         """Parse yt-dlp error output into user-friendly message."""
         error_msg = stderr.strip() or "Download failed"
 
-        if "Sign in to confirm you're not a bot" in error_msg or "LOGIN_REQUIRED" in error_msg:
+        if "No video formats found" in error_msg:
+            return "This post contains only images, not video. Only video/reel posts can be downloaded."
+        elif "Sign in to confirm you're not a bot" in error_msg or "LOGIN_REQUIRED" in error_msg:
             return "This content requires login to access."
         elif "Private" in error_msg or "login" in error_msg.lower():
             return "This content is private or requires login."
@@ -306,6 +329,189 @@ class DownloaderService:
             return "Rate limited. Please wait a minute before trying again."
 
         return error_msg[:200] if len(error_msg) > 200 else error_msg
+
+    async def _download_images(self, url: str, download_dir: Path, platform: str) -> DownloadResult:
+        """
+        Download images using gallery-dl (fallback when yt-dlp fails on image posts).
+
+        Args:
+            url: The URL to download from
+            download_dir: Directory to save files
+            platform: Platform name for logging
+
+        Returns:
+            DownloadResult with files and status
+        """
+        log.tree("Image Download Starting", [
+            ("Platform", platform.title()),
+            ("URL", url[:60]),
+            ("Tool", "gallery-dl"),
+        ], emoji="🖼️")
+
+        cmd = [
+            GALLERY_DL_PATH,
+            "--directory", str(download_dir),
+            "--filename", "{filename}.{extension}",
+            "--no-mtime",
+        ]
+
+        # Add cookies if available
+        if COOKIES_FILE.exists():
+            cmd.extend(["--cookies", str(COOKIES_FILE)])
+            log.tree("Image Download Using Cookies", [
+                ("Platform", platform.title()),
+                ("Cookies", str(COOKIES_FILE)),
+            ], emoji="🍪")
+        else:
+            log.tree("Image Download No Cookies", [
+                ("Platform", platform.title()),
+                ("Note", "Authentication may fail"),
+            ], emoji="⚠️")
+
+        cmd.append(url)
+
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+
+            try:
+                stdout, stderr = await asyncio.wait_for(
+                    process.communicate(),
+                    timeout=60  # 1 minute timeout for images
+                )
+            except asyncio.TimeoutError:
+                process.kill()
+                log.tree("Image Download Timeout", [
+                    ("Platform", platform.title()),
+                    ("URL", url[:60]),
+                ], emoji="⏳")
+                return DownloadResult(
+                    success=False,
+                    files=[],
+                    platform=platform,
+                    error="Image download timed out."
+                )
+
+            stderr_text = stderr.decode(errors="ignore")
+
+            if process.returncode != 0:
+                log.tree("Image Download Failed", [
+                    ("Platform", platform.title()),
+                    ("Error", stderr_text[:100] if stderr_text else "Unknown error"),
+                ], emoji="❌")
+
+                # Parse gallery-dl errors
+                if "401" in stderr_text or "login" in stderr_text.lower():
+                    return DownloadResult(
+                        success=False,
+                        files=[],
+                        platform=platform,
+                        error="This content requires login to access."
+                    )
+                elif "404" in stderr_text or "not found" in stderr_text.lower():
+                    return DownloadResult(
+                        success=False,
+                        files=[],
+                        platform=platform,
+                        error="Content not found. It may have been deleted."
+                    )
+
+                return DownloadResult(
+                    success=False,
+                    files=[],
+                    platform=platform,
+                    error="Failed to download images from this post."
+                )
+
+            # Get downloaded files (gallery-dl may create subdirectories)
+            files = []
+            for ext in IMAGE_EXTENSIONS:
+                files.extend(download_dir.rglob(f"*{ext}"))
+
+            if not files:
+                log.tree("Image Download No Files", [
+                    ("Platform", platform.title()),
+                    ("URL", url[:60]),
+                ], emoji="⚠️")
+                return DownloadResult(
+                    success=False,
+                    files=[],
+                    platform=platform,
+                    error="No images found in this post."
+                )
+
+            # Move files to download_dir root if in subdirectories
+            processed_files = []
+            files_moved = 0
+            for file in files:
+                if file.parent != download_dir:
+                    new_path = download_dir / file.name
+                    # Handle duplicate names
+                    counter = 1
+                    while new_path.exists():
+                        new_path = download_dir / f"{file.stem}_{counter}{file.suffix}"
+                        counter += 1
+                    shutil.move(str(file), str(new_path))
+                    processed_files.append(new_path)
+                    files_moved += 1
+                else:
+                    processed_files.append(file)
+
+            if files_moved > 0:
+                log.tree("Image Files Reorganized", [
+                    ("Files Moved", str(files_moved)),
+                    ("Destination", str(download_dir)),
+                ], emoji="📁")
+
+            # Clean up any subdirectories
+            subdirs_cleaned = 0
+            for item in download_dir.iterdir():
+                if item.is_dir():
+                    shutil.rmtree(item, ignore_errors=True)
+                    subdirs_cleaned += 1
+
+            if subdirs_cleaned > 0:
+                log.tree("Image Subdirectories Cleaned", [
+                    ("Directories Removed", str(subdirs_cleaned)),
+                ], emoji="🧹")
+
+            log.tree("Image Download Complete", [
+                ("Platform", platform.title()),
+                ("Images", str(len(processed_files))),
+                ("Files", ", ".join(f.name for f in processed_files[:3]) + ("..." if len(processed_files) > 3 else "")),
+            ], emoji="✅")
+
+            return DownloadResult(
+                success=True,
+                files=processed_files,
+                platform=platform
+            )
+
+        except FileNotFoundError:
+            log.tree("Image Download Tool Not Found", [
+                ("Tool", "gallery-dl"),
+                ("Path", GALLERY_DL_PATH),
+            ], emoji="❌")
+            return DownloadResult(
+                success=False,
+                files=[],
+                platform=platform,
+                error="Image download tool not available."
+            )
+        except Exception as e:
+            log.error_tree("Image Download Error", e, [
+                ("Platform", platform),
+                ("URL", url[:60]),
+            ])
+            return DownloadResult(
+                success=False,
+                files=[],
+                platform=platform,
+                error=f"Image download failed: {type(e).__name__}"
+            )
 
     async def _process_file(self, file: Path) -> Optional[Path]:
         """Process a downloaded file - compress if too large."""

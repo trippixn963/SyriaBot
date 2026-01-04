@@ -59,6 +59,7 @@ LANGUAGES: Dict[str, Tuple[str, str]] = {
 }
 
 LANGUAGE_ALIASES: Dict[str, str] = {
+    # Language names
     "arabic": "ar",
     "english": "en",
     "spanish": "es",
@@ -96,24 +97,174 @@ LANGUAGE_ALIASES: Dict[str, str] = {
     "vietnamese": "vi",
     "indonesian": "id",
     "malay": "ms",
+    # Country names
+    "syria": "ar",
+    "syrian": "ar",
+    "saudi": "ar",
+    "saudi arabia": "ar",
+    "egypt": "ar",
+    "egyptian": "ar",
+    "iraq": "ar",
+    "iraqi": "ar",
+    "jordan": "ar",
+    "jordanian": "ar",
+    "lebanon": "ar",
+    "lebanese": "ar",
+    "palestine": "ar",
+    "palestinian": "ar",
+    "america": "en",
+    "american": "en",
+    "usa": "en",
+    "uk": "en",
+    "british": "en",
+    "britain": "en",
+    "australia": "en",
+    "australian": "en",
+    "canada": "en",
+    "canadian": "en",
+    "spain": "es",
+    "mexico": "es",
+    "mexican": "es",
+    "france": "fr",
+    "germany": "de",
+    "italy": "it",
+    "portugal": "pt",
+    "brazil": "pt",
+    "brazilian": "pt",
+    "russia": "ru",
+    "china": "zh-CN",
+    "taiwan": "zh-TW",
+    "japan": "ja",
+    "korea": "ko",
+    "south korea": "ko",
+    "turkey": "tr",
+    "netherlands": "nl",
+    "holland": "nl",
+    "poland": "pl",
+    "ukraine": "uk",
+    "india": "hi",
+    "indian": "hi",
+    "israel": "iw",
+    "israeli": "iw",
+    "iran": "fa",
+    "iranian": "fa",
+    "pakistan": "ur",
+    "pakistani": "ur",
+    "sweden": "sv",
+    "denmark": "da",
+    "norway": "no",
+    "finland": "fi",
+    "greece": "el",
+    "czechia": "cs",
+    "czech republic": "cs",
+    "romania": "ro",
+    "hungary": "hu",
+    "thailand": "th",
+    "vietnam": "vi",
+    "indonesia": "id",
+    "malaysia": "ms",
 }
 
 
+def _fuzzy_match(s1: str, s2: str) -> float:
+    """Calculate similarity ratio between two strings (0.0 to 1.0)."""
+    if not s1 or not s2:
+        return 0.0
+    if s1 == s2:
+        return 1.0
+
+    # Check prefix match (at least 3 chars)
+    if len(s1) >= 3 and len(s2) >= 3:
+        if s1.startswith(s2[:3]) or s2.startswith(s1[:3]):
+            # Good prefix match
+            return 0.85
+
+    # Check if one contains the other
+    if s1 in s2 or s2 in s1:
+        return 0.8
+
+    # Count matching characters (order-independent for typo tolerance)
+    len1, len2 = len(s1), len(s2)
+    if abs(len1 - len2) > 2:
+        # Allow up to 2 char length difference
+        if abs(len1 - len2) > max(len1, len2) // 2:
+            return 0.0
+
+    # Count common characters
+    chars1 = list(s1)
+    chars2 = list(s2)
+    common = 0
+    for c in chars1:
+        if c in chars2:
+            common += 1
+            chars2.remove(c)
+
+    return common / max(len1, len2)
+
+
 def find_similar_language(lang_input: str) -> Optional[Tuple[str, str, str]]:
-    """Find a similar language to what the user typed."""
+    """Find a similar language to what the user typed using fuzzy matching."""
     lang_lower = lang_input.lower().strip()
 
+    if not lang_lower:
+        return None
+
+    best_match = None
+    best_score = 0.0
+    match_type = None
+
+    # Check exact matches in aliases first
+    if lang_lower in LANGUAGE_ALIASES:
+        code = LANGUAGE_ALIASES[lang_lower]
+        name, flag = LANGUAGES[code]
+        log.tree("Language Alias Match", [
+            ("Input", lang_input),
+            ("Alias", lang_lower),
+            ("Resolved", f"{name} ({code}) {flag}"),
+        ], emoji="🌐")
+        return (code, name, flag)
+
+    # Check exact matches in language codes
+    if lang_lower in LANGUAGES:
+        name, flag = LANGUAGES[lang_lower]
+        log.tree("Language Code Match", [
+            ("Input", lang_input),
+            ("Code", lang_lower),
+            ("Language", f"{name} {flag}"),
+        ], emoji="🌐")
+        return (lang_lower, name, flag)
+
+    # Fuzzy match against aliases (includes country names)
     for alias, code in LANGUAGE_ALIASES.items():
-        if alias.startswith(lang_lower) or lang_lower.startswith(alias[:3]):
+        score = _fuzzy_match(lang_lower, alias)
+        if score > best_score and score >= 0.6:
+            best_score = score
             name, flag = LANGUAGES[code]
-            return (code, name, flag)
+            best_match = (code, name, flag)
+            match_type = ("alias", alias)
 
+    # Fuzzy match against language names
     for code, (name, flag) in LANGUAGES.items():
-        name_lower = name.lower()
-        if name_lower.startswith(lang_lower) or lang_lower.startswith(name_lower[:3]):
-            return (code, name, flag)
+        score = _fuzzy_match(lang_lower, name.lower())
+        if score > best_score and score >= 0.6:
+            best_score = score
+            best_match = (code, name, flag)
+            match_type = ("name", name)
 
-    return None
+    if best_match:
+        log.tree("Language Fuzzy Match", [
+            ("Input", lang_input),
+            ("Matched", f"{match_type[0]}: {match_type[1]}"),
+            ("Score", f"{best_score:.0%}"),
+            ("Resolved", f"{best_match[1]} ({best_match[0]}) {best_match[2]}"),
+        ], emoji="🔍")
+    else:
+        log.tree("Language Match Failed", [
+            ("Input", lang_input),
+            ("Reason", "No match found"),
+        ], emoji="⚠️")
+
+    return best_match
 
 
 # =============================================================================
@@ -146,20 +297,45 @@ class TranslateService:
         pass
 
     def resolve_language(self, lang_input: str) -> Optional[str]:
-        """Resolve a language input to a language code."""
+        """Resolve a language input to a language code using fuzzy matching."""
         lang_input = lang_input.strip()
         lang_lower = lang_input.lower()
 
+        # Exact match on language codes
         if lang_input in LANGUAGES:
+            log.tree("Language Resolved", [
+                ("Input", lang_input),
+                ("Type", "Exact code match"),
+                ("Code", lang_input),
+            ], emoji="✅")
             return lang_input
 
         for code in LANGUAGES:
             if code.lower() == lang_lower:
+                log.tree("Language Resolved", [
+                    ("Input", lang_input),
+                    ("Type", "Case-insensitive code match"),
+                    ("Code", code),
+                ], emoji="✅")
                 return code
 
+        # Exact match on aliases (includes country names)
         if lang_lower in LANGUAGE_ALIASES:
-            return LANGUAGE_ALIASES[lang_lower]
+            code = LANGUAGE_ALIASES[lang_lower]
+            name, flag = LANGUAGES[code]
+            log.tree("Language Resolved", [
+                ("Input", lang_input),
+                ("Type", "Alias/country match"),
+                ("Resolved", f"{name} ({code}) {flag}"),
+            ], emoji="✅")
+            return code
 
+        # Fuzzy match using find_similar_language (logs internally)
+        similar = find_similar_language(lang_input)
+        if similar:
+            return similar[0]  # Return the code
+
+        # find_similar_language already logs failure
         return None
 
     def get_language_info(self, lang_code: str) -> Tuple[str, str]:
@@ -176,10 +352,13 @@ class TranslateService:
         """Detect the language of text."""
         try:
             detected = detect(text)
+            # Map language codes to what GoogleTranslator expects
             if detected == "zh-cn":
                 return "zh-CN"
             if detected == "zh-tw":
                 return "zh-TW"
+            if detected == "he":
+                return "iw"  # GoogleTranslator uses 'iw' for Hebrew, not 'he'
             return detected
         except LangDetectException:
             return None

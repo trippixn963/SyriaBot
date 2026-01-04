@@ -315,7 +315,11 @@ class MessageHandler(commands.Cog):
                     similar = find_similar_language(target_lang)
                     if similar:
                         code, name, flag = similar
-                        error_msg = f"Language `{target_lang}` is not supported. Did you mean {flag} **{name}** (`{code}`)?"
+                        # Don't suggest the same code they already typed
+                        if code.lower() == target_lang.lower():
+                            error_msg = "Translation service temporarily unavailable. Please try again."
+                        else:
+                            error_msg = f"Language `{target_lang}` is not supported. Did you mean {flag} **{name}** (`{code}`)?"
                     else:
                         error_msg = f"Language `{target_lang}` is not supported."
                 elif len(result.error) < 100:
