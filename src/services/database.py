@@ -242,6 +242,15 @@ class Database:
                 )
             """)
 
+            # Image Search Usage (weekly limit)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS image_usage (
+                    user_id INTEGER PRIMARY KEY,
+                    uses_this_week INTEGER DEFAULT 0,
+                    week_start_timestamp INTEGER NOT NULL
+                )
+            """)
+
             # XP System
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS user_xp (
@@ -880,6 +889,95 @@ class Database:
             ], emoji="📥")
             return remaining
 
+    # =========================================================================
+    # Image Search Usage (Weekly Limit)
+    # =========================================================================
+
+    def get_image_usage(self, user_id: int, weekly_limit: int = 5) -> tuple[int, int]:
+        """
+        Get user's image search usage for this week.
+
+        Args:
+            user_id: The user's Discord ID
+            weekly_limit: Weekly limit for free users (default 5)
+
+        Returns:
+            (uses_remaining, week_start_timestamp)
+        """
+        week_start = _get_week_start_timestamp()
+
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT uses_this_week, week_start_timestamp FROM image_usage WHERE user_id = ?", (user_id,))
+            row = cur.fetchone()
+
+            if not row:
+                return (weekly_limit, week_start)
+
+            stored_week_start = row["week_start_timestamp"]
+            uses_this_week = row["uses_this_week"]
+
+            if week_start > stored_week_start:
+                return (weekly_limit, week_start)
+
+            return (max(0, weekly_limit - uses_this_week), stored_week_start)
+
+    def record_image_usage(self, user_id: int, weekly_limit: int = 5) -> int:
+        """
+        Record an image search usage for a user.
+
+        Args:
+            user_id: The user's Discord ID
+            weekly_limit: Weekly limit for free users (default 5)
+
+        Returns:
+            Number of uses remaining after this use
+        """
+        week_start = _get_week_start_timestamp()
+
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT uses_this_week, week_start_timestamp FROM image_usage WHERE user_id = ?", (user_id,))
+            row = cur.fetchone()
+
+            if not row:
+                cur.execute("""
+                    INSERT INTO image_usage (user_id, uses_this_week, week_start_timestamp)
+                    VALUES (?, 1, ?)
+                """, (user_id, week_start))
+                log.tree("Image Usage Recorded", [
+                    ("User ID", str(user_id)),
+                    ("Uses", "1"),
+                    ("Remaining", str(weekly_limit - 1)),
+                ], emoji="🖼️")
+                return weekly_limit - 1
+
+            stored_week_start = row["week_start_timestamp"]
+
+            if week_start > stored_week_start:
+                cur.execute("""
+                    UPDATE image_usage SET uses_this_week = 1, week_start_timestamp = ?
+                    WHERE user_id = ?
+                """, (week_start, user_id))
+                log.tree("Image Usage Reset (New Week)", [
+                    ("User ID", str(user_id)),
+                    ("Uses", "1"),
+                    ("Remaining", str(weekly_limit - 1)),
+                ], emoji="🖼️")
+                return weekly_limit - 1
+
+            new_uses = row["uses_this_week"] + 1
+            cur.execute("""
+                UPDATE image_usage SET uses_this_week = ?
+                WHERE user_id = ?
+            """, (new_uses, user_id))
+            remaining = max(0, weekly_limit - new_uses)
+            log.tree("Image Usage Recorded", [
+                ("User ID", str(user_id)),
+                ("Uses", str(new_uses)),
+                ("Remaining", str(remaining)),
+            ], emoji="🖼️")
+            return remaining
 
     # =========================================================================
     # XP System

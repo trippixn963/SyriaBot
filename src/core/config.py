@@ -103,6 +103,10 @@ class Config:
     OPENWEATHER_API_KEY: str = os.getenv("OPENWEATHER_API_KEY", "")
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
 
+    # Google Custom Search API (for /image command)
+    GOOGLE_API_KEY: str = os.getenv("GOOGLE_API_KEY", "")
+    GOOGLE_CX: str = os.getenv("GOOGLE_CX", "")
+
     # Webhooks (read directly by logger from env vars)
     # SYRIA_LIVE_LOGS_WEBHOOK_URL - Tree format console logs streaming
     # SYRIA_ERROR_WEBHOOK_URL - Error-only logs
@@ -130,6 +134,9 @@ class Config:
 
     # Download System
     DOWNLOAD_WEEKLY_LIMIT: int = _get_env_int("SYRIA_DOWNLOAD_WEEKLY_LIMIT", 5)
+
+    # Image Search System
+    IMAGE_WEEKLY_LIMIT: int = _get_env_int("SYRIA_IMAGE_WEEKLY_LIMIT", 5)
 
     # Gallery Channel (media-only)
     GALLERY_CHANNEL_ID: int = _get_env_int("SYRIA_GALLERY_CHANNEL_ID", 1408234733988483212)

@@ -86,6 +86,7 @@ class SyriaBot(commands.Bot):
             "src.commands.translate",
             "src.commands.download",
             "src.commands.afk",
+            "src.commands.image",
         ]
         loaded_commands = []
         for cmd in commands_list:
