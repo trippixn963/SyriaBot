@@ -97,7 +97,8 @@ class ImageCog(commands.Cog):
             await interaction.followup.send(embed=embed, ephemeral=True)
 
             log.tree("Image Search Unavailable", [
-                ("User", str(user)),
+                ("User", f"{user.name} ({user.display_name})"),
+                ("User ID", str(user.id)),
                 ("Reason", "Service not configured"),
             ], emoji="❌")
             return
@@ -146,7 +147,8 @@ class ImageCog(commands.Cog):
             await interaction.followup.send(embed=embed, ephemeral=True)
 
             log.tree("Image Search Failed", [
-                ("User", str(user)),
+                ("User", f"{user.name} ({user.display_name})"),
+                ("User ID", str(user.id)),
                 ("Query", query[:30]),
                 ("Error", result.error[:50] if result.error else "Unknown"),
             ], emoji="❌")
@@ -162,7 +164,8 @@ class ImageCog(commands.Cog):
             await interaction.followup.send(embed=embed, ephemeral=True)
 
             log.tree("Image Search No Results", [
-                ("User", str(user)),
+                ("User", f"{user.name} ({user.display_name})"),
+                ("User ID", str(user.id)),
                 ("Query", query[:30]),
             ], emoji="⚠️")
             return
@@ -220,13 +223,15 @@ class ImageCog(commands.Cog):
                 pass
 
             log.tree("Image Command Cooldown", [
-                ("User", str(interaction.user)),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("User ID", str(interaction.user.id)),
                 ("Retry After", f"{error.retry_after:.1f}s"),
             ], emoji="⏳")
             return
 
         log.error_tree("Image Command Error", error, [
-            ("User", str(interaction.user)),
+            ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+            ("User ID", str(interaction.user.id)),
         ])
 
         try:

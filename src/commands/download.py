@@ -290,13 +290,15 @@ class DownloadCog(commands.Cog):
                 pass
 
             log.tree("Download Command Cooldown", [
-                ("User", str(interaction.user)),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("User ID", str(interaction.user.id)),
                 ("Retry After", f"{error.retry_after:.1f}s"),
             ], emoji="⏳")
             return
 
         log.error_tree("Download Command Error", error, [
-            ("User", str(interaction.user)),
+            ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+            ("User ID", str(interaction.user.id)),
         ])
 
         try:

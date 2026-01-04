@@ -128,7 +128,8 @@ class SyriaBot(commands.Bot):
             )
         except Exception as e:
             log.tree("Command Usage Track Failed", [
-                ("User", str(interaction.user)),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("User ID", str(interaction.user.id)),
                 ("Command", command.name if command else "Unknown"),
                 ("Error", str(e)[:50]),
             ], emoji="⚠️")
@@ -141,7 +142,8 @@ class SyriaBot(commands.Bot):
         """Handle app command errors."""
         log.error_tree("App Command Error", error, [
             ("Command", interaction.command.name if interaction.command else "Unknown"),
-            ("User", str(interaction.user)),
+            ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+            ("User ID", str(interaction.user.id)),
         ])
 
     async def _init_services(self) -> None:

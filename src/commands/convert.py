@@ -151,7 +151,8 @@ class ConvertCog(commands.Cog):
                 source_name = media.filename
             except Exception as e:
                 log.tree("Attachment Read Failed", [
-                    ("User", str(interaction.user)),
+                    ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                    ("User ID", str(interaction.user.id)),
                     ("File", media.filename),
                     ("Error", str(e)),
                 ], emoji="❌")
@@ -203,7 +204,8 @@ class ConvertCog(commands.Cog):
                 source_name = url.split("/")[-1].split("?")[0]
 
         log.tree("Convert Command", [
-            ("User", str(interaction.user)),
+            ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+            ("User ID", str(interaction.user.id)),
             ("Source", source_name[:50]),
             ("Type", "Video" if is_video else "Image"),
         ], emoji="CONVERT")
@@ -229,7 +231,8 @@ class ConvertCog(commands.Cog):
             await interaction.response.send_message(embed=embed, ephemeral=True)
         else:
             log.tree("Convert Command Error", [
-                ("User", str(interaction.user)),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("User ID", str(interaction.user.id)),
                 ("Error", f"{type(error).__name__}: {str(error)}"),
             ], emoji="❌")
             if not interaction.response.is_done():

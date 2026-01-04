@@ -165,7 +165,8 @@ class RankCog(commands.Cog):
         except Exception as e:
             # Fallback to embed if image generation fails
             log.tree("Rank Card Generation Failed", [
-                ("User", str(member)),
+                ("User", f"{member.name} ({member.display_name})"),
+                ("User ID", str(member.id)),
                 ("Error", str(e)),
             ], emoji="⚠️")
 
@@ -257,7 +258,8 @@ class RankCog(commands.Cog):
             return
 
         log.tree("Rank Command Error", [
-            ("User", str(interaction.user)),
+            ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+            ("User ID", str(interaction.user.id)),
             ("Error", str(error)),
         ], emoji="❌")
 

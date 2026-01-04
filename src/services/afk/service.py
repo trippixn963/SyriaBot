@@ -142,7 +142,8 @@ class AFKService:
             ], emoji="👋")
         except discord.HTTPException as e:
             log.tree("AFK Welcome Back Failed", [
-                ("User", str(message.author)),
+                ("User", f"{message.author.name} ({message.author.display_name})"),
+                ("User ID", str(message.author.id)),
                 ("Error", str(e)[:50]),
             ], emoji="⚠️")
 

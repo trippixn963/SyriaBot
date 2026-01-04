@@ -1455,7 +1455,8 @@ class TempVoiceService:
                         except discord.HTTPException as e:
                             log.error_tree("Blocked User Kick Failed", e, [
                                 ("Channel", channel.name),
-                                ("User", str(blocked_user)),
+                                ("User", f"{blocked_user.name} ({blocked_user.display_name})"),
+                                ("User ID", str(blocked_user.id)),
                             ])
                     blocked_count += 1
 

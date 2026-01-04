@@ -334,7 +334,8 @@ class RateLimiter:
                     await interaction.response.send_message(embed=embed, ephemeral=True)
             except discord.HTTPException as e:
                 log.tree("Rate Limit Response Failed", [
-                    ("User", str(member)),
+                    ("User", f"{member.name} ({member.display_name})"),
+                    ("User ID", str(member.id)),
                     ("Error", str(e)),
                 ], emoji="❌")
 
@@ -365,7 +366,8 @@ class RateLimiter:
 
             except discord.HTTPException as e:
                 log.tree("Rate Limit Reply Failed", [
-                    ("User", str(member)),
+                    ("User", f"{member.name} ({member.display_name})"),
+                    ("User ID", str(member.id)),
                     ("Error", str(e)),
                 ], emoji="❌")
 
