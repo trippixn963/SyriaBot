@@ -7,6 +7,7 @@ Interactive view for browsing image search results.
 Author: حَـــــنَّـــــا
 """
 
+import io
 import discord
 from discord import ui
 from typing import Optional
@@ -15,6 +16,12 @@ from src.core.logger import log
 from src.core.colors import COLOR_SUCCESS, COLOR_GOLD
 from src.services.image_service import ImageResult
 from src.utils.footer import set_footer
+from src.utils.http import http_session
+
+
+# Custom emojis
+SAVE_EMOJI = "<:save:1455776703468273825>"
+DELETE_EMOJI = "<:delete:1455710362539397192>"
 
 
 # =============================================================================
@@ -157,22 +164,58 @@ class ImageView(ui.View):
             self.current_index -= 1
         await self._update_message(interaction, "prev")
 
-    @ui.button(label="", emoji="📥", style=discord.ButtonStyle.secondary, custom_id="download")
+    @ui.button(label="", emoji=discord.PartialEmoji.from_str(SAVE_EMOJI), style=discord.ButtonStyle.secondary, custom_id="download")
     async def download_button(self, interaction: discord.Interaction, button: ui.Button):
-        """Send direct download link."""
+        """Download and send image as .gif for easy Discord saving."""
+        await interaction.response.defer(ephemeral=True)
+
         image = self.images[self.current_index]
-        await interaction.response.send_message(
-            f"📥 **Direct Link:** {image.url}",
-            ephemeral=True
-        )
-        log.tree("Image Download", [
+
+        log.tree("Image Download Started", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("User ID", str(interaction.user.id)),
             ("Query", self.query[:30]),
             ("Position", f"{self.current_index + 1}/{len(self.images)}"),
+            ("URL", image.url[:60]),
         ], emoji="📥")
 
-    @ui.button(label="", emoji="🗑️", style=discord.ButtonStyle.secondary, custom_id="delete")
+        try:
+            # Fetch the image
+            session = await http_session.get_session()
+            async with session.get(image.url, timeout=30) as response:
+                if response.status != 200:
+                    await interaction.followup.send("Failed to download image.", ephemeral=True)
+                    log.tree("Image Download Failed", [
+                        ("User", f"{interaction.user.name}"),
+                        ("User ID", str(interaction.user.id)),
+                        ("Status", str(response.status)),
+                    ], emoji="❌")
+                    return
+
+                image_bytes = await response.read()
+
+            # Send as .gif for right-click save support
+            file = discord.File(
+                fp=io.BytesIO(image_bytes),
+                filename="discord.gg-syria.gif"
+            )
+            await interaction.followup.send(file=file, ephemeral=True)
+
+            log.tree("Image Download Complete", [
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("User ID", str(interaction.user.id)),
+                ("Size", f"{len(image_bytes) // 1024}KB"),
+            ], emoji="✅")
+
+        except Exception as e:
+            log.tree("Image Download Failed", [
+                ("User", f"{interaction.user.name}"),
+                ("User ID", str(interaction.user.id)),
+                ("Error", str(e)[:50]),
+            ], emoji="❌")
+            await interaction.followup.send("Failed to download image.", ephemeral=True)
+
+    @ui.button(label="", emoji=discord.PartialEmoji.from_str(DELETE_EMOJI), style=discord.ButtonStyle.secondary, custom_id="delete")
     async def delete_button(self, interaction: discord.Interaction, button: ui.Button):
         """Delete the message."""
         log.tree("Image View Deleted", [
