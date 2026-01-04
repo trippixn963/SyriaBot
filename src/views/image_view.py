@@ -8,6 +8,7 @@ Author: حَـــــنَّـــــا
 """
 
 import io
+import aiohttp
 import discord
 from discord import ui
 from typing import Optional
@@ -181,8 +182,8 @@ class ImageView(ui.View):
 
         try:
             # Fetch the image
-            session = await http_session.get_session()
-            async with session.get(image.url, timeout=30) as response:
+            timeout = aiohttp.ClientTimeout(total=30)
+            async with http_session.session.get(image.url, timeout=timeout) as response:
                 if response.status != 200:
                     await interaction.followup.send("Failed to download image.", ephemeral=True)
                     log.tree("Image Download Failed", [
