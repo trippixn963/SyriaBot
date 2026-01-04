@@ -67,7 +67,7 @@ class ImageCog(commands.Cog):
         query="What to search for",
     )
     @app_commands.guilds(discord.Object(id=config.GUILD_ID))
-    @app_commands.checks.cooldown(1, 5, key=lambda i: i.user.id)
+    @app_commands.checks.cooldown(1, 60, key=lambda i: i.user.id)
     async def image(
         self,
         interaction: discord.Interaction,

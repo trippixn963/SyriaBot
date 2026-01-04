@@ -261,11 +261,57 @@ class DownloadCog(commands.Cog):
         description="Download media from Instagram, Twitter/X, or TikTok"
     )
     @app_commands.describe(url="The URL to download from (Instagram, Twitter/X, or TikTok)")
-    @app_commands.checks.cooldown(1, 10, key=lambda i: i.user.id)
+    @app_commands.checks.cooldown(1, 60, key=lambda i: i.user.id)
     async def download(self, interaction: discord.Interaction, url: str) -> None:
         """Download media from a social media URL."""
         await interaction.response.defer()
         await handle_download(interaction, url, is_reply=False)
+
+    @download.error
+    async def download_error(
+        self,
+        interaction: discord.Interaction,
+        error: app_commands.AppCommandError
+    ) -> None:
+        """Handle download command errors."""
+        if isinstance(error, app_commands.CommandOnCooldown):
+            embed = discord.Embed(
+                description=f"Please wait {error.retry_after:.1f}s before downloading again.",
+                color=COLOR_WARNING
+            )
+            set_footer(embed)
+
+            try:
+                if not interaction.response.is_done():
+                    await interaction.response.send_message(embed=embed, ephemeral=True)
+                else:
+                    await interaction.followup.send(embed=embed, ephemeral=True)
+            except discord.HTTPException:
+                pass
+
+            log.tree("Download Command Cooldown", [
+                ("User", str(interaction.user)),
+                ("Retry After", f"{error.retry_after:.1f}s"),
+            ], emoji="⏳")
+            return
+
+        log.error_tree("Download Command Error", error, [
+            ("User", str(interaction.user)),
+        ])
+
+        try:
+            embed = discord.Embed(
+                description="An error occurred while downloading.",
+                color=COLOR_ERROR
+            )
+            set_footer(embed)
+
+            if not interaction.response.is_done():
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+            else:
+                await interaction.followup.send(embed=embed, ephemeral=True)
+        except discord.HTTPException:
+            pass
 
 
 async def setup(bot: commands.Bot) -> None:
