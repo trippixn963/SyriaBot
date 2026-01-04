@@ -70,7 +70,9 @@ class BumpService:
         if self._task:
             self._task.cancel()
             self._task = None
-        log.info("Bump scheduler stopped")
+        log.tree("Bump Scheduler Stopped", [
+            ("Status", "Stopped"),
+        ], emoji="🛑")
 
     def _load_data(self) -> None:
         """Load bump data from file."""
@@ -85,9 +87,18 @@ class BumpService:
                     elapsed_min = int((time.time() - self._last_bump_time) / 60)
                     log.tree("Bump Data Loaded", [
                         ("Last Bump", f"{elapsed_min} min ago"),
+                        ("File", str(self.DATA_FILE)),
                     ], emoji="📊")
+            else:
+                log.tree("Bump Data", [
+                    ("Status", "No previous data"),
+                    ("File", str(self.DATA_FILE)),
+                ], emoji="📊")
         except Exception as e:
-            log.warning(f"Failed to load bump data: {e}")
+            log.tree("Bump Data Load Failed", [
+                ("File", str(self.DATA_FILE)),
+                ("Error", str(e)[:50]),
+            ], emoji="⚠️")
 
     def _save_data(self) -> None:
         """Save bump data to file."""
@@ -99,7 +110,10 @@ class BumpService:
                     "last_reminder_time": self._last_reminder_time,
                 }, f, indent=2)
         except Exception as e:
-            log.warning(f"Failed to save bump data: {e}")
+            log.tree("Bump Data Save Failed", [
+                ("File", str(self.DATA_FILE)),
+                ("Error", str(e)[:50]),
+            ], emoji="⚠️")
 
     def record_bump(self) -> None:
         """Record that a bump just happened."""
@@ -176,7 +190,11 @@ class BumpService:
     async def _send_reminder(self) -> None:
         """Send a bump reminder in the designated channel."""
         if not self.bot or not self.bump_channel_id:
-            log.warning("Bump service not properly configured")
+            log.tree("Bump Reminder Skipped", [
+                ("Reason", "Service not configured"),
+                ("Bot", "Missing" if not self.bot else "OK"),
+                ("Channel ID", str(self.bump_channel_id) if self.bump_channel_id else "Missing"),
+            ], emoji="⚠️")
             return
 
         channel = self.bot.get_channel(self.bump_channel_id)
@@ -205,16 +223,21 @@ class BumpService:
 
             log.tree("Bump Reminder Sent", [
                 ("Channel", f"#{channel.name}"),
+                ("Channel ID", str(channel.id)),
+                ("Role ID", str(self.ping_role_id)),
                 ("Time", datetime.now(timezone.utc).strftime("%H:%M UTC")),
             ], emoji="📢")
 
         except discord.Forbidden:
             log.tree("Bump Reminder Failed", [
                 ("Reason", "No permission"),
-                ("Channel", str(self.bump_channel_id)),
+                ("Channel", f"#{channel.name}"),
+                ("Channel ID", str(self.bump_channel_id)),
             ], emoji="❌")
         except discord.HTTPException as e:
             log.tree("Bump Reminder Failed", [
+                ("Channel", f"#{channel.name}"),
+                ("Channel ID", str(self.bump_channel_id)),
                 ("Error", str(e)[:50]),
             ], emoji="❌")
 
