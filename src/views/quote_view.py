@@ -26,10 +26,12 @@ class QuoteView(ui.View):
     def __init__(
         self,
         image_bytes: bytes,
+        requester_id: int,
         timeout: float = 300,
     ):
         super().__init__(timeout=timeout)
         self.image_bytes = image_bytes
+        self.requester_id = requester_id
         self.message: Optional[discord.Message] = None
 
     @ui.button(
@@ -39,7 +41,21 @@ class QuoteView(ui.View):
         custom_id="quote_save",
     )
     async def save_button(self, interaction: discord.Interaction, button: ui.Button):
-        """Send PNG with .gif filename for easy Discord saving (full quality)."""
+        """Send as public .gif and delete original to avoid spam."""
+        # Only allow the requester to save
+        if interaction.user.id != self.requester_id:
+            await interaction.response.send_message(
+                "Only the person who made this quote can save it.",
+                ephemeral=True
+            )
+            log.tree("Quote Save Rejected", [
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("User ID", str(interaction.user.id)),
+                ("Owner ID", str(self.requester_id)),
+                ("Reason", "Not quote owner"),
+            ], emoji="🚫")
+            return
+
         guild_name = interaction.guild.name if interaction.guild else "DM"
 
         log.tree("Quote Save Pressed", [
@@ -49,23 +65,29 @@ class QuoteView(ui.View):
             ("Size", f"{len(self.image_bytes) // 1024}KB"),
         ], emoji="💾")
 
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer()
 
         try:
-            # Send original PNG bytes with .gif filename
-            # Discord allows right-click save on .gif files
-            # PNG format preserves full quality (no 256 color limit like real GIF)
+            # Send as public .gif (permanent CDN link)
             file = discord.File(
                 fp=io.BytesIO(self.image_bytes),
                 filename="discord.gg-syria.gif"
             )
-            await interaction.followup.send(file=file, ephemeral=True)
+            await interaction.followup.send(file=file)
+
+            # Delete original message to avoid spam
+            if self.message:
+                try:
+                    await self.message.delete()
+                except discord.NotFound:
+                    pass
 
             log.tree("Quote Saved", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("User ID", str(interaction.user.id)),
-                ("Format", "PNG (full quality)"),
+                ("Format", "PNG as .gif"),
                 ("Size", f"{len(self.image_bytes) // 1024}KB"),
+                ("Original", "Deleted"),
             ], emoji="✅")
 
         except Exception as e:

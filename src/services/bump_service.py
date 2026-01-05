@@ -176,7 +176,8 @@ class BumpService:
                 while self._running:
                     await asyncio.sleep(300)  # Check every 5 minutes
                     # If a new bump happened, break out to restart cooldown
-                    if self._last_bump_time and self._last_bump_time > self._last_reminder_time:
+                    # Note: _last_reminder_time can be None after record_bump() is called
+                    if self._last_bump_time and self._last_reminder_time and self._last_bump_time > self._last_reminder_time:
                         break
 
             except asyncio.CancelledError:

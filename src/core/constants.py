@@ -71,6 +71,14 @@ TEXT_PADDING_RATIO = 0.05    # Horizontal padding = 5% of image width
 DEFAULT_BAR_COLOR = (255, 255, 255)   # White
 DEFAULT_TEXT_COLOR = (0, 0, 0)        # Black
 
+# Watermark settings
+WATERMARK_TEXT = "discord.gg/syria"
+WATERMARK_COLOR = (212, 175, 55)      # Gold
+WATERMARK_PADDING_RATIO = 0.015       # 1.5% of image width for padding
+WATERMARK_FONT_SIZE_RATIO = 0.03      # 3% of image width
+WATERMARK_MIN_FONT = 10               # Minimum font size
+WATERMARK_MAX_FONT = 36               # Maximum font size
+
 
 # =============================================================================
 # Quote Image Styling

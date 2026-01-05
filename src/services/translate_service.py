@@ -12,6 +12,7 @@ import aiohttp
 from dataclasses import dataclass
 from typing import Optional, Dict, Tuple
 from deep_translator import GoogleTranslator
+from deep_translator.exceptions import TranslationNotFound
 from langdetect import detect, LangDetectException
 
 from src.core.logger import log
@@ -418,6 +419,30 @@ class TranslateService:
                 target_name=target_name,
                 source_flag=source_flag,
                 target_flag=target_flag,
+            )
+
+        except TranslationNotFound:
+            # This can happen when:
+            # - Text is too short or simple
+            # - Text is already in the target language
+            # - API couldn't find a translation
+            log.tree("Translation Not Found", [
+                ("Text", text[:50]),
+                ("Target", resolved_target),
+                ("Reason", "API returned no translation"),
+            ], emoji="⚠️")
+
+            return TranslationResult(
+                success=False,
+                original_text=text,
+                translated_text="",
+                source_lang=source_lang,
+                target_lang=resolved_target,
+                source_name="",
+                target_name="",
+                source_flag="",
+                target_flag="",
+                error="Could not translate this text. It may already be in the target language or too short to translate."
             )
 
         except Exception as e:

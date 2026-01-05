@@ -181,15 +181,20 @@ class ImageCog(commands.Cog):
         else:
             new_remaining = -1
 
-        # Create view and embed
+        # Create view and embed with attached image
         view = ImageView(
             images=result.images,
             query=query,
             requester_id=user.id,
         )
-        embed = view.create_embed()
+        embed, file = await view.create_embed_with_file()
 
-        msg = await interaction.followup.send(embed=embed, view=view)
+        if file:
+            msg = await interaction.followup.send(embed=embed, file=file, view=view)
+        else:
+            # Fallback to URL-based if download failed
+            msg = await interaction.followup.send(embed=embed, view=view)
+
         view.message = msg
 
         log.tree("Image Search Complete", [
@@ -197,6 +202,7 @@ class ImageCog(commands.Cog):
             ("User ID", str(user.id)),
             ("Query", query[:50] + "..." if len(query) > 50 else query),
             ("Results", str(len(result.images))),
+            ("Attached", "Yes" if file else "No (fallback)"),
             ("Remaining", "Unlimited" if new_remaining == -1 else str(new_remaining)),
         ], emoji="✅")
 

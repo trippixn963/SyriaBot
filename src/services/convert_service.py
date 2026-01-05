@@ -48,6 +48,12 @@ from src.core.constants import (
     DEFAULT_TEXT_COLOR,
     IMAGE_EXTENSIONS,
     VIDEO_EXTENSIONS,
+    WATERMARK_TEXT,
+    WATERMARK_COLOR,
+    WATERMARK_PADDING_RATIO,
+    WATERMARK_FONT_SIZE_RATIO,
+    WATERMARK_MIN_FONT,
+    WATERMARK_MAX_FONT,
 )
 from src.utils.http import http_session, DOWNLOAD_TIMEOUT
 from src.utils.text import wrap_text
@@ -190,7 +196,7 @@ class ConvertService:
         Calculate layout with DYNAMIC sizing based on image dimensions (NotSoBot style).
 
         Bar height = 20% of image height
-        Font size = 70% of bar height
+        Font size = 70% of bar height, BUT constrained to fit text width
 
         Returns:
             (font, wrapped_lines, bar_height, text_padding)
@@ -198,16 +204,37 @@ class ConvertService:
         # Calculate bar height based on image (20% of height, minimum 80px)
         bar_height = max(MIN_BAR_HEIGHT, int(img_height * BAR_HEIGHT_RATIO))
 
-        # Calculate font size based on bar height (70% of bar)
-        font_size = max(24, int(bar_height * FONT_SIZE_RATIO))
-        font = self._get_font(font_size)
-
         # Calculate horizontal padding (5% of image width, minimum 20px)
         text_padding = max(20, int(img_width * TEXT_PADDING_RATIO))
-
-        # Wrap text at this font size
         max_text_width = img_width - (text_padding * 2)
+
+        # Calculate initial font size based on bar height (70% of bar)
+        initial_font_size = max(24, int(bar_height * FONT_SIZE_RATIO))
+
+        # Find optimal font size that fits both height AND width constraints
+        # Start from bar-based size and shrink until text fits width
+        font_size = initial_font_size
+        font = self._get_font(font_size)
         lines = wrap_text(text, font, max_text_width)
+
+        # Shrink font until all lines fit within max_text_width
+        # This handles single long words that can't wrap (like "Adnan:")
+        while font_size > 16:
+            all_lines_fit = True
+            for line in lines:
+                bbox = font.getbbox(line)
+                line_width = bbox[2] - bbox[0]
+                if line_width > max_text_width:
+                    all_lines_fit = False
+                    break
+
+            if all_lines_fit:
+                break
+
+            # Shrink font and re-wrap
+            font_size -= 2
+            font = self._get_font(font_size)
+            lines = wrap_text(text, font, max_text_width)
 
         # If text wraps to multiple lines, we may need to expand bar height
         line_height = font.getbbox("Ay")[3] - font.getbbox("Ay")[1]
@@ -223,6 +250,36 @@ class ConvertService:
             bar_height = min_bar_for_text
 
         return font, lines, bar_height, text_padding
+
+    def _add_watermark(self, img: Image.Image) -> Image.Image:
+        """Add small gold watermark to bottom right corner, scaled to image size."""
+        # Calculate font size based on image width (3% of width, clamped)
+        font_size = max(WATERMARK_MIN_FONT, min(WATERMARK_MAX_FONT, int(img.width * WATERMARK_FONT_SIZE_RATIO)))
+        font = self._get_font(font_size)
+
+        # Calculate padding based on image size (1.5% of width, min 8px)
+        padding = max(8, int(img.width * WATERMARK_PADDING_RATIO))
+
+        draw = ImageDraw.Draw(img)
+
+        # Get text dimensions
+        bbox = font.getbbox(WATERMARK_TEXT)
+        text_width = bbox[2] - bbox[0]
+        text_height = bbox[3] - bbox[1]
+
+        # Position at bottom right with dynamic padding
+        x = img.width - text_width - padding - bbox[0]
+        y = img.height - text_height - padding - bbox[1]
+
+        # Draw dark outline for visibility on any background
+        outline_color = (0, 0, 0)  # Black outline
+        for ox, oy in [(-1, -1), (-1, 1), (1, -1), (1, 1), (-1, 0), (1, 0), (0, -1), (0, 1)]:
+            draw.text((x + ox, y + oy), WATERMARK_TEXT, font=font, fill=outline_color)
+
+        # Draw gold text on top
+        draw.text((x, y), WATERMARK_TEXT, font=font, fill=WATERMARK_COLOR)
+
+        return img
 
     async def fetch_image(self, url: str) -> Optional[bytes]:
         """Fetch image from URL."""
@@ -362,14 +419,20 @@ class ConvertService:
                 # No text - just convert to GIF without adding bar
                 new_img = img
 
-            # Save as PNG (full quality) - filename will be .gif for Discord starring
-            output = io.BytesIO()
+            # Ensure RGB mode for watermark
             if new_img.mode == "RGBA":
-                # Keep RGBA for PNG
-                pass
+                # Composite RGBA on white background for consistent watermark
+                background = Image.new("RGB", new_img.size, (255, 255, 255))
+                background.paste(new_img, mask=new_img.split()[3])
+                new_img = background
             elif new_img.mode != "RGB":
                 new_img = new_img.convert("RGB")
 
+            # Add watermark
+            new_img = self._add_watermark(new_img)
+
+            # Save as PNG (full quality) - filename will be .gif for Discord starring
+            output = io.BytesIO()
             new_img.save(output, format="PNG", optimize=True)
             result_bytes = output.getvalue()
 
@@ -476,11 +539,39 @@ class ConvertService:
                                     draw.text(orig_width // 2, text_y, text)
                                     draw(new_frame)
 
+                                # Add watermark to bottom right (scaled, with outline)
+                                watermark_size = max(WATERMARK_MIN_FONT, min(WATERMARK_MAX_FONT, int(orig_width * WATERMARK_FONT_SIZE_RATIO)))
+                                watermark_padding = max(8, int(orig_width * WATERMARK_PADDING_RATIO))
+                                watermark_color = f'rgb({WATERMARK_COLOR[0]},{WATERMARK_COLOR[1]},{WATERMARK_COLOR[2]})'
+                                with Drawing() as wm_draw:
+                                    wm_draw.font = self._font_path or 'DejaVu-Sans-Bold'
+                                    wm_draw.font_size = watermark_size
+                                    wm_draw.fill_color = Color(watermark_color)
+                                    wm_draw.stroke_color = Color('black')
+                                    wm_draw.stroke_width = 1
+                                    wm_draw.text_alignment = 'right'
+                                    wm_draw.gravity = 'south_east'
+                                    wm_draw.text(watermark_padding, watermark_padding, WATERMARK_TEXT)
+                                    wm_draw(new_frame)
+
                                 # Copy frame delay
                                 new_frame.delay = f.delay or 10
                                 output_img.sequence.append(new_frame.clone())
                         else:
-                            # No text, just clone the frame
+                            # No text, just add watermark to original frame (scaled, with outline)
+                            watermark_size = max(WATERMARK_MIN_FONT, min(WATERMARK_MAX_FONT, int(orig_width * WATERMARK_FONT_SIZE_RATIO)))
+                            watermark_padding = max(8, int(orig_width * WATERMARK_PADDING_RATIO))
+                            watermark_color = f'rgb({WATERMARK_COLOR[0]},{WATERMARK_COLOR[1]},{WATERMARK_COLOR[2]})'
+                            with Drawing() as wm_draw:
+                                wm_draw.font = self._font_path or 'DejaVu-Sans-Bold'
+                                wm_draw.font_size = watermark_size
+                                wm_draw.fill_color = Color(watermark_color)
+                                wm_draw.stroke_color = Color('black')
+                                wm_draw.stroke_width = 1
+                                wm_draw.text_alignment = 'right'
+                                wm_draw.gravity = 'south_east'
+                                wm_draw.text(watermark_padding, watermark_padding, WATERMARK_TEXT)
+                                wm_draw(f)
                             f.delay = f.delay or 10
                             output_img.sequence.append(f.clone())
 
@@ -565,6 +656,21 @@ class ConvertService:
                             current_y += line_height + line_spacing
                     else:
                         new_frame = frame
+
+                    # Add watermark to frame (scaled to image size, with outline)
+                    wm_font_size = max(WATERMARK_MIN_FONT, min(WATERMARK_MAX_FONT, int(orig_width * WATERMARK_FONT_SIZE_RATIO)))
+                    wm_padding = max(8, int(orig_width * WATERMARK_PADDING_RATIO))
+                    wm_font = self._get_font(wm_font_size)
+                    wm_draw = ImageDraw.Draw(new_frame)
+                    wm_bbox = wm_font.getbbox(WATERMARK_TEXT)
+                    wm_width = wm_bbox[2] - wm_bbox[0]
+                    wm_height = wm_bbox[3] - wm_bbox[1]
+                    wm_x = new_frame.width - wm_width - wm_padding - wm_bbox[0]
+                    wm_y = new_frame.height - wm_height - wm_padding - wm_bbox[1]
+                    # Draw outline
+                    for ox, oy in [(-1, -1), (-1, 1), (1, -1), (1, 1), (-1, 0), (1, 0), (0, -1), (0, 1)]:
+                        wm_draw.text((wm_x + ox, wm_y + oy), WATERMARK_TEXT, font=wm_font, fill=(0, 0, 0))
+                    wm_draw.text((wm_x, wm_y), WATERMARK_TEXT, font=wm_font, fill=WATERMARK_COLOR)
 
                     frames.append(new_frame)
                     frame_count += 1
@@ -779,18 +885,32 @@ class ConvertService:
                 # DYNAMIC font sizing (NotSoBot style) - same as images
                 # Bar height = 20% of scaled video height, minimum 60px
                 bar_height = max(60, int(scale_height * BAR_HEIGHT_RATIO))
-                # Font size = 70% of bar height, minimum 20px
+                # Initial font size = 70% of bar height, minimum 20px
                 font_size = max(20, int(bar_height * FONT_SIZE_RATIO))
                 # Vertical padding = 10% of bar height, minimum 8px
                 vertical_padding = max(8, int(bar_height * BAR_PADDING_RATIO))
 
+                # Max text width (90% of video width for padding)
+                max_text_width = int(scale_width * 0.90)
+
+                # Find longest word to ensure it fits
+                # Shrink font if any single word is too wide (can't wrap single words)
+                words = text.split()
+                longest_word = max(words, key=len) if words else text
+
+                # Estimate: char width ≈ 0.6 * font_size for most fonts
+                # Shrink font until longest word fits
+                while font_size > 16:
+                    estimated_word_width = len(longest_word) * font_size * 0.6
+                    if estimated_word_width <= max_text_width:
+                        break
+                    font_size -= 2
+
                 # Calculate max chars per line based on width and font size
-                # Average char width is roughly 0.5 * font_size for most fonts
-                max_chars = int((scale_width * 0.90) / (font_size * 0.5))
+                max_chars = int(max_text_width / (font_size * 0.5))
                 max_chars = max(max_chars, 8)  # At least 8 chars per line
 
                 # Wrap text into lines
-                words = text.split()
                 lines = []
                 current_line = ""
                 for word in words:
@@ -842,6 +962,18 @@ class ConvertService:
                             f":fontsize={font_size}:fontcolor={text_color_hex}"
                             f":x=(w-text_w)/2:y=h-{bar_height}+{y_pos}"
                         )
+
+            # Add watermark at bottom right (scaled, with black outline)
+            watermark_size = max(WATERMARK_MIN_FONT, min(WATERMARK_MAX_FONT, int(scale_width * WATERMARK_FONT_SIZE_RATIO)))
+            watermark_padding = max(8, int(scale_width * WATERMARK_PADDING_RATIO))
+            watermark_hex = "#{:02x}{:02x}{:02x}".format(*WATERMARK_COLOR)
+            escaped_watermark = WATERMARK_TEXT.replace("'", "'\\''").replace(":", "\\:")
+            filters.append(
+                f"drawtext=text='{escaped_watermark}'{font_option}"
+                f":fontsize={watermark_size}:fontcolor={watermark_hex}"
+                f":borderw=1:bordercolor=black"
+                f":x=w-text_w-{watermark_padding}:y=h-text_h-{watermark_padding}"
+            )
 
             # Add fps filter
             filters.append(f"fps={GIF_FPS}")

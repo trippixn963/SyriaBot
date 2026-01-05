@@ -31,15 +31,18 @@ class GalleryService:
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.cleanup_task.start()
+        # Cleanup disabled - let Discord's 7-day auto-archive handle empty threads
+        # self.cleanup_task.start()
         log.tree("Gallery Service Initialized", [
             ("Gallery ID", str(config.GALLERY_CHANNEL_ID)),
             ("Memes ID", str(config.MEMES_CHANNEL_ID)),
+            ("Thread Cleanup", "Disabled"),
         ], emoji="📸")
 
     def stop(self):
-        """Stop the cleanup task."""
-        self.cleanup_task.cancel()
+        """Stop the cleanup task (if running)."""
+        if self.cleanup_task.is_running():
+            self.cleanup_task.cancel()
         log.tree("Gallery Service Stopped", [], emoji="📸")
 
     @tasks.loop(hours=1)
@@ -149,6 +152,13 @@ class GalleryService:
             return True
 
         # Valid media - add heart and create thread
+        channel_name = "Gallery" if channel_type == self.GALLERY else "Memes"
+        log.tree(f"{channel_name} Valid Post Detected", [
+            ("User", f"{message.author.name} ({message.author.display_name})"),
+            ("User ID", str(message.author.id)),
+            ("Attachments", str(len(message.attachments))),
+        ], emoji="📸")
+
         await self._handle_valid_post(message, channel_type)
         return True
 
@@ -251,14 +261,20 @@ class GalleryService:
             return
 
         try:
-            # Build embed - same design for both channels
+            # Build embed - different title for gallery vs memes
             media_type = "🎬 video" if is_video else "🖼️ image"
+            title = "🔔 New Gallery Post" if channel_type == self.GALLERY else "🔔 New Meme Post"
+
             embed = discord.Embed(
-                title="🔔 New Gallery Post",
+                title=title,
                 description=f"Posted a new {media_type}",
                 color=COLOR_GOLD
             )
-            embed.set_author(name=message.author.display_name)
+            embed.set_author(
+                name=message.author.display_name,
+                icon_url=message.author.display_avatar.url
+            )
+            embed.set_thumbnail(url=message.author.display_avatar.url)
             set_footer(embed)
 
             # Create view with comment button if thread exists
@@ -319,5 +335,10 @@ class GalleryService:
                     ("User", f"{user.name}"),
                     ("Error", str(e)[:50]),
                 ], emoji="⚠️")
+        else:
+            log.tree(f"{channel_name} Heart Reaction", [
+                ("User", f"{user.name}"),
+                ("Message ID", str(reaction.message.id)),
+            ], emoji="❤️")
 
         return True
