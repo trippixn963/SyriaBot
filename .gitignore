@@ -1,6 +1,12 @@
 # Claude
 CLAUDE.md
 
+# Scripts (internal use only)
+scripts/
+
+# Assets
+assets/
+
 # Environment
 .env
 *.env
