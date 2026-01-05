@@ -1,5 +1,9 @@
 # SyriaBot
 
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&logo=python&logoColor=white)
+![Discord.py](https://img.shields.io/badge/Discord.py-2.7+-5865F2?style=flat-square&logo=discord&logoColor=white)
+![License](https://img.shields.io/badge/License-Educational-red?style=flat-square)
+
 Custom Discord bot built for [discord.gg/syria](https://discord.gg/syria).
 
 ## Features
