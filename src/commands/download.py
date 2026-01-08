@@ -2,7 +2,8 @@
 SyriaBot - Download Command
 ===========================
 
-Slash command to download media from Instagram, Twitter/X, and TikTok.
+Slash command to download media from social media platforms.
+Supported: Instagram, Twitter/X, TikTok, Reddit, Facebook, Snapchat, Twitch.
 Free users: 5/week limit. Boosters: Unlimited.
 Clean output: just the video + ping, no embeds.
 
@@ -120,7 +121,7 @@ async def handle_download(
     if not platform:
         embed = discord.Embed(
             title="Unsupported URL",
-            description="Only Instagram, Twitter/X, and TikTok URLs are supported.",
+            description="Supported platforms: Instagram, Twitter/X, TikTok, Reddit, Facebook, Snapchat, Twitch.",
             color=COLOR_ERROR
         )
         set_footer(embed)
@@ -164,10 +165,58 @@ async def handle_download(
                 ("Error", str(e)[:50]),
             ], emoji="⚠️")
 
-    # Download silently (no status message)
+    # Send progress message
+    progress_msg = None
+    try:
+        if is_interaction:
+            progress_msg = await interaction_or_message.followup.send(
+                f"<:save:1455776703468273825> Downloading from **{platform.title()}**...",
+                wait=True
+            )
+        else:
+            progress_msg = await channel.send(
+                f"<:save:1455776703468273825> Downloading from **{platform.title()}**..."
+            )
+        log.tree("Download Progress Sent", [
+            ("User", f"{user.name}"),
+            ("Platform", platform.title()),
+        ], emoji="💬")
+    except discord.HTTPException as e:
+        log.tree("Download Progress Send Failed", [
+            ("User", f"{user.name}"),
+            ("Error", str(e)[:50]),
+        ], emoji="⚠️")
+
+    # Download
     result = await downloader.download(url)
 
+    # Update progress message
+    if progress_msg and result.success and len(result.files) > 0:
+        try:
+            await progress_msg.edit(
+                content=f"<:save:1455776703468273825> Processing **{len(result.files)}** file(s)..."
+            )
+            log.tree("Download Progress Updated", [
+                ("User", f"{user.name}"),
+                ("Files", str(len(result.files))),
+            ], emoji="💬")
+        except discord.HTTPException as e:
+            log.tree("Download Progress Update Failed", [
+                ("User", f"{user.name}"),
+                ("Error", str(e)[:50]),
+            ], emoji="⚠️")
+
     if not result.success:
+        # Delete progress message
+        if progress_msg:
+            try:
+                await progress_msg.delete()
+                log.tree("Download Progress Deleted", [
+                    ("Reason", "Download failed"),
+                ], emoji="🗑️")
+            except discord.HTTPException:
+                pass
+
         # Send ephemeral-like error (auto-delete for replies)
         embed = discord.Embed(
             title="Download Failed",
@@ -201,6 +250,9 @@ async def handle_download(
     else:
         new_remaining = -1
 
+    # Record lifetime download stats
+    db.record_download_stats(user.id, platform, file_count=len(result.files))
+
     # Upload files - just the video + ping, no embed
     try:
         files = []
@@ -210,6 +262,16 @@ async def handle_download(
             total_size += file_path.stat().st_size
             discord_file = discord.File(file_path, filename=file_path.name)
             files.append(discord_file)
+
+        # Delete progress message before sending files
+        if progress_msg:
+            try:
+                await progress_msg.delete()
+                log.tree("Download Progress Deleted", [
+                    ("Reason", "Sending files"),
+                ], emoji="🗑️")
+            except discord.HTTPException:
+                pass
 
         # Send just files with ping - no embed
         await channel.send(content=f"<@{user.id}>", files=files)
@@ -224,6 +286,16 @@ async def handle_download(
         ], emoji="✅")
 
     except discord.HTTPException as e:
+        # Delete progress message on error too
+        if progress_msg:
+            try:
+                await progress_msg.delete()
+                log.tree("Download Progress Deleted", [
+                    ("Reason", "Upload failed"),
+                ], emoji="🗑️")
+            except discord.HTTPException:
+                pass
+
         embed = discord.Embed(
             title="Upload Failed",
             description="The file couldn't be uploaded to Discord. It may be too large.",
@@ -258,10 +330,10 @@ class DownloadCog(commands.Cog):
 
     @app_commands.command(
         name="download",
-        description="Download media from Instagram, Twitter/X, or TikTok"
+        description="Download media from Instagram, Twitter, TikTok, Reddit & more"
     )
-    @app_commands.describe(url="The URL to download from (Instagram, Twitter/X, or TikTok)")
-    @app_commands.checks.cooldown(1, 60, key=lambda i: i.user.id)
+    @app_commands.describe(url="URL to download (Instagram, Twitter, TikTok, Reddit, Facebook, Snapchat, Twitch)")
+    @app_commands.checks.cooldown(1, 300, key=lambda i: i.user.id)
     async def download(self, interaction: discord.Interaction, url: str) -> None:
         """Download media from a social media URL."""
         await interaction.response.defer()

@@ -415,21 +415,24 @@ class ConvertService:
                     text_y = current_y - bbox[1]
                     draw.text((text_x, text_y), line, font=font, fill=text_color)
                     current_y += line_height + line_spacing
+
+                # Ensure RGB mode for watermark
+                if new_img.mode == "RGBA":
+                    # Composite RGBA on white background for consistent watermark
+                    background = Image.new("RGB", new_img.size, (255, 255, 255))
+                    background.paste(new_img, mask=new_img.split()[3])
+                    new_img = background
+                elif new_img.mode != "RGB":
+                    new_img = new_img.convert("RGB")
+
+                # Add watermark only when text is added (quotes already have watermark)
+                new_img = self._add_watermark(new_img)
             else:
-                # No text - just convert to GIF without adding bar
+                # No text - just convert to GIF without adding bar or watermark
+                # (preserves existing watermarks like quote images have)
                 new_img = img
-
-            # Ensure RGB mode for watermark
-            if new_img.mode == "RGBA":
-                # Composite RGBA on white background for consistent watermark
-                background = Image.new("RGB", new_img.size, (255, 255, 255))
-                background.paste(new_img, mask=new_img.split()[3])
-                new_img = background
-            elif new_img.mode != "RGB":
-                new_img = new_img.convert("RGB")
-
-            # Add watermark
-            new_img = self._add_watermark(new_img)
+                if new_img.mode != "RGB":
+                    new_img = new_img.convert("RGB")
 
             # Save as PNG (full quality) - filename will be .gif for Discord starring
             output = io.BytesIO()
@@ -558,20 +561,8 @@ class ConvertService:
                                 new_frame.delay = f.delay or 10
                                 output_img.sequence.append(new_frame.clone())
                         else:
-                            # No text, just add watermark to original frame (scaled, with outline)
-                            watermark_size = max(WATERMARK_MIN_FONT, min(WATERMARK_MAX_FONT, int(orig_width * WATERMARK_FONT_SIZE_RATIO)))
-                            watermark_padding = max(8, int(orig_width * WATERMARK_PADDING_RATIO))
-                            watermark_color = f'rgb({WATERMARK_COLOR[0]},{WATERMARK_COLOR[1]},{WATERMARK_COLOR[2]})'
-                            with Drawing() as wm_draw:
-                                wm_draw.font = self._font_path or 'DejaVu-Sans-Bold'
-                                wm_draw.font_size = watermark_size
-                                wm_draw.fill_color = Color(watermark_color)
-                                wm_draw.stroke_color = Color('black')
-                                wm_draw.stroke_width = 1
-                                wm_draw.text_alignment = 'right'
-                                wm_draw.gravity = 'south_east'
-                                wm_draw.text(watermark_padding, watermark_padding, WATERMARK_TEXT)
-                                wm_draw(f)
+                            # No text - just pass through without adding watermark
+                            # (preserves existing watermarks like quote images have)
                             f.delay = f.delay or 10
                             output_img.sequence.append(f.clone())
 
@@ -657,20 +648,22 @@ class ConvertService:
                     else:
                         new_frame = frame
 
-                    # Add watermark to frame (scaled to image size, with outline)
-                    wm_font_size = max(WATERMARK_MIN_FONT, min(WATERMARK_MAX_FONT, int(orig_width * WATERMARK_FONT_SIZE_RATIO)))
-                    wm_padding = max(8, int(orig_width * WATERMARK_PADDING_RATIO))
-                    wm_font = self._get_font(wm_font_size)
-                    wm_draw = ImageDraw.Draw(new_frame)
-                    wm_bbox = wm_font.getbbox(WATERMARK_TEXT)
-                    wm_width = wm_bbox[2] - wm_bbox[0]
-                    wm_height = wm_bbox[3] - wm_bbox[1]
-                    wm_x = new_frame.width - wm_width - wm_padding - wm_bbox[0]
-                    wm_y = new_frame.height - wm_height - wm_padding - wm_bbox[1]
-                    # Draw outline
-                    for ox, oy in [(-1, -1), (-1, 1), (1, -1), (1, 1), (-1, 0), (1, 0), (0, -1), (0, 1)]:
-                        wm_draw.text((wm_x + ox, wm_y + oy), WATERMARK_TEXT, font=wm_font, fill=(0, 0, 0))
-                    wm_draw.text((wm_x, wm_y), WATERMARK_TEXT, font=wm_font, fill=WATERMARK_COLOR)
+                    # Add watermark to frame only when text is added
+                    # (preserves existing watermarks like quote images have)
+                    if has_text:
+                        wm_font_size = max(WATERMARK_MIN_FONT, min(WATERMARK_MAX_FONT, int(orig_width * WATERMARK_FONT_SIZE_RATIO)))
+                        wm_padding = max(8, int(orig_width * WATERMARK_PADDING_RATIO))
+                        wm_font = self._get_font(wm_font_size)
+                        wm_draw = ImageDraw.Draw(new_frame)
+                        wm_bbox = wm_font.getbbox(WATERMARK_TEXT)
+                        wm_width = wm_bbox[2] - wm_bbox[0]
+                        wm_height = wm_bbox[3] - wm_bbox[1]
+                        wm_x = new_frame.width - wm_width - wm_padding - wm_bbox[0]
+                        wm_y = new_frame.height - wm_height - wm_padding - wm_bbox[1]
+                        # Draw outline
+                        for ox, oy in [(-1, -1), (-1, 1), (1, -1), (1, 1), (-1, 0), (1, 0), (0, -1), (0, 1)]:
+                            wm_draw.text((wm_x + ox, wm_y + oy), WATERMARK_TEXT, font=wm_font, fill=(0, 0, 0))
+                        wm_draw.text((wm_x, wm_y), WATERMARK_TEXT, font=wm_font, fill=WATERMARK_COLOR)
 
                     frames.append(new_frame)
                     frame_count += 1
@@ -876,11 +869,12 @@ class ConvertService:
             if effect_filter:
                 filters.append(effect_filter)
 
+            # Font option for drawtext filters
+            font_file = self._font_path or ""
+            font_option = f":fontfile='{font_file}'" if font_file else ""
+
             # Add text bar if text is provided
             if text:
-                # Find font path
-                font_file = self._font_path or ""
-                font_option = f":fontfile='{font_file}'" if font_file else ""
 
                 # DYNAMIC font sizing (NotSoBot style) - same as images
                 # Bar height = 20% of scaled video height, minimum 60px
@@ -963,17 +957,19 @@ class ConvertService:
                             f":x=(w-text_w)/2:y=h-{bar_height}+{y_pos}"
                         )
 
-            # Add watermark at bottom right (scaled, with black outline)
-            watermark_size = max(WATERMARK_MIN_FONT, min(WATERMARK_MAX_FONT, int(scale_width * WATERMARK_FONT_SIZE_RATIO)))
-            watermark_padding = max(8, int(scale_width * WATERMARK_PADDING_RATIO))
-            watermark_hex = "#{:02x}{:02x}{:02x}".format(*WATERMARK_COLOR)
-            escaped_watermark = WATERMARK_TEXT.replace("'", "'\\''").replace(":", "\\:")
-            filters.append(
-                f"drawtext=text='{escaped_watermark}'{font_option}"
-                f":fontsize={watermark_size}:fontcolor={watermark_hex}"
-                f":borderw=1:bordercolor=black"
-                f":x=w-text_w-{watermark_padding}:y=h-text_h-{watermark_padding}"
-            )
+            # Add watermark at bottom right only when text is added
+            # (preserves existing watermarks like quote images have)
+            if text:
+                watermark_size = max(WATERMARK_MIN_FONT, min(WATERMARK_MAX_FONT, int(scale_width * WATERMARK_FONT_SIZE_RATIO)))
+                watermark_padding = max(8, int(scale_width * WATERMARK_PADDING_RATIO))
+                watermark_hex = "#{:02x}{:02x}{:02x}".format(*WATERMARK_COLOR)
+                escaped_watermark = WATERMARK_TEXT.replace("'", "'\\''").replace(":", "\\:")
+                filters.append(
+                    f"drawtext=text='{escaped_watermark}'{font_option}"
+                    f":fontsize={watermark_size}:fontcolor={watermark_hex}"
+                    f":borderw=1:bordercolor=black"
+                    f":x=w-text_w-{watermark_padding}:y=h-text_h-{watermark_padding}"
+                )
 
             # Add fps filter
             filters.append(f"fps={GIF_FPS}")

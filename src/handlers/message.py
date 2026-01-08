@@ -36,9 +36,13 @@ DISBOARD_BOT_ID = 302050872383242240
 class MessageHandler(commands.Cog):
     """Handles message events."""
 
+    # Download reply cooldown (5 minutes = 300 seconds)
+    DOWNLOAD_REPLY_COOLDOWN = 300
+
     def __init__(self, bot: commands.Bot) -> None:
         """Initialize the message handler with bot reference."""
         self.bot = bot
+        self._download_cooldowns: dict[int, float] = {}  # user_id -> last_download_time
 
     async def _handle_reply_convert(self, message: discord.Message) -> None:
         """Handle replying 'convert' to an image/video - opens interactive editor."""
@@ -379,7 +383,34 @@ class MessageHandler(commands.Cog):
         ], emoji="✅")
 
     async def _handle_reply_download(self, message: discord.Message) -> None:
-        """Handle replying 'download' to a message with a link."""
+        """Handle replying 'download' or 'dw' to a message with a link."""
+        import time
+
+        user_id = message.author.id
+
+        # Check cooldown (everyone has cooldown, boosters only get unlimited weekly downloads)
+        last_use = self._download_cooldowns.get(user_id, 0)
+        time_since = time.time() - last_use
+        if time_since < self.DOWNLOAD_REPLY_COOLDOWN:
+            remaining = self.DOWNLOAD_REPLY_COOLDOWN - time_since
+            embed = discord.Embed(
+                description=f"Please wait **{remaining:.0f}s** before downloading again.",
+                color=COLOR_WARNING
+            )
+            set_footer(embed)
+            msg = await message.reply(embed=embed, mention_author=False)
+            await msg.delete(delay=5)
+            try:
+                await message.delete()
+            except discord.HTTPException:
+                pass
+            log.tree("Download Reply Cooldown", [
+                ("User", f"{message.author.name}"),
+                ("User ID", str(user_id)),
+                ("Remaining", f"{remaining:.0f}s"),
+            ], emoji="⏳")
+            return
+
         ref = message.reference
         if not ref or not ref.message_id:
             return
@@ -398,14 +429,32 @@ class MessageHandler(commands.Cog):
                 await message.reply("Couldn't access that message.", mention_author=False)
                 return
 
+        # URL pattern for all supported platforms
         url_pattern = re.compile(
             r'https?://(?:www\.)?(?:'
+            # Instagram
             r'instagram\.com/(?:p|reel|reels|stories)/[\w-]+|'
             r'instagram\.com/[\w.]+/(?:p|reel)/[\w-]+|'
+            # Twitter/X
             r'(?:twitter|x)\.com/\w+/status/\d+|'
+            # TikTok
             r'tiktok\.com/@[\w.]+/video/\d+|'
             r'(?:vm|vt)\.tiktok\.com/[\w]+|'
-            r'tiktok\.com/t/[\w]+'
+            r'tiktok\.com/t/[\w]+|'
+            # Reddit
+            r'reddit\.com/r/\w+/comments/\w+|'
+            r'v\.redd\.it/\w+|'
+            # Facebook
+            r'facebook\.com/.+/videos/\d+|'
+            r'facebook\.com/watch/?\?v=\d+|'
+            r'facebook\.com/reel/\d+|'
+            r'fb\.watch/[\w-]+|'
+            # Snapchat
+            r'snapchat\.com/spotlight/[\w-]+|'
+            r'snapchat\.com/t/[\w-]+|'
+            # Twitch
+            r'twitch\.tv/\w+/clip/[\w-]+|'
+            r'clips\.twitch\.tv/[\w-]+'
             r')',
             re.IGNORECASE
         )
@@ -413,10 +462,15 @@ class MessageHandler(commands.Cog):
         urls = url_pattern.findall(original.content)
 
         if not urls:
-            await message.reply(
-                "No supported URL found. Supported: Instagram, Twitter/X, TikTok.",
+            msg = await message.reply(
+                "No supported URL found. Supported: Instagram, Twitter/X, TikTok, Reddit, Facebook, Snapchat, Twitch.",
                 mention_author=False
             )
+            await msg.delete(delay=5)
+            try:
+                await message.delete()
+            except discord.HTTPException:
+                pass
             log.tree("Download No URL Found", [
                 ("User", f"{message.author.name}"),
                 ("User ID", str(message.author.id)),
@@ -425,6 +479,9 @@ class MessageHandler(commands.Cog):
             return
 
         url = urls[0]
+
+        # Record cooldown
+        self._download_cooldowns[user_id] = time.time()
 
         log.tree("Reply Download", [
             ("User", f"{message.author.name} ({message.author.display_name})"),
@@ -508,7 +565,7 @@ class MessageHandler(commands.Cog):
             await self._handle_reply_convert(message)
         elif content == "quote":
             await self._handle_reply_quote(message)
-        elif content == "download":
+        elif content in ("download", "dw", "dl"):
             await self._handle_reply_download(message)
         elif content.startswith("translate to ") or content.startswith("translate "):
             if content.startswith("translate to "):

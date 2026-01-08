@@ -32,10 +32,10 @@ class BumpService:
     DATA_FILE = Path(__file__).parent.parent.parent / "data" / "bump_data.json"
 
     def __init__(self):
-        self.bot: Optional[discord.Client] = None
-        self.bump_channel_id: Optional[int] = None
-        self.ping_role_id: Optional[int] = None
-        self._task: Optional[asyncio.Task] = None
+        self.bot: discord.Client = None
+        self.bump_channel_id: int = None
+        self.ping_role_id: int = None
+        self._task: asyncio.Task = None
         self._running = False
         self._last_bump_time: Optional[float] = None
         self._last_reminder_time: Optional[float] = None
@@ -70,9 +70,7 @@ class BumpService:
         if self._task:
             self._task.cancel()
             self._task = None
-        log.tree("Bump Scheduler Stopped", [
-            ("Status", "Stopped"),
-        ], emoji="🛑")
+        log.info("Bump scheduler stopped")
 
     def _load_data(self) -> None:
         """Load bump data from file."""
@@ -87,18 +85,9 @@ class BumpService:
                     elapsed_min = int((time.time() - self._last_bump_time) / 60)
                     log.tree("Bump Data Loaded", [
                         ("Last Bump", f"{elapsed_min} min ago"),
-                        ("File", str(self.DATA_FILE)),
                     ], emoji="📊")
-            else:
-                log.tree("Bump Data", [
-                    ("Status", "No previous data"),
-                    ("File", str(self.DATA_FILE)),
-                ], emoji="📊")
         except Exception as e:
-            log.tree("Bump Data Load Failed", [
-                ("File", str(self.DATA_FILE)),
-                ("Error", str(e)[:50]),
-            ], emoji="⚠️")
+            log.warning(f"Failed to load bump data: {e}")
 
     def _save_data(self) -> None:
         """Save bump data to file."""
@@ -110,10 +99,7 @@ class BumpService:
                     "last_reminder_time": self._last_reminder_time,
                 }, f, indent=2)
         except Exception as e:
-            log.tree("Bump Data Save Failed", [
-                ("File", str(self.DATA_FILE)),
-                ("Error", str(e)[:50]),
-            ], emoji="⚠️")
+            log.warning(f"Failed to save bump data: {e}")
 
     def record_bump(self) -> None:
         """Record that a bump just happened."""
@@ -130,6 +116,13 @@ class BumpService:
         """Main loop that sends bump reminders."""
         # Wait for bot to fully initialize
         await asyncio.sleep(10)
+
+        # Reload data to ensure we have latest state
+        self._load_data()
+        log.tree("Bump Service Ready", [
+            ("Last Bump", f"{int((time.time() - self._last_bump_time) / 60)} min ago" if self._last_bump_time else "Never"),
+            ("Reminder Pending", "Yes" if self._last_bump_time and not self._last_reminder_time else "No"),
+        ], emoji="📢")
 
         while self._running:
             try:
@@ -163,46 +156,48 @@ class BumpService:
                     await asyncio.sleep(self.BUMP_INTERVAL)
                     continue
 
-                # Send reminder
+                # Cooldown expired, send reminder
+                log.tree("Bump Cooldown Expired", [
+                    ("Last Bump", f"{int((time.time() - self._last_bump_time) / 60)} min ago"),
+                    ("Action", "Sending reminder"),
+                ], emoji="⏰")
+
                 await self._send_reminder()
                 self._last_reminder_time = time.time()
                 self._save_data()
 
                 log.tree("Bump Reminder", [
-                    ("Status", "Sent, waiting for bump"),
-                ], emoji="⏳")
+                    ("Status", "Sent, now waiting for bump"),
+                ], emoji="✅")
 
                 # Wait for next bump (check periodically)
                 while self._running:
                     await asyncio.sleep(300)  # Check every 5 minutes
-                    # If a new bump happened, break out to restart cooldown
-                    # Note: _last_reminder_time can be None after record_bump() is called
-                    if self._last_bump_time and self._last_reminder_time and self._last_bump_time > self._last_reminder_time:
+                    # Check if a new bump happened
+                    # record_bump() sets _last_reminder_time to None to signal a new bump
+                    if self._last_reminder_time is None:
+                        log.tree("New Bump Detected", [
+                            ("Last Bump", f"{int((time.time() - self._last_bump_time) / 60)} min ago" if self._last_bump_time else "Unknown"),
+                            ("Action", "Restarting 2-hour cooldown"),
+                        ], emoji="🔄")
                         break
 
-            except asyncio.CancelledError:
-                break
             except Exception as e:
                 log.error_tree("Bump Reminder Failed", e, [
-                    ("Status", "Will retry"),
+                    ("Last Bump", str(self._last_bump_time)),
+                    ("Last Reminder", str(self._last_reminder_time)),
                 ])
                 await asyncio.sleep(60)
 
     async def _send_reminder(self) -> None:
         """Send a bump reminder in the designated channel."""
         if not self.bot or not self.bump_channel_id:
-            log.tree("Bump Reminder Skipped", [
-                ("Reason", "Service not configured"),
-                ("Bot", "Missing" if not self.bot else "OK"),
-                ("Channel ID", str(self.bump_channel_id) if self.bump_channel_id else "Missing"),
-            ], emoji="⚠️")
+            log.warning("Bump service not properly configured")
             return
 
         channel = self.bot.get_channel(self.bump_channel_id)
         if not channel:
-            log.tree("Bump Channel Not Found", [
-                ("Channel ID", str(self.bump_channel_id)),
-            ], emoji="⚠️")
+            log.warning(f"Bump channel {self.bump_channel_id} not found")
             return
 
         try:
@@ -224,23 +219,13 @@ class BumpService:
 
             log.tree("Bump Reminder Sent", [
                 ("Channel", f"#{channel.name}"),
-                ("Channel ID", str(channel.id)),
-                ("Role ID", str(self.ping_role_id)),
                 ("Time", datetime.now(timezone.utc).strftime("%H:%M UTC")),
             ], emoji="📢")
 
         except discord.Forbidden:
-            log.tree("Bump Reminder Failed", [
-                ("Reason", "No permission"),
-                ("Channel", f"#{channel.name}"),
-                ("Channel ID", str(self.bump_channel_id)),
-            ], emoji="❌")
+            log.error("No permission to send bump reminder")
         except discord.HTTPException as e:
-            log.tree("Bump Reminder Failed", [
-                ("Channel", f"#{channel.name}"),
-                ("Channel ID", str(self.bump_channel_id)),
-                ("Error", str(e)[:50]),
-            ], emoji="❌")
+            log.error(f"Failed to send bump reminder: {e}")
 
 
 # Global instance
