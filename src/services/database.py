@@ -383,6 +383,18 @@ class Database:
                 )
             """)
 
+            # AFK Mention Pingers (track WHO pinged while AFK)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS afk_mention_pingers (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    afk_user_id INTEGER NOT NULL,
+                    guild_id INTEGER NOT NULL,
+                    pinger_id INTEGER NOT NULL,
+                    pinger_name TEXT NOT NULL,
+                    timestamp INTEGER NOT NULL
+                )
+            """)
+
             # Download Stats (lifetime stats per user per platform)
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS download_stats (
@@ -1666,22 +1678,33 @@ class Database:
             ("Reason", reason[:50] if reason else "None"),
         ], emoji="💤")
 
-    def remove_afk(self, user_id: int, guild_id: int) -> bool:
-        """Remove AFK status. Returns True if was AFK."""
+    def remove_afk(self, user_id: int, guild_id: int) -> Optional[Dict[str, Any]]:
+        """Remove AFK status. Returns AFK data if was AFK, None otherwise."""
         with self._get_conn() as conn:
             cur = conn.cursor()
+
+            # Get the AFK data first (for timestamp)
+            cur.execute("""
+                SELECT * FROM afk_users WHERE user_id = ? AND guild_id = ?
+            """, (user_id, guild_id))
+            row = cur.fetchone()
+
+            if not row:
+                return None
+
+            afk_data = dict(row)
+
+            # Now delete
             cur.execute("""
                 DELETE FROM afk_users WHERE user_id = ? AND guild_id = ?
             """, (user_id, guild_id))
-            removed = cur.rowcount > 0
 
-        if removed:
-            log.tree("AFK Removed", [
-                ("User ID", str(user_id)),
-                ("Guild ID", str(guild_id)),
-            ], emoji="👋")
+        log.tree("AFK Removed", [
+            ("User ID", str(user_id)),
+            ("Guild ID", str(guild_id)),
+        ], emoji="👋")
 
-        return removed
+        return afk_data
 
     def get_afk(self, user_id: int, guild_id: int) -> Optional[Dict[str, Any]]:
         """Get user's AFK status. Returns None if not AFK."""
@@ -1707,10 +1730,13 @@ class Database:
             """, user_ids + [guild_id])
             return [dict(row) for row in cur.fetchall()]
 
-    def increment_afk_mentions(self, user_id: int, guild_id: int) -> None:
-        """Increment mention count for an AFK user."""
+    def increment_afk_mentions(self, user_id: int, guild_id: int, pinger_id: int = None, pinger_name: str = None) -> None:
+        """Increment mention count for an AFK user and track who pinged."""
+        import time
+
         with self._get_conn() as conn:
             cur = conn.cursor()
+            # Update count
             cur.execute("""
                 INSERT INTO afk_mentions (user_id, guild_id, mention_count)
                 VALUES (?, ?, 1)
@@ -1718,13 +1744,23 @@ class Database:
                     mention_count = mention_count + 1
             """, (user_id, guild_id))
 
+            # Track pinger if provided
+            if pinger_id and pinger_name:
+                cur.execute("""
+                    INSERT INTO afk_mention_pingers (afk_user_id, guild_id, pinger_id, pinger_name, timestamp)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (user_id, guild_id, pinger_id, pinger_name, int(time.time())))
+
         log.tree("AFK Mention Tracked", [
             ("User ID", str(user_id)),
-            ("Guild ID", str(guild_id)),
+            ("Pinger", pinger_name or "Unknown"),
         ], emoji="📬")
 
-    def get_and_clear_afk_mentions(self, user_id: int, guild_id: int) -> int:
-        """Get mention count and clear it. Returns 0 if no mentions."""
+    def get_and_clear_afk_mentions(self, user_id: int, guild_id: int) -> tuple[int, List[str]]:
+        """
+        Get mention count and pinger names, then clear.
+        Returns (count, list of unique pinger names).
+        """
         with self._get_conn() as conn:
             cur = conn.cursor()
 
@@ -1735,23 +1771,35 @@ class Database:
             """, (user_id, guild_id))
             row = cur.fetchone()
 
-            if not row or row["mention_count"] == 0:
-                return 0
+            count = row["mention_count"] if row else 0
 
-            count = row["mention_count"]
+            # Get unique pinger names (most recent first, limit 5)
+            cur.execute("""
+                SELECT DISTINCT pinger_name FROM afk_mention_pingers
+                WHERE afk_user_id = ? AND guild_id = ?
+                ORDER BY timestamp DESC
+                LIMIT 5
+            """, (user_id, guild_id))
+            pinger_names = [r["pinger_name"] for r in cur.fetchall()]
 
             # Clear the count
             cur.execute("""
                 DELETE FROM afk_mentions WHERE user_id = ? AND guild_id = ?
             """, (user_id, guild_id))
 
-            log.tree("AFK Mentions Cleared", [
-                ("User ID", str(user_id)),
-                ("Guild ID", str(guild_id)),
-                ("Count", str(count)),
-            ], emoji="📭")
+            # Clear the pingers
+            cur.execute("""
+                DELETE FROM afk_mention_pingers WHERE afk_user_id = ? AND guild_id = ?
+            """, (user_id, guild_id))
 
-            return count
+            if count > 0:
+                log.tree("AFK Mentions Cleared", [
+                    ("User ID", str(user_id)),
+                    ("Count", str(count)),
+                    ("Pingers", ", ".join(pinger_names) if pinger_names else "None"),
+                ], emoji="📭")
+
+            return count, pinger_names
 
 
     # =========================================================================

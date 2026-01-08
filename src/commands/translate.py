@@ -45,7 +45,7 @@ class TranslateCog(commands.Cog):
 
         log.tree("Translate Command", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-            ("User ID", str(interaction.user.id)),
+            ("ID", str(interaction.user.id)),
             ("Text", text[:50] + "..." if len(text) > 50 else text),
             ("To", to),
         ], emoji="🌐")
@@ -77,8 +77,8 @@ class TranslateCog(commands.Cog):
             await interaction.followup.send(embed=embed, ephemeral=True)
 
             log.tree("Translation Failed", [
-                ("User", f"{interaction.user.name}"),
-                ("User ID", str(interaction.user.id)),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("ID", str(interaction.user.id)),
                 ("Target", to),
                 ("Error", result.error[:50] if result.error else "Unknown"),
             ], emoji="❌")
@@ -93,8 +93,8 @@ class TranslateCog(commands.Cog):
             set_footer(embed)
             await interaction.followup.send(embed=embed, ephemeral=True)
             log.tree("Translation Skipped", [
-                ("User", f"{interaction.user.name}"),
-                ("User ID", str(interaction.user.id)),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("ID", str(interaction.user.id)),
                 ("Reason", f"Already in {result.target_name}"),
             ], emoji="⚠️")
             return
@@ -113,7 +113,7 @@ class TranslateCog(commands.Cog):
 
         log.tree("Translation Sent", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-            ("User ID", str(interaction.user.id)),
+            ("ID", str(interaction.user.id)),
             ("From", f"{result.source_name} ({result.source_lang})"),
             ("To", f"{result.target_name} ({result.target_lang})"),
         ], emoji="✅")
@@ -127,7 +127,7 @@ class TranslateCog(commands.Cog):
         """Handle translate command errors."""
         log.tree("Translate Command Error", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-            ("User ID", str(interaction.user.id)),
+            ("ID", str(interaction.user.id)),
             ("Error", str(error)[:100]),
         ], emoji="❌")
 

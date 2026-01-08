@@ -17,8 +17,8 @@ from discord import app_commands
 from discord.ext import commands
 
 from src.core.logger import log
-from src.core.colors import COLOR_SUCCESS
 from src.utils.footer import set_footer
+from src.services.database import db
 
 
 class AFKCog(commands.Cog):
@@ -40,8 +40,8 @@ class AFKCog(commands.Cog):
                 ephemeral=True
             )
             log.tree("AFK Command Rejected", [
-                ("User", f"{interaction.user.name}"),
-                ("User ID", str(interaction.user.id)),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("ID", str(interaction.user.id)),
                 ("Reason", "Used in DMs"),
             ], emoji="⚠️")
             return
@@ -53,41 +53,69 @@ class AFKCog(commands.Cog):
                 ephemeral=True
             )
             log.tree("AFK Command Rejected", [
-                ("User", f"{interaction.user.name}"),
-                ("User ID", str(interaction.user.id)),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("ID", str(interaction.user.id)),
                 ("Reason", "Service not initialized"),
             ], emoji="⚠️")
             return
 
-        # Use AFK service to set status and handle nickname
-        if isinstance(interaction.user, discord.Member):
-            await self.bot.afk_service.set_afk(interaction.user, reason or "")
+        # Check if user is already AFK
+        existing_afk = db.get_afk(interaction.user.id, interaction.guild.id)
+        if existing_afk:
+            await interaction.response.send_message(
+                f"You're already AFK since <t:{existing_afk['timestamp']}:R>",
+                ephemeral=True
+            )
+            log.tree("AFK Command Rejected", [
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("ID", str(interaction.user.id)),
+                ("Reason", "Already AFK"),
+            ], emoji="ℹ️")
+            return
 
-        # Build response
+        # Use AFK service to set status and handle nickname
+        if not isinstance(interaction.user, discord.Member):
+            await interaction.response.send_message(
+                "Unable to set AFK status.",
+                ephemeral=True
+            )
+            log.tree("AFK Command Rejected", [
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("ID", str(interaction.user.id)),
+                ("Reason", "User is not a Member"),
+            ], emoji="⚠️")
+            return
+
+        _, converted_reason = await self.bot.afk_service.set_afk(interaction.user, reason or "")
+
+        # Build response - thumbnail design with mention
         now = int(time.time())
 
-        if reason:
-            description = f"You are now AFK: **{reason}**"
-        else:
-            description = "You are now AFK."
-
-        embed = discord.Embed(
-            description=f"💤 {description}",
-            color=COLOR_SUCCESS
-        )
+        embed = discord.Embed(color=0x1F5E2E)  # Syria green
         embed.set_thumbnail(url=interaction.user.display_avatar.url)
-        embed.add_field(name="Set", value=f"<t:{now}:R>", inline=True)
-        embed.add_field(name="Nickname", value=f"`{interaction.user.display_name}`", inline=True)
+
+        if converted_reason:
+            embed.description = f"💤 {interaction.user.mention} is now AFK\n\n{converted_reason}\n"
+        else:
+            embed.description = f"💤 {interaction.user.mention} is now AFK"
+
+        embed.add_field(name="", value=f"-# Set <t:{now}:R>", inline=False)
         set_footer(embed)
 
-        await interaction.response.send_message(embed=embed)
-
-        log.tree("AFK Command", [
-            ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-            ("User ID", str(interaction.user.id)),
-            ("Guild", interaction.guild.name),
-            ("Reason", reason[:50] if reason else "None"),
-        ], emoji="💤")
+        try:
+            await interaction.response.send_message(embed=embed)
+            log.tree("AFK Command", [
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("ID", str(interaction.user.id)),
+                ("Guild", interaction.guild.name),
+                ("Reason", converted_reason[:50] if converted_reason else "None"),
+            ], emoji="💤")
+        except discord.HTTPException as e:
+            log.tree("AFK Response Failed", [
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("ID", str(interaction.user.id)),
+                ("Error", str(e)[:50]),
+            ], emoji="❌")
 
 
 async def setup(bot: commands.Bot) -> None:

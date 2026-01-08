@@ -85,7 +85,7 @@ class DownloadView(ui.View):
             )
             log.tree("Save Rejected", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                ("User ID", str(interaction.user.id)),
+                ("ID", str(interaction.user.id)),
                 ("Owner ID", str(self.requester_id)),
                 ("Type", self.label),
             ], emoji="🚫")
@@ -138,8 +138,8 @@ class DownloadView(ui.View):
 
         except Exception as e:
             log.tree("Save Failed", [
-                ("User", f"{interaction.user.name}"),
-                ("User ID", str(interaction.user.id)),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("ID", str(interaction.user.id)),
                 ("Type", self.label),
                 ("Error", str(e)[:50]),
             ], emoji="❌")
@@ -203,7 +203,7 @@ class AvatarToggleView(ui.View):
             )
             log.tree("Avatar Save Rejected", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                ("User ID", str(interaction.user.id)),
+                ("ID", str(interaction.user.id)),
                 ("Owner ID", str(self.requester_id)),
             ], emoji="🚫")
             return
@@ -224,7 +224,8 @@ class AvatarToggleView(ui.View):
                 if response.status != 200:
                     await interaction.followup.send("Failed to download avatar.", ephemeral=True)
                     log.tree("Avatar Save Failed", [
-                        ("User", f"{interaction.user.name}"),
+                        ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                        ("ID", str(interaction.user.id)),
                         ("Status", str(response.status)),
                     ], emoji="❌")
                     return
@@ -254,7 +255,8 @@ class AvatarToggleView(ui.View):
 
         except Exception as e:
             log.tree("Avatar Save Failed", [
-                ("User", f"{interaction.user.name}"),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("ID", str(interaction.user.id)),
                 ("Error", str(e)[:50]),
             ], emoji="❌")
             await interaction.followup.send("Failed to save avatar.", ephemeral=True)
@@ -347,7 +349,7 @@ class BannerToggleView(ui.View):
             )
             log.tree("Banner Save Rejected", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                ("User ID", str(interaction.user.id)),
+                ("ID", str(interaction.user.id)),
                 ("Owner ID", str(self.requester_id)),
             ], emoji="🚫")
             return
@@ -368,7 +370,8 @@ class BannerToggleView(ui.View):
                 if response.status != 200:
                     await interaction.followup.send("Failed to download banner.", ephemeral=True)
                     log.tree("Banner Save Failed", [
-                        ("User", f"{interaction.user.name}"),
+                        ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                        ("ID", str(interaction.user.id)),
                         ("Status", str(response.status)),
                     ], emoji="❌")
                     return
@@ -398,7 +401,8 @@ class BannerToggleView(ui.View):
 
         except Exception as e:
             log.tree("Banner Save Failed", [
-                ("User", f"{interaction.user.name}"),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("ID", str(interaction.user.id)),
                 ("Error", str(e)[:50]),
             ], emoji="❌")
             await interaction.followup.send("Failed to save banner.", ephemeral=True)
@@ -838,14 +842,14 @@ class GetCog(commands.Cog):
 
             log.tree("Get Cooldown", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                ("User ID", str(interaction.user.id)),
+                ("ID", str(interaction.user.id)),
                 ("Remaining", time_str),
             ], emoji="⏳")
             return
 
         log.tree("Get Command Error", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-            ("User ID", str(interaction.user.id)),
+            ("ID", str(interaction.user.id)),
             ("Error", str(error)[:100]),
         ], emoji="❌")
 

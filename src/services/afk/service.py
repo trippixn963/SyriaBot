@@ -9,12 +9,17 @@ Author: حَـــــنَّـــــا
 Server: discord.gg/syria
 """
 
+import re
+import time
+
 import discord
 from discord.ext import commands
 
 from src.core.logger import log
-from src.core.colors import EMOJI_WAVE, EMOJI_MAILBOX, EMOJI_ZZZ
 from src.services.database import db
+
+# Constants
+EMOJI_ZZZ = "💤"
 
 
 class AFKService:
@@ -24,23 +29,80 @@ class AFKService:
         self.bot = bot
         log.tree("AFK Service Initialized", [], emoji="💤")
 
-    async def set_afk(self, member: discord.Member, reason: str = "") -> bool:
+    def convert_emoji_shortcodes(self, text: str, guild: discord.Guild) -> str:
+        """
+        Convert :emoji: shortcodes to actual emojis.
+        Looks up custom emojis in the guild.
+        Cleans malformed emoji syntax from Discord picker.
+        """
+        if not text:
+            return text
+
+        original_text = text
+
+        # Check if input already has valid Discord emoji format - return unchanged
+        # Valid: <:name:id> or <a:name:id>
+        if re.search(r'<a?:\w+:\d{17,20}>', text):
+            return text
+
+        # Step 2: Remove malformed emoji syntax (leaked IDs without proper format)
+        text = re.sub(r'<[^>]*\d{17,20}[^>]*>', '', text)
+        text = re.sub(r'\d{17,20}>?', '', text)
+        text = re.sub(r'<a?:?\s*', '', text)
+
+        # Step 3: Clean up extra spaces
+        text = re.sub(r'\s+', ' ', text).strip()
+
+        if not text or ":" not in text:
+            return text
+
+        # Step 4: Convert :emoji_name: shortcodes to Discord emoji format
+        shortcode_pattern = re.compile(r':([a-zA-Z0-9_]+):')
+
+        def replace_emoji(match):
+            emoji_name = match.group(1)
+
+            # Look up in guild emojis (case-insensitive)
+            for emoji in guild.emojis:
+                if emoji.name.lower() == emoji_name.lower():
+                    if emoji.animated:
+                        return f"<a:{emoji.name}:{emoji.id}>"
+                    else:
+                        return f"<:{emoji.name}:{emoji.id}>"
+
+            # Not found in guild, return original shortcode
+            return match.group(0)
+
+        converted = shortcode_pattern.sub(replace_emoji, text)
+
+        if converted != original_text:
+            log.tree("AFK Emoji Converted", [
+                ("Original", original_text[:50]),
+                ("Result", converted[:50]),
+            ], emoji="✨")
+
+        return converted
+
+    async def set_afk(self, member: discord.Member, reason: str = "") -> tuple[bool, str]:
         """
         Set a user as AFK.
 
-        Returns True if nickname was changed.
+        Returns (nickname_changed, converted_reason).
         """
+        # Convert emoji shortcodes in reason
+        converted_reason = self.convert_emoji_shortcodes(reason, member.guild) if reason else ""
+
         # Set in database
         db.set_afk(
             user_id=member.id,
             guild_id=member.guild.id,
-            reason=reason
+            reason=converted_reason
         )
         log.tree("AFK Status Set", [
             ("User", f"{member.name} ({member.display_name})"),
-            ("User ID", str(member.id)),
+            ("ID", str(member.id)),
             ("Guild", member.guild.name),
-            ("Reason", reason[:50] if reason else "None"),
+            ("Reason", converted_reason[:50] if converted_reason else "None"),
         ], emoji="💤")
 
         # Add [AFK] prefix to nickname
@@ -52,26 +114,26 @@ class AFKService:
                 await member.edit(nick=new_nick)
                 nickname_changed = True
                 log.tree("AFK Nickname Set", [
-                    ("User", f"{member.name}"),
+                    ("User", f"{member.name} ({member.display_name})"),
                     ("New Nick", new_nick),
                 ], emoji="✏️")
             else:
                 log.tree("AFK Nickname Skipped", [
-                    ("User", f"{member.name}"),
+                    ("User", f"{member.name} ({member.display_name})"),
                     ("Reason", "Already has [AFK] prefix"),
                 ], emoji="ℹ️")
         except discord.Forbidden:
             log.tree("AFK Nickname Failed", [
-                ("User", f"{member.name}"),
+                ("User", f"{member.name} ({member.display_name})"),
                 ("Reason", "Missing permissions"),
             ], emoji="⚠️")
         except discord.HTTPException as e:
             log.tree("AFK Nickname Failed", [
-                ("User", f"{member.name}"),
+                ("User", f"{member.name} ({member.display_name})"),
                 ("Error", str(e)[:50]),
             ], emoji="⚠️")
 
-        return nickname_changed
+        return nickname_changed, converted_reason
 
     async def on_message(self, message: discord.Message) -> None:
         """Handle AFK logic for a message - remove author's AFK and notify about mentioned AFKs."""
@@ -80,18 +142,22 @@ class AFKService:
 
         guild_id = message.guild.id
 
-        # Check if author is AFK and remove it
-        was_afk = db.remove_afk(message.author.id, guild_id)
-        if was_afk:
-            await self._handle_return(message, guild_id)
+        # Check if author is AFK and remove it (returns timestamp if was AFK)
+        afk_data = db.remove_afk(message.author.id, guild_id)
+        if afk_data:
+            await self._handle_return(message, guild_id, afk_data.get("timestamp", 0))
 
         # Check if any mentioned users are AFK
         await self._handle_mentions(message, guild_id)
 
-    async def _handle_return(self, message: discord.Message, guild_id: int) -> None:
+    async def _handle_return(self, message: discord.Message, guild_id: int, afk_timestamp: int) -> None:
         """Handle user returning from AFK."""
-        # Get mention count while they were AFK
-        mention_count = db.get_and_clear_afk_mentions(message.author.id, guild_id)
+        # Get mention count and pinger names while they were AFK
+        mention_count, pinger_names = db.get_and_clear_afk_mentions(message.author.id, guild_id)
+
+        # Calculate AFK duration
+        duration_seconds = int(time.time()) - afk_timestamp
+        duration_str = self._format_duration(duration_seconds)
 
         # Remove [AFK] prefix from nickname
         if isinstance(message.author, discord.Member):
@@ -103,49 +169,82 @@ class AFKService:
                         new_nick = None
                     await message.author.edit(nick=new_nick)
                     log.tree("AFK Nickname Removed", [
-                        ("User", f"{message.author.name}"),
+                        ("User", f"{message.author.name} ({message.author.display_name})"),
                         ("Old Nick", current_nick),
                         ("New Nick", new_nick or "None"),
                     ], emoji="✏️")
                 else:
                     log.tree("AFK Nickname Not Changed", [
-                        ("User", f"{message.author.name}"),
+                        ("User", f"{message.author.name} ({message.author.display_name})"),
                         ("Reason", "No [AFK] prefix in nickname"),
                     ], emoji="ℹ️")
             except discord.Forbidden:
                 log.tree("AFK Nickname Remove Failed", [
-                    ("User", f"{message.author.name}"),
+                    ("User", f"{message.author.name} ({message.author.display_name})"),
                     ("Reason", "Missing permissions"),
                 ], emoji="⚠️")
             except discord.HTTPException as e:
                 log.tree("AFK Nickname Remove Failed", [
-                    ("User", f"{message.author.name}"),
+                    ("User", f"{message.author.name} ({message.author.display_name})"),
                     ("Error", str(e)[:50]),
                 ], emoji="⚠️")
 
-        # Build welcome back message
-        welcome_msg = f"{EMOJI_WAVE} Welcome back {message.author.mention}! Your AFK has been removed."
+        # Build welcome back message - clean design
+        welcome_msg = f"Welcome back {message.author.mention}! Your AFK has been removed."
+        welcome_msg += f"\n-# You were away for {duration_str}"
+
         if mention_count > 0:
-            welcome_msg += f"\n{EMOJI_MAILBOX} You were mentioned **{mention_count}** time{'s' if mention_count != 1 else ''} while away."
+            if pinger_names:
+                # Show who mentioned them as <@id> format (clickable but no ping)
+                mentions_str = ", ".join(f"<@{uid}>" for uid in pinger_names)
+                if mention_count > len(pinger_names):
+                    # More mentions than unique pingers shown
+                    welcome_msg += f" · Mentioned by {mentions_str} (+{mention_count - len(pinger_names)} more)"
+                else:
+                    welcome_msg += f" · Mentioned by {mentions_str}"
+            else:
+                welcome_msg += f" · {mention_count} mention{'s' if mention_count != 1 else ''}"
 
         try:
             await message.reply(
                 welcome_msg,
                 mention_author=False,
-                delete_after=8 if mention_count > 0 else 5
+                delete_after=10 if mention_count > 0 else 5
             )
             log.tree("AFK Auto-Removed", [
                 ("User", f"{message.author.name} ({message.author.display_name})"),
-                ("User ID", str(message.author.id)),
+                ("ID", str(message.author.id)),
                 ("Guild", message.guild.name),
-                ("Mentions While AFK", str(mention_count)),
+                ("Duration", duration_str),
+                ("Mentions", str(mention_count)),
+                ("Pingers", ", ".join(pinger_names) if pinger_names else "None"),
             ], emoji="👋")
         except discord.HTTPException as e:
             log.tree("AFK Welcome Back Failed", [
                 ("User", f"{message.author.name} ({message.author.display_name})"),
-                ("User ID", str(message.author.id)),
+                ("ID", str(message.author.id)),
                 ("Error", str(e)[:50]),
             ], emoji="⚠️")
+
+    def _format_duration(self, seconds: int) -> str:
+        """Format seconds into human readable duration."""
+        if seconds < 60:
+            return f"{seconds}s"
+        elif seconds < 3600:
+            minutes = seconds // 60
+            return f"{minutes}m"
+        elif seconds < 86400:
+            hours = seconds // 3600
+            minutes = (seconds % 3600) // 60
+            if minutes > 0:
+                return f"{hours}h {minutes}m"
+            return f"{hours}h"
+        else:
+            days = seconds // 86400
+            hours = (seconds % 86400) // 3600
+            if hours > 0:
+                return f"{days}d {hours}h"
+            return f"{days}d"
 
     async def _handle_mentions(self, message: discord.Message, guild_id: int) -> None:
         """Handle notifying about AFK users that were mentioned."""
@@ -172,7 +271,7 @@ class AFKService:
             member = message.guild.get_member(user_id)
             if not member:
                 log.tree("AFK User Not In Guild", [
-                    ("User ID", str(user_id)),
+                    ("ID", str(user_id)),
                     ("Guild", message.guild.name),
                     ("Reason", "Member left or not found"),
                 ], emoji="⚠️")
@@ -184,8 +283,13 @@ class AFKService:
             else:
                 afk_messages.append(f"{EMOJI_ZZZ} **{member.display_name}** is AFK (<t:{timestamp}:R>)")
 
-            # Track this mention for the AFK user
-            db.increment_afk_mentions(user_id, guild_id)
+            # Track this mention for the AFK user (with pinger info)
+            db.increment_afk_mentions(
+                user_id,
+                guild_id,
+                pinger_id=message.author.id,
+                pinger_name=str(message.author.id)  # Store ID for <@id> format
+            )
 
         if afk_messages:
             try:

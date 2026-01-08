@@ -82,7 +82,7 @@ class ImageCog(commands.Cog):
 
         log.tree("Image Command", [
             ("User", f"{user.name} ({user.display_name})"),
-            ("User ID", str(user.id)),
+            ("ID", str(user.id)),
             ("Query", query[:50] + "..." if len(query) > 50 else query),
         ], emoji="🖼️")
 
@@ -98,7 +98,7 @@ class ImageCog(commands.Cog):
 
             log.tree("Image Search Unavailable", [
                 ("User", f"{user.name} ({user.display_name})"),
-                ("User ID", str(user.id)),
+                ("ID", str(user.id)),
                 ("Reason", "Service not configured"),
             ], emoji="❌")
             return
@@ -122,14 +122,14 @@ class ImageCog(commands.Cog):
 
             log.tree("Image Search Limit Reached", [
                 ("User", f"{user.name} ({user.display_name})"),
-                ("User ID", str(user.id)),
+                ("ID", str(user.id)),
                 ("Remaining", "0"),
             ], emoji="⚠️")
             return
 
         log.tree("Image Search Starting", [
             ("User", f"{user.name} ({user.display_name})"),
-            ("User ID", str(user.id)),
+            ("ID", str(user.id)),
             ("Query", query[:50] + "..." if len(query) > 50 else query),
             ("Remaining", "Unlimited" if remaining == -1 else str(remaining)),
         ], emoji="🔍")
@@ -148,7 +148,7 @@ class ImageCog(commands.Cog):
 
             log.tree("Image Search Failed", [
                 ("User", f"{user.name} ({user.display_name})"),
-                ("User ID", str(user.id)),
+                ("ID", str(user.id)),
                 ("Query", query[:30]),
                 ("Error", result.error[:50] if result.error else "Unknown"),
             ], emoji="❌")
@@ -165,7 +165,7 @@ class ImageCog(commands.Cog):
 
             log.tree("Image Search No Results", [
                 ("User", f"{user.name} ({user.display_name})"),
-                ("User ID", str(user.id)),
+                ("ID", str(user.id)),
                 ("Query", query[:30]),
             ], emoji="⚠️")
             return
@@ -174,8 +174,8 @@ class ImageCog(commands.Cog):
         if remaining != -1:
             new_remaining = db.record_image_usage(user.id, config.IMAGE_WEEKLY_LIMIT)
             log.tree("Image Usage Recorded", [
-                ("User", f"{user.name}"),
-                ("User ID", str(user.id)),
+                ("User", f"{user.name} ({user.display_name})"),
+                ("ID", str(user.id)),
                 ("Remaining", str(new_remaining)),
             ], emoji="📊")
         else:
@@ -199,7 +199,7 @@ class ImageCog(commands.Cog):
 
         log.tree("Image Search Complete", [
             ("User", f"{user.name} ({user.display_name})"),
-            ("User ID", str(user.id)),
+            ("ID", str(user.id)),
             ("Query", query[:50] + "..." if len(query) > 50 else query),
             ("Results", str(len(result.images))),
             ("Attached", "Yes" if file else "No (fallback)"),
@@ -230,14 +230,14 @@ class ImageCog(commands.Cog):
 
             log.tree("Image Command Cooldown", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                ("User ID", str(interaction.user.id)),
+                ("ID", str(interaction.user.id)),
                 ("Retry After", f"{error.retry_after:.1f}s"),
             ], emoji="⏳")
             return
 
         log.error_tree("Image Command Error", error, [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-            ("User ID", str(interaction.user.id)),
+            ("ID", str(interaction.user.id)),
         ])
 
         try:

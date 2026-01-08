@@ -94,6 +94,13 @@ class RankCog(commands.Cog):
             )
             set_footer(embed)
             await interaction.followup.send(embed=embed, ephemeral=True)
+            log.tree("Rank User Not Found", [
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("ID", str(interaction.user.id)),
+                ("Target", f"{target.name} ({target.display_name})"),
+                ("Target ID", str(target.id)),
+                ("Reason", "Not in server"),
+            ], emoji="⚠️")
             return
 
         # Get XP data
@@ -155,8 +162,10 @@ class RankCog(commands.Cog):
             await interaction.followup.send(file=file, view=view)
 
             log.tree("Rank Command", [
-                ("User", f"{interaction.user.name}"),
-                ("Target", f"{member.name}"),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("ID", str(interaction.user.id)),
+                ("Target", f"{member.name} ({member.display_name})"),
+                ("Target ID", str(member.id)),
                 ("Level", str(level)),
                 ("XP", format_xp(current_xp)),
                 ("Type", "Graphical"),
@@ -166,7 +175,7 @@ class RankCog(commands.Cog):
             # Fallback to embed if image generation fails
             log.tree("Rank Card Generation Failed", [
                 ("User", f"{member.name} ({member.display_name})"),
-                ("User ID", str(member.id)),
+                ("ID", str(member.id)),
                 ("Error", str(e)),
             ], emoji="⚠️")
 
@@ -220,8 +229,10 @@ class RankCog(commands.Cog):
         await interaction.followup.send(embed=embed, view=view)
 
         log.tree("Rank Command", [
-            ("User", f"{interaction.user.name}"),
-            ("Target", f"{member.name}"),
+            ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+            ("ID", str(interaction.user.id)),
+            ("Target", f"{member.name} ({member.display_name})"),
+            ("Target ID", str(member.id)),
             ("Level", str(level)),
             ("XP", format_xp(current_xp)),
             ("Type", "Embed (fallback)"),
@@ -252,14 +263,15 @@ class RankCog(commands.Cog):
                 pass
 
             log.tree("Rank Cooldown", [
-                ("User", interaction.user.name),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("ID", str(interaction.user.id)),
                 ("Remaining", time_str),
             ], emoji="⏳")
             return
 
         log.tree("Rank Command Error", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-            ("User ID", str(interaction.user.id)),
+            ("ID", str(interaction.user.id)),
             ("Error", str(error)),
         ], emoji="❌")
 

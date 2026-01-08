@@ -110,7 +110,7 @@ async def handle_download(
 
         log.tree("Download Limit Reached", [
             ("User", f"{user.name} ({user.display_name})"),
-            ("User ID", str(user.id)),
+            ("ID", str(user.id)),
             ("Remaining", "0"),
         ], emoji="⚠️")
         return
@@ -137,15 +137,15 @@ async def handle_download(
                 pass
 
         log.tree("Download Unsupported URL", [
-            ("User", f"{user.name}"),
-            ("User ID", str(user.id)),
+            ("User", f"{user.name} ({user.display_name})"),
+            ("ID", str(user.id)),
             ("URL", url[:60]),
         ], emoji="⚠️")
         return
 
     log.tree("Download Starting", [
         ("User", f"{user.name} ({user.display_name})"),
-        ("User ID", str(user.id)),
+        ("ID", str(user.id)),
         ("Platform", platform.title()),
         ("URL", url[:60] + "..." if len(url) > 60 else url),
         ("Remaining", "Unlimited" if remaining == -1 else str(remaining)),
@@ -232,8 +232,8 @@ async def handle_download(
             await msg.delete(delay=10)
 
         log.tree("Download Failed", [
-            ("User", f"{user.name}"),
-            ("User ID", str(user.id)),
+            ("User", f"{user.name} ({user.display_name})"),
+            ("ID", str(user.id)),
             ("Platform", platform.title()),
             ("Error", result.error[:50] if result.error else "Unknown"),
         ], emoji="❌")
@@ -243,8 +243,8 @@ async def handle_download(
     if remaining != -1:
         new_remaining = db.record_download_usage(user.id, config.DOWNLOAD_WEEKLY_LIMIT)
         log.tree("Download Usage Recorded", [
-            ("User", f"{user.name}"),
-            ("User ID", str(user.id)),
+            ("User", f"{user.name} ({user.display_name})"),
+            ("ID", str(user.id)),
             ("Remaining", str(new_remaining)),
         ], emoji="📊")
     else:
@@ -278,7 +278,7 @@ async def handle_download(
 
         log.tree("Download Complete", [
             ("User", f"{user.name} ({user.display_name})"),
-            ("User ID", str(user.id)),
+            ("ID", str(user.id)),
             ("Platform", platform.title()),
             ("Files", str(len(files))),
             ("Size", downloader.format_size(total_size)),
@@ -310,8 +310,8 @@ async def handle_download(
             await msg.delete(delay=10)
 
         log.tree("Download Upload Failed", [
-            ("User", f"{user.name}"),
-            ("User ID", str(user.id)),
+            ("User", f"{user.name} ({user.display_name})"),
+            ("ID", str(user.id)),
             ("Error", str(e)[:50]),
         ], emoji="❌")
 
@@ -363,14 +363,14 @@ class DownloadCog(commands.Cog):
 
             log.tree("Download Command Cooldown", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                ("User ID", str(interaction.user.id)),
+                ("ID", str(interaction.user.id)),
                 ("Retry After", f"{error.retry_after:.1f}s"),
             ], emoji="⏳")
             return
 
         log.error_tree("Download Command Error", error, [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-            ("User ID", str(interaction.user.id)),
+            ("ID", str(interaction.user.id)),
         ])
 
         try:

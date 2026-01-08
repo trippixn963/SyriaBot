@@ -113,6 +113,11 @@ class ConvertCog(commands.Cog):
             embed = discord.Embed(description="⚠️ Please provide an image/video attachment or URL", color=COLOR_WARNING)
             set_footer(embed)
             await interaction.followup.send(embed=embed, ephemeral=True)
+            log.tree("Convert Rejected", [
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("ID", str(interaction.user.id)),
+                ("Reason", "No attachment or URL provided"),
+            ], emoji="⚠️")
             return
 
         # Get media data
@@ -136,6 +141,12 @@ class ConvertCog(commands.Cog):
                     embed = discord.Embed(description="⚠️ Attachment must be an image (PNG, JPG, GIF, WebP) or video (MP4, MOV, WebM)", color=COLOR_WARNING)
                     set_footer(embed)
                     await interaction.followup.send(embed=embed, ephemeral=True)
+                    log.tree("Convert Rejected", [
+                        ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                        ("ID", str(interaction.user.id)),
+                        ("File", media.filename),
+                        ("Reason", "Invalid file type"),
+                    ], emoji="⚠️")
                     return
 
             # Check file size
@@ -144,17 +155,24 @@ class ConvertCog(commands.Cog):
                 embed = discord.Embed(description=f"⚠️ File too large. Maximum size is {25 if is_video else 8}MB", color=COLOR_WARNING)
                 set_footer(embed)
                 await interaction.followup.send(embed=embed, ephemeral=True)
+                log.tree("Convert Rejected", [
+                    ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                    ("ID", str(interaction.user.id)),
+                    ("File", media.filename),
+                    ("Size", f"{media.size / 1024 / 1024:.1f}MB"),
+                    ("Reason", "File too large"),
+                ], emoji="⚠️")
                 return
 
             try:
                 media_data = await media.read()
                 source_name = media.filename
             except Exception as e:
-                log.tree("Attachment Read Failed", [
+                log.tree("Convert Attachment Read Failed", [
                     ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                    ("User ID", str(interaction.user.id)),
+                    ("ID", str(interaction.user.id)),
                     ("File", media.filename),
-                    ("Error", str(e)),
+                    ("Error", str(e)[:50]),
                 ], emoji="❌")
                 embed = discord.Embed(description="❌ Failed to read attachment. Please try again", color=COLOR_ERROR)
                 set_footer(embed)
@@ -181,6 +199,12 @@ class ConvertCog(commands.Cog):
                 )
                 set_footer(embed)
                 await interaction.followup.send(embed=embed, ephemeral=True)
+                log.tree("Convert Rejected", [
+                    ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                    ("ID", str(interaction.user.id)),
+                    ("URL", url[:50]),
+                    ("Reason", "Invalid URL format"),
+                ], emoji="⚠️")
                 return
 
             # Determine if it's a video URL (Tenor embeds as video)
@@ -191,6 +215,12 @@ class ConvertCog(commands.Cog):
                 embed = discord.Embed(description="❌ Failed to fetch media from URL. Make sure it's valid and accessible", color=COLOR_ERROR)
                 set_footer(embed)
                 await interaction.followup.send(embed=embed, ephemeral=True)
+                log.tree("Convert Fetch Failed", [
+                    ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                    ("ID", str(interaction.user.id)),
+                    ("URL", url[:50]),
+                    ("Reason", "Failed to fetch media"),
+                ], emoji="❌")
                 return
 
             # Set friendly source name
@@ -205,10 +235,10 @@ class ConvertCog(commands.Cog):
 
         log.tree("Convert Command", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-            ("User ID", str(interaction.user.id)),
+            ("ID", str(interaction.user.id)),
             ("Source", source_name[:50]),
             ("Type", "Video" if is_video else "Image"),
-        ], emoji="CONVERT")
+        ], emoji="🔄")
 
         # Start interactive editor
         await start_convert_editor(
@@ -228,17 +258,28 @@ class ConvertCog(commands.Cog):
         if isinstance(error, app_commands.CommandOnCooldown):
             embed = discord.Embed(description=f"⏳ Command on cooldown. Try again in {error.retry_after:.1f}s", color=COLOR_WARNING)
             set_footer(embed)
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            try:
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+            except discord.HTTPException:
+                pass
+            log.tree("Convert Cooldown", [
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("ID", str(interaction.user.id)),
+                ("Retry After", f"{error.retry_after:.1f}s"),
+            ], emoji="⏳")
         else:
             log.tree("Convert Command Error", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                ("User ID", str(interaction.user.id)),
-                ("Error", f"{type(error).__name__}: {str(error)}"),
+                ("ID", str(interaction.user.id)),
+                ("Error", f"{type(error).__name__}: {str(error)[:50]}"),
             ], emoji="❌")
-            if not interaction.response.is_done():
-                embed = discord.Embed(description="❌ An error occurred while processing your request", color=COLOR_ERROR)
-                set_footer(embed)
-                await interaction.response.send_message(embed=embed, ephemeral=True)
+            try:
+                if not interaction.response.is_done():
+                    embed = discord.Embed(description="❌ An error occurred while processing your request", color=COLOR_ERROR)
+                    set_footer(embed)
+                    await interaction.response.send_message(embed=embed, ephemeral=True)
+            except discord.HTTPException:
+                pass
 
 
 # =============================================================================

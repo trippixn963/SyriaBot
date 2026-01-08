@@ -231,7 +231,7 @@ class WeatherView(discord.ui.View):
             item.disabled = True
         log.tree("Weather View Expired", [
             ("City", self.city),
-            ("User ID", str(self.user_id)),
+            ("ID", str(self.user_id)),
         ], emoji="⏳")
 
     def build_embed(self) -> discord.Embed:
@@ -539,14 +539,14 @@ class WeatherCog(commands.Cog):
 
             log.tree("Weather Cooldown", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                ("User ID", str(interaction.user.id)),
+                ("ID", str(interaction.user.id)),
                 ("Remaining", time_str),
             ], emoji="⏳")
             return
 
         log.tree("Weather Command Error", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-            ("User ID", str(interaction.user.id)),
+            ("ID", str(interaction.user.id)),
             ("Error", str(error)[:100]),
         ], emoji="❌")
 
