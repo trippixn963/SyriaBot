@@ -5,6 +5,7 @@ SyriaBot - Database AFK Mixin
 AFK system database operations.
 
 Author: حَـــــنَّـــــا
+Server: discord.gg/syria
 """
 
 import time

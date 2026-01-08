@@ -5,6 +5,7 @@ SyriaBot - Voice Handler
 Handles voice state updates for TempVoice.
 
 Author: حَـــــنَّـــــا
+Server: discord.gg/syria
 """
 
 from datetime import datetime

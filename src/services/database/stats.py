@@ -5,6 +5,7 @@ SyriaBot - Database Stats Mixin
 Server-level statistics database operations.
 
 Author: حَـــــنَّـــــا
+Server: discord.gg/syria
 """
 
 import time

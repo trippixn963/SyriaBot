@@ -1,1 +1,1 @@
-"""SyriaBot Handlers."""
+"""SyriaBot - Handlers Package."""

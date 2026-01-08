@@ -105,8 +105,11 @@ async def handle_download(
             await msg.delete(delay=10)
             try:
                 await interaction_or_message.delete()
-            except discord.HTTPException:
-                pass
+            except discord.HTTPException as e:
+                log.tree("Delete Failed (Limit)", [
+                    ("User", f"{user.name}"),
+                    ("Error", str(e)[:50]),
+                ], emoji="⚠️")
 
         log.tree("Download Limit Reached", [
             ("User", f"{user.name} ({user.display_name})"),
@@ -133,8 +136,11 @@ async def handle_download(
             await msg.delete(delay=10)
             try:
                 await interaction_or_message.delete()
-            except discord.HTTPException:
-                pass
+            except discord.HTTPException as e:
+                log.tree("Delete Failed (Unsupported)", [
+                    ("User", f"{user.name}"),
+                    ("Error", str(e)[:50]),
+                ], emoji="⚠️")
 
         log.tree("Download Unsupported URL", [
             ("User", f"{user.name} ({user.display_name})"),
@@ -214,8 +220,11 @@ async def handle_download(
                 log.tree("Download Progress Deleted", [
                     ("Reason", "Download failed"),
                 ], emoji="🗑️")
-            except discord.HTTPException:
-                pass
+            except discord.HTTPException as e:
+                log.tree("Progress Delete Failed", [
+                    ("User", f"{user.name}"),
+                    ("Error", str(e)[:50]),
+                ], emoji="⚠️")
 
         # Send ephemeral-like error (auto-delete for replies)
         embed = discord.Embed(
@@ -270,8 +279,11 @@ async def handle_download(
                 log.tree("Download Progress Deleted", [
                     ("Reason", "Sending files"),
                 ], emoji="🗑️")
-            except discord.HTTPException:
-                pass
+            except discord.HTTPException as e:
+                log.tree("Progress Delete Failed", [
+                    ("User", f"{user.name}"),
+                    ("Error", str(e)[:50]),
+                ], emoji="⚠️")
 
         # Send just files with ping - no embed
         await channel.send(content=f"<@{user.id}>", files=files)
@@ -293,8 +305,11 @@ async def handle_download(
                 log.tree("Download Progress Deleted", [
                     ("Reason", "Upload failed"),
                 ], emoji="🗑️")
-            except discord.HTTPException:
-                pass
+            except discord.HTTPException as del_e:
+                log.tree("Progress Delete Failed", [
+                    ("User", f"{user.name}"),
+                    ("Error", str(del_e)[:50]),
+                ], emoji="⚠️")
 
         embed = discord.Embed(
             title="Upload Failed",
@@ -358,8 +373,11 @@ class DownloadCog(commands.Cog):
                     await interaction.response.send_message(embed=embed, ephemeral=True)
                 else:
                     await interaction.followup.send(embed=embed, ephemeral=True)
-            except discord.HTTPException:
-                pass
+            except discord.HTTPException as e:
+                log.tree("Cooldown Response Failed", [
+                    ("User", f"{interaction.user.name}"),
+                    ("Error", str(e)[:50]),
+                ], emoji="⚠️")
 
             log.tree("Download Command Cooldown", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
@@ -384,8 +402,11 @@ class DownloadCog(commands.Cog):
                 await interaction.response.send_message(embed=embed, ephemeral=True)
             else:
                 await interaction.followup.send(embed=embed, ephemeral=True)
-        except discord.HTTPException:
-            pass
+        except discord.HTTPException as e:
+            log.tree("Error Response Failed", [
+                ("User", f"{interaction.user.name}"),
+                ("Error", str(e)[:50]),
+            ], emoji="⚠️")
 
 
 async def setup(bot: commands.Bot) -> None:

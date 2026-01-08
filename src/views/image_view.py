@@ -6,6 +6,7 @@ Interactive view for browsing image search results.
 Downloads and attaches images for reliable display.
 
 Author: حَـــــنَّـــــا
+Server: discord.gg/syria
 """
 
 import io
@@ -234,7 +235,7 @@ class ImageView(ui.View):
             return False
         return True
 
-    async def on_timeout(self):
+    async def on_timeout(self) -> None:
         """Disable buttons on timeout."""
         for item in self.children:
             item.disabled = True
@@ -293,7 +294,7 @@ class ImageView(ui.View):
             ], emoji="❌")
 
     @ui.button(label="Previous", style=discord.ButtonStyle.secondary, custom_id="prev")
-    async def prev_button(self, interaction: discord.Interaction, button: ui.Button):
+    async def prev_button(self, interaction: discord.Interaction, button: ui.Button) -> None:
         """Go to previous image."""
         log.tree("Image Nav Previous", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
@@ -306,7 +307,7 @@ class ImageView(ui.View):
         await self._update_message(interaction, "prev")
 
     @ui.button(label="", emoji=discord.PartialEmoji.from_str(SAVE_EMOJI), style=discord.ButtonStyle.secondary, custom_id="download")
-    async def download_button(self, interaction: discord.Interaction, button: ui.Button):
+    async def download_button(self, interaction: discord.Interaction, button: ui.Button) -> None:
         """Save image using cached data, send as public .gif, delete original."""
         await interaction.response.defer()
 
@@ -342,7 +343,9 @@ class ImageView(ui.View):
                 try:
                     await self.message.delete()
                 except discord.NotFound:
-                    pass
+                    log.tree("Image Original Delete", [
+                        ("Reason", "Message already deleted"),
+                    ], emoji="ℹ️")
 
             log.tree("Image Saved", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
@@ -361,7 +364,7 @@ class ImageView(ui.View):
             await interaction.followup.send("Failed to save image.", ephemeral=True)
 
     @ui.button(label="", emoji=discord.PartialEmoji.from_str(DELETE_EMOJI), style=discord.ButtonStyle.secondary, custom_id="delete")
-    async def delete_button(self, interaction: discord.Interaction, button: ui.Button):
+    async def delete_button(self, interaction: discord.Interaction, button: ui.Button) -> None:
         """Delete the message."""
         await interaction.response.defer()
         try:
@@ -386,7 +389,7 @@ class ImageView(ui.View):
             ], emoji="❌")
 
     @ui.button(label="Next", style=discord.ButtonStyle.secondary, custom_id="next")
-    async def next_button(self, interaction: discord.Interaction, button: ui.Button):
+    async def next_button(self, interaction: discord.Interaction, button: ui.Button) -> None:
         """Go to next image."""
         log.tree("Image Nav Next", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),

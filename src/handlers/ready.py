@@ -5,6 +5,7 @@ SyriaBot - Ready Handler
 Handles bot startup events.
 
 Author: حَـــــنَّـــــا
+Server: discord.gg/syria
 """
 
 import discord

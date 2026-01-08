@@ -7,6 +7,7 @@ Now with interactive editor for customization.
 Supports both images and short videos (max 15 seconds).
 
 Author: حَـــــنَّـــــا
+Server: discord.gg/syria
 """
 
 import re
@@ -260,8 +261,11 @@ class ConvertCog(commands.Cog):
             set_footer(embed)
             try:
                 await interaction.response.send_message(embed=embed, ephemeral=True)
-            except discord.HTTPException:
-                pass
+            except discord.HTTPException as e:
+                log.tree("Convert Cooldown Response Failed", [
+                    ("User", f"{interaction.user.name}"),
+                    ("Error", str(e)[:50]),
+                ], emoji="⚠️")
             log.tree("Convert Cooldown", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
@@ -278,8 +282,11 @@ class ConvertCog(commands.Cog):
                     embed = discord.Embed(description="❌ An error occurred while processing your request", color=COLOR_ERROR)
                     set_footer(embed)
                     await interaction.response.send_message(embed=embed, ephemeral=True)
-            except discord.HTTPException:
-                pass
+            except discord.HTTPException as e:
+                log.tree("Convert Error Response Failed", [
+                    ("User", f"{interaction.user.name}"),
+                    ("Error", str(e)[:50]),
+                ], emoji="⚠️")
 
 
 # =============================================================================

@@ -6,6 +6,7 @@ Manages rotating Discord presence with stats and hourly promo.
 Modeled after AzabBot's presence system.
 
 Author: حَـــــنَّـــــا
+Server: discord.gg/syria
 """
 
 import asyncio

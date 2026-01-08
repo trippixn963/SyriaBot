@@ -5,6 +5,7 @@ SyriaBot - Translate Command
 Slash command to translate text.
 
 Author: حَـــــنَّـــــا
+Server: discord.gg/syria
 """
 
 import discord
@@ -145,8 +146,11 @@ class TranslateCog(commands.Cog):
                 await interaction.response.send_message(embed=embed, ephemeral=True)
             else:
                 await interaction.followup.send(embed=embed, ephemeral=True)
-        except discord.HTTPException:
-            pass
+        except discord.HTTPException as e:
+            log.tree("Translate Error Response Failed", [
+                ("User", f"{interaction.user.name}"),
+                ("Error", str(e)[:50]),
+            ], emoji="⚠️")
 
 
 async def setup(bot: commands.Bot) -> None:

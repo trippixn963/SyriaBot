@@ -5,6 +5,7 @@ SyriaBot - Profile Sync Service
 Syncs bot avatar and banner with server.
 
 Author: حَـــــنَّـــــا
+Server: discord.gg/syria
 """
 
 import asyncio

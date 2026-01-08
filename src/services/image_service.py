@@ -5,6 +5,7 @@ SyriaBot - Image Search Service
 Image search using Google Custom Search API.
 
 Author: حَـــــنَّـــــا
+Server: discord.gg/syria
 """
 
 import asyncio

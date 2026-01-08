@@ -5,6 +5,7 @@ SyriaBot - Main Bot
 Discord bot with TempVoice system.
 
 Author: حَـــــنَّـــــا
+Server: discord.gg/syria
 """
 
 import asyncio

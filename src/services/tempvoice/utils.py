@@ -6,6 +6,7 @@ Centralized utilities for the TempVoice system.
 All shared logic lives here to avoid duplication.
 
 Author: حَـــــنَّـــــا
+Server: discord.gg/syria
 """
 
 import re

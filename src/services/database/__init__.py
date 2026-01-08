@@ -14,6 +14,7 @@ Structure:
     - downloads.py: Download statistics
 
 Author: حَـــــنَّـــــا
+Server: discord.gg/syria
 """
 
 from .core import DatabaseCore

@@ -5,7 +5,8 @@ SyriaBot - Convert View
 Interactive view for image/video conversion with customization options.
 Supports both images (with live preview) and videos (settings only).
 
-Author: Unknown
+Author: حَـــــنَّـــــا
+Server: discord.gg/syria
 """
 
 import asyncio
@@ -356,7 +357,7 @@ class ConvertView(ui.View):
             return False
         return True
 
-    async def on_timeout(self):
+    async def on_timeout(self) -> None:
         """Disable buttons on timeout."""
         for item in self.children:
             item.disabled = True
@@ -378,13 +379,13 @@ class ConvertView(ui.View):
     # ==========================================================================
 
     @ui.button(label="Edit", emoji="<:rename:1455709387711578394>", style=discord.ButtonStyle.secondary, row=1)
-    async def edit_text_button(self, interaction: discord.Interaction, button: ui.Button):
+    async def edit_text_button(self, interaction: discord.Interaction, button: ui.Button) -> None:
         """Open modal to edit caption text."""
         modal = TextInputModal(self.settings.text, self)
         await interaction.response.send_modal(modal)
 
     @ui.button(label="Save", emoji="<:save:1455776703468273825>", style=discord.ButtonStyle.secondary, row=1)
-    async def download_button(self, interaction: discord.Interaction, button: ui.Button):
+    async def download_button(self, interaction: discord.Interaction, button: ui.Button) -> None:
         """Download the final result."""
         await interaction.response.defer()
 
@@ -464,7 +465,7 @@ class ConvertView(ui.View):
         self.stop()
 
     @ui.button(label="Cancel", emoji="<:block:1455709662316986539>", style=discord.ButtonStyle.secondary, row=1)
-    async def cancel_button(self, interaction: discord.Interaction, button: ui.Button):
+    async def cancel_button(self, interaction: discord.Interaction, button: ui.Button) -> None:
         """Cancel and delete the editor."""
         await interaction.response.defer()
 
@@ -595,7 +596,7 @@ class VideoConvertView(ui.View):
             return False
         return True
 
-    async def on_timeout(self):
+    async def on_timeout(self) -> None:
         """Disable buttons on timeout."""
         for item in self.children:
             item.disabled = True
@@ -617,13 +618,13 @@ class VideoConvertView(ui.View):
     # ==========================================================================
 
     @ui.button(label="Edit", emoji="<:rename:1455709387711578394>", style=discord.ButtonStyle.secondary, row=1)
-    async def edit_text_button(self, interaction: discord.Interaction, button: ui.Button):
+    async def edit_text_button(self, interaction: discord.Interaction, button: ui.Button) -> None:
         """Open modal to edit caption text."""
         modal = TextInputModal(self.settings.text, self, "update_embed")
         await interaction.response.send_modal(modal)
 
     @ui.button(label="Save", emoji="<:save:1455776703468273825>", style=discord.ButtonStyle.secondary, row=1)
-    async def convert_button(self, interaction: discord.Interaction, button: ui.Button):
+    async def convert_button(self, interaction: discord.Interaction, button: ui.Button) -> None:
         """Convert the video to GIF."""
         self._processing = True
 
@@ -704,7 +705,7 @@ class VideoConvertView(ui.View):
         self.stop()
 
     @ui.button(label="Cancel", emoji="<:block:1455709662316986539>", style=discord.ButtonStyle.secondary, row=1)
-    async def cancel_button(self, interaction: discord.Interaction, button: ui.Button):
+    async def cancel_button(self, interaction: discord.Interaction, button: ui.Button) -> None:
         """Cancel and delete the editor."""
         await interaction.response.defer()
 

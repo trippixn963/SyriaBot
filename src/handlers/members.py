@@ -5,6 +5,7 @@ SyriaBot - Members Handler
 Handles member join/leave/update events.
 
 Author: حَـــــنَّـــــا
+Server: discord.gg/syria
 """
 
 from typing import Dict, Optional

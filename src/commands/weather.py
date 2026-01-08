@@ -5,6 +5,7 @@ SyriaBot - Weather Command
 Get current weather for any city with fuzzy matching.
 
 Author: حَـــــنَّـــــا
+Server: discord.gg/syria
 """
 
 import discord
@@ -534,8 +535,11 @@ class WeatherCog(commands.Cog):
                     f"⏳ Slow down! You can use `/weather` again in **{time_str}**",
                     ephemeral=True,
                 )
-            except discord.HTTPException:
-                pass
+            except discord.HTTPException as e:
+                log.tree("Weather Cooldown Response Failed", [
+                    ("User", f"{interaction.user.name}"),
+                    ("Error", str(e)[:50]),
+                ], emoji="⚠️")
 
             log.tree("Weather Cooldown", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
@@ -561,8 +565,11 @@ class WeatherCog(commands.Cog):
                     "❌ An error occurred",
                     ephemeral=True,
                 )
-        except discord.HTTPException:
-            pass
+        except discord.HTTPException as e:
+            log.tree("Weather Error Response Failed", [
+                ("User", f"{interaction.user.name}"),
+                ("Error", str(e)[:50]),
+            ], emoji="⚠️")
 
 
 async def setup(bot: commands.Bot) -> None:

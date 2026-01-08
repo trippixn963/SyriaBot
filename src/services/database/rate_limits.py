@@ -5,6 +5,7 @@ SyriaBot - Database Rate Limits Mixin
 Weekly usage tracking for rate-limited features.
 
 Author: حَـــــنَّـــــا
+Server: discord.gg/syria
 """
 
 from src.core.logger import log

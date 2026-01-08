@@ -5,6 +5,7 @@ SyriaBot - HTTP Utilities
 Shared HTTP session for all services.
 
 Author: حَـــــنَّـــــا
+Server: discord.gg/syria
 """
 
 import aiohttp

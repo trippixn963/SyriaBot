@@ -5,6 +5,7 @@ SyriaBot - Database TempVoice Mixin
 TempVoice-related database operations.
 
 Author: حَـــــنَّـــــا
+Server: discord.gg/syria
 """
 
 import sqlite3

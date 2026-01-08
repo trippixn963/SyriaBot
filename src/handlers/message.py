@@ -6,6 +6,7 @@ Handles message events including reply features (convert, quote, translate, down
 Delegates to specialized services for AFK and Gallery.
 
 Author: حَـــــنَّـــــا
+Server: discord.gg/syria
 """
 
 import io
@@ -473,8 +474,11 @@ class MessageHandler(commands.Cog):
             await msg.delete(delay=5)
             try:
                 await message.delete()
-            except discord.HTTPException:
-                pass
+            except discord.HTTPException as e:
+                log.tree("Download Cooldown Delete Failed", [
+                    ("User", f"{message.author.name}"),
+                    ("Error", str(e)[:50]),
+                ], emoji="⚠️")
             log.tree("Download Reply Cooldown", [
                 ("User", f"{message.author.name} ({message.author.display_name})"),
                 ("ID", str(user_id)),
@@ -540,8 +544,11 @@ class MessageHandler(commands.Cog):
             await msg.delete(delay=5)
             try:
                 await message.delete()
-            except discord.HTTPException:
-                pass
+            except discord.HTTPException as e:
+                log.tree("Download No URL Delete Failed", [
+                    ("User", f"{message.author.name}"),
+                    ("Error", str(e)[:50]),
+                ], emoji="⚠️")
             log.tree("Download No URL Found", [
                 ("User", f"{message.author.name}"),
                 ("ID", str(message.author.id)),

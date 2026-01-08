@@ -5,6 +5,7 @@ SyriaBot - Database Downloads Mixin
 Lifetime download statistics database operations.
 
 Author: حَـــــنَّـــــا
+Server: discord.gg/syria
 """
 
 import time

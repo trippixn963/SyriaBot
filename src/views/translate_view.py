@@ -5,6 +5,7 @@ SyriaBot - Translate View
 Interactive buttons for translation.
 
 Author: حَـــــنَّـــــا
+Server: discord.gg/syria
 """
 
 import discord
@@ -275,7 +276,7 @@ class TranslateView(ui.View):
             return False
         return True
 
-    async def on_timeout(self):
+    async def on_timeout(self) -> None:
         """Disable buttons on timeout."""
         for item in self.children:
             item.disabled = True

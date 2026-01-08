@@ -345,8 +345,12 @@ class RateLimiter:
                 # Delete the user's message (e.g., "convert" or "quote")
                 try:
                     await message.delete()
-                except discord.HTTPException:
-                    pass  # May not have permission
+                except discord.HTTPException as e:
+                    log.tree("Rate Limit Delete Failed", [
+                        ("User", f"{member.name} ({member.display_name})"),
+                        ("Reason", "No permission or already deleted"),
+                        ("Error", str(e)[:50]),
+                    ], emoji="⚠️")
 
                 # Send rate limit embed, then delete after 10 seconds
                 response = await message.channel.send(
@@ -360,7 +364,7 @@ class RateLimiter:
                     try:
                         await response.delete()
                     except discord.HTTPException:
-                        pass
+                        pass  # Response already deleted, no action needed
 
                 asyncio.create_task(delete_after_delay())
 

@@ -5,10 +5,12 @@ SyriaBot - Translation Service
 Translation service using Google Translate.
 
 Author: حَـــــنَّـــــا
+Server: discord.gg/syria
 """
 
 import asyncio
 import aiohttp
+import re
 from dataclasses import dataclass
 from typing import Optional, Dict, Tuple
 from deep_translator import GoogleTranslator
@@ -18,6 +20,30 @@ from langdetect import detect, LangDetectException
 from src.core.logger import log
 from src.core.config import config
 from src.utils.http import http_session
+
+
+# =============================================================================
+# Discord Token Handling
+# =============================================================================
+
+# Patterns for Discord mentions/emojis to strip from translations
+DISCORD_TOKEN_PATTERN = re.compile(
+    r'<(?:'
+    r'@!?\d+|'           # User mentions: <@123> or <@!123>
+    r'@&\d+|'            # Role mentions: <@&123>
+    r'#\d+|'             # Channel mentions: <#123>
+    r'a?:\w+:\d+'        # Custom emojis: <:name:123> or <a:name:123>
+    r')>'
+)
+
+
+def strip_discord_tokens(text: str) -> str:
+    """Remove Discord mentions/emojis from text completely."""
+    # Remove tokens and clean up extra whitespace
+    cleaned = DISCORD_TOKEN_PATTERN.sub('', text)
+    # Clean up multiple spaces left behind
+    cleaned = re.sub(r' +', ' ', cleaned).strip()
+    return cleaned
 
 
 # =============================================================================
@@ -386,27 +412,27 @@ class TranslateService:
                 error=f"Unknown language: {target_lang}"
             )
 
+        # Strip Discord mentions/emojis before translation
+        cleaned_text = strip_discord_tokens(text)
+
         if source_lang == "auto":
-            detected = self.detect_language(text)
+            detected = self.detect_language(cleaned_text)
             source_lang = detected or "auto"
 
         log.tree("Translating", [
-            ("Text", text[:50] + "..." if len(text) > 50 else text),
+            ("Text", cleaned_text[:50] + "..." if len(cleaned_text) > 50 else cleaned_text),
             ("From", source_lang),
             ("To", resolved_target),
         ], emoji="🌐")
 
         # Try DeepL first (higher quality), fall back to Google
         if config.DEEPL_API_KEY:
-            result = await self._translate_deepl(text, source_lang, resolved_target)
+            result = await self._translate_deepl(cleaned_text, source_lang, resolved_target)
             if result.success:
                 return result
-            log.tree("DeepL Failed, Trying Google", [
-                ("Error", result.error[:50] if result.error else "Unknown"),
-            ], emoji="🔄")
 
         # Google Translate fallback
-        return await self._translate_google(text, source_lang, resolved_target)
+        return await self._translate_google(cleaned_text, source_lang, resolved_target)
 
 
     # DeepL language code mapping (DeepL uses different codes)
@@ -469,10 +495,10 @@ class TranslateService:
             ) as resp:
                 if resp.status != 200:
                     error_text = await resp.text()
-                    log.tree("DeepL API Error", [
+                    log.tree("DeepL Unavailable", [
                         ("Status", str(resp.status)),
-                        ("Error", error_text[:100]),
-                    ], emoji="❌")
+                        ("Fallback", "Google Translate"),
+                    ], emoji="🔄")
                     return TranslationResult(
                         success=False,
                         original_text=text,

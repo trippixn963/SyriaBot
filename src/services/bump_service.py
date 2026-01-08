@@ -6,6 +6,7 @@ Reminds staff to bump the server on Disboard every 2 hours.
 Detects successful bumps from Disboard's "bump done" embed.
 
 Author: حَـــــنَّـــــا
+Server: discord.gg/syria
 """
 
 import asyncio

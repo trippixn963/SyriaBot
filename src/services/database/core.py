@@ -5,6 +5,7 @@ SyriaBot - Database Core
 Base database class with connection management and table initialization.
 
 Author: حَـــــنَّـــــا
+Server: discord.gg/syria
 """
 
 import os

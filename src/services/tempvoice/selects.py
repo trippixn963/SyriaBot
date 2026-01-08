@@ -43,8 +43,11 @@ class ConfirmView(ui.View):
                 embed = discord.Embed(description="⏳ Confirmation expired", color=COLOR_NEUTRAL)
                 set_footer(embed)
                 await self.message.edit(embed=embed, view=None)
-            except discord.HTTPException:
-                pass
+            except discord.HTTPException as e:
+                log.tree("Confirm View Timeout Edit Failed", [
+                    ("Action", self.action),
+                    ("Error", str(e)[:50]),
+                ], emoji="⚠️")
         log.tree("Confirm View Expired", [
             ("Action", self.action),
             ("Channel", self.channel.name if self.channel else "Unknown"),
@@ -197,8 +200,11 @@ class UserSelectView(ui.View):
                 embed = discord.Embed(description="⏳ Selection expired", color=COLOR_NEUTRAL)
                 set_footer(embed)
                 await self.message.edit(embed=embed, view=None)
-            except discord.HTTPException:
-                pass
+            except discord.HTTPException as e:
+                log.tree("User Select Timeout Edit Failed", [
+                    ("Action", self.action),
+                    ("Error", str(e)[:50]),
+                ], emoji="⚠️")
         log.tree("User Select Expired", [
             ("Action", self.action),
             ("Channel", self.channel.name if self.channel else "Unknown"),

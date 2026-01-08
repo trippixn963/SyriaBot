@@ -5,6 +5,7 @@ SyriaBot - Database XP Mixin
 XP/Leveling system database operations.
 
 Author: حَـــــنَّـــــا
+Server: discord.gg/syria
 """
 
 import json

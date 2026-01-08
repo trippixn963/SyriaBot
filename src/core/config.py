@@ -5,6 +5,7 @@ SyriaBot - Configuration
 Central configuration from environment variables.
 
 Author: حَـــــنَّـــــا
+Server: discord.gg/syria
 """
 
 import os

@@ -5,6 +5,7 @@ SyriaBot - Get Command
 Get user avatars/banners and server icon/banner.
 
 Author: حَـــــنَّـــــا
+Server: discord.gg/syria
 """
 
 import io
@@ -88,7 +89,10 @@ async def _download_and_save_image(
             try:
                 await message.delete()
             except discord.NotFound:
-                pass
+                log.tree(f"{label} Delete Skipped", [
+                    ("User", f"{interaction.user.name}"),
+                    ("Reason", "Message already deleted"),
+                ], emoji="⚠️")
 
         log_entries = [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
@@ -136,8 +140,11 @@ class DownloadView(ui.View):
         if self.message:
             try:
                 await self.message.edit(view=self)
-            except discord.HTTPException:
-                pass
+            except discord.HTTPException as e:
+                log.tree("View Timeout Edit Failed", [
+                    ("Type", self.label),
+                    ("Error", str(e)[:50]),
+                ], emoji="⚠️")
 
     @ui.button(label="Save", style=discord.ButtonStyle.secondary, emoji="<:save:1455776703468273825>")
     async def save(self, interaction: discord.Interaction, button: ui.Button) -> None:
@@ -208,8 +215,11 @@ class AvatarToggleView(ui.View):
         if self.message:
             try:
                 await self.message.edit(view=self)
-            except discord.HTTPException:
-                pass
+            except discord.HTTPException as e:
+                log.tree("Avatar View Timeout Edit Failed", [
+                    ("Target", f"{self.target.name}"),
+                    ("Error", str(e)[:50]),
+                ], emoji="⚠️")
 
     @ui.button(label="Save", style=discord.ButtonStyle.secondary, emoji="<:save:1455776703468273825>", row=0)
     async def save(self, interaction: discord.Interaction, button: ui.Button) -> None:
@@ -314,8 +324,11 @@ class BannerToggleView(ui.View):
         if self.message:
             try:
                 await self.message.edit(view=self)
-            except discord.HTTPException:
-                pass
+            except discord.HTTPException as e:
+                log.tree("Banner View Timeout Edit Failed", [
+                    ("Target", f"{self.target.name}"),
+                    ("Error", str(e)[:50]),
+                ], emoji="⚠️")
 
     @ui.button(label="Save", style=discord.ButtonStyle.secondary, emoji="<:save:1455776703468273825>", row=0)
     async def save(self, interaction: discord.Interaction, button: ui.Button) -> None:
@@ -776,8 +789,11 @@ class GetCog(commands.Cog):
                     f"⏳ Slow down! You can use `/get` again in **{time_str}**",
                     ephemeral=True,
                 )
-            except discord.HTTPException:
-                pass
+            except discord.HTTPException as e:
+                log.tree("Get Cooldown Response Failed", [
+                    ("User", f"{interaction.user.name}"),
+                    ("Error", str(e)[:50]),
+                ], emoji="⚠️")
 
             log.tree("Get Cooldown", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
@@ -803,8 +819,11 @@ class GetCog(commands.Cog):
                     "❌ An error occurred",
                     ephemeral=True,
                 )
-        except discord.HTTPException:
-            pass
+        except discord.HTTPException as e:
+            log.tree("Get Error Response Failed", [
+                ("User", f"{interaction.user.name}"),
+                ("Error", str(e)[:50]),
+            ], emoji="⚠️")
 
 
 async def setup(bot: commands.Bot) -> None:

@@ -6,7 +6,8 @@ Image/video processing service for the /convert command.
 Adds white bars with text and converts to GIF.
 Supports both images and short videos.
 
-Author: Unknown
+Author: حَـــــنَّـــــا
+Server: discord.gg/syria
 """
 
 import asyncio
@@ -1043,8 +1044,11 @@ class ConvertService:
             for path in [input_path, output_path, palette_path]:
                 try:
                     path.unlink(missing_ok=True)
-                except Exception:
-                    pass
+                except Exception as e:
+                    log.tree("Temp File Cleanup Failed", [
+                        ("Path", str(path.name)),
+                        ("Error", str(e)[:50]),
+                    ], emoji="⚠️")
 
     def extract_thumbnail(self, video_data: bytes) -> Optional[bytes]:
         """Extract a thumbnail frame from video data."""
@@ -1084,8 +1088,11 @@ class ConvertService:
             for path in [input_path, output_path]:
                 try:
                     path.unlink(missing_ok=True)
-                except Exception:
-                    pass
+                except Exception as e:
+                    log.tree("Thumbnail Cleanup Failed", [
+                        ("Path", str(path.name)),
+                        ("Error", str(e)[:50]),
+                    ], emoji="⚠️")
 
     def extract_preview_strip(self, video_data: bytes, num_frames: int = 5) -> Optional[bytes]:
         """
@@ -1171,13 +1178,19 @@ class ConvertService:
             # Cleanup
             try:
                 input_path.unlink(missing_ok=True)
-            except Exception:
-                pass
+            except Exception as e:
+                log.tree("Preview Input Cleanup Failed", [
+                    ("Path", str(input_path.name)),
+                    ("Error", str(e)[:50]),
+                ], emoji="⚠️")
             for path in frame_paths:
                 try:
                     path.unlink(missing_ok=True)
-                except Exception:
-                    pass
+                except Exception as e:
+                    log.tree("Preview Frame Cleanup Failed", [
+                        ("Path", str(path.name)),
+                        ("Error", str(e)[:50]),
+                    ], emoji="⚠️")
 
     def get_video_duration(self, video_data: bytes) -> Optional[float]:
         """Get video duration in seconds from video data."""
@@ -1196,8 +1209,11 @@ class ConvertService:
         finally:
             try:
                 input_path.unlink(missing_ok=True)
-            except Exception:
-                pass
+            except Exception as e:
+                log.tree("Duration Input Cleanup Failed", [
+                    ("Path", str(input_path.name)),
+                    ("Error", str(e)[:50]),
+                ], emoji="⚠️")
 
     def get_video_preview_data(self, video_data: bytes) -> tuple[Optional[float], Optional[bytes]]:
         """
@@ -1315,8 +1331,11 @@ class ConvertService:
             for path in [input_path, output_path] + frame_paths:
                 try:
                     path.unlink(missing_ok=True)
-                except Exception:
-                    pass
+                except Exception as e:
+                    log.tree("Preview Data Cleanup Failed", [
+                        ("Path", str(path.name)),
+                        ("Error", str(e)[:50]),
+                    ], emoji="⚠️")
 
     @staticmethod
     def is_video(filename: str) -> bool:

@@ -6,6 +6,7 @@ Centralized constants for the entire codebase.
 Import from here instead of defining locally.
 
 Author: حَـــــنَّـــــا
+Server: discord.gg/syria
 """
 
 from zoneinfo import ZoneInfo

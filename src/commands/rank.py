@@ -3,6 +3,9 @@ SyriaBot - Rank Command
 =======================
 
 View XP and level information.
+
+Author: حَـــــنَّـــــا
+Server: discord.gg/syria
 """
 
 import io
@@ -259,8 +262,11 @@ class RankCog(commands.Cog):
                     f"⏳ Slow down! You can use `/rank` again in **{time_str}**",
                     ephemeral=True,
                 )
-            except discord.HTTPException:
-                pass
+            except discord.HTTPException as e:
+                log.tree("Rank Cooldown Response Failed", [
+                    ("User", f"{interaction.user.name}"),
+                    ("Error", str(e)[:50]),
+                ], emoji="⚠️")
 
             log.tree("Rank Cooldown", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
@@ -286,8 +292,11 @@ class RankCog(commands.Cog):
                     "❌ An error occurred while fetching rank data",
                     ephemeral=True,
                 )
-        except discord.HTTPException:
-            pass
+        except discord.HTTPException as e:
+            log.tree("Rank Error Response Failed", [
+                ("User", f"{interaction.user.name}"),
+                ("Error", str(e)[:50]),
+            ], emoji="⚠️")
 
 
 async def setup(bot: commands.Bot) -> None:

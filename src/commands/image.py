@@ -6,6 +6,7 @@ Slash command to search for images using Google Custom Search.
 Free users: 5/week limit. Boosters: Unlimited.
 
 Author: حَـــــنَّـــــا
+Server: discord.gg/syria
 """
 
 import discord
@@ -225,8 +226,11 @@ class ImageCog(commands.Cog):
                     await interaction.response.send_message(embed=embed, ephemeral=True)
                 else:
                     await interaction.followup.send(embed=embed, ephemeral=True)
-            except discord.HTTPException:
-                pass
+            except discord.HTTPException as e:
+                log.tree("Image Cooldown Response Failed", [
+                    ("User", f"{interaction.user.name}"),
+                    ("Error", str(e)[:50]),
+                ], emoji="⚠️")
 
             log.tree("Image Command Cooldown", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
@@ -251,8 +255,11 @@ class ImageCog(commands.Cog):
                 await interaction.response.send_message(embed=embed, ephemeral=True)
             else:
                 await interaction.followup.send(embed=embed, ephemeral=True)
-        except discord.HTTPException:
-            pass
+        except discord.HTTPException as e:
+            log.tree("Image Error Response Failed", [
+                ("User", f"{interaction.user.name}"),
+                ("Error", str(e)[:50]),
+            ], emoji="⚠️")
 
 
 # =============================================================================

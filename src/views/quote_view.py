@@ -6,6 +6,7 @@ Interactive button to save quote image for Discord saving.
 Uses PNG format with .gif filename for right-click save support.
 
 Author: حَـــــنَّـــــا
+Server: discord.gg/syria
 """
 
 import io
@@ -40,7 +41,7 @@ class QuoteView(ui.View):
         style=discord.ButtonStyle.secondary,
         custom_id="quote_save",
     )
-    async def save_button(self, interaction: discord.Interaction, button: ui.Button):
+    async def save_button(self, interaction: discord.Interaction, button: ui.Button) -> None:
         """Send as public .gif and delete original to avoid spam."""
         log.tree("Quote Save Button", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
@@ -85,7 +86,9 @@ class QuoteView(ui.View):
                 try:
                     await self.message.delete()
                 except discord.NotFound:
-                    pass
+                    log.tree("Quote Original Delete", [
+                        ("Reason", "Message already deleted"),
+                    ], emoji="ℹ️")
 
             log.tree("Quote Saved", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
@@ -103,7 +106,7 @@ class QuoteView(ui.View):
             ], emoji="❌")
             await interaction.followup.send("Failed to save quote.", ephemeral=True)
 
-    async def on_timeout(self):
+    async def on_timeout(self) -> None:
         """Disable button on timeout."""
         for item in self.children:
             item.disabled = True
