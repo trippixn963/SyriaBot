@@ -670,13 +670,13 @@ class TempVoiceService:
             log.error_tree("Text Access Grant Failed", e, [
                 ("Channel", channel.name),
                 ("User", f"{member.name} ({member.display_name})"),
-                ("User ID", str(member.id)),
+                ("ID", str(member.id)),
             ])
         except Exception as e:
             log.error_tree("Text Access Grant Error", e, [
                 ("Channel", channel.name),
                 ("User", f"{member.name} ({member.display_name})"),
-                ("User ID", str(member.id)),
+                ("ID", str(member.id)),
             ])
 
     async def _check_booster_name(self, channel: discord.VoiceChannel, member: discord.Member) -> None:
@@ -764,7 +764,7 @@ class TempVoiceService:
                     log.tree("Text Access Retained", [
                         ("Channel", channel.name),
                         ("User", f"{member.name} ({member.display_name})"),
-                        ("User ID", str(member.id)),
+                        ("ID", str(member.id)),
                         ("Reason", "Trusted user"),
                     ], emoji="✅")
                 else:
@@ -780,13 +780,13 @@ class TempVoiceService:
             log.error_tree("Text Access Revoke Failed", e, [
                 ("Channel", channel.name),
                 ("User", f"{member.name} ({member.display_name})"),
-                ("User ID", str(member.id)),
+                ("ID", str(member.id)),
             ])
         except Exception as e:
             log.error_tree("Text Access Revoke Error", e, [
                 ("Channel", channel.name),
                 ("User", f"{member.name} ({member.display_name})"),
-                ("User ID", str(member.id)),
+                ("ID", str(member.id)),
             ])
 
     def schedule_reorder(self, guild: discord.Guild) -> None:
@@ -976,7 +976,7 @@ class TempVoiceService:
         if self._create_lock.locked():
             log.tree("Create Queued", [
                 ("User", f"{member.name} ({member.display_name})"),
-                ("User ID", str(member.id)),
+                ("ID", str(member.id)),
                 ("Status", "Waiting for previous creation to complete"),
             ], emoji="⏳")
 
@@ -984,7 +984,7 @@ class TempVoiceService:
         async with self._create_lock:
             log.tree("Create Lock Acquired", [
                 ("User", f"{member.name} ({member.display_name})"),
-                ("User ID", str(member.id)),
+                ("ID", str(member.id)),
             ], emoji="🔓")
             await self._create_temp_channel_inner(member)
 
@@ -995,7 +995,7 @@ class TempVoiceService:
 
         log.tree("Create Inner Started", [
             ("User", f"{member.name} ({member.display_name})"),
-            ("User ID", str(member.id)),
+            ("ID", str(member.id)),
             ("Guild", guild.name),
         ], emoji="🔧")
 
@@ -1023,7 +1023,7 @@ class TempVoiceService:
 
             log.tree("Member Refetched", [
                 ("User", f"{member.name} ({member.display_name})"),
-                ("User ID", str(member.id)),
+                ("ID", str(member.id)),
                 ("Channel", channel_name),
                 ("State", state_str),
             ], emoji="🔍")
@@ -1037,7 +1037,7 @@ class TempVoiceService:
         if not member.voice or not member.voice.channel:
             log.tree("Create Skipped", [
                 ("User", f"{member.name} ({member.display_name})"),
-                ("User ID", str(member.id)),
+                ("ID", str(member.id)),
                 ("Reason", "User no longer in any voice channel"),
             ], emoji="⏭️")
             return
@@ -1045,7 +1045,7 @@ class TempVoiceService:
         if member.voice.channel.id != config.VC_CREATOR_CHANNEL_ID:
             log.tree("Create Skipped", [
                 ("User", f"{member.name} ({member.display_name})"),
-                ("User ID", str(member.id)),
+                ("ID", str(member.id)),
                 ("Current Channel", member.voice.channel.name),
                 ("Reason", "User moved to different channel while waiting"),
             ], emoji="⏭️")
@@ -1058,7 +1058,7 @@ class TempVoiceService:
             remaining = JOIN_COOLDOWN - (now - last_join)
             log.tree("Join Cooldown", [
                 ("User", f"{member.name} ({member.display_name})"),
-                ("User ID", str(member.id)),
+                ("ID", str(member.id)),
                 ("Remaining", f"{remaining:.1f}s"),
             ], emoji="⏳")
             # Disconnect them from creator channel
@@ -1067,7 +1067,7 @@ class TempVoiceService:
             except discord.HTTPException as e:
                 log.error_tree("Cooldown Disconnect Failed", e, [
                     ("User", f"{member.name} ({member.display_name})"),
-                    ("User ID", str(member.id)),
+                    ("ID", str(member.id)),
                 ])
             return
 
@@ -1212,7 +1212,7 @@ class TempVoiceService:
                     if is_mod and member.id != config.OWNER_ID:
                         log.tree("Block Skipped", [
                             ("User", f"{blocked_user.name} ({blocked_user.display_name})"),
-                            ("User ID", str(blocked_user.id)),
+                            ("ID", str(blocked_user.id)),
                             ("Reason", "Is moderator"),
                         ], emoji="⚠️")
                         continue
@@ -1247,7 +1247,7 @@ class TempVoiceService:
                 log.error_tree("Move User Failed", e, [
                     ("Channel", channel_name),
                     ("User", f"{member.name} ({member.display_name})"),
-                    ("User ID", str(member.id)),
+                    ("ID", str(member.id)),
                 ])
                 # Channel was created but move failed - clean up
                 db.delete_temp_channel(channel.id)
@@ -1456,7 +1456,7 @@ class TempVoiceService:
                             log.error_tree("Blocked User Kick Failed", e, [
                                 ("Channel", channel.name),
                                 ("User", f"{blocked_user.name} ({blocked_user.display_name})"),
-                                ("User ID", str(blocked_user.id)),
+                                ("ID", str(blocked_user.id)),
                             ])
                     blocked_count += 1
 

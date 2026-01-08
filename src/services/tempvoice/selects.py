@@ -145,7 +145,7 @@ class ConfirmView(ui.View):
                 ("Action", self.action),
                 ("Channel", self.channel.name if self.channel else "Unknown"),
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                ("User ID", str(interaction.user.id)),
+                ("ID", str(interaction.user.id)),
                 ("Error", str(e)),
             ], emoji="❌")
             if not interaction.response.is_done():
@@ -173,7 +173,7 @@ class ConfirmView(ui.View):
             ("Action", self.action),
             ("Channel", self.channel.name if self.channel else "Unknown"),
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-            ("User ID", str(interaction.user.id)),
+            ("ID", str(interaction.user.id)),
         ], emoji="↩️")
 
 
@@ -264,7 +264,7 @@ class UserSelect(ui.UserSelect):
             log.tree("User Select Failed", [
                 ("Action", self.action),
                 ("User", f"{user.name} ({user.display_name})"),
-                ("User ID", str(user.id)),
+                ("ID", str(user.id)),
                 ("Error", str(e)),
             ], emoji="❌")
             if not interaction.response.is_done():
@@ -275,7 +275,7 @@ class UserSelect(ui.UserSelect):
             log.tree("User Select Error", [
                 ("Action", self.action),
                 ("User", f"{user.name} ({user.display_name})"),
-                ("User ID", str(user.id)),
+                ("ID", str(user.id)),
                 ("Error", str(e)),
             ], emoji="❌")
             if not interaction.response.is_done():
@@ -292,7 +292,7 @@ class UserSelect(ui.UserSelect):
             log.tree("Permit Rejected", [
                 ("Channel", channel.name),
                 ("User", f"{user.name} ({user.display_name})"),
-                ("User ID", str(user.id)),
+                ("ID", str(user.id)),
                 ("Reason", "Self-permit"),
             ], emoji="⚠️")
             return
@@ -303,7 +303,7 @@ class UserSelect(ui.UserSelect):
             log.tree("Permit Rejected", [
                 ("Channel", channel.name),
                 ("User", f"{user.name} ({user.display_name})"),
-                ("User ID", str(user.id)),
+                ("ID", str(user.id)),
                 ("Reason", "Is bot"),
             ], emoji="⚠️")
             return
@@ -356,7 +356,7 @@ class UserSelect(ui.UserSelect):
                 log.tree("Permit Blocked", [
                     ("Channel", channel.name),
                     ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                    ("User ID", str(interaction.user.id)),
+                    ("ID", str(interaction.user.id)),
                     ("Reason", f"Max {MAX_ALLOWED_USERS_FREE} reached"),
                 ], emoji="💎")
                 return
@@ -438,7 +438,7 @@ class UserSelect(ui.UserSelect):
             log.tree("Block Rejected", [
                 ("Channel", channel.name),
                 ("User", f"{user.name} ({user.display_name})"),
-                ("User ID", str(user.id)),
+                ("ID", str(user.id)),
                 ("Reason", "Self-block"),
             ], emoji="⚠️")
             return
@@ -449,7 +449,7 @@ class UserSelect(ui.UserSelect):
             log.tree("Block Rejected", [
                 ("Channel", channel.name),
                 ("User", f"{user.name} ({user.display_name})"),
-                ("User ID", str(user.id)),
+                ("ID", str(user.id)),
                 ("Reason", "Is bot"),
             ], emoji="⚠️")
             return
@@ -473,22 +473,34 @@ class UserSelect(ui.UserSelect):
         # Remove from trusted if was trusted
         db.remove_trusted(owner_id, user.id)
         if db.add_blocked(owner_id, user.id):
-            await channel.set_permissions(user, connect=False)
+            # Set permission to deny connect
+            await channel.set_permissions(user, connect=False, send_messages=False, read_message_history=False)
+
+            # Kick from channel if currently in it
+            was_kicked = False
             if user.voice and user.voice.channel == channel:
                 try:
                     await user.move_to(None)
+                    was_kicked = True
                 except discord.HTTPException as e:
-                    log.tree("Blocked User Disconnect Failed", [
+                    log.tree("Blocked User Kick Failed", [
                         ("Channel", channel.name),
                         ("User", f"{user.name} ({user.display_name})"),
-                        ("User ID", str(user.id)),
-                        ("Error", str(e)),
+                        ("ID", str(user.id)),
+                        ("Error", str(e)[:50]),
                     ], emoji="❌")
+
             total_blocked = len(db.get_blocked_list(owner_id))
-            embed = discord.Embed(
-                description=f"🚫 **{user.display_name}** added to blocked list\n`{total_blocked}` users blocked",
-                color=COLOR_ERROR
-            )
+            if was_kicked:
+                embed = discord.Embed(
+                    description=f"🚫 **{user.display_name}** blocked and kicked\n`{total_blocked}` users blocked",
+                    color=COLOR_ERROR
+                )
+            else:
+                embed = discord.Embed(
+                    description=f"🚫 **{user.display_name}** added to blocked list\n`{total_blocked}` users blocked",
+                    color=COLOR_ERROR
+                )
             embed.set_thumbnail(url=user.display_avatar.url)
             set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
@@ -498,6 +510,7 @@ class UserSelect(ui.UserSelect):
                 ("Target ID", str(user.id)),
                 ("By", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("By ID", str(interaction.user.id)),
+                ("Kicked", "Yes" if was_kicked else "No"),
             ], emoji="🚫")
         else:
             # Already blocked - unblock them
@@ -539,7 +552,7 @@ class UserSelect(ui.UserSelect):
             log.tree("Kick Rejected", [
                 ("Channel", channel.name),
                 ("User", f"{user.name} ({user.display_name})"),
-                ("User ID", str(user.id)),
+                ("ID", str(user.id)),
                 ("Reason", "Self-kick"),
             ], emoji="⚠️")
             return
@@ -552,7 +565,7 @@ class UserSelect(ui.UserSelect):
             log.tree("Kick Rejected", [
                 ("Channel", channel.name),
                 ("User", f"{user.name} ({user.display_name})"),
-                ("User ID", str(user.id)),
+                ("ID", str(user.id)),
                 ("Reason", "Target is moderator"),
             ], emoji="⚠️")
             return
@@ -599,7 +612,7 @@ class UserSelect(ui.UserSelect):
             log.tree("Transfer Rejected", [
                 ("Channel", channel.name),
                 ("User", f"{user.name} ({user.display_name})"),
-                ("User ID", str(user.id)),
+                ("ID", str(user.id)),
                 ("Reason", "Already owner"),
             ], emoji="⚠️")
             return
@@ -610,7 +623,7 @@ class UserSelect(ui.UserSelect):
             log.tree("Transfer Rejected", [
                 ("Channel", channel.name),
                 ("User", f"{user.name} ({user.display_name})"),
-                ("User ID", str(user.id)),
+                ("ID", str(user.id)),
                 ("Reason", "Is bot"),
             ], emoji="⚠️")
             return

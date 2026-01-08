@@ -158,8 +158,10 @@ class StatusWebhookService:
             if config.GUILD_ID:
                 guild = self._bot.get_guild(config.GUILD_ID)
                 if guild:
-                    for vc in guild.voice_channels:
-                        stats["users_in_voice"] += len([m for m in vc.members if not m.bot])
+                    stats["users_in_voice"] = sum(
+                        1 for vc in guild.voice_channels
+                        for m in vc.members if not m.bot
+                    )
 
             # Get XP stats
             xp_stats = db.get_xp_stats(config.GUILD_ID)

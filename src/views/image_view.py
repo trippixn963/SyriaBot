@@ -228,7 +228,7 @@ class ImageView(ui.View):
             )
             log.tree("Image View Unauthorized", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                ("User ID", str(interaction.user.id)),
+                ("ID", str(interaction.user.id)),
                 ("Requester ID", str(self.requester_id)),
             ], emoji="⚠️")
             return False
@@ -280,7 +280,7 @@ class ImageView(ui.View):
 
             log.tree("Image Navigation", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                ("User ID", str(interaction.user.id)),
+                ("ID", str(interaction.user.id)),
                 ("Action", nav_action),
                 ("Position", f"{self.current_index + 1}/{len(self.images)}"),
                 ("Attached", "Yes" if file else "No (fallback)"),
@@ -295,6 +295,12 @@ class ImageView(ui.View):
     @ui.button(label="Previous", style=discord.ButtonStyle.secondary, custom_id="prev")
     async def prev_button(self, interaction: discord.Interaction, button: ui.Button):
         """Go to previous image."""
+        log.tree("Image Nav Previous", [
+            ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+            ("ID", str(interaction.user.id)),
+            ("From", str(self.current_index + 1)),
+            ("To", str(max(1, self.current_index))),
+        ], emoji="⬅️")
         if self.current_index > 0:
             self.current_index -= 1
         await self._update_message(interaction, "prev")
@@ -306,7 +312,7 @@ class ImageView(ui.View):
 
         log.tree("Image Save Started", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-            ("User ID", str(interaction.user.id)),
+            ("ID", str(interaction.user.id)),
             ("Query", self.query[:30]),
             ("Position", f"{self.current_index + 1}/{len(self.images)}"),
         ], emoji="📥")
@@ -318,7 +324,7 @@ class ImageView(ui.View):
             await interaction.followup.send("Failed to download image.", ephemeral=True)
             log.tree("Image Save Failed", [
                 ("User", f"{interaction.user.name}"),
-                ("User ID", str(interaction.user.id)),
+                ("ID", str(interaction.user.id)),
                 ("Reason", "Fetch failed"),
             ], emoji="❌")
             return
@@ -340,7 +346,7 @@ class ImageView(ui.View):
 
             log.tree("Image Saved", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                ("User ID", str(interaction.user.id)),
+                ("ID", str(interaction.user.id)),
                 ("Size", f"{len(image_bytes) // 1024}KB"),
                 ("Source", "Cache" if self._cached_index == self.current_index else "Fresh"),
                 ("Original", "Deleted"),
@@ -349,7 +355,7 @@ class ImageView(ui.View):
         except Exception as e:
             log.tree("Image Save Failed", [
                 ("User", f"{interaction.user.name}"),
-                ("User ID", str(interaction.user.id)),
+                ("ID", str(interaction.user.id)),
                 ("Error", str(e)[:50]),
             ], emoji="❌")
             await interaction.followup.send("Failed to save image.", ephemeral=True)
@@ -362,26 +368,32 @@ class ImageView(ui.View):
             await interaction.message.delete()
             log.tree("Image View Deleted", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                ("User ID", str(interaction.user.id)),
+                ("ID", str(interaction.user.id)),
                 ("Query", self.query[:30]),
                 ("Position", f"{self.current_index + 1}/{len(self.images)}"),
             ], emoji="🗑️")
         except discord.NotFound:
             log.tree("Image Delete Skipped", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                ("User ID", str(interaction.user.id)),
+                ("ID", str(interaction.user.id)),
                 ("Reason", "Message already deleted"),
             ], emoji="⚠️")
         except discord.HTTPException as e:
             log.tree("Image Delete Failed", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                ("User ID", str(interaction.user.id)),
+                ("ID", str(interaction.user.id)),
                 ("Error", str(e)[:50]),
             ], emoji="❌")
 
     @ui.button(label="Next", style=discord.ButtonStyle.secondary, custom_id="next")
     async def next_button(self, interaction: discord.Interaction, button: ui.Button):
         """Go to next image."""
+        log.tree("Image Nav Next", [
+            ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+            ("ID", str(interaction.user.id)),
+            ("From", str(self.current_index + 1)),
+            ("To", str(min(len(self.images), self.current_index + 2))),
+        ], emoji="➡️")
         if self.current_index < len(self.images) - 1:
             self.current_index += 1
         await self._update_message(interaction, "next")

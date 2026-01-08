@@ -441,7 +441,7 @@ class SyriaAPI:
 
             log.tree("User API Request", [
                 ("Client IP", client_ip),
-                ("User ID", str(user_id)),
+                ("ID", str(user_id)),
                 ("Booster", "Yes" if is_booster else "No"),
             ], emoji="👤")
 
@@ -719,7 +719,7 @@ class SyriaAPI:
                 errors += 1
                 if errors <= 3:  # Only log first 3 errors
                     log.tree("Booster Check Error", [
-                        ("User ID", str(user_id)),
+                        ("ID", str(user_id)),
                         ("Error", str(e)[:50]),
                     ], emoji="⚠️")
 

@@ -46,6 +46,71 @@ def get_cooldown(interaction: discord.Interaction) -> Optional[app_commands.Cool
 COLOR_GET = COLOR_GOLD
 
 
+async def _download_and_save_image(
+    interaction: discord.Interaction,
+    url: str,
+    label: str,
+    message: Optional[discord.Message] = None,
+    target_name: Optional[str] = None,
+) -> None:
+    """
+    Shared helper to download an image, send as .gif file, and delete original.
+
+    Args:
+        interaction: The Discord interaction (must be deferred)
+        url: URL to download from
+        label: Label for logging (e.g., "Avatar", "Banner", "Server Icon")
+        message: Original message to delete after save
+        target_name: Target user/server name for logging
+    """
+    try:
+        timeout = aiohttp.ClientTimeout(total=30)
+        async with http_session.session.get(url, timeout=timeout) as response:
+            if response.status != 200:
+                await interaction.followup.send(f"Failed to download {label.lower()}.", ephemeral=True)
+                log.tree(f"{label} Save Failed", [
+                    ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                    ("ID", str(interaction.user.id)),
+                    ("Status", str(response.status)),
+                ], emoji="❌")
+                return
+            image_bytes = await response.read()
+
+        # Send as public .gif
+        file = discord.File(
+            fp=io.BytesIO(image_bytes),
+            filename="discord.gg-syria.gif"
+        )
+        await interaction.followup.send(file=file)
+
+        # Delete original message
+        if message:
+            try:
+                await message.delete()
+            except discord.NotFound:
+                pass
+
+        log_entries = [
+            ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+            ("ID", str(interaction.user.id)),
+        ]
+        if target_name:
+            log_entries.append(("Target", target_name))
+        log_entries.extend([
+            ("Size", f"{len(image_bytes) // 1024}KB"),
+            ("Original", "Deleted"),
+        ])
+        log.tree(f"{label} Saved", log_entries, emoji="✅")
+
+    except Exception as e:
+        log.tree(f"{label} Save Failed", [
+            ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+            ("ID", str(interaction.user.id)),
+            ("Error", str(e)[:50]),
+        ], emoji="❌")
+        await interaction.followup.send(f"Failed to save {label.lower()}.", ephemeral=True)
+
+
 class DownloadView(ui.View):
     """View with download button."""
 
@@ -77,7 +142,6 @@ class DownloadView(ui.View):
     @ui.button(label="Save", style=discord.ButtonStyle.secondary, emoji="<:save:1455776703468273825>")
     async def save(self, interaction: discord.Interaction, button: ui.Button) -> None:
         """Download, send as public .gif, delete original."""
-        # Only allow requester to save
         if self.requester_id and interaction.user.id != self.requester_id:
             await interaction.response.send_message(
                 "Only the person who used this command can save it.",
@@ -92,58 +156,13 @@ class DownloadView(ui.View):
             return
 
         await interaction.response.defer()
-
         log.tree("Save Started", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
             ("Type", self.label),
         ], emoji="💾")
 
-        try:
-            # Download the image
-            timeout = aiohttp.ClientTimeout(total=30)
-            async with http_session.session.get(self.url, timeout=timeout) as response:
-                if response.status != 200:
-                    await interaction.followup.send("Failed to download.", ephemeral=True)
-                    log.tree("Save Failed", [
-                        ("User", f"{interaction.user.name}"),
-                        ("User ID", str(interaction.user.id)),
-                        ("Type", self.label),
-                        ("Status", str(response.status)),
-                    ], emoji="❌")
-                    return
-                image_bytes = await response.read()
-
-            # Send as public .gif
-            file = discord.File(
-                fp=io.BytesIO(image_bytes),
-                filename="discord.gg-syria.gif"
-            )
-            await interaction.followup.send(file=file)
-
-            # Delete original
-            if self.message:
-                try:
-                    await self.message.delete()
-                except discord.NotFound:
-                    pass
-
-            log.tree("Saved", [
-                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                ("ID", str(interaction.user.id)),
-                ("Type", self.label),
-                ("Size", f"{len(image_bytes) // 1024}KB"),
-                ("Original", "Deleted"),
-            ], emoji="✅")
-
-        except Exception as e:
-            log.tree("Save Failed", [
-                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                ("ID", str(interaction.user.id)),
-                ("Type", self.label),
-                ("Error", str(e)[:50]),
-            ], emoji="❌")
-            await interaction.followup.send("Failed to save.", ephemeral=True)
+        await _download_and_save_image(interaction, self.url, self.label, self.message)
 
 
 class AvatarToggleView(ui.View):
@@ -195,7 +214,6 @@ class AvatarToggleView(ui.View):
     @ui.button(label="Save", style=discord.ButtonStyle.secondary, emoji="<:save:1455776703468273825>", row=0)
     async def save(self, interaction: discord.Interaction, button: ui.Button) -> None:
         """Download, send as public .gif, delete original."""
-        # Only allow requester to save
         if self.requester_id and interaction.user.id != self.requester_id:
             await interaction.response.send_message(
                 "Only the person who used this command can save it.",
@@ -209,57 +227,18 @@ class AvatarToggleView(ui.View):
             return
 
         await interaction.response.defer()
-
+        avatar_type = "Server" if self.showing_server else "Global"
         log.tree("Avatar Save Started", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
             ("Target", f"{self.target.name}"),
-            ("Type", "Server" if self.showing_server else "Global"),
+            ("Type", avatar_type),
         ], emoji="💾")
 
-        try:
-            # Download the avatar
-            timeout = aiohttp.ClientTimeout(total=30)
-            async with http_session.session.get(self._get_current_url(), timeout=timeout) as response:
-                if response.status != 200:
-                    await interaction.followup.send("Failed to download avatar.", ephemeral=True)
-                    log.tree("Avatar Save Failed", [
-                        ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                        ("ID", str(interaction.user.id)),
-                        ("Status", str(response.status)),
-                    ], emoji="❌")
-                    return
-                image_bytes = await response.read()
-
-            # Send as public .gif
-            file = discord.File(
-                fp=io.BytesIO(image_bytes),
-                filename="discord.gg-syria.gif"
-            )
-            await interaction.followup.send(file=file)
-
-            # Delete original
-            if self.message:
-                try:
-                    await self.message.delete()
-                except discord.NotFound:
-                    pass
-
-            log.tree("Avatar Saved", [
-                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                ("ID", str(interaction.user.id)),
-                ("Target", f"{self.target.name}"),
-                ("Size", f"{len(image_bytes) // 1024}KB"),
-                ("Original", "Deleted"),
-            ], emoji="✅")
-
-        except Exception as e:
-            log.tree("Avatar Save Failed", [
-                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                ("ID", str(interaction.user.id)),
-                ("Error", str(e)[:50]),
-            ], emoji="❌")
-            await interaction.followup.send("Failed to save avatar.", ephemeral=True)
+        await _download_and_save_image(
+            interaction, self._get_current_url(), f"Avatar ({avatar_type})",
+            self.message, self.target.name
+        )
 
     @ui.button(label="View Global", style=discord.ButtonStyle.secondary, emoji="<:transfer:1455710226429902858>", row=0)
     async def toggle_btn(self, interaction: discord.Interaction, button: ui.Button) -> None:
@@ -341,7 +320,6 @@ class BannerToggleView(ui.View):
     @ui.button(label="Save", style=discord.ButtonStyle.secondary, emoji="<:save:1455776703468273825>", row=0)
     async def save(self, interaction: discord.Interaction, button: ui.Button) -> None:
         """Download, send as public .gif, delete original."""
-        # Only allow requester to save
         if self.requester_id and interaction.user.id != self.requester_id:
             await interaction.response.send_message(
                 "Only the person who used this command can save it.",
@@ -355,57 +333,18 @@ class BannerToggleView(ui.View):
             return
 
         await interaction.response.defer()
-
+        banner_type = "Server" if self.showing_server else "Global"
         log.tree("Banner Save Started", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
             ("Target", f"{self.target.name}"),
-            ("Type", "Server" if self.showing_server else "Global"),
+            ("Type", banner_type),
         ], emoji="💾")
 
-        try:
-            # Download the banner
-            timeout = aiohttp.ClientTimeout(total=30)
-            async with http_session.session.get(self._get_current_url(), timeout=timeout) as response:
-                if response.status != 200:
-                    await interaction.followup.send("Failed to download banner.", ephemeral=True)
-                    log.tree("Banner Save Failed", [
-                        ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                        ("ID", str(interaction.user.id)),
-                        ("Status", str(response.status)),
-                    ], emoji="❌")
-                    return
-                image_bytes = await response.read()
-
-            # Send as public .gif
-            file = discord.File(
-                fp=io.BytesIO(image_bytes),
-                filename="discord.gg-syria.gif"
-            )
-            await interaction.followup.send(file=file)
-
-            # Delete original
-            if self.message:
-                try:
-                    await self.message.delete()
-                except discord.NotFound:
-                    pass
-
-            log.tree("Banner Saved", [
-                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                ("ID", str(interaction.user.id)),
-                ("Target", f"{self.target.name}"),
-                ("Size", f"{len(image_bytes) // 1024}KB"),
-                ("Original", "Deleted"),
-            ], emoji="✅")
-
-        except Exception as e:
-            log.tree("Banner Save Failed", [
-                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                ("ID", str(interaction.user.id)),
-                ("Error", str(e)[:50]),
-            ], emoji="❌")
-            await interaction.followup.send("Failed to save banner.", ephemeral=True)
+        await _download_and_save_image(
+            interaction, self._get_current_url(), f"Banner ({banner_type})",
+            self.message, self.target.name
+        )
 
     @ui.button(label="View Global", style=discord.ButtonStyle.secondary, emoji="<:transfer:1455710226429902858>", row=0)
     async def toggle_btn(self, interaction: discord.Interaction, button: ui.Button) -> None:

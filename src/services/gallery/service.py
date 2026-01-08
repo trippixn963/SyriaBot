@@ -155,7 +155,7 @@ class GalleryService:
         channel_name = "Gallery" if channel_type == self.GALLERY else "Memes"
         log.tree(f"{channel_name} Valid Post Detected", [
             ("User", f"{message.author.name} ({message.author.display_name})"),
-            ("User ID", str(message.author.id)),
+            ("ID", str(message.author.id)),
             ("Attachments", str(len(message.attachments))),
         ], emoji="📸")
 
@@ -169,7 +169,7 @@ class GalleryService:
             await message.delete()
             log.tree(f"{channel_name} Message Deleted", [
                 ("User", f"{message.author.name} ({message.author.display_name})"),
-                ("User ID", str(message.author.id)),
+                ("ID", str(message.author.id)),
                 ("Reason", "No valid image/video attachment"),
                 ("Content", message.content[:50] if message.content else "None"),
             ], emoji="🗑️")

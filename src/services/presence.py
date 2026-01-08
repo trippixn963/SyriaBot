@@ -42,7 +42,7 @@ class PresenceHandler:
         self._running = False
 
     def _get_status_messages(self) -> List[str]:
-        """Get list of status messages with live stats.
+        """Get list of status messages with all-time stats.
 
         Returns:
             List of formatted status messages.
@@ -57,11 +57,6 @@ class PresenceHandler:
             total_messages = stats.get("total_messages", 0)
             total_voice = stats.get("total_voice_minutes", 0)
 
-            # Get active voice sessions
-            voice_sessions = 0
-            if self.bot.xp_service and self.bot.xp_service._voice_sessions:
-                voice_sessions = len(self.bot.xp_service._voice_sessions)
-
             # Format numbers nicely
             def format_number(n: int) -> str:
                 if n >= 1_000_000:
@@ -73,7 +68,7 @@ class PresenceHandler:
             # Format voice time
             voice_hours = total_voice // 60
 
-            # Build status messages with emojis
+            # Build status messages with all-time stats only
             if total_users > 0:
                 messages.append(f"🏆 {format_number(total_users)} members ranked")
 
@@ -86,15 +81,6 @@ class PresenceHandler:
             if voice_hours > 0:
                 messages.append(f"🎙️ {format_number(voice_hours)}h in voice")
 
-            if voice_sessions > 0:
-                messages.append(f"🔊 {voice_sessions} in voice now")
-
-            # Get member count
-            if self.bot.guilds:
-                total_members = sum(g.member_count or 0 for g in self.bot.guilds)
-                if total_members > 0:
-                    messages.append(f"👥 {format_number(total_members)} members")
-
         except Exception as e:
             log.tree("Presence Stats Error", [
                 ("Error", str(e)[:50]),
@@ -103,9 +89,7 @@ class PresenceHandler:
         # Fallback if no stats available
         if not messages:
             messages = [
-                "🎤 voice channels",
-                "🇸🇾 the community",
-                "🌐 discord.gg/syria",
+                "🇸🇾 discord.gg/syria",
             ]
 
         return messages

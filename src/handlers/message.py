@@ -46,11 +46,22 @@ class MessageHandler(commands.Cog):
 
     async def _handle_reply_convert(self, message: discord.Message) -> None:
         """Handle replying 'convert' to an image/video - opens interactive editor."""
+        log.tree("Convert Reply Started", [
+            ("User", f"{message.author.name} ({message.author.display_name})"),
+            ("ID", str(message.author.id)),
+            ("Channel", message.channel.name if hasattr(message.channel, 'name') else "DM"),
+        ], emoji="🔄")
+
         if not await check_rate_limit(message.author, "convert", message=message):
             return
 
         ref = message.reference
         if not ref or not ref.message_id:
+            log.tree("Convert Reply Skipped", [
+                ("User", f"{message.author.name} ({message.author.display_name})"),
+                ("ID", str(message.author.id)),
+                ("Reason", "No message reference"),
+            ], emoji="⚠️")
             return
 
         original = ref.cached_message
@@ -60,7 +71,7 @@ class MessageHandler(commands.Cog):
             except (discord.NotFound, discord.Forbidden) as e:
                 log.tree("Convert Fetch Failed", [
                     ("User", f"{message.author.name} ({message.author.display_name})"),
-                    ("User ID", str(message.author.id)),
+                    ("ID", str(message.author.id)),
                     ("Message ID", str(ref.message_id)),
                     ("Error", type(e).__name__),
                 ], emoji="⚠️")
@@ -178,11 +189,21 @@ class MessageHandler(commands.Cog):
 
     async def _handle_reply_quote(self, message: discord.Message) -> None:
         """Handle replying 'quote' to a message - generates quote image."""
+        log.tree("Quote Reply Started", [
+            ("User", f"{message.author.name} ({message.author.display_name})"),
+            ("ID", str(message.author.id)),
+        ], emoji="💬")
+
         if not await check_rate_limit(message.author, "quote", message=message):
             return
 
         ref = message.reference
         if not ref or not ref.message_id:
+            log.tree("Quote Reply Skipped", [
+                ("User", f"{message.author.name} ({message.author.display_name})"),
+                ("ID", str(message.author.id)),
+                ("Reason", "No message reference"),
+            ], emoji="⚠️")
             return
 
         original = ref.cached_message
@@ -192,7 +213,7 @@ class MessageHandler(commands.Cog):
             except (discord.NotFound, discord.Forbidden) as e:
                 log.tree("Quote Fetch Failed", [
                     ("User", f"{message.author.name} ({message.author.display_name})"),
-                    ("User ID", str(message.author.id)),
+                    ("ID", str(message.author.id)),
                     ("Message ID", str(ref.message_id)),
                     ("Error", type(e).__name__),
                 ], emoji="⚠️")
@@ -202,7 +223,7 @@ class MessageHandler(commands.Cog):
         if not original.content or not original.content.strip():
             log.tree("Quote No Content", [
                 ("User", f"{message.author.name} ({message.author.display_name})"),
-                ("User ID", str(message.author.id)),
+                ("ID", str(message.author.id)),
                 ("Target Message", str(ref.message_id)),
             ], emoji="⚠️")
             await message.reply("That message has no text to quote.", mention_author=False)
@@ -250,7 +271,7 @@ class MessageHandler(commands.Cog):
 
         log.tree("Quote", [
             ("User", f"{message.author.name} ({message.author.display_name})"),
-            ("User ID", str(message.author.id)),
+            ("ID", str(message.author.id)),
             ("Author", f"{author.name} ({author.display_name})"),
             ("Author ID", str(author.id)),
             ("Length", f"{len(original.content)} chars"),
@@ -281,10 +302,52 @@ class MessageHandler(commands.Cog):
         msg = await message.reply(file=file, view=view, mention_author=False)
         view.message = msg
 
+    # Common typos/variations of "translate"
+    TRANSLATE_TRIGGERS = (
+        "translate to ",
+        "translate ",
+        "tanslate to ",  # missing r
+        "tanslate ",
+        "tranlate to ",  # missing s
+        "tranlate ",
+        "transalte to ", # swapped a/l
+        "transalte ",
+        "trasnlate to ", # swapped s/n
+        "trasnlate ",
+        "translte to ",  # missing a
+        "translte ",
+        "tarnslate to ", # swapped a/r
+        "tarnslate ",
+        "tr to ",        # shorthand
+        "tr ",
+    )
+
+    def _is_translate_trigger(self, content: str) -> bool:
+        """Check if content starts with a translate trigger (with typo tolerance)."""
+        return any(content.startswith(trigger) for trigger in self.TRANSLATE_TRIGGERS)
+
+    def _extract_translate_lang(self, content: str) -> str:
+        """Extract the target language from a translate command."""
+        for trigger in self.TRANSLATE_TRIGGERS:
+            if content.startswith(trigger):
+                return content[len(trigger):].strip()
+        return ""
+
     async def _handle_reply_translate(self, message: discord.Message, target_lang: str) -> None:
         """Handle replying 'translate to X' to a message."""
+        log.tree("Translate Reply Started", [
+            ("User", f"{message.author.name} ({message.author.display_name})"),
+            ("ID", str(message.author.id)),
+            ("Target Lang", target_lang),
+        ], emoji="🌐")
+
         ref = message.reference
         if not ref or not ref.message_id:
+            log.tree("Translate Reply Skipped", [
+                ("User", f"{message.author.name} ({message.author.display_name})"),
+                ("ID", str(message.author.id)),
+                ("Reason", "No message reference"),
+            ], emoji="⚠️")
             return
 
         original = ref.cached_message
@@ -294,7 +357,7 @@ class MessageHandler(commands.Cog):
             except (discord.NotFound, discord.Forbidden) as e:
                 log.tree("Translate Fetch Failed", [
                     ("User", f"{message.author.name} ({message.author.display_name})"),
-                    ("User ID", str(message.author.id)),
+                    ("ID", str(message.author.id)),
                     ("Message ID", str(ref.message_id)),
                     ("Error", type(e).__name__),
                 ], emoji="⚠️")
@@ -304,7 +367,7 @@ class MessageHandler(commands.Cog):
         if not original.content or not original.content.strip():
             log.tree("Translate No Content", [
                 ("User", f"{message.author.name} ({message.author.display_name})"),
-                ("User ID", str(message.author.id)),
+                ("ID", str(message.author.id)),
                 ("Target Message", str(ref.message_id)),
             ], emoji="⚠️")
             await message.reply("That message has no text to translate.", mention_author=False)
@@ -314,7 +377,7 @@ class MessageHandler(commands.Cog):
 
         log.tree("Translate Reply", [
             ("User", f"{message.author.name} ({message.author.display_name})"),
-            ("User ID", str(message.author.id)),
+            ("ID", str(message.author.id)),
             ("Text", text[:50] + "..." if len(text) > 50 else text),
             ("To", target_lang),
         ], emoji="🌐")
@@ -344,7 +407,7 @@ class MessageHandler(commands.Cog):
 
             log.tree("Translation Failed", [
                 ("User", f"{message.author.name}"),
-                ("User ID", str(message.author.id)),
+                ("ID", str(message.author.id)),
                 ("Target", target_lang),
                 ("Error", result.error[:50] if result.error else "Unknown"),
             ], emoji="❌")
@@ -360,24 +423,27 @@ class MessageHandler(commands.Cog):
             await message.reply(embed=embed, mention_author=False)
             log.tree("Translation Skipped", [
                 ("User", f"{message.author.name}"),
-                ("User ID", str(message.author.id)),
+                ("ID", str(message.author.id)),
                 ("Reason", f"Already in {result.target_name}"),
             ], emoji="⚠️")
             return
 
-        embed = create_translate_embed(result)
+        embed, file = create_translate_embed(result)
         view = TranslateView(
             original_text=text,
             requester_id=message.author.id,
             current_lang=result.target_lang,
             source_lang=result.source_lang,
         )
-        msg = await message.reply(embed=embed, view=view, mention_author=False)
+        if file:
+            msg = await message.reply(embed=embed, file=file, view=view, mention_author=False)
+        else:
+            msg = await message.reply(embed=embed, view=view, mention_author=False)
         view.message = msg
 
         log.tree("Translation Sent", [
             ("User", f"{message.author.name} ({message.author.display_name})"),
-            ("User ID", str(message.author.id)),
+            ("ID", str(message.author.id)),
             ("From", f"{result.source_name} ({result.source_lang})"),
             ("To", f"{result.target_name} ({result.target_lang})"),
         ], emoji="✅")
@@ -385,6 +451,11 @@ class MessageHandler(commands.Cog):
     async def _handle_reply_download(self, message: discord.Message) -> None:
         """Handle replying 'download' or 'dw' to a message with a link."""
         import time
+
+        log.tree("Download Reply Started", [
+            ("User", f"{message.author.name} ({message.author.display_name})"),
+            ("ID", str(message.author.id)),
+        ], emoji="📥")
 
         user_id = message.author.id
 
@@ -405,8 +476,8 @@ class MessageHandler(commands.Cog):
             except discord.HTTPException:
                 pass
             log.tree("Download Reply Cooldown", [
-                ("User", f"{message.author.name}"),
-                ("User ID", str(user_id)),
+                ("User", f"{message.author.name} ({message.author.display_name})"),
+                ("ID", str(user_id)),
                 ("Remaining", f"{remaining:.0f}s"),
             ], emoji="⏳")
             return
@@ -422,7 +493,7 @@ class MessageHandler(commands.Cog):
             except (discord.NotFound, discord.Forbidden) as e:
                 log.tree("Download Fetch Failed", [
                     ("User", f"{message.author.name} ({message.author.display_name})"),
-                    ("User ID", str(message.author.id)),
+                    ("ID", str(message.author.id)),
                     ("Message ID", str(ref.message_id)),
                     ("Error", type(e).__name__),
                 ], emoji="⚠️")
@@ -473,7 +544,7 @@ class MessageHandler(commands.Cog):
                 pass
             log.tree("Download No URL Found", [
                 ("User", f"{message.author.name}"),
-                ("User ID", str(message.author.id)),
+                ("ID", str(message.author.id)),
                 ("Original Message", str(original.id)),
             ], emoji="⚠️")
             return
@@ -485,7 +556,7 @@ class MessageHandler(commands.Cog):
 
         log.tree("Reply Download", [
             ("User", f"{message.author.name} ({message.author.display_name})"),
-            ("User ID", str(message.author.id)),
+            ("ID", str(message.author.id)),
             ("URL", url[:60] + "..." if len(url) > 60 else url),
         ], emoji="📥")
 
@@ -542,7 +613,7 @@ class MessageHandler(commands.Cog):
             except Exception as e:
                 log.tree("Image Track Failed", [
                     ("User", f"{message.author.name} ({message.author.display_name})"),
-                    ("User ID", str(message.author.id)),
+                    ("ID", str(message.author.id)),
                     ("Error", str(e)[:50]),
                 ], emoji="⚠️")
 
@@ -567,11 +638,11 @@ class MessageHandler(commands.Cog):
             await self._handle_reply_quote(message)
         elif content in ("download", "dw", "dl"):
             await self._handle_reply_download(message)
-        elif content.startswith("translate to ") or content.startswith("translate "):
-            if content.startswith("translate to "):
-                target_lang = content[13:].strip()
-            else:
-                target_lang = content[10:].strip()
+        elif content == "tr" or content == "translate":
+            # Default to English
+            await self._handle_reply_translate(message, "en")
+        elif self._is_translate_trigger(content):
+            target_lang = self._extract_translate_lang(content)
             if target_lang:
                 await self._handle_reply_translate(message, target_lang)
 
@@ -603,7 +674,7 @@ class MessageHandler(commands.Cog):
         except Exception as e:
             log.tree("Reaction Track Failed", [
                 ("User", f"{user.name} ({user.display_name})"),
-                ("User ID", str(user.id)),
+                ("ID", str(user.id)),
                 ("Error", str(e)[:50]),
             ], emoji="⚠️")
 

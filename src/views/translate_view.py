@@ -77,7 +77,7 @@ class LanguageSelect(ui.Select):
         if selected == "none":
             log.tree("Language Select", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                ("User ID", str(interaction.user.id)),
+                ("ID", str(interaction.user.id)),
                 ("Selected", "none"),
                 ("Action", "Ignored - no languages available"),
             ], emoji="🌐")
@@ -89,7 +89,7 @@ class LanguageSelect(ui.Select):
 
         log.tree("Language Select", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-            ("User ID", str(interaction.user.id)),
+            ("ID", str(interaction.user.id)),
             ("Selected", f"{lang_name} ({selected})"),
         ], emoji="🌐")
 
@@ -117,13 +117,20 @@ class TranslateView(ui.View):
         self._rebuild_buttons()
 
     def _rebuild_buttons(self):
-        """Rebuild buttons based on current language."""
+        """Rebuild buttons based on current and source language."""
         self.clear_items()
 
         shown_buttons = set()
         button_count = 0
+
+        # Skip both source (original already shown) and current (already translated to)
+        skip_langs = {self.current_lang}
+        if self.source_lang and self.source_lang != "auto":
+            skip_langs.add(self.source_lang)
+
+        # Fill with priority languages (excluding source and current)
         for code, label, emoji in PRIORITY_LANGUAGES:
-            if code == self.current_lang:
+            if code in skip_langs:
                 continue
 
             button = ui.Button(
@@ -141,7 +148,7 @@ class TranslateView(ui.View):
             if button_count >= 4:
                 break
 
-        self.add_item(LanguageSelect(self.original_text, self.current_lang, shown_buttons))
+        self.add_item(LanguageSelect(self.original_text, self.current_lang, shown_buttons | skip_langs))
 
         # AI button (boosters only) - same row as language buttons
         ai_button = ui.Button(
@@ -159,7 +166,7 @@ class TranslateView(ui.View):
         async def callback(interaction: discord.Interaction):
             log.tree("Language Button Pressed", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                ("User ID", str(interaction.user.id)),
+                ("ID", str(interaction.user.id)),
                 ("Language", f"{lang_name} ({target_lang})"),
                 ("Current Lang", self.current_lang),
             ], emoji="🌐")
@@ -170,7 +177,7 @@ class TranslateView(ui.View):
         """Handle AI translate button - boosters only."""
         log.tree("AI Button Pressed", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-            ("User ID", str(interaction.user.id)),
+            ("ID", str(interaction.user.id)),
             ("Current Lang", self.current_lang),
         ], emoji="🤖")
 
@@ -204,7 +211,7 @@ class TranslateView(ui.View):
 
             log.tree("AI Button Rejected", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                ("User ID", str(interaction.user.id)),
+                ("ID", str(interaction.user.id)),
                 ("Reason", "Not a booster"),
                 ("Action", "Sent booster promo embed"),
             ], emoji="🚫")
@@ -212,7 +219,7 @@ class TranslateView(ui.View):
 
         log.tree("AI Translation Started", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-            ("User ID", str(interaction.user.id)),
+            ("ID", str(interaction.user.id)),
             ("Target Lang", self.current_lang),
             ("Text Length", str(len(self.original_text))),
         ], emoji="🤖")
@@ -232,18 +239,21 @@ class TranslateView(ui.View):
 
             log.tree("AI Translation Failed", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                ("User ID", str(interaction.user.id)),
+                ("ID", str(interaction.user.id)),
                 ("Target", self.current_lang),
                 ("Error", result.error[:100] if result.error else "Unknown"),
             ], emoji="❌")
             return
 
-        embed = create_translate_embed(result, is_ai=True)
-        await interaction.edit_original_response(embed=embed, view=self)
+        embed, file = create_translate_embed(result, is_ai=True)
+        if file:
+            await interaction.edit_original_response(embed=embed, attachments=[file], view=self)
+        else:
+            await interaction.edit_original_response(embed=embed, view=self)
 
         log.tree("AI Translation Complete", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-            ("User ID", str(interaction.user.id)),
+            ("ID", str(interaction.user.id)),
             ("From", f"{result.source_name} ({result.source_lang})"),
             ("To", f"{result.target_name} ({result.target_lang})"),
             ("Result Length", str(len(result.translated_text))),
@@ -294,7 +304,7 @@ class TranslateView(ui.View):
         if target_lang == self.current_lang:
             log.tree("Translation Skipped", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                ("User ID", str(interaction.user.id)),
+                ("ID", str(interaction.user.id)),
                 ("Reason", f"Already in {target_lang}"),
             ], emoji="⚠️")
             await interaction.response.defer()
@@ -302,7 +312,7 @@ class TranslateView(ui.View):
 
         log.tree("Re-translation Started", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-            ("User ID", str(interaction.user.id)),
+            ("ID", str(interaction.user.id)),
             ("From Lang", self.current_lang),
             ("To Lang", target_lang),
             ("Text Length", str(len(self.original_text))),
@@ -324,7 +334,7 @@ class TranslateView(ui.View):
 
             log.tree("Re-translation Failed", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                ("User ID", str(interaction.user.id)),
+                ("ID", str(interaction.user.id)),
                 ("Target", target_lang),
                 ("Error", result.error[:100] if result.error else "Unknown"),
             ], emoji="❌")
@@ -339,7 +349,7 @@ class TranslateView(ui.View):
 
             log.tree("Re-translation Skipped", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                ("User ID", str(interaction.user.id)),
+                ("ID", str(interaction.user.id)),
                 ("Reason", f"Text already in {target_name}"),
             ], emoji="⚠️")
             return
@@ -348,20 +358,29 @@ class TranslateView(ui.View):
         self.source_lang = result.source_lang
         self._rebuild_buttons()
 
-        embed = create_translate_embed(result)
-        await interaction.edit_original_response(embed=embed, view=self)
+        embed, file = create_translate_embed(result)
+        if file:
+            await interaction.edit_original_response(embed=embed, attachments=[file], view=self)
+        else:
+            await interaction.edit_original_response(embed=embed, view=self)
 
         log.tree("Re-translation Complete", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-            ("User ID", str(interaction.user.id)),
+            ("ID", str(interaction.user.id)),
             ("From", f"{result.source_name} ({result.source_lang})"),
             ("To", f"{result.target_name} ({result.target_lang})"),
             ("Result Length", str(len(result.translated_text))),
         ], emoji="✅")
 
 
-def create_translate_embed(result, is_ai: bool = False) -> discord.Embed:
-    """Create a translation embed with code blocks."""
+def create_translate_embed(result, is_ai: bool = False) -> tuple[discord.Embed, discord.File | None]:
+    """
+    Create a translation embed with code blocks.
+
+    Returns (embed, file) - file is provided when text is too long for embed.
+    """
+    import io
+
     if is_ai:
         title = f"{AI_EMOJI} {result.source_flag} → {result.target_flag} AI Translation"
         color = COLOR_SUCCESS  # Green for AI
@@ -373,6 +392,10 @@ def create_translate_embed(result, is_ai: bool = False) -> discord.Embed:
         title=title,
         color=color
     )
+
+    # Check if we need a file for long text
+    is_long = len(result.original_text) > 800 or len(result.translated_text) > 800
+    file = None
 
     original_display = result.original_text
     if len(original_display) > 900:
@@ -392,5 +415,20 @@ def create_translate_embed(result, is_ai: bool = False) -> discord.Embed:
         inline=False
     )
 
-    set_footer(embed)
-    return embed
+    # Create file with full translation if text was truncated
+    if is_long:
+        file_content = (
+            f"═══ ORIGINAL ({result.source_name}) ═══\n\n"
+            f"{result.original_text}\n\n"
+            f"═══ TRANSLATION ({result.target_name}) ═══\n\n"
+            f"{result.translated_text}"
+        )
+        file = discord.File(
+            fp=io.BytesIO(file_content.encode('utf-8')),
+            filename="translation.txt"
+        )
+        embed.set_footer(text="Full translation attached as file • trippixn.com/Syria")
+    else:
+        set_footer(embed)
+
+    return embed, file

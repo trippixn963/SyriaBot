@@ -42,6 +42,11 @@ class QuoteView(ui.View):
     )
     async def save_button(self, interaction: discord.Interaction, button: ui.Button):
         """Send as public .gif and delete original to avoid spam."""
+        log.tree("Quote Save Button", [
+            ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+            ("ID", str(interaction.user.id)),
+        ], emoji="💾")
+
         # Only allow the requester to save
         if interaction.user.id != self.requester_id:
             await interaction.response.send_message(
@@ -50,7 +55,7 @@ class QuoteView(ui.View):
             )
             log.tree("Quote Save Rejected", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                ("User ID", str(interaction.user.id)),
+                ("ID", str(interaction.user.id)),
                 ("Owner ID", str(self.requester_id)),
                 ("Reason", "Not quote owner"),
             ], emoji="🚫")
@@ -60,7 +65,7 @@ class QuoteView(ui.View):
 
         log.tree("Quote Save Pressed", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-            ("User ID", str(interaction.user.id)),
+            ("ID", str(interaction.user.id)),
             ("Guild", guild_name),
             ("Size", f"{len(self.image_bytes) // 1024}KB"),
         ], emoji="💾")
@@ -84,7 +89,7 @@ class QuoteView(ui.View):
 
             log.tree("Quote Saved", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                ("User ID", str(interaction.user.id)),
+                ("ID", str(interaction.user.id)),
                 ("Format", "PNG as .gif"),
                 ("Size", f"{len(self.image_bytes) // 1024}KB"),
                 ("Original", "Deleted"),
@@ -93,7 +98,7 @@ class QuoteView(ui.View):
         except Exception as e:
             log.tree("Quote Save Failed", [
                 ("User", f"{interaction.user.name}"),
-                ("User ID", str(interaction.user.id)),
+                ("ID", str(interaction.user.id)),
                 ("Error", str(e)[:100]),
             ], emoji="❌")
             await interaction.followup.send("Failed to save quote.", ephemeral=True)

@@ -139,7 +139,7 @@ class MembersHandler(commands.Cog):
             await member.add_roles(role, reason="Auto-role on join")
             log.tree("Member Joined", [
                 ("User", f"{member.name} ({member.display_name})"),
-                ("User ID", str(member.id)),
+                ("ID", str(member.id)),
                 ("Role Given", role.name),
                 ("Invited By", str(inviter_id) if inviter_id else "Unknown"),
             ], emoji="👋")
@@ -149,6 +149,52 @@ class MembersHandler(commands.Cog):
                 ("Role", role.name),
                 ("Error", str(e)[:50]),
             ], emoji="❌")
+
+        # Restore XP roles if they had any (for returning members)
+        if hasattr(self.bot, 'xp_service') and self.bot.xp_service:
+            try:
+                await self.bot.xp_service.restore_member_roles(member)
+            except Exception as e:
+                log.tree("XP Role Restore Error", [
+                    ("User", f"{member.name} ({member.display_name})"),
+                    ("ID", str(member.id)),
+                    ("Error", str(e)[:50]),
+                ], emoji="⚠️")
+
+        # Mark user as active for leaderboard (returning members)
+        try:
+            db.set_user_active(member.id, member.guild.id)
+        except Exception as e:
+            log.tree("Set User Active Failed", [
+                ("User", f"{member.name} ({member.display_name})"),
+                ("ID", str(member.id)),
+                ("Error", str(e)[:50]),
+            ], emoji="⚠️")
+
+    @commands.Cog.listener()
+    async def on_member_remove(self, member: discord.Member) -> None:
+        """Called when a member leaves/is kicked/banned."""
+        if member.bot:
+            return
+
+        # Only track in main server
+        if member.guild.id != config.GUILD_ID:
+            return
+
+        # Mark user as inactive for leaderboard
+        try:
+            db.set_user_inactive(member.id, member.guild.id)
+            log.tree("Member Left", [
+                ("User", f"{member.name} ({member.display_name})"),
+                ("ID", str(member.id)),
+                ("Action", "Marked inactive on leaderboard"),
+            ], emoji="👋")
+        except Exception as e:
+            log.tree("Set User Inactive Failed", [
+                ("User", f"{member.name} ({member.display_name})"),
+                ("ID", str(member.id)),
+                ("Error", str(e)[:50]),
+            ], emoji="⚠️")
 
     @commands.Cog.listener()
     async def on_member_update(self, before: discord.Member, after: discord.Member) -> None:
@@ -212,7 +258,7 @@ class MembersHandler(commands.Cog):
         """Send thank you message when someone boosts."""
         log.tree("New Boost", [
             ("User", f"{member.name} ({member.display_name})"),
-            ("User ID", str(member.id)),
+            ("ID", str(member.id)),
             ("Guild", member.guild.name),
         ], emoji="💎")
 
@@ -220,7 +266,7 @@ class MembersHandler(commands.Cog):
         if not config.GENERAL_CHANNEL_ID:
             log.tree("Boost Notification Skipped", [
                 ("User", f"{member.name} ({member.display_name})"),
-                ("User ID", str(member.id)),
+                ("ID", str(member.id)),
                 ("Reason", "GENERAL_CHANNEL_ID not configured"),
             ], emoji="⚠️")
             return
@@ -229,7 +275,7 @@ class MembersHandler(commands.Cog):
         if not channel:
             log.tree("Boost Notification Failed", [
                 ("User", f"{member.name} ({member.display_name})"),
-                ("User ID", str(member.id)),
+                ("ID", str(member.id)),
                 ("Reason", "General channel not found"),
                 ("Channel ID", str(config.GENERAL_CHANNEL_ID)),
             ], emoji="⚠️")
@@ -278,13 +324,13 @@ class MembersHandler(commands.Cog):
             await channel.send(content=member.mention, embed=embed)
             log.tree("Boost Notification Sent", [
                 ("User", f"{member.name} ({member.display_name})"),
-                ("User ID", str(member.id)),
+                ("ID", str(member.id)),
                 ("Channel", channel.name),
             ], emoji="✅")
         except discord.HTTPException as e:
             log.tree("Boost Notification Failed", [
                 ("User", f"{member.name} ({member.display_name})"),
-                ("User ID", str(member.id)),
+                ("ID", str(member.id)),
                 ("Error", str(e)[:100]),
             ], emoji="❌")
 

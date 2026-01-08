@@ -335,7 +335,7 @@ class RateLimiter:
             except discord.HTTPException as e:
                 log.tree("Rate Limit Response Failed", [
                     ("User", f"{member.name} ({member.display_name})"),
-                    ("User ID", str(member.id)),
+                    ("ID", str(member.id)),
                     ("Error", str(e)),
                 ], emoji="❌")
 
@@ -367,7 +367,7 @@ class RateLimiter:
             except discord.HTTPException as e:
                 log.tree("Rate Limit Reply Failed", [
                     ("User", f"{member.name} ({member.display_name})"),
-                    ("User ID", str(member.id)),
+                    ("ID", str(member.id)),
                     ("Error", str(e)),
                 ], emoji="❌")
 

@@ -286,6 +286,7 @@ class Database:
                 ("images_shared", "INTEGER DEFAULT 0"),
                 ("activity_hours", "TEXT DEFAULT '{}'"),  # JSON: {"0": 5, "14": 20, ...}
                 ("invited_by", "INTEGER DEFAULT 0"),  # User ID who invited them
+                ("is_active", "INTEGER DEFAULT 1"),  # 1 = in server, 0 = left server
             ]
             for col_name, col_type in new_columns:
                 try:
@@ -1139,7 +1140,7 @@ class Database:
             return row["last_message_xp"] if row else 0
 
     def get_leaderboard(self, guild_id: int = None, limit: int = 10, offset: int = 0) -> List[Dict[str, Any]]:
-        """Get top users by XP in a guild with pagination."""
+        """Get top users by XP in a guild with pagination (only active members)."""
         from src.core.config import config
         gid = guild_id or config.GUILD_ID
 
@@ -1149,14 +1150,14 @@ class Database:
                 SELECT user_id, xp, level, total_messages, voice_minutes,
                        ROW_NUMBER() OVER (ORDER BY xp DESC) as rank
                 FROM user_xp
-                WHERE guild_id = ?
+                WHERE guild_id = ? AND is_active = 1
                 ORDER BY xp DESC
                 LIMIT ? OFFSET ?
             """, (gid, limit, offset))
             return [dict(row) for row in cur.fetchall()]
 
     def get_total_ranked_users(self, guild_id: int = None) -> int:
-        """Get total number of users with XP in a guild."""
+        """Get total number of active users with XP in a guild."""
         from src.core.config import config
         gid = guild_id or config.GUILD_ID
 
@@ -1165,13 +1166,13 @@ class Database:
             cur.execute("""
                 SELECT COUNT(*) as total
                 FROM user_xp
-                WHERE guild_id = ?
+                WHERE guild_id = ? AND is_active = 1
             """, (gid,))
             row = cur.fetchone()
             return row["total"] if row else 0
 
     def get_xp_stats(self, guild_id: int = None) -> Dict[str, Any]:
-        """Get overall XP statistics for a guild."""
+        """Get overall XP statistics for a guild (only active members)."""
         from src.core.config import config
         gid = guild_id or config.GUILD_ID
 
@@ -1185,7 +1186,7 @@ class Database:
                     COALESCE(SUM(voice_minutes), 0) as total_voice_minutes,
                     COALESCE(MAX(level), 0) as highest_level
                 FROM user_xp
-                WHERE guild_id = ?
+                WHERE guild_id = ? AND is_active = 1
             """, (gid,))
             row = cur.fetchone()
             return dict(row) if row else {
@@ -1197,19 +1198,39 @@ class Database:
             }
 
     def get_user_rank(self, user_id: int, guild_id: int) -> int:
-        """Get user's rank position in the guild (1-indexed)."""
+        """Get user's rank position in the guild (1-indexed, only active members)."""
         with self._get_conn() as conn:
             cur = conn.cursor()
             cur.execute("""
                 SELECT COUNT(*) + 1 as rank
                 FROM user_xp
-                WHERE guild_id = ? AND xp > (
+                WHERE guild_id = ? AND is_active = 1 AND xp > (
                     SELECT COALESCE(xp, 0) FROM user_xp
                     WHERE user_id = ? AND guild_id = ?
                 )
             """, (guild_id, user_id, guild_id))
             row = cur.fetchone()
             return row["rank"] if row else 1
+
+    def set_user_active(self, user_id: int, guild_id: int) -> None:
+        """Mark a user as active (in server) for leaderboard visibility."""
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                UPDATE user_xp SET is_active = 1
+                WHERE user_id = ? AND guild_id = ?
+            """, (user_id, guild_id))
+            conn.commit()
+
+    def set_user_inactive(self, user_id: int, guild_id: int) -> None:
+        """Mark a user as inactive (left server) to hide from leaderboard."""
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                UPDATE user_xp SET is_active = 0
+                WHERE user_id = ? AND guild_id = ?
+            """, (user_id, guild_id))
+            conn.commit()
 
     # =========================================================================
     # Extended User Tracking

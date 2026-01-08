@@ -43,7 +43,8 @@ class VoiceHandler(commands.Cog):
                 await self.bot.tempvoice.on_voice_state_update(member, before, after)
             except Exception as e:
                 log.tree("TempVoice Voice Update Error", [
-                    ("User", f"{member.name} ({member.id})"),
+                    ("User", f"{member.name} ({member.display_name})"),
+                    ("ID", str(member.id)),
                     ("Error", str(e)),
                 ], emoji="❌")
 
@@ -53,7 +54,8 @@ class VoiceHandler(commands.Cog):
                 await self.bot.xp_service.on_voice_update(member, before, after)
             except Exception as e:
                 log.tree("XP Voice Update Error", [
-                    ("User", f"{member.name} ({member.id})"),
+                    ("User", f"{member.name} ({member.display_name})"),
+                    ("ID", str(member.id)),
                     ("Error", str(e)),
                 ], emoji="❌")
 
@@ -69,14 +71,15 @@ class VoiceHandler(commands.Cog):
                 # Track peak concurrent voice users
                 if after.channel:
                     total_voice_users = sum(
-                        len([m for m in vc.members if not m.bot])
-                        for vc in member.guild.voice_channels
+                        1 for vc in member.guild.voice_channels
+                        for m in vc.members if not m.bot
                     )
                     today = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
                     db.update_voice_peak(member.guild.id, today, total_voice_users)
             except Exception as e:
                 log.tree("Voice Stats Track Failed", [
-                    ("User", f"{member.name} ({member.id})"),
+                    ("User", f"{member.name} ({member.display_name})"),
+                    ("ID", str(member.id)),
                     ("Error", str(e)[:50]),
                 ], emoji="⚠️")
 

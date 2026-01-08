@@ -107,6 +107,9 @@ class Config:
     GOOGLE_API_KEY: str = os.getenv("GOOGLE_API_KEY", "")
     GOOGLE_CX: str = os.getenv("GOOGLE_CX", "")
 
+    # DeepL API (for translation)
+    DEEPL_API_KEY: str = os.getenv("DEEPL_API_KEY", "")
+
     # Webhooks (read directly by logger from env vars)
     # SYRIA_LIVE_LOGS_WEBHOOK_URL - Tree format console logs streaming
     # SYRIA_ERROR_WEBHOOK_URL - Error-only logs

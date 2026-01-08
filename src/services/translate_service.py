@@ -396,14 +396,196 @@ class TranslateService:
             ("To", resolved_target),
         ], emoji="🌐")
 
+        # Try DeepL first (higher quality), fall back to Google
+        if config.DEEPL_API_KEY:
+            result = await self._translate_deepl(text, source_lang, resolved_target)
+            if result.success:
+                return result
+            log.tree("DeepL Failed, Trying Google", [
+                ("Error", result.error[:50] if result.error else "Unknown"),
+            ], emoji="🔄")
+
+        # Google Translate fallback
+        return await self._translate_google(text, source_lang, resolved_target)
+
+
+    # DeepL language code mapping (DeepL uses different codes)
+    DEEPL_LANG_MAP = {
+        "en": "EN",
+        "ar": "AR",
+        "de": "DE",
+        "es": "ES",
+        "fr": "FR",
+        "it": "IT",
+        "ja": "JA",
+        "ko": "KO",
+        "nl": "NL",
+        "pl": "PL",
+        "pt": "PT",
+        "ru": "RU",
+        "zh-CN": "ZH",
+        "zh-TW": "ZH",
+        "tr": "TR",
+        "uk": "UK",
+        "iw": "HE",  # Hebrew: iw → HE
+        "el": "EL",
+        "cs": "CS",
+        "da": "DA",
+        "fi": "FI",
+        "hu": "HU",
+        "id": "ID",
+        "no": "NB",  # Norwegian → Norwegian Bokmål
+        "ro": "RO",
+        "sv": "SV",
+    }
+
+    async def _translate_deepl(
+        self,
+        text: str,
+        source_lang: str,
+        target_lang: str
+    ) -> TranslationResult:
+        """Translate using DeepL API (higher quality)."""
+        # Map to DeepL language codes
+        deepl_target = self.DEEPL_LANG_MAP.get(target_lang, target_lang.upper())
+        deepl_source = self.DEEPL_LANG_MAP.get(source_lang) if source_lang != "auto" else None
+
         try:
-            translator = GoogleTranslator(source=source_lang, target=resolved_target)
+            params = {
+                "text": text,
+                "target_lang": deepl_target,
+            }
+            if deepl_source:
+                params["source_lang"] = deepl_source
+
+            async with http_session.session.post(
+                "https://api-free.deepl.com/v2/translate",
+                headers={
+                    "Authorization": f"DeepL-Auth-Key {config.DEEPL_API_KEY}",
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+                data=params,
+                timeout=aiohttp.ClientTimeout(total=15),
+            ) as resp:
+                if resp.status != 200:
+                    error_text = await resp.text()
+                    log.tree("DeepL API Error", [
+                        ("Status", str(resp.status)),
+                        ("Error", error_text[:100]),
+                    ], emoji="❌")
+                    return TranslationResult(
+                        success=False,
+                        original_text=text,
+                        translated_text="",
+                        source_lang=source_lang,
+                        target_lang=target_lang,
+                        source_name="",
+                        target_name="",
+                        source_flag="",
+                        target_flag="",
+                        error=f"DeepL API error: {resp.status}"
+                    )
+
+                data = await resp.json()
+                translations = data.get("translations", [])
+                if not translations:
+                    return TranslationResult(
+                        success=False,
+                        original_text=text,
+                        translated_text="",
+                        source_lang=source_lang,
+                        target_lang=target_lang,
+                        source_name="",
+                        target_name="",
+                        source_flag="",
+                        target_flag="",
+                        error="DeepL returned no translation"
+                    )
+
+                translated = translations[0].get("text", "")
+                detected_source = translations[0].get("detected_source_language", "").lower()
+
+                # Map DeepL detected language back to our codes
+                if detected_source == "he":
+                    detected_source = "iw"
+                elif detected_source == "nb":
+                    detected_source = "no"
+                elif detected_source == "zh":
+                    detected_source = "zh-CN"
+
+                if source_lang == "auto" and detected_source:
+                    source_lang = detected_source
+
+                source_name, source_flag = self.get_language_info(source_lang)
+                target_name, target_flag = self.get_language_info(target_lang)
+
+                log.tree("DeepL Translation Complete", [
+                    ("From", f"{source_name} {source_flag}"),
+                    ("To", f"{target_name} {target_flag}"),
+                    ("Chars Used", str(len(text))),
+                    ("Result Length", str(len(translated))),
+                ], emoji="✅")
+
+                return TranslationResult(
+                    success=True,
+                    original_text=text,
+                    translated_text=translated,
+                    source_lang=source_lang,
+                    target_lang=target_lang,
+                    source_name=source_name,
+                    target_name=target_name,
+                    source_flag=source_flag,
+                    target_flag=target_flag,
+                )
+
+        except asyncio.TimeoutError:
+            log.tree("DeepL Timeout", [
+                ("Text Length", str(len(text))),
+            ], emoji="⏳")
+            return TranslationResult(
+                success=False,
+                original_text=text,
+                translated_text="",
+                source_lang=source_lang,
+                target_lang=target_lang,
+                source_name="",
+                target_name="",
+                source_flag="",
+                target_flag="",
+                error="DeepL request timed out"
+            )
+        except Exception as e:
+            log.error_tree("DeepL Translation Failed", e, [
+                ("Text", text[:50]),
+            ])
+            return TranslationResult(
+                success=False,
+                original_text=text,
+                translated_text="",
+                source_lang=source_lang,
+                target_lang=target_lang,
+                source_name="",
+                target_name="",
+                source_flag="",
+                target_flag="",
+                error=str(e)
+            )
+
+    async def _translate_google(
+        self,
+        text: str,
+        source_lang: str,
+        target_lang: str
+    ) -> TranslationResult:
+        """Translate using Google Translate (fallback)."""
+        try:
+            translator = GoogleTranslator(source=source_lang, target=target_lang)
             translated = await asyncio.to_thread(translator.translate, text)
 
             source_name, source_flag = self.get_language_info(source_lang)
-            target_name, target_flag = self.get_language_info(resolved_target)
+            target_name, target_flag = self.get_language_info(target_lang)
 
-            log.tree("Translation Complete", [
+            log.tree("Google Translation Complete", [
                 ("From", f"{source_name} {source_flag}"),
                 ("To", f"{target_name} {target_flag}"),
                 ("Result Length", str(len(translated))),
@@ -414,7 +596,7 @@ class TranslateService:
                 original_text=text,
                 translated_text=translated,
                 source_lang=source_lang,
-                target_lang=resolved_target,
+                target_lang=target_lang,
                 source_name=source_name,
                 target_name=target_name,
                 source_flag=source_flag,
@@ -422,41 +604,33 @@ class TranslateService:
             )
 
         except TranslationNotFound:
-            # This can happen when:
-            # - Text is too short or simple
-            # - Text is already in the target language
-            # - API couldn't find a translation
-            log.tree("Translation Not Found", [
+            log.tree("Google Translation Not Found", [
                 ("Text", text[:50]),
-                ("Target", resolved_target),
-                ("Reason", "API returned no translation"),
+                ("Target", target_lang),
             ], emoji="⚠️")
-
             return TranslationResult(
                 success=False,
                 original_text=text,
                 translated_text="",
                 source_lang=source_lang,
-                target_lang=resolved_target,
+                target_lang=target_lang,
                 source_name="",
                 target_name="",
                 source_flag="",
                 target_flag="",
-                error="Could not translate this text. It may already be in the target language or too short to translate."
+                error="Could not translate this text."
             )
 
         except Exception as e:
-            log.error_tree("Translation Failed", e, [
+            log.error_tree("Google Translation Failed", e, [
                 ("Text", text[:50]),
-                ("Target", resolved_target),
             ])
-
             return TranslationResult(
                 success=False,
                 original_text=text,
                 translated_text="",
                 source_lang=source_lang,
-                target_lang=resolved_target,
+                target_lang=target_lang,
                 source_name="",
                 target_name="",
                 source_flag="",
@@ -464,6 +638,66 @@ class TranslateService:
                 error=str(e)
             )
 
+    def _build_ai_prompt(
+        self,
+        source_name: str,
+        target_name: str,
+        source_lang: str,
+        target_lang: str
+    ) -> str:
+        """Build a comprehensive system prompt for AI translation."""
+        # Base prompt
+        prompt_parts = [
+            f"You are an expert {source_name} to {target_name} translator.",
+            "",
+            "TASK: Translate the user's text accurately and naturally.",
+            "",
+            "CRITICAL RULES:",
+            "1. Output ONLY the translation - no explanations, alternatives, or commentary",
+            "2. Never say 'Here is the translation' or similar - just give the translated text",
+            "3. Preserve the original tone (formal, casual, emotional, humorous)",
+            "4. Keep formatting intact (line breaks, punctuation, capitalization style)",
+            "5. Preserve emojis exactly as they appear",
+            "6. Keep names, brands, and proper nouns unchanged",
+            "7. Translate idioms/expressions to natural equivalents, not literally",
+        ]
+
+        # Arabic-specific instructions
+        if source_lang == "ar" or source_lang == "auto":
+            prompt_parts.extend([
+                "",
+                "ARABIC INPUT HANDLING:",
+                "- Recognize Syrian dialect (شامي), Egyptian (مصري), Gulf (خليجي), etc.",
+                "- Translate the intended meaning, not literal transliteration",
+                "- Common Syrian expressions: شو، كيفك، هلق، منيح، يلا → translate naturally",
+            ])
+
+        if target_lang == "ar":
+            prompt_parts.extend([
+                "",
+                "ARABIC OUTPUT:",
+                "- Use Modern Standard Arabic (فصحى) for formal text",
+                "- For casual/informal input, use natural conversational Arabic",
+                "- Ensure proper Arabic grammar and sentence structure",
+            ])
+
+        # English-specific
+        if target_lang == "en":
+            prompt_parts.extend([
+                "",
+                "ENGLISH OUTPUT:",
+                "- Use natural, fluent English that a native speaker would use",
+                "- Match the formality level of the source text",
+                "- Avoid awkward literal translations",
+            ])
+
+        prompt_parts.extend([
+            "",
+            "If the text is already in the target language, return it unchanged.",
+            "If text is ambiguous, choose the most contextually appropriate meaning.",
+        ])
+
+        return "\n".join(prompt_parts)
 
     async def translate_ai(
         self,
@@ -516,6 +750,9 @@ class TranslateService:
                 error="AI translation not configured"
             )
 
+        # Build a comprehensive translation prompt
+        system_prompt = self._build_ai_prompt(source_name, target_name, source_lang, resolved_target)
+
         try:
             async with http_session.session.post(
                 "https://api.openai.com/v1/chat/completions",
@@ -528,14 +765,14 @@ class TranslateService:
                     "messages": [
                         {
                             "role": "system",
-                            "content": f"You are a professional translator. Translate the following text to {target_name}. Only respond with the translation, nothing else. Preserve the original formatting, tone, and style."
+                            "content": system_prompt
                         },
                         {
                             "role": "user",
                             "content": text
                         }
                     ],
-                    "temperature": 0.3,
+                    "temperature": 0.2,
                     "max_tokens": 2000,
                 },
                 timeout=aiohttp.ClientTimeout(total=30),
@@ -613,6 +850,44 @@ class TranslateService:
                 target_flag=target_flag,
                 error=str(e)
             )
+
+
+    async def check_deepl_usage(self) -> tuple[int, int] | None:
+        """Check DeepL API usage. Returns (used, limit) or None if failed."""
+        if not config.DEEPL_API_KEY:
+            return None
+
+        try:
+            async with http_session.session.get(
+                "https://api-free.deepl.com/v2/usage",
+                headers={
+                    "Authorization": f"DeepL-Auth-Key {config.DEEPL_API_KEY}",
+                },
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as resp:
+                if resp.status != 200:
+                    return None
+
+                data = await resp.json()
+                used = data.get("character_count", 0)
+                limit = data.get("character_limit", 500000)
+
+                percent = (used / limit * 100) if limit > 0 else 0
+                remaining = limit - used
+
+                log.tree("DeepL Usage", [
+                    ("Used", f"{used:,} chars"),
+                    ("Limit", f"{limit:,} chars"),
+                    ("Remaining", f"{remaining:,} chars ({100-percent:.1f}%)"),
+                ], emoji="📊")
+
+                return (used, limit)
+
+        except Exception as e:
+            log.tree("DeepL Usage Check Failed", [
+                ("Error", str(e)[:50]),
+            ], emoji="⚠️")
+            return None
 
 
 # Global instance

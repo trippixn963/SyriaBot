@@ -99,7 +99,7 @@ class TranslateCog(commands.Cog):
             ], emoji="⚠️")
             return
 
-        embed = create_translate_embed(result)
+        embed, file = create_translate_embed(result)
 
         view = TranslateView(
             original_text=text,
@@ -108,7 +108,10 @@ class TranslateCog(commands.Cog):
             source_lang=result.source_lang,
         )
 
-        msg = await interaction.followup.send(embed=embed, view=view, wait=True)
+        if file:
+            msg = await interaction.followup.send(embed=embed, file=file, view=view, wait=True)
+        else:
+            msg = await interaction.followup.send(embed=embed, view=view, wait=True)
         view.message = msg
 
         log.tree("Translation Sent", [

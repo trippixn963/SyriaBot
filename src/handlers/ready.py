@@ -67,6 +67,15 @@ class ReadyHandler(commands.Cog):
         except Exception as e:
             log.error_tree("Service Init Failed", e)
 
+        # Check DeepL usage at startup
+        try:
+            from src.services.translate_service import translate_service
+            await translate_service.check_deepl_usage()
+        except Exception as e:
+            log.tree("DeepL Usage Check Skipped", [
+                ("Error", str(e)[:50]),
+            ], emoji="⚠️")
+
 
 async def setup(bot: commands.Bot) -> None:
     """Register the ready handler cog with the bot."""
