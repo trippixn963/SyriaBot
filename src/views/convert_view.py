@@ -460,7 +460,7 @@ class ConvertView(ui.View):
             ("Text", self.settings.text[:30] if self.settings.text else "(none)"),
             ("Color", self.settings.get_preset_name()),
             ("Animated", "Yes" if is_animated else "No"),
-        ], emoji="OK")
+        ], emoji="✅")
 
         self.stop()
 
@@ -700,7 +700,7 @@ class VideoConvertView(ui.View):
             ("Size", f"{len(result.gif_bytes) / 1024:.1f} KB"),
             ("Text", self.settings.text[:30] if self.settings.text else "(none)"),
             ("Color", self.settings.get_preset_name()),
-        ], emoji="OK")
+        ], emoji="✅")
 
         self.stop()
 
@@ -804,7 +804,7 @@ async def start_convert_editor(
             ("Source", source_name[:30]),
             ("Initial Text", initial_text[:30] if initial_text else "(none)"),
             ("Preview Strip", "Yes" if preview_strip_bytes else "No"),
-        ], emoji="VIDEO")
+        ], emoji="🎬")
 
     else:
         # Image: Use ConvertView with live preview
@@ -838,4 +838,4 @@ async def start_convert_editor(
             ("ID", str(user.id)),
             ("Source", source_name[:30]),
             ("Initial Text", initial_text[:30] if initial_text else "(none)"),
-        ], emoji="IMAGE")
+        ], emoji="🖼️")

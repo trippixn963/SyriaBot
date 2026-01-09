@@ -140,6 +140,33 @@ class XPMixin:
                 ("Error", str(e)[:50]),
             ], emoji="❌")
 
+    def set_xp(self, user_id: int, guild_id: int, xp: int, level: int) -> None:
+        """
+        Set user's XP and level directly (overwrites current values).
+
+        Used by API for administrative XP adjustments.
+        """
+        try:
+            # Ensure user exists first
+            self.ensure_user_xp(user_id, guild_id)
+
+            with self._get_conn() as conn:
+                cur = conn.cursor()
+                cur.execute("""
+                    UPDATE user_xp SET xp = ?, level = ? WHERE user_id = ? AND guild_id = ?
+                """, (xp, level, user_id, guild_id))
+
+            log.tree("DB: XP Set", [
+                ("User ID", str(user_id)),
+                ("XP", str(xp)),
+                ("Level", str(level)),
+            ], emoji="✏️")
+        except Exception as e:
+            log.error_tree("DB: Set XP Error", e, [
+                ("User ID", str(user_id)),
+                ("XP", str(xp)),
+            ])
+
     def get_last_message_xp(self, user_id: int, guild_id: int) -> int:
         """Get timestamp of last message XP gain."""
         with self._get_conn() as conn:

@@ -43,6 +43,9 @@ _CACHE_TTL = 30  # Cache cards for 30 seconds
 _last_activity: float = 0
 _IDLE_TIMEOUT = 300  # Close browser after 5 minutes of inactivity
 
+# Semaphore to limit concurrent card generations (prevents race conditions)
+_render_semaphore: asyncio.Semaphore = None
+
 
 def _sync_cleanup():
     """Synchronous cleanup for atexit/signal handlers."""
@@ -584,7 +587,11 @@ async def generate_rank_card(
     status: str = "online",
 ) -> bytes:
     """Generate rank card using Playwright with caching and page pooling."""
-    global _card_cache
+    global _card_cache, _render_semaphore
+
+    # Initialize semaphore on first use (limits concurrent renders to prevent race conditions)
+    if _render_semaphore is None:
+        _render_semaphore = asyncio.Semaphore(2)
 
     # Create cache key from data that affects appearance
     cache_key = (
@@ -606,81 +613,87 @@ async def generate_rank_card(
     if len(_card_cache) > 100:
         _card_cache.clear()
 
-    page = None
-    try:
-        page = await _get_page()
-
-        # Generate HTML
-        html = _generate_html(
-            display_name=display_name[:20] + "..." if len(display_name) > 20 else display_name,
-            username=username,
-            avatar_url=avatar_url,
-            level=level,
-            rank=rank,
-            current_xp=current_xp,
-            xp_for_next=xp_for_next,
-            xp_progress=xp_progress,
-            total_messages=total_messages,
-            voice_minutes=voice_minutes,
-            is_booster=is_booster,
-            banner_url=banner_url,
-            status=status,
-        )
-
-        await page.set_content(html, wait_until='domcontentloaded')
-
-        # Wait for avatar with shorter timeout (2s instead of 5s)
-        try:
-            await page.wait_for_function(
-                '''() => {
-                    const img = document.querySelector('img.avatar');
-                    return img && img.complete && img.naturalWidth > 0;
-                }''',
-                timeout=2000
-            )
-        except Exception:
-            # Quick fallback - don't log every time
-            await page.evaluate('''(initial) => {
-                const img = document.querySelector('img.avatar');
-                if (img) {
-                    img.style.display = 'none';
-                    const wrapper = document.querySelector('.avatar-wrapper');
-                    if (wrapper) {
-                        const fallback = document.createElement('div');
-                        fallback.style.cssText = 'width:180px;height:180px;border-radius:50%;background:linear-gradient(135deg,#3a3a4a,#2a2a3a);display:flex;align-items:center;justify-content:center;font-size:64px;color:#fff;font-weight:700;';
-                        fallback.textContent = initial;
-                        wrapper.insertBefore(fallback, img);
-                    }
-                }
-            }''', display_name[0].upper() if display_name else "?")
-
-        # Screenshot
-        screenshot = await page.screenshot(type='png', omit_background=True)
-
-        # Return page to pool instead of closing
-        await _return_page(page)
+    # Use semaphore to limit concurrent renders
+    async with _render_semaphore:
         page = None
+        try:
+            page = await _get_page()
 
-        # Cache the result
-        _card_cache[cache_key] = (screenshot, now)
+            # Clear page before each render to prevent stale content
+            await page.goto('about:blank')
 
-        log.tree("Rank Card Generated", [
-            ("User", display_name),
-            ("Level", str(level)),
-        ], emoji="🎨")
+            # Generate HTML
+            html = _generate_html(
+                display_name=display_name[:20] + "..." if len(display_name) > 20 else display_name,
+                username=username,
+                avatar_url=avatar_url,
+                level=level,
+                rank=rank,
+                current_xp=current_xp,
+                xp_for_next=xp_for_next,
+                xp_progress=xp_progress,
+                total_messages=total_messages,
+                voice_minutes=voice_minutes,
+                is_booster=is_booster,
+                banner_url=banner_url,
+                status=status,
+            )
 
-        return screenshot
+            await page.set_content(html, wait_until='networkidle')
 
-    except Exception as e:
-        log.tree("Rank Card Failed", [
-            ("Error", str(e)),
-        ], emoji="❌")
-        if page:
+            # Wait for avatar with shorter timeout (2s instead of 5s)
             try:
-                await page.close()
+                await page.wait_for_function(
+                    '''() => {
+                        const img = document.querySelector('img.avatar');
+                        return img && img.complete && img.naturalWidth > 0;
+                    }''',
+                    timeout=2000
+                )
             except Exception:
-                pass
-        raise
+                # Quick fallback - don't log every time
+                await page.evaluate('''(initial) => {
+                    const img = document.querySelector('img.avatar');
+                    if (img) {
+                        img.style.display = 'none';
+                        const wrapper = document.querySelector('.avatar-wrapper');
+                        if (wrapper) {
+                            const fallback = document.createElement('div');
+                            fallback.style.cssText = 'width:180px;height:180px;border-radius:50%;background:linear-gradient(135deg,#3a3a4a,#2a2a3a);display:flex;align-items:center;justify-content:center;font-size:64px;color:#fff;font-weight:700;';
+                            fallback.textContent = initial;
+                            wrapper.insertBefore(fallback, img);
+                        }
+                    }
+                }''', display_name[0].upper() if display_name else "?")
+
+            # Screenshot
+            screenshot = await page.screenshot(type='png', omit_background=True)
+
+            # Return page to pool instead of closing
+            await _return_page(page)
+            page = None
+
+            # Cache the result
+            _card_cache[cache_key] = (screenshot, now)
+
+            log.tree("Rank Card Generated", [
+                ("User", display_name),
+                ("Level", str(level)),
+            ], emoji="🎨")
+
+            return screenshot
+
+        except Exception as e:
+            log.tree("Rank Card Failed", [
+                ("User", display_name),
+                ("Error", str(e)[:100]),
+            ], emoji="❌")
+            if page:
+                try:
+                    await page.close()
+                except Exception:
+                    pass
+            raise
 
 
 async def cleanup():

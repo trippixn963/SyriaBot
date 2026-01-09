@@ -18,6 +18,7 @@ from aiohttp import web
 from typing import TYPE_CHECKING, Optional
 
 from src.core.logger import log
+from src.core.config import config
 from src.core.constants import (
     STATS_API_PORT,
     STATS_API_HOST,
@@ -25,6 +26,7 @@ from src.core.constants import (
     TIMEZONE_EST,
 )
 from src.services.database import db
+from src.services.xp.utils import level_from_xp
 
 if TYPE_CHECKING:
     from src.bot import SyriaBot
@@ -148,15 +150,15 @@ async def cors_middleware(request: web.Request, handler) -> web.Response:
             status=204,
             headers={
                 "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "GET, OPTIONS",
-                "Access-Control-Allow-Headers": "Content-Type",
+                "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type, X-API-Key",
                 "Access-Control-Max-Age": "86400",
             }
         )
 
     response = await handler(request)
     response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     return response
 
 
@@ -213,10 +215,23 @@ class SyriaAPI:
 
     def _setup_routes(self) -> None:
         """Configure API routes."""
+        # Read-only endpoints (public)
         self.app.router.add_get("/api/syria/leaderboard", self.handle_leaderboard)
         self.app.router.add_get("/api/syria/user/{user_id}", self.handle_user)
         self.app.router.add_get("/api/syria/stats", self.handle_stats)
         self.app.router.add_get("/health", self.handle_health)
+
+        # XP modification endpoints (require API key)
+        self.app.router.add_post("/api/syria/xp/grant", self.handle_xp_grant)
+        self.app.router.add_post("/api/syria/xp/set", self.handle_xp_set)
+
+    def _verify_api_key(self, request: web.Request) -> bool:
+        """Verify the API key from request header."""
+        if not config.XP_API_KEY:
+            return False  # API key not configured
+
+        api_key = request.headers.get("X-API-Key", "")
+        return api_key == config.XP_API_KEY
 
     def _format_voice_time(self, mins: int) -> str:
         """Format minutes into human-readable string."""
@@ -581,6 +596,278 @@ class SyriaAPI:
     async def handle_health(self, request: web.Request) -> web.Response:
         """GET /health - Health check endpoint."""
         return web.json_response({"status": "healthy"})
+
+    # =========================================================================
+    # XP Modification Endpoints (require API key)
+    # =========================================================================
+
+    async def handle_xp_grant(self, request: web.Request) -> web.Response:
+        """
+        POST /api/syria/xp/grant - Grant XP to a user.
+
+        Request body:
+        {
+            "user_id": 123456789,
+            "amount": 100,
+            "reason": "minigame win"  // optional, for logging
+        }
+
+        Headers:
+        X-API-Key: your-api-key
+        """
+        client_ip = get_client_ip(request)
+
+        # Verify API key
+        if not self._verify_api_key(request):
+            log.tree("XP Grant Unauthorized", [
+                ("Client IP", client_ip),
+                ("Reason", "Invalid or missing API key"),
+            ], emoji="🔒")
+            return web.json_response(
+                {"error": "Unauthorized", "message": "Invalid or missing API key"},
+                status=401,
+                headers={"Access-Control-Allow-Origin": "*"}
+            )
+
+        try:
+            data = await request.json()
+        except Exception:
+            log.tree("XP Grant Bad Request", [
+                ("Client IP", client_ip),
+                ("Error", "Invalid JSON body"),
+            ], emoji="⚠️")
+            return web.json_response(
+                {"error": "Bad Request", "message": "Invalid JSON body"},
+                status=400,
+                headers={"Access-Control-Allow-Origin": "*"}
+            )
+
+        user_id = data.get("user_id")
+        amount = data.get("amount")
+        reason = data.get("reason", "API grant")
+
+        # Validate required fields
+        if not user_id or not isinstance(user_id, int):
+            log.tree("XP Grant Bad Request", [
+                ("Client IP", client_ip),
+                ("Error", "user_id (int) is required"),
+                ("Received", str(user_id)[:50]),
+            ], emoji="⚠️")
+            return web.json_response(
+                {"error": "Bad Request", "message": "user_id (int) is required"},
+                status=400,
+                headers={"Access-Control-Allow-Origin": "*"}
+            )
+
+        if amount is None or not isinstance(amount, int):
+            log.tree("XP Grant Bad Request", [
+                ("Client IP", client_ip),
+                ("User ID", str(user_id)),
+                ("Error", "amount (int) is required"),
+                ("Received", str(amount)[:50]),
+            ], emoji="⚠️")
+            return web.json_response(
+                {"error": "Bad Request", "message": "amount (int) is required"},
+                status=400,
+                headers={"Access-Control-Allow-Origin": "*"}
+            )
+
+        if amount <= 0 or amount > 100000:
+            log.tree("XP Grant Bad Request", [
+                ("Client IP", client_ip),
+                ("User ID", str(user_id)),
+                ("Error", "amount out of range"),
+                ("Amount", str(amount)),
+            ], emoji="⚠️")
+            return web.json_response(
+                {"error": "Bad Request", "message": "amount must be between 1 and 100000"},
+                status=400,
+                headers={"Access-Control-Allow-Origin": "*"}
+            )
+
+        try:
+            # Get current XP data (non-blocking)
+            guild_id = config.GUILD_ID
+            user_data = await asyncio.to_thread(db.get_user_xp, user_id, guild_id)
+
+            if not user_data:
+                # Create new user entry
+                user_data = await asyncio.to_thread(db.ensure_user_xp, user_id, guild_id)
+
+            current_xp = user_data.get("xp", 0)
+            current_level = user_data.get("level", 0)
+            new_xp = current_xp + amount
+            new_level = level_from_xp(new_xp)
+
+            # Update XP in database (non-blocking)
+            await asyncio.to_thread(db.add_xp, user_id, guild_id, amount)
+
+            log.tree("XP Granted via API", [
+                ("User ID", str(user_id)),
+                ("Amount", f"+{amount}"),
+                ("New XP", str(new_xp)),
+                ("Level", f"{current_level} → {new_level}" if new_level != current_level else str(new_level)),
+                ("Reason", reason[:50]),
+                ("Client IP", client_ip),
+            ], emoji="⬆️")
+
+            # Clear response cache to reflect new data
+            global _response_cache
+            _response_cache.clear()
+
+            return web.json_response({
+                "success": True,
+                "user_id": user_id,
+                "xp_added": amount,
+                "new_xp": new_xp,
+                "old_level": current_level,
+                "new_level": new_level,
+                "leveled_up": new_level > current_level,
+            }, headers={"Access-Control-Allow-Origin": "*"})
+
+        except Exception as e:
+            log.error_tree("XP Grant API Error", e, [
+                ("User ID", str(user_id)),
+                ("Amount", str(amount)),
+                ("Client IP", client_ip),
+            ])
+            return web.json_response(
+                {"error": "Internal server error", "message": str(e)[:100]},
+                status=500,
+                headers={"Access-Control-Allow-Origin": "*"}
+            )
+
+    async def handle_xp_set(self, request: web.Request) -> web.Response:
+        """
+        POST /api/syria/xp/set - Set XP for a user (overwrites).
+
+        Request body:
+        {
+            "user_id": 123456789,
+            "xp": 5000,
+            "reason": "admin adjustment"  // optional
+        }
+
+        Headers:
+        X-API-Key: your-api-key
+        """
+        client_ip = get_client_ip(request)
+
+        # Verify API key
+        if not self._verify_api_key(request):
+            log.tree("XP Set Unauthorized", [
+                ("Client IP", client_ip),
+                ("Reason", "Invalid or missing API key"),
+            ], emoji="🔒")
+            return web.json_response(
+                {"error": "Unauthorized", "message": "Invalid or missing API key"},
+                status=401,
+                headers={"Access-Control-Allow-Origin": "*"}
+            )
+
+        try:
+            data = await request.json()
+        except Exception:
+            log.tree("XP Set Bad Request", [
+                ("Client IP", client_ip),
+                ("Error", "Invalid JSON body"),
+            ], emoji="⚠️")
+            return web.json_response(
+                {"error": "Bad Request", "message": "Invalid JSON body"},
+                status=400,
+                headers={"Access-Control-Allow-Origin": "*"}
+            )
+
+        user_id = data.get("user_id")
+        new_xp = data.get("xp")
+        reason = data.get("reason", "API set")
+
+        # Validate required fields
+        if not user_id or not isinstance(user_id, int):
+            log.tree("XP Set Bad Request", [
+                ("Client IP", client_ip),
+                ("Error", "user_id (int) is required"),
+                ("Received", str(user_id)[:50]),
+            ], emoji="⚠️")
+            return web.json_response(
+                {"error": "Bad Request", "message": "user_id (int) is required"},
+                status=400,
+                headers={"Access-Control-Allow-Origin": "*"}
+            )
+
+        if new_xp is None or not isinstance(new_xp, int):
+            log.tree("XP Set Bad Request", [
+                ("Client IP", client_ip),
+                ("User ID", str(user_id)),
+                ("Error", "xp (int) is required"),
+                ("Received", str(new_xp)[:50]),
+            ], emoji="⚠️")
+            return web.json_response(
+                {"error": "Bad Request", "message": "xp (int) is required"},
+                status=400,
+                headers={"Access-Control-Allow-Origin": "*"}
+            )
+
+        if new_xp < 0 or new_xp > 10000000:
+            log.tree("XP Set Bad Request", [
+                ("Client IP", client_ip),
+                ("User ID", str(user_id)),
+                ("Error", "xp out of range"),
+                ("XP", str(new_xp)),
+            ], emoji="⚠️")
+            return web.json_response(
+                {"error": "Bad Request", "message": "xp must be between 0 and 10000000"},
+                status=400,
+                headers={"Access-Control-Allow-Origin": "*"}
+            )
+
+        try:
+            guild_id = config.GUILD_ID
+            user_data = await asyncio.to_thread(db.get_user_xp, user_id, guild_id)
+
+            old_xp = 0
+            old_level = 0
+            if user_data:
+                old_xp = user_data.get("xp", 0)
+                old_level = user_data.get("level", 0)
+
+            new_level = level_from_xp(new_xp)
+
+            # Set XP in database (non-blocking)
+            await asyncio.to_thread(db.set_xp, user_id, guild_id, new_xp, new_level)
+
+            log.tree("XP Set via API", [
+                ("User ID", str(user_id)),
+                ("XP", f"{old_xp} → {new_xp}"),
+                ("Level", f"{old_level} → {new_level}"),
+                ("Reason", reason[:50]),
+                ("Client IP", client_ip),
+            ], emoji="✏️")
+
+            # Clear response cache
+            global _response_cache
+            _response_cache.clear()
+
+            return web.json_response({
+                "success": True,
+                "user_id": user_id,
+                "old_xp": old_xp,
+                "new_xp": new_xp,
+                "old_level": old_level,
+                "new_level": new_level,
+            }, headers={"Access-Control-Allow-Origin": "*"})
+
+        except Exception as e:
+            log.error_tree("XP Set API Error", e, [
+                ("User ID", str(user_id)),
+                ("XP", str(new_xp)),
+                ("Client IP", client_ip),
+            ])
+            return web.json_response(
+                {"error": "Internal server error", "message": str(e)[:100]},
+                status=500,
+                headers={"Access-Control-Allow-Origin": "*"}
+            )
 
     async def _periodic_cleanup(self) -> None:
         """Periodically cleanup rate limiter and response cache."""

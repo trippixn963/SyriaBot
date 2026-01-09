@@ -320,7 +320,7 @@ class ConvertService:
         log.tree("Converting Image", [
             ("Text", text[:50] + "..." if len(text) > 50 else text),
             ("Position", position),
-        ], emoji="CONVERT")
+        ], emoji="🔄")
 
         try:
             # Process in thread to avoid blocking
@@ -444,7 +444,7 @@ class ConvertService:
                 ("Size", f"{len(result_bytes) / 1024:.1f} KB"),
                 ("Dimensions", f"{new_img.width}x{new_img.height}"),
                 ("Format", "GIF"),
-            ], emoji="OK")
+            ], emoji="✅")
 
             return ConvertResult(
                 success=True,
@@ -505,8 +505,29 @@ class ConvertService:
             bar_height = max(MIN_BAR_HEIGHT, int(orig_height * BAR_HEIGHT_RATIO)) if has_text else 0
             new_height = orig_height + bar_height
 
-            # Calculate font size (70% of bar height)
-            font_size = max(24, int(bar_height * FONT_SIZE_RATIO)) if has_text else 0
+            # Max text width = 90% of image width
+            max_text_width = int(orig_width * 0.90)
+
+            # Start with large font (70% of bar height)
+            font_size = max(16, int(bar_height * FONT_SIZE_RATIO)) if has_text else 0
+
+            # SHRINK font until text fits (NotSoBot style)
+            if has_text:
+                with Drawing() as measure_draw:
+                    measure_draw.font = self._font_path or 'DejaVu-Sans-Bold'
+                    while font_size > 12:
+                        measure_draw.font_size = font_size
+                        with WandImage(width=orig_width, height=bar_height) as temp_img:
+                            metrics = measure_draw.get_font_metrics(temp_img, text)
+                            if metrics.text_width <= max_text_width:
+                                break
+                        font_size -= 2
+
+                log.tree("GIF Text Layout", [
+                    ("Text", text[:30] + "..." if len(text) > 30 else text),
+                    ("GIF Width", str(orig_width)),
+                    ("Font Size", str(font_size)),
+                ], emoji="📏")
 
             # Create output image
             with WandImage() as output_img:
@@ -521,13 +542,13 @@ class ConvertService:
                             bar_color_hex = f'rgb({bar_color[0]},{bar_color[1]},{bar_color[2]})'
 
                             with WandImage(width=orig_width, height=new_height, background=Color(bar_color_hex)) as new_frame:
-                                # Paste original frame in correct position
+                                # Paste original frame
                                 if position == "top":
                                     new_frame.composite(f, left=0, top=bar_height)
                                 else:
                                     new_frame.composite(f, left=0, top=0)
 
-                                # Draw text on bar
+                                # Draw text centered on bar
                                 text_color_hex = f'rgb({text_color[0]},{text_color[1]},{text_color[2]})'
 
                                 with Drawing() as draw:
@@ -535,15 +556,23 @@ class ConvertService:
                                     draw.font_size = font_size
                                     draw.fill_color = Color(text_color_hex)
                                     draw.text_alignment = 'center'
-                                    draw.gravity = 'north' if position == "top" else 'south'
 
-                                    # Calculate vertical center of bar
-                                    text_y = bar_height // 2 + font_size // 3
+                                    # Get metrics for vertical positioning
+                                    metrics = draw.get_font_metrics(new_frame, text)
 
-                                    draw.text(orig_width // 2, text_y, text)
+                                    # X = center of image
+                                    text_x = orig_width // 2
+
+                                    # Y = center of bar
+                                    if position == "top":
+                                        text_y = int(bar_height / 2 + metrics.text_height / 3)
+                                    else:
+                                        text_y = int(orig_height + bar_height / 2 + metrics.text_height / 3)
+
+                                    draw.text(text_x, text_y, text)
                                     draw(new_frame)
 
-                                # Add watermark to bottom right (scaled, with outline)
+                                # Add watermark
                                 watermark_size = max(WATERMARK_MIN_FONT, min(WATERMARK_MAX_FONT, int(orig_width * WATERMARK_FONT_SIZE_RATIO)))
                                 watermark_padding = max(8, int(orig_width * WATERMARK_PADDING_RATIO))
                                 watermark_color = f'rgb({WATERMARK_COLOR[0]},{WATERMARK_COLOR[1]},{WATERMARK_COLOR[2]})'
@@ -578,7 +607,7 @@ class ConvertService:
             ("Dimensions", f"{orig_width}x{new_height}"),
             ("Has Text", "Yes" if has_text else "No"),
             ("Engine", "ImageMagick"),
-        ], emoji="OK")
+        ], emoji="✅")
 
         return ConvertResult(success=True, gif_bytes=result_bytes)
 
@@ -699,7 +728,7 @@ class ConvertService:
                 ("Dimensions", f"{orig_width}x{new_height}"),
                 ("Has Text", "Yes" if has_text else "No"),
                 ("Engine", "Pillow (fallback)"),
-            ], emoji="OK")
+            ], emoji="✅")
 
             return ConvertResult(success=True, gif_bytes=result_bytes)
 
@@ -795,7 +824,7 @@ class ConvertService:
             ("Text", text[:30] + "..." if len(text) > 30 else text if text else "(none)"),
             ("Position", position),
             ("Effect", effect),
-        ], emoji="VIDEO")
+        ], emoji="🎬")
 
         try:
             result = await asyncio.to_thread(
@@ -877,89 +906,58 @@ class ConvertService:
             # Add text bar if text is provided
             if text:
 
-                # DYNAMIC font sizing (NotSoBot style) - same as images
                 # Bar height = 20% of scaled video height, minimum 60px
                 bar_height = max(60, int(scale_height * BAR_HEIGHT_RATIO))
-                # Initial font size = 70% of bar height, minimum 20px
-                font_size = max(20, int(bar_height * FONT_SIZE_RATIO))
-                # Vertical padding = 10% of bar height, minimum 8px
-                vertical_padding = max(8, int(bar_height * BAR_PADDING_RATIO))
 
-                # Max text width (90% of video width for padding)
+                # Max text width = 90% of video width (leave padding)
                 max_text_width = int(scale_width * 0.90)
 
-                # Find longest word to ensure it fits
-                # Shrink font if any single word is too wide (can't wrap single words)
-                words = text.split()
-                longest_word = max(words, key=len) if words else text
+                # Start with large font (70% of bar height)
+                font_size = max(16, int(bar_height * FONT_SIZE_RATIO))
 
-                # Estimate: char width ≈ 0.6 * font_size for most fonts
-                # Shrink font until longest word fits
-                while font_size > 16:
-                    estimated_word_width = len(longest_word) * font_size * 0.6
-                    if estimated_word_width <= max_text_width:
+                # SHRINK font until text fits (NotSoBot style)
+                # Use conservative estimate: char_width ≈ 0.65 * font_size
+                while font_size > 12:
+                    estimated_width = len(text) * font_size * 0.65
+                    if estimated_width <= max_text_width:
                         break
                     font_size -= 2
 
-                # Calculate max chars per line based on width and font size
-                max_chars = int(max_text_width / (font_size * 0.5))
-                max_chars = max(max_chars, 8)  # At least 8 chars per line
-
-                # Wrap text into lines
-                lines = []
-                current_line = ""
-                for word in words:
-                    test_line = f"{current_line} {word}".strip() if current_line else word
-                    if len(test_line) <= max_chars:
-                        current_line = test_line
-                    else:
-                        if current_line:
-                            lines.append(current_line)
-                        current_line = word
-                if current_line:
-                    lines.append(current_line)
-                if not lines:
-                    lines = [text]
-
-                # Calculate bar height based on number of lines (expand to fit multiline)
-                line_spacing = int(font_size * LINE_SPACING_RATIO)
-                total_text_height = (font_size * len(lines)) + (line_spacing * (len(lines) - 1))
+                # Vertical padding
+                vertical_padding = max(8, int(bar_height * BAR_PADDING_RATIO))
+                total_text_height = font_size
                 min_bar_for_text = total_text_height + (vertical_padding * 2)
                 if min_bar_for_text > bar_height:
                     bar_height = min_bar_for_text
-                # Make bar height divisible by 2 for ffmpeg
-                bar_height = bar_height + (bar_height % 2)
+                bar_height = bar_height + (bar_height % 2)  # Make divisible by 2
 
-                # Calculate starting Y for text (centered in bar)
-                start_y = (bar_height - total_text_height) // 2
+                # Y position for text (centered in bar)
+                text_y = (bar_height - font_size) // 2
 
                 if position == "top":
-                    # Add padding at top for bar
                     filters.append(f"pad=iw:ih+{bar_height}:0:{bar_height}:color={bar_color_hex}")
-                    # Draw each line centered
-                    for i, line in enumerate(lines):
-                        escaped_line = line.replace("'", "'\\''").replace(":", "\\:")
-                        y_pos = start_y + (i * (font_size + line_spacing))
-                        filters.append(
-                            f"drawtext=text='{escaped_line}'{font_option}"
-                            f":fontsize={font_size}:fontcolor={text_color_hex}"
-                            f":x=(w-text_w)/2:y={y_pos}"
-                        )
-                else:  # bottom
-                    # Add padding at bottom for bar
+                    escaped_text = text.replace("'", "'\\''").replace(":", "\\:")
+                    filters.append(
+                        f"drawtext=text='{escaped_text}'{font_option}"
+                        f":fontsize={font_size}:fontcolor={text_color_hex}"
+                        f":x=(w-text_w)/2:y={text_y}"
+                    )
+                else:
                     filters.append(f"pad=iw:ih+{bar_height}:0:0:color={bar_color_hex}")
-                    # Draw each line centered
-                    for i, line in enumerate(lines):
-                        escaped_line = line.replace("'", "'\\''").replace(":", "\\:")
-                        y_pos = start_y + (i * (font_size + line_spacing))
-                        filters.append(
-                            f"drawtext=text='{escaped_line}'{font_option}"
-                            f":fontsize={font_size}:fontcolor={text_color_hex}"
-                            f":x=(w-text_w)/2:y=h-{bar_height}+{y_pos}"
-                        )
+                    escaped_text = text.replace("'", "'\\''").replace(":", "\\:")
+                    filters.append(
+                        f"drawtext=text='{escaped_text}'{font_option}"
+                        f":fontsize={font_size}:fontcolor={text_color_hex}"
+                        f":x=(w-text_w)/2:y=h-{bar_height}+{text_y}"
+                    )
+
+                log.tree("Video Text Layout", [
+                    ("Text", text[:30] + "..." if len(text) > 30 else text),
+                    ("Video Width", str(scale_width)),
+                    ("Font Size", str(font_size)),
+                ], emoji="📏")
 
             # Add watermark at bottom right only when text is added
-            # (preserves existing watermarks like quote images have)
             if text:
                 watermark_size = max(WATERMARK_MIN_FONT, min(WATERMARK_MAX_FONT, int(scale_width * WATERMARK_FONT_SIZE_RATIO)))
                 watermark_padding = max(8, int(scale_width * WATERMARK_PADDING_RATIO))
@@ -1031,7 +1029,7 @@ class ConvertService:
                 ("Size", f"{len(gif_bytes) / 1024:.1f} KB"),
                 ("Duration", f"{info.duration:.1f}s"),
                 ("FPS", GIF_FPS),
-            ], emoji="OK")
+            ], emoji="✅")
 
             return ConvertResult(success=True, gif_bytes=gif_bytes)
 
@@ -1165,7 +1163,7 @@ class ConvertService:
                 ("Frames", len(frames)),
                 ("Duration", f"{duration:.1f}s"),
                 ("Size", f"{total_width}x{max_height}"),
-            ], emoji="PREVIEW")
+            ], emoji="👁️")
 
             return output.getvalue()
 
@@ -1299,7 +1297,7 @@ class ConvertService:
                         ("Duration", f"{duration:.1f}s"),
                         ("Type", "Strip" if len(frames) >= 2 else "Thumbnail"),
                         ("Frames", str(len(frames))),
-                    ], emoji="PREVIEW")
+                    ], emoji="👁️")
 
             # Fallback to single thumbnail if strip failed
             if not preview_bytes and not is_short_clip:
@@ -1317,7 +1315,7 @@ class ConvertService:
                     log.tree("Video Preview Fallback", [
                         ("Duration", f"{duration:.1f}s"),
                         ("Type", "Single Thumbnail"),
-                    ], emoji="PREVIEW")
+                    ], emoji="👁️")
 
             return duration, preview_bytes
 

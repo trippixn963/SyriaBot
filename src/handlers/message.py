@@ -232,7 +232,7 @@ class MessageHandler(commands.Cog):
             ("ID", str(message.author.id)),
             ("Type", "Video" if is_video else "Image"),
             ("Size", f"{len(media_data) // 1024}KB"),
-        ], emoji="CONVERT")
+        ], emoji="🔄")
 
         await start_convert_editor(
             interaction_or_message=message,

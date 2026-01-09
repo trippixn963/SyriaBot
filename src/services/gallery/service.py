@@ -267,12 +267,8 @@ class GalleryService:
 
             embed = discord.Embed(
                 title=title,
-                description=f"Posted a new {media_type}",
+                description=f"<@{message.author.id}> posted a new {media_type}",
                 color=COLOR_GOLD
-            )
-            embed.set_author(
-                name=message.author.display_name,
-                icon_url=message.author.display_avatar.url
             )
             embed.set_thumbnail(url=message.author.display_avatar.url)
             set_footer(embed)

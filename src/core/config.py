@@ -119,10 +119,10 @@ class Config:
     # Database
     DATABASE_PATH: str = str(DATA_DIR / "syria.db")
 
-    # XP System
-    XP_MESSAGE_MIN: int = _get_env_int("SYRIA_XP_MESSAGE_MIN", 15)
-    XP_MESSAGE_MAX: int = _get_env_int("SYRIA_XP_MESSAGE_MAX", 25)
-    XP_VOICE_PER_MIN: int = _get_env_int("SYRIA_XP_VOICE_PER_MIN", 5)
+    # XP System (defaults match CLAUDE.md documentation)
+    XP_MESSAGE_MIN: int = _get_env_int("SYRIA_XP_MESSAGE_MIN", 8)
+    XP_MESSAGE_MAX: int = _get_env_int("SYRIA_XP_MESSAGE_MAX", 12)
+    XP_VOICE_PER_MIN: int = _get_env_int("SYRIA_XP_VOICE_PER_MIN", 3)
     XP_MESSAGE_COOLDOWN: int = _get_env_int("SYRIA_XP_MESSAGE_COOLDOWN", 60)
     XP_BOOSTER_MULTIPLIER: float = float(os.getenv("SYRIA_XP_BOOSTER_MULTIPLIER", "2.0"))
 
@@ -143,8 +143,8 @@ class Config:
     IMAGE_WEEKLY_LIMIT: int = _get_env_int("SYRIA_IMAGE_WEEKLY_LIMIT", 5)
 
     # Gallery Channel (media-only)
-    GALLERY_CHANNEL_ID: int = _get_env_int("SYRIA_GALLERY_CHANNEL_ID", 1408234733988483212)
-    MEMES_CHANNEL_ID: int = _get_env_int("SYRIA_MEMES_CHANNEL_ID", 1442153997610913812)
+    GALLERY_CHANNEL_ID: int = _get_env_int("SYRIA_GALLERY_CHANNEL_ID", 0)
+    MEMES_CHANNEL_ID: int = _get_env_int("SYRIA_MEMES_CHANNEL_ID", 0)
     GALLERY_HEART_EMOJI: str = "<:heart:1456779669805203539>"
 
     # Bump Reminder (Disboard)
@@ -155,6 +155,9 @@ class Config:
     CONFESSIONS_CHANNEL_ID: int = _get_env_int("SYRIA_CONFESSIONS_CHANNEL_ID", 0)
     CONFESSIONS_MOD_CHANNEL_ID: int = _get_env_int("SYRIA_CONFESSIONS_MOD_CHANNEL_ID", 0)
     CONFESSIONS_HEART_EMOJI: str = "<:heart:1456779669805203539>"
+
+    # XP API (for cross-bot XP integration)
+    XP_API_KEY: str = os.getenv("SYRIA_XP_API_KEY", "")
 
 
 config = Config()

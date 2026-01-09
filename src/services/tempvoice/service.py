@@ -552,11 +552,11 @@ class TempVoiceService:
             if channel:
                 await self._grant_text_access(channel, member)
                 # Owner rejoined - cancel pending transfer
-                if channel.id in self._pending_transfers:
-                    channel_info = db.get_temp_channel(channel.id)
-                    if channel_info and channel_info["owner_id"] == member.id:
-                        self._pending_transfers[channel.id].cancel()
-                        del self._pending_transfers[channel.id]
+                channel_info = db.get_temp_channel(channel.id)
+                if channel_info and channel_info["owner_id"] == member.id:
+                    task = self._pending_transfers.pop(channel.id, None)
+                    if task:
+                        task.cancel()
                         log.tree("Owner Rejoined", [
                             ("Channel", channel.name),
                             ("Owner", f"{member.name} ({member.display_name})"),
@@ -800,10 +800,10 @@ class TempVoiceService:
         """
         guild_id = guild.id
 
-        # Cancel any existing pending reorder for this guild
-        was_pending = guild_id in self._pending_reorders
-        if was_pending:
-            self._pending_reorders[guild_id].cancel()
+        # Cancel any existing pending reorder for this guild (race-safe)
+        existing_task = self._pending_reorders.pop(guild_id, None)
+        if existing_task:
+            existing_task.cancel()
             log.tree("Reorder Rescheduled", [
                 ("Guild", guild.name),
                 ("Reason", "New deletion during debounce"),
@@ -813,7 +813,7 @@ class TempVoiceService:
         task = asyncio.create_task(self._debounced_reorder(guild))
         self._pending_reorders[guild_id] = task
 
-        if not was_pending:
+        if not existing_task:
             log.tree("Reorder Scheduled", [
                 ("Guild", guild.name),
                 ("Delay", f"{REORDER_DEBOUNCE_DELAY}s"),
