@@ -17,7 +17,7 @@ from src.services.convert.service import (
     TEXT_COLOR,
     WAND_AVAILABLE,
 )
-from src.services.convert.views import ConvertView, ConvertEditorView
+from src.services.convert.views import ConvertView, VideoConvertView, start_convert_editor
 
 __all__ = [
     "ConvertService",
@@ -25,7 +25,8 @@ __all__ = [
     "VideoInfo",
     "convert_service",
     "ConvertView",
-    "ConvertEditorView",
+    "VideoConvertView",
+    "start_convert_editor",
     "BAR_COLOR",
     "TEXT_COLOR",
     "WAND_AVAILABLE",
