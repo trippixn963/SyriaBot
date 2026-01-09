@@ -10,6 +10,10 @@ import discord
 from discord import ui
 
 from src.core.config import config
+from src.core.colors import (
+    EMOJI_LOCK, EMOJI_UNLOCK, EMOJI_LIMIT, EMOJI_RENAME, EMOJI_ALLOW,
+    EMOJI_BLOCK, EMOJI_KICK, EMOJI_CLAIM, EMOJI_TRANSFER, EMOJI_DELETE,
+)
 from src.core.constants import (
     TEMPVOICE_JOIN_COOLDOWN,
     TEMPVOICE_OWNER_LEAVE_TRANSFER_DELAY,
@@ -304,10 +308,10 @@ class TempVoiceService:
 
         # Lock status
         if is_locked:
-            status = "<:lock:1455709111684694107> Locked"
+            status = f"{EMOJI_LOCK} Locked"
             color = 0xf04747  # Red
         else:
-            status = "<:unlock:1455709112309514290> Unlocked"
+            status = f"{EMOJI_UNLOCK} Unlocked"
             color = 0x43b581  # Green
 
         embed = discord.Embed(
@@ -356,22 +360,22 @@ class TempVoiceService:
         view = ui.View(timeout=None)
 
         # Row 1
-        lock_emoji = "<:lock:1455709111684694107>" if is_locked else "<:unlock:1455709112309514290>"
+        lock_emoji = EMOJI_LOCK if is_locked else EMOJI_UNLOCK
         lock_label = "Locked" if is_locked else "Unlocked"
 
         view.add_item(ui.Button(label=lock_label, emoji=lock_emoji, style=discord.ButtonStyle.secondary, custom_id="tv_lock", row=0))
-        view.add_item(ui.Button(label="Limit", emoji="<:limit:1455709299732123762>", style=discord.ButtonStyle.secondary, custom_id="tv_limit", row=0))
-        view.add_item(ui.Button(label="Rename", emoji="<:rename:1455709387711578394>", style=discord.ButtonStyle.secondary, custom_id="tv_rename", row=0))
+        view.add_item(ui.Button(label="Limit", emoji=EMOJI_LIMIT, style=discord.ButtonStyle.secondary, custom_id="tv_limit", row=0))
+        view.add_item(ui.Button(label="Rename", emoji=EMOJI_RENAME, style=discord.ButtonStyle.secondary, custom_id="tv_rename", row=0))
 
         # Row 2
-        view.add_item(ui.Button(label="Allow", emoji="<:allow:1455709499792031744>", style=discord.ButtonStyle.secondary, custom_id="tv_permit", row=1))
-        view.add_item(ui.Button(label="Block", emoji="<:block:1455709662316986539>", style=discord.ButtonStyle.secondary, custom_id="tv_block", row=1))
-        view.add_item(ui.Button(label="Kick", emoji="<:kick:1455709879976198361>", style=discord.ButtonStyle.secondary, custom_id="tv_kick", row=1))
+        view.add_item(ui.Button(label="Allow", emoji=EMOJI_ALLOW, style=discord.ButtonStyle.secondary, custom_id="tv_permit", row=1))
+        view.add_item(ui.Button(label="Block", emoji=EMOJI_BLOCK, style=discord.ButtonStyle.secondary, custom_id="tv_block", row=1))
+        view.add_item(ui.Button(label="Kick", emoji=EMOJI_KICK, style=discord.ButtonStyle.secondary, custom_id="tv_kick", row=1))
 
         # Row 3
-        view.add_item(ui.Button(label="Claim", emoji="<:claim:1455709985467011173>", style=discord.ButtonStyle.secondary, custom_id="tv_claim", row=2))
-        view.add_item(ui.Button(label="Transfer", emoji="<:transfer:1455710226429902858>", style=discord.ButtonStyle.secondary, custom_id="tv_transfer", row=2))
-        view.add_item(ui.Button(label="Delete", emoji="<:delete:1455710362539397192>", style=discord.ButtonStyle.secondary, custom_id="tv_delete", row=2))
+        view.add_item(ui.Button(label="Claim", emoji=EMOJI_CLAIM, style=discord.ButtonStyle.secondary, custom_id="tv_claim", row=2))
+        view.add_item(ui.Button(label="Transfer", emoji=EMOJI_TRANSFER, style=discord.ButtonStyle.secondary, custom_id="tv_transfer", row=2))
+        view.add_item(ui.Button(label="Delete", emoji=EMOJI_DELETE, style=discord.ButtonStyle.secondary, custom_id="tv_delete", row=2))
 
         return view
 
@@ -380,7 +384,7 @@ class TempVoiceService:
         for item in self.control_panel.children:
             if item.custom_id == "tv_lock":
                 item.style = discord.ButtonStyle.secondary
-                item.emoji = "<:lock:1455709111684694107>" if is_locked else "<:unlock:1455709112309514290>"
+                item.emoji = EMOJI_LOCK if is_locked else EMOJI_UNLOCK
                 item.label = "Locked" if is_locked else "Unlocked"
                 break
 
@@ -1476,7 +1480,7 @@ class TempVoiceService:
             # Notify new owner in channel chat
             try:
                 notification = await channel.send(
-                    f"<:transfer:1455710226429902858> {new_owner.mention} you are now the owner of this channel!\n"
+                    f"{EMOJI_TRANSFER} {new_owner.mention} you are now the owner of this channel!\n"
                     f"*The previous owner left and you were here the longest.*"
                 )
                 # Auto-delete notification after 30 seconds

@@ -104,7 +104,8 @@ class ConvertCog(commands.Cog):
     ) -> None:
         """Convert an image or video with interactive editor."""
         # Check rate limit first (before deferring to show embed properly)
-        if not await check_rate_limit(interaction.user, "convert", interaction=interaction):
+        allowed, usage = await check_rate_limit(interaction.user, "convert", interaction=interaction)
+        if not allowed:
             return
 
         await interaction.response.defer()

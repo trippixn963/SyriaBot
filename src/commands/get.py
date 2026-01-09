@@ -17,7 +17,7 @@ from typing import Optional
 
 from src.core.config import config
 from src.core.logger import log
-from src.core.colors import COLOR_ERROR, COLOR_WARNING, COLOR_GOLD
+from src.core.colors import COLOR_ERROR, COLOR_WARNING, COLOR_GOLD, EMOJI_SAVE, EMOJI_TRANSFER
 from src.core.constants import VIEW_TIMEOUT_DEFAULT
 from src.utils.footer import set_footer
 from src.utils.http import http_session
@@ -147,7 +147,7 @@ class DownloadView(ui.View):
                     ("Error", str(e)[:50]),
                 ], emoji="⚠️")
 
-    @ui.button(label="Save", style=discord.ButtonStyle.secondary, emoji="<:save:1455776703468273825>")
+    @ui.button(label="Save", style=discord.ButtonStyle.secondary, emoji=EMOJI_SAVE)
     async def save(self, interaction: discord.Interaction, button: ui.Button) -> None:
         """Download, send as public .gif, delete original."""
         if self.requester_id and interaction.user.id != self.requester_id:
@@ -222,7 +222,7 @@ class AvatarToggleView(ui.View):
                     ("Error", str(e)[:50]),
                 ], emoji="⚠️")
 
-    @ui.button(label="Save", style=discord.ButtonStyle.secondary, emoji="<:save:1455776703468273825>", row=0)
+    @ui.button(label="Save", style=discord.ButtonStyle.secondary, emoji=EMOJI_SAVE, row=0)
     async def save(self, interaction: discord.Interaction, button: ui.Button) -> None:
         """Download, send as public .gif, delete original."""
         if self.requester_id and interaction.user.id != self.requester_id:
@@ -251,7 +251,7 @@ class AvatarToggleView(ui.View):
             self.message, self.target.name
         )
 
-    @ui.button(label="View Global", style=discord.ButtonStyle.secondary, emoji="<:transfer:1455710226429902858>", row=0)
+    @ui.button(label="View Global", style=discord.ButtonStyle.secondary, emoji=EMOJI_TRANSFER, row=0)
     async def toggle_btn(self, interaction: discord.Interaction, button: ui.Button) -> None:
         """Toggle between server and global avatar."""
         self.showing_server = not self.showing_server
@@ -331,7 +331,7 @@ class BannerToggleView(ui.View):
                     ("Error", str(e)[:50]),
                 ], emoji="⚠️")
 
-    @ui.button(label="Save", style=discord.ButtonStyle.secondary, emoji="<:save:1455776703468273825>", row=0)
+    @ui.button(label="Save", style=discord.ButtonStyle.secondary, emoji=EMOJI_SAVE, row=0)
     async def save(self, interaction: discord.Interaction, button: ui.Button) -> None:
         """Download, send as public .gif, delete original."""
         if self.requester_id and interaction.user.id != self.requester_id:
@@ -360,7 +360,7 @@ class BannerToggleView(ui.View):
             self.message, self.target.name
         )
 
-    @ui.button(label="View Global", style=discord.ButtonStyle.secondary, emoji="<:transfer:1455710226429902858>", row=0)
+    @ui.button(label="View Global", style=discord.ButtonStyle.secondary, emoji=EMOJI_TRANSFER, row=0)
     async def toggle_btn(self, interaction: discord.Interaction, button: ui.Button) -> None:
         """Toggle between server and global banner."""
         self.showing_server = not self.showing_server

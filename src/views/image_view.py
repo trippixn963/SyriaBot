@@ -16,15 +16,10 @@ from discord import ui
 from typing import Optional, Tuple
 
 from src.core.logger import log
-from src.core.colors import COLOR_SYRIA_GREEN, COLOR_SYRIA_GOLD
+from src.core.colors import COLOR_SYRIA_GREEN, COLOR_SYRIA_GOLD, EMOJI_SAVE, EMOJI_DELETE
 from src.services.image_service import ImageResult
 from src.utils.footer import set_footer
 from src.utils.http import http_session
-
-
-# Custom emojis
-SAVE_EMOJI = "<:save:1455776703468273825>"
-DELETE_EMOJI = "<:delete:1455710362539397192>"
 
 
 # =============================================================================
@@ -306,7 +301,7 @@ class ImageView(ui.View):
             self.current_index -= 1
         await self._update_message(interaction, "prev")
 
-    @ui.button(label="", emoji=discord.PartialEmoji.from_str(SAVE_EMOJI), style=discord.ButtonStyle.secondary, custom_id="download")
+    @ui.button(label="", emoji=discord.PartialEmoji.from_str(EMOJI_SAVE), style=discord.ButtonStyle.secondary, custom_id="download")
     async def download_button(self, interaction: discord.Interaction, button: ui.Button) -> None:
         """Save image using cached data, send as public .gif, delete original."""
         await interaction.response.defer()
@@ -363,7 +358,7 @@ class ImageView(ui.View):
             ], emoji="❌")
             await interaction.followup.send("Failed to save image.", ephemeral=True)
 
-    @ui.button(label="", emoji=discord.PartialEmoji.from_str(DELETE_EMOJI), style=discord.ButtonStyle.secondary, custom_id="delete")
+    @ui.button(label="", emoji=discord.PartialEmoji.from_str(EMOJI_DELETE), style=discord.ButtonStyle.secondary, custom_id="delete")
     async def delete_button(self, interaction: discord.Interaction, button: ui.Button) -> None:
         """Delete the message."""
         await interaction.response.defer()

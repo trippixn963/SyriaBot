@@ -7,7 +7,11 @@ from typing import TYPE_CHECKING, Optional
 import discord
 from discord import ui
 
-from src.core.colors import COLOR_SUCCESS, COLOR_ERROR, COLOR_WARNING, COLOR_NEUTRAL, COLOR_BOOST
+from src.core.colors import (
+    COLOR_SUCCESS, COLOR_ERROR, COLOR_WARNING, COLOR_NEUTRAL, COLOR_BOOST,
+    EMOJI_LOCK, EMOJI_UNLOCK, EMOJI_LIMIT, EMOJI_RENAME, EMOJI_ALLOW,
+    EMOJI_BLOCK, EMOJI_KICK, EMOJI_CLAIM, EMOJI_TRANSFER, EMOJI_DELETE,
+)
 from src.core.constants import CLAIM_APPROVAL_TIMEOUT
 from src.core.logger import log
 from src.services.database import db
@@ -58,7 +62,7 @@ class ClaimApprovalView(ui.View):
                 ("Channel", self.channel.name),
             ])
 
-    @ui.button(label="Approve", style=discord.ButtonStyle.secondary, emoji="<:allow:1455709499792031744>")
+    @ui.button(label="Approve", style=discord.ButtonStyle.secondary, emoji=EMOJI_ALLOW)
     async def approve(self, interaction: discord.Interaction, button: ui.Button):
         try:
             # Only owner can approve
@@ -174,7 +178,7 @@ class ClaimApprovalView(ui.View):
 
         self.stop()
 
-    @ui.button(label="Deny", style=discord.ButtonStyle.secondary, emoji="<:block:1455709662316986539>")
+    @ui.button(label="Deny", style=discord.ButtonStyle.secondary, emoji=EMOJI_BLOCK)
     async def deny(self, interaction: discord.Interaction, button: ui.Button):
         try:
             # Only owner can deny
@@ -255,7 +259,7 @@ class TempVoiceControlPanel(ui.View):
         return channel
 
     # Row 1: Lock, Limit, Rename
-    @ui.button(label="Locked", emoji="<:lock:1455709111684694107>", style=discord.ButtonStyle.secondary, custom_id="tv_lock", row=0)
+    @ui.button(label="Locked", emoji=EMOJI_LOCK, style=discord.ButtonStyle.secondary, custom_id="tv_lock", row=0)
     async def lock_button(self, interaction: discord.Interaction, button: ui.Button):
         """Toggle lock/unlock."""
         try:
@@ -306,7 +310,7 @@ class TempVoiceControlPanel(ui.View):
             # Send response first, then do the work
             if new_locked:
                 embed = discord.Embed(
-                    description="<:lock:1455709111684694107> Channel is now **locked**",
+                    description=f"{EMOJI_LOCK} Channel is now **locked**",
                     color=COLOR_ERROR
                 )
                 set_footer(embed)
@@ -314,7 +318,7 @@ class TempVoiceControlPanel(ui.View):
                 await channel.set_permissions(everyone, connect=False, send_messages=False, read_message_history=False)
             else:
                 embed = discord.Embed(
-                    description="<:unlock:1455709112309514290> Channel is now **unlocked**",
+                    description=f"{EMOJI_UNLOCK} Channel is now **unlocked**",
                     color=COLOR_SUCCESS
                 )
                 set_footer(embed)
@@ -357,7 +361,7 @@ class TempVoiceControlPanel(ui.View):
                 set_footer(embed)
                 await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @ui.button(label="Limit", emoji="<:limit:1455709299732123762>", style=discord.ButtonStyle.secondary, custom_id="tv_limit", row=0)
+    @ui.button(label="Limit", emoji=EMOJI_LIMIT, style=discord.ButtonStyle.secondary, custom_id="tv_limit", row=0)
     async def limit_button(self, interaction: discord.Interaction, button: ui.Button):
         """Set user limit."""
         try:
@@ -383,7 +387,7 @@ class TempVoiceControlPanel(ui.View):
                 set_footer(embed)
                 await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @ui.button(label="Rename", emoji="<:rename:1455709387711578394>", style=discord.ButtonStyle.secondary, custom_id="tv_rename", row=0)
+    @ui.button(label="Rename", emoji=EMOJI_RENAME, style=discord.ButtonStyle.secondary, custom_id="tv_rename", row=0)
     async def rename_button(self, interaction: discord.Interaction, button: ui.Button):
         """Rename channel - Booster only."""
         try:
@@ -451,7 +455,7 @@ class TempVoiceControlPanel(ui.View):
                 await interaction.response.send_message(embed=embed, ephemeral=True)
 
     # Row 2: Permit, Block, Kick
-    @ui.button(label="Allow", emoji="<:allow:1455709499792031744>", style=discord.ButtonStyle.secondary, custom_id="tv_permit", row=1)
+    @ui.button(label="Allow", emoji=EMOJI_ALLOW, style=discord.ButtonStyle.secondary, custom_id="tv_permit", row=1)
     async def permit_button(self, interaction: discord.Interaction, button: ui.Button):
         """Permit/unpermit a user."""
         try:
@@ -479,7 +483,7 @@ class TempVoiceControlPanel(ui.View):
                 set_footer(embed)
                 await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @ui.button(label="Block", emoji="<:block:1455709662316986539>", style=discord.ButtonStyle.secondary, custom_id="tv_block", row=1)
+    @ui.button(label="Block", emoji=EMOJI_BLOCK, style=discord.ButtonStyle.secondary, custom_id="tv_block", row=1)
     async def block_button(self, interaction: discord.Interaction, button: ui.Button):
         """Block/unblock a user."""
         try:
@@ -507,7 +511,7 @@ class TempVoiceControlPanel(ui.View):
                 set_footer(embed)
                 await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @ui.button(label="Kick", emoji="<:kick:1455709879976198361>", style=discord.ButtonStyle.secondary, custom_id="tv_kick", row=1)
+    @ui.button(label="Kick", emoji=EMOJI_KICK, style=discord.ButtonStyle.secondary, custom_id="tv_kick", row=1)
     async def kick_button(self, interaction: discord.Interaction, button: ui.Button):
         """Kick a user."""
         try:
@@ -536,7 +540,7 @@ class TempVoiceControlPanel(ui.View):
                 await interaction.response.send_message(embed=embed, ephemeral=True)
 
     # Row 3: Claim, Transfer, Delete
-    @ui.button(label="Claim", emoji="<:claim:1455709985467011173>", style=discord.ButtonStyle.secondary, custom_id="tv_claim", row=2)
+    @ui.button(label="Claim", emoji=EMOJI_CLAIM, style=discord.ButtonStyle.secondary, custom_id="tv_claim", row=2)
     async def claim_button(self, interaction: discord.Interaction, button: ui.Button):
         """Request to claim channel - requires owner approval."""
         try:
@@ -671,7 +675,7 @@ class TempVoiceControlPanel(ui.View):
                 set_footer(embed)
                 await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @ui.button(label="Transfer", emoji="<:transfer:1455710226429902858>", style=discord.ButtonStyle.secondary, custom_id="tv_transfer", row=2)
+    @ui.button(label="Transfer", emoji=EMOJI_TRANSFER, style=discord.ButtonStyle.secondary, custom_id="tv_transfer", row=2)
     async def transfer_button(self, interaction: discord.Interaction, button: ui.Button):
         """Transfer ownership."""
         try:
@@ -699,7 +703,7 @@ class TempVoiceControlPanel(ui.View):
                 set_footer(embed)
                 await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @ui.button(label="Delete", emoji="<:delete:1455710362539397192>", style=discord.ButtonStyle.secondary, custom_id="tv_delete", row=2)
+    @ui.button(label="Delete", emoji=EMOJI_DELETE, style=discord.ButtonStyle.secondary, custom_id="tv_delete", row=2)
     async def delete_button(self, interaction: discord.Interaction, button: ui.Button):
         """Delete channel."""
         try:

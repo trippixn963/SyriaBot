@@ -17,7 +17,7 @@ from discord.ext import commands
 
 from src.core.logger import log
 from src.core.config import config
-from src.core.colors import COLOR_ERROR, COLOR_WARNING
+from src.core.colors import COLOR_ERROR, COLOR_WARNING, EMOJI_SAVE
 from src.core.constants import DELETE_DELAY_MEDIUM
 from src.services.downloader import downloader
 from src.services.database import db
@@ -177,12 +177,12 @@ async def handle_download(
     try:
         if is_interaction:
             progress_msg = await interaction_or_message.followup.send(
-                f"<:save:1455776703468273825> Downloading from **{platform.title()}**...",
+                f"{EMOJI_SAVE} Downloading from **{platform.title()}**...",
                 wait=True
             )
         else:
             progress_msg = await channel.send(
-                f"<:save:1455776703468273825> Downloading from **{platform.title()}**..."
+                f"{EMOJI_SAVE} Downloading from **{platform.title()}**..."
             )
         log.tree("Download Progress Sent", [
             ("User", f"{user.name}"),
@@ -201,7 +201,7 @@ async def handle_download(
     if progress_msg and result.success and len(result.files) > 0:
         try:
             await progress_msg.edit(
-                content=f"<:save:1455776703468273825> Processing **{len(result.files)}** file(s)..."
+                content=f"{EMOJI_SAVE} Processing **{len(result.files)}** file(s)..."
             )
             log.tree("Download Progress Updated", [
                 ("User", f"{user.name}"),

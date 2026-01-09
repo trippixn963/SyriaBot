@@ -166,7 +166,8 @@ class ReplyHandler:
             ("Channel", message.channel.name if hasattr(message.channel, 'name') else "DM"),
         ], emoji="🔄")
 
-        if not await check_rate_limit(message.author, "convert", message=message):
+        allowed, usage = await check_rate_limit(message.author, "convert", message=message)
+        if not allowed:
             return
 
         ref = message.reference
@@ -339,7 +340,8 @@ class ReplyHandler:
             ("ID", str(message.author.id)),
         ], emoji="💬")
 
-        if not await check_rate_limit(message.author, "quote", message=message):
+        allowed, usage = await check_rate_limit(message.author, "quote", message=message)
+        if not allowed:
             return
 
         ref = message.reference

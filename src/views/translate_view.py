@@ -14,7 +14,7 @@ from typing import Optional
 
 from src.core.logger import log
 from src.core.config import config
-from src.core.colors import COLOR_GOLD, COLOR_SUCCESS
+from src.core.colors import COLOR_GOLD, COLOR_SUCCESS, EMOJI_AI
 from src.services.translate_service import translate_service, LANGUAGES
 from src.utils.footer import set_footer
 
@@ -30,9 +30,6 @@ PRIORITY_LANGUAGES = [
     ("tr", "Turkish", "🇹🇷"),
     ("zh-CN", "Chinese", "🇨🇳"),
 ]
-
-# Custom emoji IDs
-AI_EMOJI = "<:AI:1456695002271977515>"
 
 
 class LanguageSelect(ui.Select):
@@ -154,7 +151,7 @@ class TranslateView(ui.View):
         # AI button (boosters only) - same row as language buttons
         ai_button = ui.Button(
             label="AI",
-            emoji=discord.PartialEmoji.from_str(AI_EMOJI),
+            emoji=discord.PartialEmoji.from_str(EMOJI_AI),
             style=discord.ButtonStyle.secondary,
             custom_id="translate_ai",
             row=1,
@@ -383,7 +380,7 @@ def create_translate_embed(result, is_ai: bool = False) -> tuple[discord.Embed, 
     import io
 
     if is_ai:
-        title = f"{AI_EMOJI} {result.source_flag} → {result.target_flag} AI Translation"
+        title = f"{EMOJI_AI} {result.source_flag} → {result.target_flag} AI Translation"
         color = COLOR_SUCCESS  # Green for AI
     else:
         title = f"{result.source_flag} → {result.target_flag} Translation"

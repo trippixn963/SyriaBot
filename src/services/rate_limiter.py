@@ -208,6 +208,12 @@ class RateLimiter:
         usage = self.get_usage(user_id, action_type)
         return max(0, limit - usage)
 
+    def get_usage_display(self, user_id: int, action_type: str) -> str:
+        """Get a display string showing current usage (e.g., '3/10')."""
+        limit = WEEKLY_LIMITS.get(action_type, 0)
+        usage = self.get_usage(user_id, action_type)
+        return f"{usage}/{limit}"
+
     def check_limit(self, member: discord.Member, action_type: str) -> Tuple[bool, int, str]:
         """
         Check if a user can perform an action.
@@ -435,7 +441,7 @@ async def check_rate_limit(
     action_type: str,
     interaction: Optional[discord.Interaction] = None,
     message: Optional[discord.Message] = None,
-) -> bool:
+) -> Tuple[bool, str]:
     """
     Check and consume rate limit for an action.
 
@@ -446,7 +452,9 @@ async def check_rate_limit(
         message: Discord message (optional, for reply-based commands)
 
     Returns:
-        True if allowed, False if limit reached
+        Tuple of (allowed, usage_display)
+        - allowed: True if action permitted, False if limit reached
+        - usage_display: String like "3/10" or "∞" for unlimited
     """
     rate_limiter = get_rate_limiter()
 
@@ -460,13 +468,17 @@ async def check_rate_limit(
             interaction=interaction,
             message=message,
         )
-        return False
+        limit = WEEKLY_LIMITS.get(action_type, 0)
+        return False, f"{limit}/{limit}"
 
     # Consume one use (only if not exempt)
     if remaining != -1:
         rate_limiter.consume(member.id, action_type)
+        usage_display = rate_limiter.get_usage_display(member.id, action_type)
+    else:
+        usage_display = "∞"
 
-    return True
+    return True, usage_display
 
 
 __all__ = [

@@ -11,6 +11,7 @@ Server: discord.gg/syria
 import discord
 from discord.ext import commands
 
+from src.core.config import config
 from src.core.logger import log
 from src.utils.footer import init_footer
 
@@ -21,6 +22,26 @@ class ReadyHandler(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         """Initialize the ready handler with bot reference."""
         self.bot = bot
+
+    def _log_feature_status(self) -> None:
+        """Log enabled/disabled features based on configuration."""
+        features = []
+
+        # Core features
+        features.append(("TempVoice", "✅" if config.VC_CREATOR_CHANNEL_ID else "❌"))
+        features.append(("XP System", "✅" if config.XP_ROLE_REWARDS else "❌"))
+        features.append(("Confessions", "✅" if config.CONFESSIONS_CHANNEL_ID else "❌"))
+        features.append(("Gallery", "✅" if config.GALLERY_CHANNEL_ID else "❌"))
+        features.append(("Bump Reminder", "✅" if config.BUMP_CHANNEL_ID else "❌"))
+        features.append(("Fun Commands", "✅" if config.FUN_COMMANDS_CHANNEL_ID else "❌"))
+
+        # API-dependent features
+        features.append(("Weather", "✅" if config.OPENWEATHER_API_KEY else "❌"))
+        features.append(("Translation", "✅" if config.DEEPL_API_KEY else "❌"))
+        features.append(("Image Search", "✅" if config.GOOGLE_API_KEY else "❌"))
+        features.append(("AI Chat", "✅" if config.OPENAI_API_KEY else "❌"))
+
+        log.tree("Feature Status", features, emoji="📋")
 
     @commands.Cog.listener()
     async def on_ready(self) -> None:
@@ -33,6 +54,9 @@ class ReadyHandler(commands.Cog):
             latency=self.bot.latency * 1000,
         )
 
+        # Log feature status
+        self._log_feature_status()
+
         # Initialize footer (cache developer avatar)
         # Note: init_footer() logs its own status with Avatar Cached: Yes/No
         try:
@@ -42,8 +66,6 @@ class ReadyHandler(commands.Cog):
 
         # Sync slash commands (global + guild-specific)
         try:
-            from src.core.config import config
-
             # Sync global commands
             global_synced = await self.bot.tree.sync()
 

@@ -75,16 +75,37 @@ class FunHandler:
                 pass
 
         embed = discord.Embed(
-            title="Fun Commands",
-            description=(
-                "`ship @user1 @user2` — Check compatibility\n"
-                "`simp @user` — Simp meter\n"
-                "`howgay @user` — Gay meter\n"
-                "`howsmart @user` — Smart meter\n"
-                "`bodyfat @user` — Body fat %"
-            ),
+            title="🎮 Commands Channel",
+            description="**⚠️ This channel does not earn XP.**",
             color=COLOR_SYRIA_GREEN
         )
+
+        # Fun commands
+        embed.add_field(
+            name="📊 Fun Commands",
+            value=(
+                "`ship @user @user` — Compatibility %\n"
+                "`simp @user` — Simp meter\n"
+                "`howgay @user` — Gay meter\n"
+                "`howsmart @user` — IQ meter\n"
+                "`bodyfat @user` — Body fat %"
+            ),
+            inline=False
+        )
+
+        # Action commands
+        embed.add_field(
+            name="🎬 Action Commands",
+            value=(
+                "`hug` `kiss` `pat` `cuddle` `poke`\n"
+                "`slap` `punch` `kick` `bonk` `bite`\n"
+                "`wave` `wink` `highfive` `handhold`\n"
+                "`cry` `smile` `dance` `laugh` `sleep`"
+            ),
+            inline=False
+        )
+
+        embed.set_footer(text="Mention users to target them • Self-target if no mention")
         set_footer(embed)
 
         sticky_msg = await channel.send(embed=embed)

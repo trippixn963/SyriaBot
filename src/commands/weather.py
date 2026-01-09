@@ -17,7 +17,7 @@ import aiohttp
 
 from src.core.config import config
 from src.core.logger import log
-from src.core.colors import COLOR_GOLD
+from src.core.colors import COLOR_GOLD, EMOJI_TRANSFER
 from src.core.constants import VIEW_TIMEOUT_DEFAULT
 from src.utils.footer import set_footer
 
@@ -345,7 +345,7 @@ class WeatherView(discord.ui.View):
 
         return embed
 
-    @discord.ui.button(label="°C / °F", style=discord.ButtonStyle.secondary, emoji="<:transfer:1455710226429902858>")
+    @discord.ui.button(label="°C / °F", style=discord.ButtonStyle.secondary, emoji=EMOJI_TRANSFER)
     async def toggle_unit(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Toggle between Celsius and Fahrenheit."""
         # Only allow the original user to toggle

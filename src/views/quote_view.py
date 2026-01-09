@@ -15,10 +15,7 @@ from discord import ui
 from typing import Optional
 
 from src.core.logger import log
-
-
-# Custom emoji ID
-SAVE_EMOJI = "<:save:1455776703468273825>"
+from src.core.colors import EMOJI_SAVE
 
 
 class QuoteView(ui.View):
@@ -37,7 +34,7 @@ class QuoteView(ui.View):
 
     @ui.button(
         label="Save",
-        emoji=discord.PartialEmoji.from_str(SAVE_EMOJI),
+        emoji=discord.PartialEmoji.from_str(EMOJI_SAVE),
         style=discord.ButtonStyle.secondary,
         custom_id="quote_save",
     )

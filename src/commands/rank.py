@@ -16,7 +16,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from src.core.config import config
-from src.core.colors import COLOR_GOLD
+from src.core.colors import COLOR_GOLD, EMOJI_LEADERBOARD
 from src.core.logger import log
 from src.services.database import db
 from src.utils.footer import set_footer
@@ -63,8 +63,8 @@ class LeaderboardView(discord.ui.View):
         super().__init__(timeout=None)
         self.add_item(discord.ui.Button(
             label="Stats & Leaderboard",
-            emoji=discord.PartialEmoji.from_str("<:leaderboard:1456582433033162927>"),
-            url=f"https://trippixn.com/syria/leaderboard/{user_id}",
+            emoji=discord.PartialEmoji.from_str(EMOJI_LEADERBOARD),
+            url=f"{config.LEADERBOARD_BASE_URL}/{user_id}",
         ))
 
 

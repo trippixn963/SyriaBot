@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 import discord
 from discord import ui
 
-from src.core.colors import COLOR_SUCCESS, COLOR_ERROR, COLOR_WARNING, COLOR_NEUTRAL, COLOR_BOOST
+from src.core.colors import COLOR_SUCCESS, COLOR_ERROR, COLOR_WARNING, COLOR_NEUTRAL, COLOR_BOOST, EMOJI_ALLOW
 from src.core.config import config
 from src.core.constants import SELECT_TIMEOUT_DEFAULT
 from src.core.logger import log
@@ -54,7 +54,7 @@ class ConfirmView(ui.View):
             ("Channel", self.channel.name if self.channel else "Unknown"),
         ], emoji="⏳")
 
-    @ui.button(label="Confirm", style=discord.ButtonStyle.secondary, emoji="<:allow:1455709499792031744>")
+    @ui.button(label="Confirm", style=discord.ButtonStyle.secondary, emoji=EMOJI_ALLOW)
     async def confirm(self, interaction: discord.Interaction, button: ui.Button):
         self.confirmed = True
         self.stop()

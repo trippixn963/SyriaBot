@@ -21,6 +21,7 @@ from src.core.colors import (
     COLOR_ERROR, COLOR_WARNING, COLOR_GOLD,
     EMOJI_WHITE, EMOJI_BLACK, EMOJI_RED, EMOJI_BLUE,
     EMOJI_GREEN, EMOJI_YELLOW, EMOJI_PURPLE, EMOJI_PINK,
+    EMOJI_RENAME, EMOJI_SAVE, EMOJI_BLOCK,
 )
 from src.core.logger import log
 from src.services.convert_service import convert_service
@@ -378,13 +379,13 @@ class ConvertView(ui.View):
     # Buttons - Row 1
     # ==========================================================================
 
-    @ui.button(label="Edit", emoji="<:rename:1455709387711578394>", style=discord.ButtonStyle.secondary, row=1)
+    @ui.button(label="Edit", emoji=EMOJI_RENAME, style=discord.ButtonStyle.secondary, row=1)
     async def edit_text_button(self, interaction: discord.Interaction, button: ui.Button) -> None:
         """Open modal to edit caption text."""
         modal = TextInputModal(self.settings.text, self)
         await interaction.response.send_modal(modal)
 
-    @ui.button(label="Save", emoji="<:save:1455776703468273825>", style=discord.ButtonStyle.secondary, row=1)
+    @ui.button(label="Save", emoji=EMOJI_SAVE, style=discord.ButtonStyle.secondary, row=1)
     async def download_button(self, interaction: discord.Interaction, button: ui.Button) -> None:
         """Download the final result."""
         await interaction.response.defer()
@@ -464,7 +465,7 @@ class ConvertView(ui.View):
 
         self.stop()
 
-    @ui.button(label="Cancel", emoji="<:block:1455709662316986539>", style=discord.ButtonStyle.secondary, row=1)
+    @ui.button(label="Cancel", emoji=EMOJI_BLOCK, style=discord.ButtonStyle.secondary, row=1)
     async def cancel_button(self, interaction: discord.Interaction, button: ui.Button) -> None:
         """Cancel and delete the editor."""
         await interaction.response.defer()
@@ -617,23 +618,32 @@ class VideoConvertView(ui.View):
     # Buttons - Row 1
     # ==========================================================================
 
-    @ui.button(label="Edit", emoji="<:rename:1455709387711578394>", style=discord.ButtonStyle.secondary, row=1)
+    @ui.button(label="Edit", emoji=EMOJI_RENAME, style=discord.ButtonStyle.secondary, row=1)
     async def edit_text_button(self, interaction: discord.Interaction, button: ui.Button) -> None:
         """Open modal to edit caption text."""
         modal = TextInputModal(self.settings.text, self, "update_embed")
         await interaction.response.send_modal(modal)
 
-    @ui.button(label="Save", emoji="<:save:1455776703468273825>", style=discord.ButtonStyle.secondary, row=1)
+    @ui.button(label="Save", emoji=EMOJI_SAVE, style=discord.ButtonStyle.secondary, row=1)
     async def convert_button(self, interaction: discord.Interaction, button: ui.Button) -> None:
         """Convert the video to GIF."""
         self._processing = True
 
         await interaction.response.defer()
 
-        # Disable all buttons while processing (gray out)
+        # Disable all buttons and show processing status
         for item in self.children:
             item.disabled = True
-        await interaction.message.edit(view=self)
+
+        processing_embed = discord.Embed(
+            title="⏳ Converting Video...",
+            description="Please wait while your video is being converted to GIF.\nThis may take up to 30 seconds.",
+            color=COLOR_GOLD
+        )
+        processing_embed.add_field(name="Text", value=f"`{self.settings.text or '(none)'}`", inline=True)
+        processing_embed.add_field(name="Color", value=self.settings.get_preset_name(), inline=True)
+        set_footer(processing_embed)
+        await interaction.message.edit(embed=processing_embed, view=self)
 
         # Convert video
         result = await convert_service.convert_video_to_gif(
@@ -704,7 +714,7 @@ class VideoConvertView(ui.View):
 
         self.stop()
 
-    @ui.button(label="Cancel", emoji="<:block:1455709662316986539>", style=discord.ButtonStyle.secondary, row=1)
+    @ui.button(label="Cancel", emoji=EMOJI_BLOCK, style=discord.ButtonStyle.secondary, row=1)
     async def cancel_button(self, interaction: discord.Interaction, button: ui.Button) -> None:
         """Cancel and delete the editor."""
         await interaction.response.defer()

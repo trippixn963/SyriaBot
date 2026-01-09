@@ -18,7 +18,7 @@ from discord.ext import commands, tasks
 
 from src.core.logger import log
 from src.core.config import config
-from src.core.colors import COLOR_GOLD
+from src.core.colors import COLOR_GOLD, EMOJI_HEART, EMOJI_COMMENT
 from src.utils.footer import set_footer
 
 
@@ -200,7 +200,7 @@ class GalleryService:
 
         # Add heart reaction
         try:
-            await message.add_reaction(config.GALLERY_HEART_EMOJI)
+            await message.add_reaction(EMOJI_HEART)
             log.tree(f"{channel_name} Heart Added", [
                 ("User", f"{message.author.name}"),
                 ("Message ID", str(message.id)),
@@ -280,7 +280,7 @@ class GalleryService:
                 comment_button = discord.ui.Button(
                     style=discord.ButtonStyle.link,
                     label="Comment",
-                    emoji=discord.PartialEmoji.from_str("<:comment:1456791204636135507>"),
+                    emoji=discord.PartialEmoji.from_str(EMOJI_COMMENT),
                     url=thread.jump_url
                 )
                 view.add_item(comment_button)
@@ -318,7 +318,7 @@ class GalleryService:
 
         # Check if it's the allowed heart emoji
         emoji_str = str(reaction.emoji)
-        if emoji_str != config.GALLERY_HEART_EMOJI:
+        if emoji_str != EMOJI_HEART:
             try:
                 await reaction.remove(user)
                 log.tree(f"{channel_name} Reaction Removed", [

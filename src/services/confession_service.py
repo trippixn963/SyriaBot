@@ -17,7 +17,7 @@ from collections import OrderedDict
 
 from src.core.config import config
 from src.core.logger import log
-from src.core.colors import COLOR_SYRIA_GREEN, COLOR_WARNING
+from src.core.colors import COLOR_SYRIA_GREEN, COLOR_WARNING, EMOJI_HEART
 from src.core.constants import DELETE_DELAY_MEDIUM
 from src.services.database import db
 from src.utils.footer import set_footer
@@ -590,10 +590,10 @@ class ConfessionService:
 
             # Add heart reaction
             try:
-                await confession_msg.add_reaction(config.CONFESSIONS_HEART_EMOJI)
+                await confession_msg.add_reaction(EMOJI_HEART)
                 log.tree("Confession Reaction Added", [
                     ("Number", f"#{confession_number}"),
-                    ("Emoji", config.CONFESSIONS_HEART_EMOJI),
+                    ("Emoji", EMOJI_HEART),
                 ], emoji="❤️")
             except discord.Forbidden:
                 log.tree("Confession Reaction Forbidden", [

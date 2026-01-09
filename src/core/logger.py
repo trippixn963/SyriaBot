@@ -100,11 +100,11 @@ class Logger:
         self._last_was_tree: bool = False
 
         # Live logs Discord webhook streaming (from env var)
-        self._live_logs_webhook_url: str = os.getenv("SYRIA_LIVE_LOGS_WEBHOOK_URL", "")
+        self._live_logs_webhook_url: str = os.getenv("SYRIA_LOGS_WEBHOOK", "")
         self._live_logs_enabled: bool = bool(self._live_logs_webhook_url)
 
         # Error webhook (from env var)
-        self._error_webhook_url: str = os.getenv("SYRIA_ERROR_WEBHOOK_URL", "")
+        self._error_webhook_url: str = os.getenv("SYRIA_ERROR_WEBHOOK", "")
 
         # Base logs directory
         self.logs_base_dir = Path(__file__).parent.parent.parent / "logs"
