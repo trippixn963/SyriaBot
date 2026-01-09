@@ -106,7 +106,7 @@ QUOTE_MAX_BANNER_CACHE_SIZE = 10
 
 TEMPVOICE_JOIN_COOLDOWN = 5                   # Seconds between channel creations
 TEMPVOICE_OWNER_LEAVE_TRANSFER_DELAY = 30     # Seconds before auto-transfer
-TEMPVOICE_STICKY_PANEL_THRESHOLD = 20         # Messages before re-sticking panel
+TEMPVOICE_STICKY_PANEL_THRESHOLD = 30         # Messages before re-sticking panel
 TEMPVOICE_REORDER_DEBOUNCE_DELAY = 2.0        # Seconds to wait before reordering
 TEMPVOICE_MAX_ALLOWED_USERS_FREE = 3          # Max allowed users for non-boosters
 

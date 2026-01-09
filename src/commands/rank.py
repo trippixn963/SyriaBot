@@ -9,14 +9,13 @@ Server: discord.gg/syria
 """
 
 import io
-from typing import Optional
 
 import discord
 from discord import app_commands
 from discord.ext import commands
 
 from src.core.config import config
-from src.core.colors import COLOR_GOLD, EMOJI_LEADERBOARD
+from src.core.colors import COLOR_GOLD, COLOR_ERROR, EMOJI_LEADERBOARD
 from src.core.logger import log
 from src.services.database import db
 from src.utils.footer import set_footer
@@ -30,7 +29,7 @@ from src.services.xp.utils import (
 from src.services.xp.card import generate_rank_card
 
 
-def rank_cooldown(interaction: discord.Interaction) -> Optional[app_commands.Cooldown]:
+def rank_cooldown(interaction: discord.Interaction) -> app_commands.Cooldown | None:
     """
     Dynamic cooldown - None for mods/owners, 5 min for everyone else.
 
@@ -82,7 +81,7 @@ class RankCog(commands.Cog):
     async def rank(
         self,
         interaction: discord.Interaction,
-        user: Optional[discord.User] = None
+        user: discord.User | None = None
     ) -> None:
         """Display XP rank card for a user."""
         await interaction.response.defer()
@@ -93,7 +92,7 @@ class RankCog(commands.Cog):
         if not member:
             embed = discord.Embed(
                 description="❌ User not found in this server",
-                color=0xf04747,
+                color=COLOR_ERROR,
             )
             set_footer(embed)
             await interaction.followup.send(embed=embed, ephemeral=True)

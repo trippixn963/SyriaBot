@@ -26,6 +26,7 @@ from src.services.gallery import GalleryService
 from src.services.presence import PresenceHandler
 from src.services.bump_service import bump_service
 from src.services.confessions import ConfessionService
+from src.services.suggestions import SuggestionService
 from src.services.action_service import action_service
 from src.services.database import db
 from src.utils.http import http_session
@@ -58,6 +59,7 @@ class SyriaBot(commands.Bot):
         self.gallery_service: Optional[GalleryService] = None
         self.presence_handler: Optional[PresenceHandler] = None
         self.confession_service: Optional[ConfessionService] = None
+        self.suggestion_service: Optional[SuggestionService] = None
 
     async def setup_hook(self) -> None:
         """Called when the bot is starting up."""
@@ -93,6 +95,8 @@ class SyriaBot(commands.Bot):
             "src.commands.afk",
             "src.commands.image",
             "src.commands.confess",
+            "src.commands.rules",
+            "src.commands.suggest",
         ]
         loaded_commands = []
         for cmd in commands_list:
@@ -245,6 +249,14 @@ class SyriaBot(commands.Bot):
         except Exception as e:
             log.error_tree("Confessions Init Failed", e)
 
+        # Suggestions
+        try:
+            self.suggestion_service = SuggestionService(self)
+            await self.suggestion_service.setup()
+            initialized.append("Suggestions")
+        except Exception as e:
+            log.error_tree("Suggestions Init Failed", e)
+
         log.tree("Services Init Complete", [
             ("Services", ", ".join(initialized)),
             ("Count", f"{len(initialized)}/10"),
@@ -324,6 +336,14 @@ class SyriaBot(commands.Bot):
                 stopped.append("Confessions")
             except Exception as e:
                 log.error_tree("Confessions Stop Error", e)
+
+        # Suggestions
+        if self.suggestion_service:
+            try:
+                self.suggestion_service.stop()
+                stopped.append("Suggestions")
+            except Exception as e:
+                log.error_tree("Suggestions Stop Error", e)
 
         # Close HTTP session
         try:

@@ -30,8 +30,8 @@ MAX_COOLDOWN_CACHE_SIZE = 100
 class ActionHandler:
     """Handles action commands with GIFs."""
 
-    # Action command cooldown (10 seconds)
-    ACTION_COOLDOWN = 10
+    # Action command cooldown (60 seconds)
+    ACTION_COOLDOWN = 60
 
     def __init__(self) -> None:
         """Initialize the action handler."""
@@ -79,12 +79,23 @@ class ActionHandler:
         time_since = time.time() - last_use
         if time_since < self.ACTION_COOLDOWN:
             remaining = self.ACTION_COOLDOWN - time_since
+            cooldown_ends = int(time.time() + remaining)
+            cooldown_msg = await message.reply(
+                f"You're on cooldown. Try again <t:{cooldown_ends}:R>",
+                mention_author=False
+            )
+            await asyncio.gather(
+                message.delete(delay=DELETE_DELAY_SHORT),
+                cooldown_msg.delete(delay=DELETE_DELAY_SHORT),
+                return_exceptions=True
+            )
             log.tree("Action Cooldown", [
                 ("User", f"{message.author.name}"),
                 ("ID", str(user_id)),
-                ("Remaining", f"{remaining:.1f}s"),
+                ("Action", action),
+                ("Ends", f"<t:{cooldown_ends}:R>"),
             ], emoji="⏳")
-            return False  # Silent cooldown - don't spam with messages
+            return True
 
         # Build targets list
         targets = []

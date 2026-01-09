@@ -13,7 +13,6 @@ import aiohttp
 import discord
 from discord import app_commands, ui
 from discord.ext import commands
-from typing import Optional
 
 from src.core.config import config
 from src.core.logger import log
@@ -23,7 +22,7 @@ from src.utils.footer import set_footer
 from src.utils.http import http_session
 
 
-def get_cooldown(interaction: discord.Interaction) -> Optional[app_commands.Cooldown]:
+def get_cooldown(interaction: discord.Interaction) -> app_commands.Cooldown | None:
     """
     Dynamic cooldown - None for mods/owners, 5 min for everyone else.
 
@@ -52,8 +51,8 @@ async def _download_and_save_image(
     interaction: discord.Interaction,
     url: str,
     label: str,
-    message: Optional[discord.Message] = None,
-    target_name: Optional[str] = None,
+    message: discord.Message | None = None,
+    target_name: str | None = None,
 ) -> None:
     """
     Shared helper to download an image, send as .gif file, and delete original.
@@ -132,7 +131,7 @@ class DownloadView(ui.View):
         self.url = url
         self.label = label
         self.requester_id = requester_id
-        self.message: Optional[discord.Message] = None
+        self.message: discord.Message | None = None
 
     async def on_timeout(self) -> None:
         """Disable button on timeout."""
@@ -195,7 +194,7 @@ class AvatarToggleView(ui.View):
         self.global_url = global_url
         self.showing_server = showing_server
         self.requester_id = requester_id
-        self.message: Optional[discord.Message] = None
+        self.message: discord.Message | None = None
         self._update_toggle_button()
 
     def _update_toggle_button(self) -> None:
@@ -304,7 +303,7 @@ class BannerToggleView(ui.View):
         self.global_url = global_url
         self.showing_server = showing_server
         self.requester_id = requester_id
-        self.message: Optional[discord.Message] = None
+        self.message: discord.Message | None = None
         self._update_toggle_button()
 
     def _update_toggle_button(self) -> None:
@@ -414,7 +413,7 @@ class GetCog(commands.Cog):
         self,
         interaction: discord.Interaction,
         option: app_commands.Choice[str],
-        user: Optional[discord.Member] = None
+        user: discord.Member | None = None
     ) -> None:
         """Get a user's avatar/banner or server icon/banner."""
         await interaction.response.defer()
@@ -485,7 +484,7 @@ class GetCog(commands.Cog):
         self,
         interaction: discord.Interaction,
         target: discord.Member,
-        target_member: Optional[discord.Member]
+        target_member: discord.Member | None
     ) -> None:
         """Handle avatar request - shows toggle if user has both server and global avatar."""
         # Check if user has both server and global avatar
@@ -552,7 +551,7 @@ class GetCog(commands.Cog):
         self,
         interaction: discord.Interaction,
         target: discord.Member,
-        target_member: Optional[discord.Member]
+        target_member: discord.Member | None
     ) -> None:
         """Handle banner request - shows toggle if user has both server and global banner."""
         # Need to fetch user to get global banner (not cached by default)

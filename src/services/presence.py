@@ -105,9 +105,11 @@ class PresenceHandler:
 
         while self._running:
             try:
-                # Skip if promo is active
+                # Wait first, then check promo status
+                await asyncio.sleep(PRESENCE_UPDATE_INTERVAL)
+
+                # Skip if promo is active (check right before changing)
                 if self._is_promo_active:
-                    await asyncio.sleep(PRESENCE_UPDATE_INTERVAL)
                     continue
 
                 # Get status messages and rotate
@@ -115,6 +117,10 @@ class PresenceHandler:
                 if messages:
                     self._current_index = self._current_index % len(messages)
                     status_text = messages[self._current_index]
+
+                    # Double-check promo isn't active right before changing
+                    if self._is_promo_active:
+                        continue
 
                     await self.bot.change_presence(
                         activity=discord.Activity(
@@ -124,8 +130,6 @@ class PresenceHandler:
                     )
 
                     self._current_index += 1
-
-                await asyncio.sleep(PRESENCE_UPDATE_INTERVAL)
 
             except asyncio.CancelledError:
                 break

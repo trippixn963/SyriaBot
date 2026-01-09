@@ -8,7 +8,6 @@ Author: حَـــــنَّـــــا
 Server: discord.gg/syria
 """
 
-from typing import Dict, Optional
 
 import discord
 from discord.ext import commands
@@ -26,7 +25,7 @@ class MembersHandler(commands.Cog):
         """Initialize the members handler with bot reference and invite cache."""
         self.bot = bot
         # Cache invites for tracking: {invite_code: uses}
-        self._invite_cache: Dict[str, int] = {}
+        self._invite_cache: dict[str, int] = {}
 
     @commands.Cog.listener()
     async def on_ready(self) -> None:
@@ -54,7 +53,7 @@ class MembersHandler(commands.Cog):
                 ("Error", str(e)[:100]),
             ], emoji="⚠️")
 
-    async def _find_used_invite(self, guild: discord.Guild) -> Optional[discord.Invite]:
+    async def _find_used_invite(self, guild: discord.Guild) -> discord.Invite | None:
         """
         Find which invite was used by comparing with cache.
 

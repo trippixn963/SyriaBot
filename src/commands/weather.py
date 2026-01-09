@@ -11,18 +11,17 @@ Server: discord.gg/syria
 import discord
 from discord import app_commands
 from discord.ext import commands
-from typing import Optional, List
 from difflib import SequenceMatcher
 import aiohttp
 
 from src.core.config import config
 from src.core.logger import log
-from src.core.colors import COLOR_GOLD, EMOJI_TRANSFER
+from src.core.colors import COLOR_GOLD, COLOR_ERROR, EMOJI_TRANSFER
 from src.core.constants import VIEW_TIMEOUT_DEFAULT
 from src.utils.footer import set_footer
 
 
-def weather_cooldown(interaction: discord.Interaction) -> Optional[app_commands.Cooldown]:
+def weather_cooldown(interaction: discord.Interaction) -> app_commands.Cooldown | None:
     """
     Dynamic cooldown - None for mods/owners, 5 min for everyone else.
 
@@ -138,7 +137,7 @@ WEATHER_ICONS = {
 # Helper Functions
 # =============================================================================
 
-def fuzzy_match(query: str, choices: List[str], limit: int = 25) -> List[str]:
+def fuzzy_match(query: str, choices: list[str], limit: int = 25) -> list[str]:
     """
     Fuzzy match query against choices.
 
@@ -346,7 +345,7 @@ class WeatherView(discord.ui.View):
         return embed
 
     @discord.ui.button(label="°C / °F", style=discord.ButtonStyle.secondary, emoji=EMOJI_TRANSFER)
-    async def toggle_unit(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def toggle_unit(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         """Toggle between Celsius and Fahrenheit."""
         # Only allow the original user to toggle
         if interaction.user.id != self.user_id:
@@ -384,7 +383,7 @@ class WeatherCog(commands.Cog):
         self.bot = bot
         self.api_key = config.OPENWEATHER_API_KEY
 
-    async def fetch_weather(self, city: str) -> Optional[dict]:
+    async def fetch_weather(self, city: str) -> dict | None:
         """
         Fetch weather data from OpenWeatherMap API.
 
@@ -439,14 +438,14 @@ class WeatherCog(commands.Cog):
     @app_commands.command(name="weather", description="Get current weather for any city")
     @app_commands.describe(city="City name (type to search)")
     @app_commands.checks.dynamic_cooldown(weather_cooldown)
-    async def weather(self, interaction: discord.Interaction, city: str):
+    async def weather(self, interaction: discord.Interaction, city: str) -> None:
         """Get current weather for a city."""
         await interaction.response.defer()
 
         if not self.api_key:
             embed = discord.Embed(
                 description="⚠️ Weather API is not configured.",
-                color=0xf04747
+                color=COLOR_ERROR
             )
             set_footer(embed)
             await interaction.followup.send(embed=embed, ephemeral=True)
@@ -474,7 +473,7 @@ class WeatherCog(commands.Cog):
                            f"• Just the city name without country\n"
                            f"• A nearby major city\n"
                            f"• Check spelling",
-                color=0xf04747
+                color=COLOR_ERROR
             )
             set_footer(embed)
             await interaction.followup.send(embed=embed, ephemeral=True)
@@ -502,7 +501,7 @@ class WeatherCog(commands.Cog):
     @weather.autocomplete("city")
     async def city_autocomplete(
         self, interaction: discord.Interaction, current: str
-    ) -> List[app_commands.Choice[str]]:
+    ) -> list[app_commands.Choice[str]]:
         """
         Autocomplete for city names with fuzzy matching.
 

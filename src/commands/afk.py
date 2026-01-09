@@ -17,6 +17,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from src.core.logger import log
+from src.core.colors import COLOR_SYRIA_GREEN
 from src.utils.footer import set_footer
 from src.services.database import db
 
@@ -91,7 +92,7 @@ class AFKCog(commands.Cog):
         # Build response - thumbnail design with mention
         now = int(time.time())
 
-        embed = discord.Embed(color=0x1F5E2E)  # Syria green
+        embed = discord.Embed(color=COLOR_SYRIA_GREEN)
         embed.set_thumbnail(url=interaction.user.display_avatar.url)
 
         if converted_reason:

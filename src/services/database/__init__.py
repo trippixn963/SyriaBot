@@ -28,6 +28,7 @@ from .afk import AFKMixin
 from .downloads import DownloadsMixin
 from .confessions import ConfessionsMixin
 from .actions import ActionsMixin
+from .suggestions import SuggestionsMixin
 
 
 class Database(
@@ -39,6 +40,7 @@ class Database(
     DownloadsMixin,
     ConfessionsMixin,
     ActionsMixin,
+    SuggestionsMixin,
     DatabaseCore,
 ):
     """

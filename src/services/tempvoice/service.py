@@ -4,7 +4,7 @@ TempVoice - Main Service
 
 import asyncio
 import time
-from typing import TYPE_CHECKING, Dict
+from typing import TYPE_CHECKING
 
 import discord
 from discord import ui
@@ -13,6 +13,7 @@ from src.core.config import config
 from src.core.colors import (
     EMOJI_LOCK, EMOJI_UNLOCK, EMOJI_LIMIT, EMOJI_RENAME, EMOJI_ALLOW,
     EMOJI_BLOCK, EMOJI_KICK, EMOJI_CLAIM, EMOJI_TRANSFER, EMOJI_DELETE,
+    COLOR_ERROR, COLOR_SUCCESS,
 )
 from src.core.constants import (
     TEMPVOICE_JOIN_COOLDOWN,
@@ -54,13 +55,13 @@ class TempVoiceService:
         self.bot = bot
         self.control_panel = TempVoiceControlPanel(self)
         self._cleanup_task: asyncio.Task = None
-        self._join_cooldowns: Dict[int, float] = {}  # user_id -> last join timestamp
-        self._member_join_times: Dict[int, Dict[int, float]] = {}  # channel_id -> {user_id: join_time}
-        self._pending_transfers: Dict[int, asyncio.Task] = {}  # channel_id -> pending transfer task
-        self._message_counts: Dict[int, int] = {}  # channel_id -> message count since last panel
+        self._join_cooldowns: dict[int, float] = {}  # user_id -> last join timestamp
+        self._member_join_times: dict[int, dict[int, float]] = {}  # channel_id -> {user_id: join_time}
+        self._pending_transfers: dict[int, asyncio.Task] = {}  # channel_id -> pending transfer task
+        self._message_counts: dict[int, int] = {}  # channel_id -> message count since last panel
         self._create_lock = asyncio.Lock()  # Prevents race conditions when multiple users join at once
-        self._pending_reorders: Dict[int, asyncio.Task] = {}  # guild_id -> pending reorder task (debounced)
-        self._panel_locks: Dict[int, asyncio.Lock] = {}  # channel_id -> lock for panel updates
+        self._pending_reorders: dict[int, asyncio.Task] = {}  # guild_id -> pending reorder task (debounced)
+        self._panel_locks: dict[int, asyncio.Lock] = {}  # channel_id -> lock for panel updates
 
     async def setup(self) -> None:
         """Set up the TempVoice service."""
@@ -309,10 +310,10 @@ class TempVoiceService:
         # Lock status
         if is_locked:
             status = f"{EMOJI_LOCK} Locked"
-            color = 0xf04747  # Red
+            color = COLOR_ERROR
         else:
             status = f"{EMOJI_UNLOCK} Unlocked"
-            color = 0x43b581  # Green
+            color = COLOR_SUCCESS
 
         embed = discord.Embed(
             title=channel.name,
@@ -576,13 +577,22 @@ class TempVoiceService:
             await self._create_temp_channel(member)
 
     async def on_message(self, message: discord.Message) -> None:
-        """Handle messages in temp voice channels for sticky panel."""
+        """Handle messages in temp voice channels and interface channel for sticky panel."""
         # Ignore bot messages and DMs
         if message.author.bot or not message.guild:
             return
 
-        # Check if this is a voice channel (handles VoiceChannel and StageChannel)
         channel = message.channel
+
+        # Handle interface channel (text channel for main panel)
+        if config.VC_INTERFACE_CHANNEL_ID and channel.id == config.VC_INTERFACE_CHANNEL_ID:
+            self._message_counts[channel.id] = self._message_counts.get(channel.id, 0) + 1
+            if self._message_counts[channel.id] >= STICKY_PANEL_MESSAGE_THRESHOLD:
+                self._message_counts[channel.id] = 0
+                await self._resend_interface_panel(channel)
+            return
+
+        # Handle temp voice channels
         if not hasattr(channel, 'voice_states'):
             return
 
@@ -647,6 +657,51 @@ class TempVoiceService:
                 ], emoji="📌")
             except discord.HTTPException as e:
                 log.error_tree("Sticky Panel Failed", e, [
+                    ("Channel", channel.name),
+                ])
+
+    async def _resend_interface_panel(self, channel: discord.TextChannel) -> None:
+        """Delete old interface panel and resend as sticky message in interface channel."""
+        lock = self._get_panel_lock(channel.id)
+        async with lock:
+            # Find and delete the last bot message (our panel)
+            try:
+                async for msg in channel.history(limit=50):
+                    if msg.author.id == self.bot.user.id:
+                        try:
+                            await msg.delete()
+                        except discord.HTTPException:
+                            pass
+                        break
+            except discord.HTTPException:
+                pass
+
+            # Build and send new interface panel
+            embed = discord.Embed(
+                title="🎙️ TempVoice",
+                description=(
+                    f"Create your own temporary voice channel!\n\n"
+                    f"**How to use:**\n"
+                    f"Join <#{config.VC_CREATOR_CHANNEL_ID}> to create your channel\n\n"
+                    f"**Features:**\n"
+                    f"• {EMOJI_LOCK} Lock/Unlock your channel\n"
+                    f"• {EMOJI_LIMIT} Set user limit\n"
+                    f"• {EMOJI_RENAME} Rename your channel\n"
+                    f"• {EMOJI_ALLOW} Allow/Block users\n"
+                    f"• {EMOJI_TRANSFER} Transfer ownership\n"
+                    f"• {EMOJI_DELETE} Delete your channel"
+                ),
+                color=COLOR_SUCCESS,
+            )
+            set_footer(embed)
+
+            try:
+                await channel.send(embed=embed)
+                log.tree("Interface Panel Resent", [
+                    ("Channel", channel.name),
+                ], emoji="📌")
+            except discord.HTTPException as e:
+                log.error_tree("Interface Panel Failed", e, [
                     ("Channel", channel.name),
                 ])
 

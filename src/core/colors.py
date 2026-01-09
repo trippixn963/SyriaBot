@@ -54,7 +54,10 @@ EMOJI_TRANSFER = "<:transfer:1455710226429902858>"
 EMOJI_DELETE = "<:delete:1455710362539397192>"
 
 # Confession System
-EMOJI_CONFESSION = "<:discotoolsxyzicon51:1458963705256742962>"
+EMOJI_CONFESSION = "<:confession:1458963705256742962>"
+
+# Suggestion System
+EMOJI_SUGGEST = "<:suggest:1459288562859118662>"
 
 
 # =============================================================================

@@ -423,6 +423,23 @@ class DatabaseCore:
             """)
 
             # =====================================================================
+            # Suggestions Tables
+            # =====================================================================
+
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS suggestions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    content TEXT NOT NULL,
+                    submitter_id INTEGER NOT NULL,
+                    message_id INTEGER NOT NULL,
+                    status TEXT DEFAULT 'pending',
+                    submitted_at INTEGER NOT NULL,
+                    reviewed_at INTEGER,
+                    reviewed_by INTEGER
+                )
+            """)
+
+            # =====================================================================
             # Indexes
             # =====================================================================
 

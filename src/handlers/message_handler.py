@@ -50,13 +50,23 @@ class MessageHandler(commands.Cog):
         if message.author.bot:
             return
 
-        # Confession submit thread (auto-delete messages to keep it clean)
+        # Confession channel (auto-delete messages to keep it clean)
         if hasattr(self.bot, 'confession_service') and self.bot.confession_service:
             try:
                 if await self.bot.confession_service.handle_message(message):
                     return  # Message was deleted
             except Exception as e:
                 log.tree("Confession Handler Error", [
+                    ("Error", str(e)[:50]),
+                ], emoji="❌")
+
+        # Suggestions channel (auto-delete messages to keep it clean)
+        if hasattr(self.bot, 'suggestion_service') and self.bot.suggestion_service:
+            try:
+                if await self.bot.suggestion_service.handle_message(message):
+                    return  # Message was deleted
+            except Exception as e:
+                log.tree("Suggestion Handler Error", [
                     ("Error", str(e)[:50]),
                 ], emoji="❌")
 
