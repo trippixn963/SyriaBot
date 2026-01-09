@@ -297,8 +297,8 @@ class MembersHandler(commands.Cog):
             name="🏆 Booster Perks Unlocked",
             value=(
                 "• **2x XP** on all messages and voice activity\n"
-                "• **No cooldowns** on commands\n"
-                "• **AI Translation** powered by GPT-4o"
+                "• **Unlimited** weekly uses on rate-limited commands\n"
+                "• **AI Translation** powered by GPT-4o-mini"
             ),
             inline=False
         )

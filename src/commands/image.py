@@ -16,9 +16,9 @@ from discord.ext import commands
 from src.core.config import config
 from src.core.logger import log
 from src.core.colors import COLOR_ERROR, COLOR_WARNING
-from src.services.image_service import image_service
+from src.services.image import image_service
 from src.services.database import db
-from src.views.image_view import ImageView
+from src.services.image.views import ImageView
 from src.utils.footer import set_footer
 
 

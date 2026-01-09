@@ -25,7 +25,7 @@ from src.services.afk import AFKService
 from src.services.gallery import GalleryService
 from src.services.presence import PresenceHandler
 from src.services.bump_service import bump_service
-from src.services.confession_service import ConfessionService
+from src.services.confessions import ConfessionService
 from src.services.action_service import action_service
 from src.services.database import db
 from src.utils.http import http_session
@@ -67,10 +67,10 @@ class SyriaBot(commands.Bot):
 
         # Load handlers
         handlers = [
-            "src.handlers.ready",
-            "src.handlers.voice",
-            "src.handlers.members",
-            "src.handlers.message",
+            "src.handlers.ready_handler",
+            "src.handlers.voice_handler",
+            "src.handlers.member_handler",
+            "src.handlers.message_handler",
         ]
         loaded_handlers = []
         for handler in handlers:

@@ -17,7 +17,7 @@ from collections import OrderedDict
 
 from src.core.config import config
 from src.core.logger import log
-from src.core.colors import COLOR_SYRIA_GREEN, COLOR_WARNING, EMOJI_HEART
+from src.core.colors import COLOR_SYRIA_GREEN, COLOR_WARNING, EMOJI_HEART, EMOJI_CONFESSION
 from src.core.constants import DELETE_DELAY_MEDIUM
 from src.services.database import db
 from src.utils.footer import set_footer
@@ -826,7 +826,7 @@ class ConfessionService:
 
         embed = discord.Embed(
             description=(
-                f"<:discotoolsxyzicon51:1458963705256742962> **New Confession Posted**\n\n"
+                f"{EMOJI_CONFESSION} **New Confession Posted**\n\n"
                 f"Someone just shared **Confession #{confession_number}**\n"
                 f"Head over to the confessions channel to read it!\n\n"
                 f"Use `/confess` to share yours anonymously.\n"
@@ -844,7 +844,7 @@ class ConfessionService:
             label=f"View Confession #{confession_number}",
             style=discord.ButtonStyle.link,
             url=jump_url,
-            emoji="<:discotoolsxyzicon51:1458963705256742962>"
+            emoji=EMOJI_CONFESSION
         ))
 
         try:

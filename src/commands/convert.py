@@ -19,9 +19,9 @@ from discord.ext import commands
 
 from src.core.colors import COLOR_ERROR, COLOR_WARNING
 from src.core.logger import log
-from src.services.convert_service import convert_service
+from src.services.convert import convert_service
 from src.services.rate_limiter import check_rate_limit
-from src.views.convert_view import start_convert_editor
+from src.services.convert.views import start_convert_editor
 from src.utils.footer import set_footer
 
 

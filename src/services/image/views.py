@@ -17,7 +17,7 @@ from typing import Optional, Tuple
 
 from src.core.logger import log
 from src.core.colors import COLOR_SYRIA_GREEN, COLOR_SYRIA_GOLD, EMOJI_SAVE, EMOJI_DELETE
-from src.services.image_service import ImageResult
+from src.services.image.service import ImageResult
 from src.utils.footer import set_footer
 from src.utils.http import http_session
 

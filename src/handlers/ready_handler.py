@@ -92,7 +92,7 @@ class ReadyHandler(commands.Cog):
 
         # Check DeepL usage at startup
         try:
-            from src.services.translate_service import translate_service
+            from src.services.translate import translate_service
             await translate_service.check_deepl_usage()
         except Exception as e:
             log.tree("DeepL Usage Check Skipped", [

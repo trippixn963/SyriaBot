@@ -15,7 +15,7 @@ from typing import Optional
 from src.core.logger import log
 from src.core.config import config
 from src.core.colors import COLOR_GOLD, COLOR_SUCCESS, EMOJI_AI
-from src.services.translate_service import translate_service, LANGUAGES
+from src.services.translate.service import translate_service, LANGUAGES
 from src.utils.footer import set_footer
 
 

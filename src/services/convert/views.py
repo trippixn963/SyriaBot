@@ -24,7 +24,7 @@ from src.core.colors import (
     EMOJI_RENAME, EMOJI_SAVE, EMOJI_BLOCK,
 )
 from src.core.logger import log
-from src.services.convert_service import convert_service
+from src.services.convert.service import convert_service
 from src.utils.footer import set_footer
 from src.utils.text import wrap_text, find_font, get_font
 

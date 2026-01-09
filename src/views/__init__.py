@@ -1,1 +1,0 @@
-"""SyriaBot - Views Package."""

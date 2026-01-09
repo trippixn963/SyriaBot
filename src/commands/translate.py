@@ -15,8 +15,8 @@ from discord.ext import commands
 from src.core.config import config
 from src.core.logger import log
 from src.core.colors import COLOR_ERROR, COLOR_WARNING
-from src.services.translate_service import translate_service, find_similar_language
-from src.views.translate_view import TranslateView, create_translate_embed
+from src.services.translate import translate_service, find_similar_language
+from src.services.translate.views import TranslateView, create_translate_embed
 from src.utils.footer import set_footer
 
 

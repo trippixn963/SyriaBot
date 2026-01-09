@@ -53,6 +53,9 @@ EMOJI_CLAIM = "<:claim:1455709985467011173>"
 EMOJI_TRANSFER = "<:transfer:1455710226429902858>"
 EMOJI_DELETE = "<:delete:1455710362539397192>"
 
+# Confession System
+EMOJI_CONFESSION = "<:discotoolsxyzicon51:1458963705256742962>"
+
 
 # =============================================================================
 # AFK Emojis (Unicode)

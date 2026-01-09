@@ -20,13 +20,13 @@ import discord
 from src.core.logger import log
 from src.core.constants import MAX_IMAGE_SIZE, MAX_VIDEO_SIZE, DELETE_DELAY_SHORT
 from src.core.colors import COLOR_ERROR, COLOR_WARNING
-from src.services.convert_service import convert_service
-from src.services.quote_service import quote_service
-from src.services.translate_service import translate_service, find_similar_language
+from src.services.convert import convert_service
+from src.services.quote import quote_service
+from src.services.translate import translate_service, find_similar_language
 from src.services.rate_limiter import check_rate_limit
-from src.views.convert_view import start_convert_editor
-from src.views.translate_view import TranslateView, create_translate_embed
-from src.views.quote_view import QuoteView
+from src.services.convert.views import start_convert_editor
+from src.services.translate.views import TranslateView, create_translate_embed
+from src.services.quote.views import QuoteView
 from src.utils.footer import set_footer
 from src.commands.download import handle_download
 
