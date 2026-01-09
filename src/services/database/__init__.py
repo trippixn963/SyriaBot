@@ -12,6 +12,7 @@ Structure:
     - stats.py: Server-level statistics
     - afk.py: AFK system
     - downloads.py: Download statistics
+    - confessions.py: Anonymous confessions system
 
 Author: حَـــــنَّـــــا
 Server: discord.gg/syria
@@ -24,6 +25,7 @@ from .xp import XPMixin
 from .stats import StatsMixin
 from .afk import AFKMixin
 from .downloads import DownloadsMixin
+from .confessions import ConfessionsMixin
 
 
 class Database(
@@ -33,6 +35,7 @@ class Database(
     StatsMixin,
     AFKMixin,
     DownloadsMixin,
+    ConfessionsMixin,
     DatabaseCore,
 ):
     """

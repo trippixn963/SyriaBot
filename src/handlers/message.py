@@ -585,6 +585,16 @@ class MessageHandler(commands.Cog):
         if message.author.bot:
             return
 
+        # Confession submit thread (auto-delete messages to keep it clean)
+        if hasattr(self.bot, 'confession_service') and self.bot.confession_service:
+            try:
+                if await self.bot.confession_service.handle_message(message):
+                    return  # Message was deleted
+            except Exception as e:
+                log.tree("Confession Handler Error", [
+                    ("Error", str(e)[:50]),
+                ], emoji="❌")
+
         # Gallery service (media-only channel)
         if hasattr(self.bot, 'gallery_service') and self.bot.gallery_service:
             try:

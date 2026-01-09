@@ -151,5 +151,10 @@ class Config:
     BUMP_CHANNEL_ID: int = _get_env_int("SYRIA_BUMP_CHANNEL_ID", 0)
     BUMP_ROLE_ID: int = _get_env_int("SYRIA_BUMP_ROLE_ID", 0)
 
+    # Confessions System
+    CONFESSIONS_CHANNEL_ID: int = _get_env_int("SYRIA_CONFESSIONS_CHANNEL_ID", 0)
+    CONFESSIONS_MOD_CHANNEL_ID: int = _get_env_int("SYRIA_CONFESSIONS_MOD_CHANNEL_ID", 0)
+    CONFESSIONS_HEART_EMOJI: str = "<:heart:1456779669805203539>"
+
 
 config = Config()

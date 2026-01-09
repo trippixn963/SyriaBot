@@ -25,6 +25,7 @@ from src.services.afk import AFKService
 from src.services.gallery import GalleryService
 from src.services.presence import PresenceHandler
 from src.services.bump_service import bump_service
+from src.services.confession_service import ConfessionService
 from src.services.database import db
 from src.utils.http import http_session
 
@@ -55,6 +56,7 @@ class SyriaBot(commands.Bot):
         self.afk_service: Optional[AFKService] = None
         self.gallery_service: Optional[GalleryService] = None
         self.presence_handler: Optional[PresenceHandler] = None
+        self.confession_service: Optional[ConfessionService] = None
 
     async def setup_hook(self) -> None:
         """Called when the bot is starting up."""
@@ -89,6 +91,7 @@ class SyriaBot(commands.Bot):
             "src.commands.download",
             "src.commands.afk",
             "src.commands.image",
+            "src.commands.confess",
         ]
         loaded_commands = []
         for cmd in commands_list:
@@ -233,9 +236,17 @@ class SyriaBot(commands.Bot):
             except Exception as e:
                 log.error_tree("Bump Reminder Init Failed", e)
 
+        # Confessions
+        try:
+            self.confession_service = ConfessionService(self)
+            await self.confession_service.setup()
+            initialized.append("Confessions")
+        except Exception as e:
+            log.error_tree("Confessions Init Failed", e)
+
         log.tree("Services Init Complete", [
             ("Services", ", ".join(initialized)),
-            ("Count", f"{len(initialized)}/9"),
+            ("Count", f"{len(initialized)}/10"),
         ], emoji="✅")
 
     async def close(self) -> None:
@@ -304,6 +315,14 @@ class SyriaBot(commands.Bot):
                 stopped.append("BumpReminder")
             except Exception as e:
                 log.error_tree("Bump Reminder Stop Error", e)
+
+        # Confessions
+        if self.confession_service:
+            try:
+                self.confession_service.stop()
+                stopped.append("Confessions")
+            except Exception as e:
+                log.error_tree("Confessions Stop Error", e)
 
         # Close HTTP session
         try:

@@ -383,6 +383,30 @@ class DatabaseCore:
             """)
 
             # =====================================================================
+            # Confessions Tables
+            # =====================================================================
+
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS confessions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    content TEXT NOT NULL,
+                    submitter_id INTEGER NOT NULL,
+                    status TEXT DEFAULT 'pending',
+                    confession_number INTEGER,
+                    image_url TEXT,
+                    submitted_at INTEGER NOT NULL,
+                    reviewed_at INTEGER,
+                    reviewed_by INTEGER
+                )
+            """)
+
+            # Confessions migration - add image_url column
+            try:
+                cur.execute("ALTER TABLE confessions ADD COLUMN image_url TEXT")
+            except Exception:
+                pass
+
+            # =====================================================================
             # Indexes
             # =====================================================================
 
