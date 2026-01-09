@@ -9,9 +9,11 @@ Author: حَـــــنَّـــــا
 Server: discord.gg/syria
 """
 
+import asyncio
 import time
 import discord
 from typing import TYPE_CHECKING, Optional, Tuple, Set, Dict
+from collections import OrderedDict
 
 from src.core.config import config
 from src.core.logger import log
@@ -65,16 +67,40 @@ class ConfessionService:
     # OP gets a special gold/star color
     OP_COLOR = "FFD700"  # Gold
 
+    # Cache size limits
+    MAX_CACHE_SIZE = 100
+
     def __init__(self, bot: "SyriaBot") -> None:
         """Initialize the confession service."""
         self.bot: "SyriaBot" = bot
         self._enabled: bool = False
         self._channel_id: Optional[int] = None
-        self._warned_users: Set[Tuple[int, int]] = set()  # (thread_id, user_id)
+        self._warned_users: OrderedDict[Tuple[int, int], bool] = OrderedDict()  # (thread_id, user_id) -> True
         # Anon-ID tracking: thread_id -> {user_id -> anon_id}
-        self._thread_anon_ids: Dict[int, Dict[int, str]] = {}
+        self._thread_anon_ids: OrderedDict[int, Dict[int, str]] = OrderedDict()
         # Track who submitted each confession: confession_number -> submitter_id
-        self._confession_submitters: Dict[int, int] = {}
+        self._confession_submitters: OrderedDict[int, int] = OrderedDict()
+        # Cached webhook for anonymous replies
+        self._webhook: Optional[discord.Webhook] = None
+
+    def _trim_cache(self, cache: OrderedDict, max_size: int = None) -> None:
+        """
+        Trim an OrderedDict cache to max size, removing oldest entries.
+
+        Args:
+            cache: The OrderedDict to trim
+            max_size: Maximum size (defaults to MAX_CACHE_SIZE)
+        """
+        if max_size is None:
+            max_size = self.MAX_CACHE_SIZE
+
+        while len(cache) > max_size:
+            removed_key, _ = cache.popitem(last=False)
+            log.tree("Cache Entry Trimmed", [
+                ("Cache", type(cache).__name__),
+                ("Removed Key", str(removed_key)[:50]),
+                ("Size", str(len(cache))),
+            ], emoji="🗑️")
 
     async def handle_message(self, message: discord.Message) -> bool:
         """
@@ -157,7 +183,8 @@ class ConfessionService:
                 # Warn user (only once per thread per user)
                 warn_key = (message.channel.id, message.author.id)
                 if warn_key not in self._warned_users:
-                    self._warned_users.add(warn_key)
+                    self._warned_users[warn_key] = True
+                    self._trim_cache(self._warned_users)
                     try:
                         embed = discord.Embed(
                             description=(
@@ -185,6 +212,56 @@ class ConfessionService:
                 return True
 
         return False
+
+    async def _get_webhook(self, channel: discord.TextChannel) -> Optional[discord.Webhook]:
+        """
+        Get or create a webhook for anonymous replies.
+
+        Args:
+            channel: The confessions channel
+
+        Returns:
+            Webhook instance or None if failed
+        """
+        # Return cached webhook if available
+        if self._webhook is not None:
+            return self._webhook
+
+        try:
+            # Look for existing webhook
+            webhooks = await channel.webhooks()
+            for webhook in webhooks:
+                if webhook.name == "Anonymous Confessions":
+                    self._webhook = webhook
+                    log.tree("Webhook Found", [
+                        ("Channel", channel.name),
+                        ("Webhook ID", str(webhook.id)),
+                    ], emoji="🔗")
+                    return self._webhook
+
+            # Create new webhook
+            self._webhook = await channel.create_webhook(
+                name="Anonymous Confessions",
+                reason="For anonymous confession replies"
+            )
+            log.tree("Webhook Created", [
+                ("Channel", channel.name),
+                ("Webhook ID", str(self._webhook.id)),
+            ], emoji="🔗")
+            return self._webhook
+
+        except discord.Forbidden:
+            log.tree("Webhook Creation Forbidden", [
+                ("Channel", channel.name),
+                ("Reason", "Missing permissions"),
+            ], emoji="⚠️")
+            return None
+        except discord.HTTPException as e:
+            log.tree("Webhook Creation Failed", [
+                ("Channel", channel.name),
+                ("Error", str(e)[:50]),
+            ], emoji="❌")
+            return None
 
     def _get_avatar_url(self, letter: str, is_op: bool = False) -> str:
         """
@@ -222,6 +299,7 @@ class ConfessionService:
         # Initialize thread tracking if needed
         if thread_id not in self._thread_anon_ids:
             self._thread_anon_ids[thread_id] = {}
+            self._trim_cache(self._thread_anon_ids)
 
         thread_users = self._thread_anon_ids[thread_id]
 
@@ -250,7 +328,7 @@ class ConfessionService:
 
         return anon_id
 
-    def check_rate_limit(self, user_id: int) -> Tuple[bool, Optional[int]]:
+    async def check_rate_limit(self, user_id: int) -> Tuple[bool, Optional[int]]:
         """
         Check if user can submit a confession.
 
@@ -260,7 +338,7 @@ class ConfessionService:
         Returns:
             Tuple of (can_submit, seconds_remaining)
         """
-        last_time = db.get_user_last_confession_time(user_id)
+        last_time = await asyncio.to_thread(db.get_user_last_confession_time, user_id)
         if last_time is None:
             return True, None
 
@@ -304,7 +382,7 @@ class ConfessionService:
         self._channel_id = channel.id
 
         # Get stats for log
-        stats = db.get_confession_stats()
+        stats = await asyncio.to_thread(db.get_confession_stats)
 
         log.tree("Confessions Service Ready", [
             ("Channel", channel.name),
@@ -340,7 +418,7 @@ class ConfessionService:
             return False
 
         # Create confession in database
-        confession_id = db.create_confession(content, submitter.id, image_url)
+        confession_id = await asyncio.to_thread(db.create_confession, content, submitter.id, image_url)
         if confession_id is None:
             log.tree("Confession Database Error", [
                 ("User", f"{submitter.name} ({submitter.display_name})"),
@@ -358,7 +436,7 @@ class ConfessionService:
         ], emoji="📝")
 
         # Auto-approve and publish
-        confession_number = db.approve_confession(confession_id, self.bot.user.id)
+        confession_number = await asyncio.to_thread(db.approve_confession, confession_id, self.bot.user.id)
         if confession_number is None:
             log.tree("Confession Auto-Approve Failed", [
                 ("ID", str(confession_id)),
@@ -377,6 +455,7 @@ class ConfessionService:
 
         # Store submitter for OP tracking in replies
         self._confession_submitters[confession_number] = submitter.id
+        self._trim_cache(self._confession_submitters)
 
         # Publish to channel
         success = await self._publish_confession(confession_id, confession_number, content, submitter, image_url)
@@ -463,20 +542,11 @@ class ConfessionService:
 
             # Add heart reaction
             try:
-                emoji_id = config.CONFESSIONS_HEART_EMOJI.split(":")[-1].rstrip(">")
-                emoji = self.bot.get_emoji(int(emoji_id))
-                if emoji:
-                    await confession_msg.add_reaction(emoji)
-                    log.tree("Confession Reaction Added", [
-                        ("Number", f"#{confession_number}"),
-                        ("Emoji", str(emoji)),
-                    ], emoji="❤️")
-                else:
-                    await confession_msg.add_reaction("❤️")
-                    log.tree("Confession Reaction Added", [
-                        ("Number", f"#{confession_number}"),
-                        ("Emoji", "❤️ (fallback)"),
-                    ], emoji="❤️")
+                await confession_msg.add_reaction(config.CONFESSIONS_HEART_EMOJI)
+                log.tree("Confession Reaction Added", [
+                    ("Number", f"#{confession_number}"),
+                    ("Emoji", config.CONFESSIONS_HEART_EMOJI),
+                ], emoji="❤️")
             except discord.Forbidden:
                 log.tree("Confession Reaction Forbidden", [
                     ("Number", f"#{confession_number}"),
@@ -559,7 +629,7 @@ class ConfessionService:
         confession_number: int
     ) -> bool:
         """
-        Post an anonymous reply in a confession thread.
+        Post an anonymous reply in a confession thread using webhook.
 
         Args:
             thread: The thread to post in
@@ -572,7 +642,20 @@ class ConfessionService:
         """
         try:
             # Check if user is the original confessor (OP)
+            # First check in-memory cache, then fallback to database
             submitter_id = self._confession_submitters.get(confession_number)
+            if submitter_id is None:
+                # Fallback to database (handles bot restart case)
+                submitter_id = await asyncio.to_thread(db.get_confession_submitter, confession_number)
+                if submitter_id:
+                    # Cache it for future lookups
+                    self._confession_submitters[confession_number] = submitter_id
+                    self._trim_cache(self._confession_submitters)
+                    log.tree("OP Loaded from Database", [
+                        ("Confession", f"#{confession_number}"),
+                        ("Submitter ID", str(submitter_id)),
+                    ], emoji="📥")
+
             is_op = submitter_id is not None and user.id == submitter_id
 
             if is_op:
@@ -591,14 +674,49 @@ class ConfessionService:
                 letter = anon_id.split("-")[-1][0] if "-" in anon_id else "A"
                 avatar_url = self._get_avatar_url(letter)
 
-            embed = discord.Embed(
-                description=f"```{content}```",
-                color=COLOR_SYRIA_GREEN
-            )
-            embed.set_author(name=author_name, icon_url=avatar_url)
-            set_footer(embed)
+            # Get the parent channel for webhook
+            parent_channel = thread.parent
+            if not parent_channel or not isinstance(parent_channel, discord.TextChannel):
+                log.tree("Reply Parent Channel Not Found", [
+                    ("Thread", thread.name),
+                    ("Confession", f"#{confession_number}"),
+                ], emoji="⚠️")
+                return False
 
-            await thread.send(embed=embed)
+            # Get or create webhook
+            webhook = await self._get_webhook(parent_channel)
+            if not webhook:
+                log.tree("Reply Webhook Unavailable", [
+                    ("Thread", thread.name),
+                    ("Confession", f"#{confession_number}"),
+                    ("Reason", "Could not get/create webhook"),
+                ], emoji="⚠️")
+                return False
+
+            # Send via webhook to the thread (with retry on failure)
+            try:
+                await webhook.send(
+                    content=content,
+                    username=author_name,
+                    avatar_url=avatar_url,
+                    thread=thread
+                )
+            except discord.NotFound:
+                # Webhook was deleted, clear cache and retry once
+                log.tree("Webhook Deleted, Retrying", [
+                    ("Thread", thread.name),
+                    ("Confession", f"#{confession_number}"),
+                ], emoji="🔄")
+                self._webhook = None
+                webhook = await self._get_webhook(parent_channel)
+                if not webhook:
+                    return False
+                await webhook.send(
+                    content=content,
+                    username=author_name,
+                    avatar_url=avatar_url,
+                    thread=thread
+                )
 
             log.tree("Anonymous Reply Posted", [
                 ("User", f"{user.name} ({user.display_name})"),
@@ -607,6 +725,7 @@ class ConfessionService:
                 ("Thread", thread.name),
                 ("Anon-ID", author_name),
                 ("Length", f"{len(content)} chars"),
+                ("Method", "Webhook"),
             ], emoji="💬")
 
             return True

@@ -323,7 +323,7 @@ class ConfessCog(commands.Cog):
         service = self.bot.confession_service
 
         # Check rate limit
-        can_submit, remaining = service.check_rate_limit(interaction.user.id)
+        can_submit, remaining = await service.check_rate_limit(interaction.user.id)
         if not can_submit:
             minutes = remaining // 60
             seconds = remaining % 60

@@ -223,6 +223,33 @@ class ConfessionsMixin:
             ])
             return None
 
+    def get_confession_submitter(self, confession_number: int) -> Optional[int]:
+        """
+        Get the submitter ID for a confession by its public number.
+
+        Args:
+            confession_number: The public confession number (e.g., #1, #2)
+
+        Returns:
+            Submitter's Discord user ID, or None if not found
+        """
+        try:
+            with self._get_conn() as conn:
+                if conn is None:
+                    return None
+                cur = conn.cursor()
+                cur.execute("""
+                    SELECT submitter_id FROM confessions
+                    WHERE confession_number = ? AND status = 'approved'
+                """, (confession_number,))
+                row = cur.fetchone()
+                return row["submitter_id"] if row else None
+        except Exception as e:
+            log.error_tree("Get Confession Submitter Failed", e, [
+                ("Confession Number", f"#{confession_number}"),
+            ])
+            return None
+
     def get_confession_stats(self) -> Dict[str, int]:
         """Get confession statistics."""
         try:
