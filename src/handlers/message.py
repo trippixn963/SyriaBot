@@ -9,9 +9,12 @@ Author: حَـــــنَّـــــا
 Server: discord.gg/syria
 """
 
+import asyncio
 import io
 import re
+import time
 import discord
+from collections import OrderedDict
 from discord.ext import commands
 
 from src.core.logger import log
@@ -33,6 +36,39 @@ from src.commands.download import handle_download
 # Disboard bot ID
 DISBOARD_BOT_ID = 302050872383242240
 
+# Pre-compiled URL pattern for download detection (compiled once at module load)
+DOWNLOAD_URL_PATTERN = re.compile(
+    r'https?://(?:www\.)?(?:'
+    # Instagram
+    r'instagram\.com/(?:p|reel|reels|stories)/[\w-]+|'
+    r'instagram\.com/[\w.]+/(?:p|reel)/[\w-]+|'
+    # Twitter/X
+    r'(?:twitter|x)\.com/\w+/status/\d+|'
+    # TikTok
+    r'tiktok\.com/@[\w.]+/video/\d+|'
+    r'(?:vm|vt)\.tiktok\.com/[\w]+|'
+    r'tiktok\.com/t/[\w]+|'
+    # Reddit
+    r'reddit\.com/r/\w+/comments/\w+|'
+    r'v\.redd\.it/\w+|'
+    # Facebook
+    r'facebook\.com/.+/videos/\d+|'
+    r'facebook\.com/watch/?\?v=\d+|'
+    r'facebook\.com/reel/\d+|'
+    r'fb\.watch/[\w-]+|'
+    # Snapchat
+    r'snapchat\.com/spotlight/[\w-]+|'
+    r'snapchat\.com/t/[\w-]+|'
+    # Twitch
+    r'twitch\.tv/\w+/clip/[\w-]+|'
+    r'clips\.twitch\.tv/[\w-]+'
+    r')',
+    re.IGNORECASE
+)
+
+# Max cooldown cache size before cleanup
+MAX_COOLDOWN_CACHE_SIZE = 100
+
 
 class MessageHandler(commands.Cog):
     """Handles message events."""
@@ -43,7 +79,25 @@ class MessageHandler(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         """Initialize the message handler with bot reference."""
         self.bot = bot
-        self._download_cooldowns: dict[int, float] = {}  # user_id -> last_download_time
+        self._download_cooldowns: OrderedDict[int, float] = OrderedDict()  # user_id -> last_download_time
+
+    def _cleanup_download_cooldowns(self) -> None:
+        """Remove expired cooldowns to prevent unbounded growth."""
+        if len(self._download_cooldowns) <= MAX_COOLDOWN_CACHE_SIZE:
+            return
+
+        now = time.time()
+        # Remove entries older than cooldown period
+        expired_users = [
+            uid for uid, ts in self._download_cooldowns.items()
+            if now - ts > self.DOWNLOAD_REPLY_COOLDOWN
+        ]
+        for uid in expired_users:
+            del self._download_cooldowns[uid]
+
+        # If still too large, remove oldest entries (FIFO)
+        while len(self._download_cooldowns) > MAX_COOLDOWN_CACHE_SIZE:
+            self._download_cooldowns.popitem(last=False)
 
     async def _handle_reply_convert(self, message: discord.Message) -> None:
         """Handle replying 'convert' to an image/video - opens interactive editor."""
@@ -451,8 +505,6 @@ class MessageHandler(commands.Cog):
 
     async def _handle_reply_download(self, message: discord.Message) -> None:
         """Handle replying 'download' or 'dw' to a message with a link."""
-        import time
-
         log.tree("Download Reply Started", [
             ("User", f"{message.author.name} ({message.author.display_name})"),
             ("ID", str(message.author.id)),
@@ -504,37 +556,8 @@ class MessageHandler(commands.Cog):
                 await message.reply("Couldn't access that message.", mention_author=False)
                 return
 
-        # URL pattern for all supported platforms
-        url_pattern = re.compile(
-            r'https?://(?:www\.)?(?:'
-            # Instagram
-            r'instagram\.com/(?:p|reel|reels|stories)/[\w-]+|'
-            r'instagram\.com/[\w.]+/(?:p|reel)/[\w-]+|'
-            # Twitter/X
-            r'(?:twitter|x)\.com/\w+/status/\d+|'
-            # TikTok
-            r'tiktok\.com/@[\w.]+/video/\d+|'
-            r'(?:vm|vt)\.tiktok\.com/[\w]+|'
-            r'tiktok\.com/t/[\w]+|'
-            # Reddit
-            r'reddit\.com/r/\w+/comments/\w+|'
-            r'v\.redd\.it/\w+|'
-            # Facebook
-            r'facebook\.com/.+/videos/\d+|'
-            r'facebook\.com/watch/?\?v=\d+|'
-            r'facebook\.com/reel/\d+|'
-            r'fb\.watch/[\w-]+|'
-            # Snapchat
-            r'snapchat\.com/spotlight/[\w-]+|'
-            r'snapchat\.com/t/[\w-]+|'
-            # Twitch
-            r'twitch\.tv/\w+/clip/[\w-]+|'
-            r'clips\.twitch\.tv/[\w-]+'
-            r')',
-            re.IGNORECASE
-        )
-
-        urls = url_pattern.findall(original.content)
+        # Use pre-compiled regex pattern (module-level constant)
+        urls = DOWNLOAD_URL_PATTERN.findall(original.content)
 
         if not urls:
             msg = await message.reply(
@@ -558,8 +581,9 @@ class MessageHandler(commands.Cog):
 
         url = urls[0]
 
-        # Record cooldown
+        # Record cooldown and cleanup old entries
         self._download_cooldowns[user_id] = time.time()
+        self._cleanup_download_cooldowns()
 
         log.tree("Reply Download", [
             ("User", f"{message.author.name} ({message.author.display_name})"),
@@ -623,10 +647,10 @@ class MessageHandler(commands.Cog):
                     ("Error", str(e)[:50]),
                 ], emoji="❌")
 
-        # Track images shared
+        # Track images shared (non-blocking)
         if message.guild and message.guild.id == config.GUILD_ID and message.attachments:
             try:
-                db.increment_images_shared(message.author.id, message.guild.id)
+                await asyncio.to_thread(db.increment_images_shared, message.author.id, message.guild.id)
             except Exception as e:
                 log.tree("Image Track Failed", [
                     ("User", f"{message.author.name} ({message.author.display_name})"),
@@ -682,12 +706,12 @@ class MessageHandler(commands.Cog):
                     ("Error", str(e)[:50]),
                 ], emoji="❌")
 
-        # Track reactions in main server
+        # Track reactions in main server (non-blocking)
         if reaction.message.guild.id != config.GUILD_ID:
             return
 
         try:
-            db.increment_reactions_given(user.id, reaction.message.guild.id)
+            await asyncio.to_thread(db.increment_reactions_given, user.id, reaction.message.guild.id)
         except Exception as e:
             log.tree("Reaction Track Failed", [
                 ("User", f"{user.name} ({user.display_name})"),

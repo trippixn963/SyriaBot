@@ -7,6 +7,8 @@ Optimized with page pooling and caching for fast generation.
 """
 
 import asyncio
+import atexit
+import signal
 import time
 from typing import Optional
 from playwright.async_api import async_playwright
@@ -37,11 +39,54 @@ _MAX_POOL_SIZE = 3
 _card_cache: dict = {}
 _CACHE_TTL = 30  # Cache cards for 30 seconds
 
+# Track last activity for idle timeout
+_last_activity: float = 0
+_IDLE_TIMEOUT = 300  # Close browser after 5 minutes of inactivity
+
+
+def _sync_cleanup():
+    """Synchronous cleanup for atexit/signal handlers."""
+    import subprocess
+    try:
+        # Kill any orphaned chrome-headless-shell processes owned by this user
+        subprocess.run(
+            ['pkill', '-f', 'chrome-headless-shell'],
+            capture_output=True,
+            timeout=5
+        )
+    except Exception:
+        pass
+
+
+# Register cleanup handlers
+atexit.register(_sync_cleanup)
+
+
+async def _check_idle_timeout():
+    """Check if browser should be closed due to inactivity."""
+    global _last_activity
+    if _browser is not None and _last_activity > 0:
+        idle_time = time.time() - _last_activity
+        if idle_time > _IDLE_TIMEOUT:
+            log.tree("Rank Card Browser Idle", [
+                ("Idle Time", f"{int(idle_time)}s"),
+                ("Action", "Closing browser"),
+            ], emoji="💤")
+            await cleanup()
+
 
 async def _get_context():
     """Get or create browser context (reusable)."""
-    global _browser, _context, _playwright
+    global _browser, _context, _playwright, _last_activity
+
+    # Check if we should close idle browser first
+    await _check_idle_timeout()
+
     if _context is None:
+        log.tree("Rank Card Browser Starting", [
+            ("Action", "Launching Chromium"),
+        ], emoji="🚀")
+
         _playwright = await async_playwright().start()
         _browser = await _playwright.chromium.launch(
             headless=True,
@@ -64,6 +109,12 @@ async def _get_context():
             viewport={'width': 940, 'height': 290},
             device_scale_factor=1,
         )
+
+        log.tree("Rank Card Browser Ready", [
+            ("Status", "Chromium launched"),
+        ], emoji="✅")
+
+    _last_activity = time.time()
     return _context
 
 
@@ -634,7 +685,10 @@ async def generate_rank_card(
 
 async def cleanup():
     """Clean up browser resources. Call on bot shutdown."""
-    global _browser, _context, _playwright, _page_pool, _card_cache
+    global _browser, _context, _playwright, _page_pool, _card_cache, _last_activity
+
+    # Reset activity timer
+    _last_activity = 0
 
     # Close all pooled pages
     async with _page_pool_lock:
@@ -669,5 +723,8 @@ async def cleanup():
 
     # Clear cache
     _card_cache.clear()
+
+    # Force kill any remaining chrome processes as safety net
+    _sync_cleanup()
 
     log.tree("Rank Card Cleanup", [("Status", "Browser closed")], emoji="🧹")
