@@ -229,9 +229,9 @@ class SyriaBot(commands.Bot):
             log.error_tree("Presence Handler Init Failed", e)
 
         # Bump Reminder (Disboard)
-        if config.BUMP_CHANNEL_ID and config.BUMP_ROLE_ID:
+        if config.BUMP_CHANNEL_ID and config.MOD_ROLE_ID:
             try:
-                bump_service.setup(self, config.BUMP_CHANNEL_ID, config.BUMP_ROLE_ID)
+                bump_service.setup(self, config.BUMP_CHANNEL_ID, config.MOD_ROLE_ID)
                 bump_service.start()
                 initialized.append("BumpReminder")
             except Exception as e:

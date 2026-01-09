@@ -94,7 +94,6 @@ class Config:
     MOD_ROLE_ID: int = _env_int("SYRIA_MOD_ROLE")
     AUTO_ROLE_ID: int = _env_int("SYRIA_AUTO_ROLE")
     BOOSTER_ROLE_ID: int = _env_int("SYRIA_BOOSTER_ROLE")
-    BUMP_ROLE_ID: int = _env_int("SYRIA_BUMP_ROLE")
 
     # ==========================================================================
     # Channels
