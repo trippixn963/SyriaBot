@@ -116,7 +116,7 @@ async def _get_context():
             ]
         )
         _context = await _browser.new_context(
-            viewport={'width': 940, 'height': 290},
+            viewport={'width': 960, 'height': 300},
             device_scale_factor=1,
         )
 
@@ -193,6 +193,10 @@ def _generate_html(
         body {{
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans', Ubuntu, sans-serif;
             background: transparent;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
         }}
 
         .card-wrapper {{
@@ -624,6 +628,9 @@ async def generate_rank_card(
 
             # Clear page before each render to prevent stale content
             await page.goto('about:blank')
+
+            # Reset viewport size (fun cards may have changed it)
+            await page.set_viewport_size({'width': 960, 'height': 300})
 
             # Generate HTML
             html = _generate_html(

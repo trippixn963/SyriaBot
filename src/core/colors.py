@@ -59,6 +59,9 @@ EMOJI_CONFESSION = "<:confession:1458963705256742962>"
 # Suggestion System
 EMOJI_SUGGEST = "<:suggest:1459288562859118662>"
 
+# Giveaway System
+EMOJI_GIVEAWAY = "🎉"  # TODO: Replace with custom emoji when uploaded
+
 
 # =============================================================================
 # AFK Emojis (Unicode)

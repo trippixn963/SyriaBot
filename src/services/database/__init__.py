@@ -29,6 +29,7 @@ from .downloads import DownloadsMixin
 from .confessions import ConfessionsMixin
 from .actions import ActionsMixin
 from .suggestions import SuggestionsMixin
+from .giveaways import GiveawaysMixin
 
 
 class Database(
@@ -41,6 +42,7 @@ class Database(
     ConfessionsMixin,
     ActionsMixin,
     SuggestionsMixin,
+    GiveawaysMixin,
     DatabaseCore,
 ):
     """

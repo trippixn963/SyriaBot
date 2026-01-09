@@ -188,22 +188,6 @@ def celsius_to_fahrenheit(celsius: float) -> float:
     return (celsius * 9/5) + 32
 
 
-def get_wind_direction(degrees: int) -> str:
-    """
-    Convert wind degrees to compass direction.
-
-    Args:
-        degrees: Wind direction in degrees (0-360)
-
-    Returns:
-        Compass direction string (e.g., "N", "NE", "SW")
-    """
-    directions = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
-                  "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"]
-    index = round(degrees / 22.5) % 16
-    return directions[index]
-
-
 # =============================================================================
 # Weather View (Toggle Button)
 # =============================================================================
@@ -237,7 +221,7 @@ class WeatherView(discord.ui.View):
 
     def build_embed(self) -> discord.Embed:
         """
-        Build a beautiful weather embed.
+        Build a clean weather embed.
 
         Returns:
             Discord embed with weather information
@@ -245,7 +229,6 @@ class WeatherView(discord.ui.View):
         data = self.weather_data
         main = data["main"]
         weather = data["weather"][0]
-        wind = data["wind"]
 
         # Get icon based on weather condition
         icon_code = weather.get("icon", "01d")
@@ -256,28 +239,27 @@ class WeatherView(discord.ui.View):
         feels_c = main["feels_like"]
         temp_min_c = main["temp_min"]
         temp_max_c = main["temp_max"]
+        humidity = main["humidity"]
 
         if self.is_celsius:
             temp_display = f"{temp_c:.0f}°C"
             feels_display = f"{feels_c:.0f}°C"
             high_low = f"{temp_max_c:.0f}° / {temp_min_c:.0f}°"
-            unit_label = "Celsius"
         else:
             temp_display = f"{celsius_to_fahrenheit(temp_c):.0f}°F"
             feels_display = f"{celsius_to_fahrenheit(feels_c):.0f}°F"
             high_low = f"{celsius_to_fahrenheit(temp_max_c):.0f}° / {celsius_to_fahrenheit(temp_min_c):.0f}°"
-            unit_label = "Fahrenheit"
 
-        # Build the main description with large temperature display
-        description_parts = [
-            f"## {icon} {temp_display}",
-            f"**{weather['description'].title()}**",
-            f"Feels like **{feels_display}** · High/Low: **{high_low}**",
-        ]
+        # Clean, minimal description
+        description = (
+            f"## {icon} {temp_display}\n"
+            f"**{weather['description'].title()}**\n\n"
+            f"Feels like **{feels_display}** · H/L **{high_low}** · 💧 **{humidity}%**"
+        )
 
         embed = discord.Embed(
-            title=f"Weather in {self.city}",
-            description="\n".join(description_parts),
+            title=self.city,
+            description=description,
             color=COLOR_WEATHER
         )
 
@@ -285,61 +267,6 @@ class WeatherView(discord.ui.View):
         if icon_code:
             embed.set_thumbnail(url=f"https://openweathermap.org/img/wn/{icon_code}@4x.png")
 
-        # Wind info
-        wind_speed = wind["speed"]
-        wind_dir = get_wind_direction(wind.get("deg", 0))
-        wind_gust = wind.get("gust", None)
-        wind_value = f"**{wind_speed} m/s** {wind_dir}"
-        if wind_gust:
-            wind_value += f"\nGusts: {wind_gust} m/s"
-
-        # Atmospheric conditions
-        humidity = main["humidity"]
-        pressure = main["pressure"]
-        visibility = data.get("visibility", 0) / 1000
-        clouds = data.get("clouds", {}).get("all", 0)
-
-        # Row 1: Wind, Humidity, Clouds
-        embed.add_field(
-            name="💨 Wind",
-            value=wind_value,
-            inline=True
-        )
-        embed.add_field(
-            name="💧 Humidity",
-            value=f"**{humidity}%**",
-            inline=True
-        )
-        embed.add_field(
-            name="☁️ Clouds",
-            value=f"**{clouds}%**",
-            inline=True
-        )
-
-        # Row 2: Pressure, Visibility, Sunrise/Sunset
-        embed.add_field(
-            name="📊 Pressure",
-            value=f"**{pressure}** hPa",
-            inline=True
-        )
-        embed.add_field(
-            name="👁️ Visibility",
-            value=f"**{visibility:.1f}** km",
-            inline=True
-        )
-
-        # Sunrise/Sunset
-        if "sys" in data:
-            sunrise = data["sys"].get("sunrise")
-            sunset = data["sys"].get("sunset")
-            if sunrise and sunset:
-                embed.add_field(
-                    name="🌅 Sun",
-                    value=f"↑ <t:{sunrise}:t>\n↓ <t:{sunset}:t>",
-                    inline=True
-                )
-
-        # Standard footer
         set_footer(embed)
 
         return embed

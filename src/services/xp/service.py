@@ -493,6 +493,22 @@ class XPService:
                 if roles_earned:
                     await self._send_reward_dm(member, new_level, roles_earned)
 
+                # Grant casino currency for level up (to bank)
+                if self.bot.currency_service and self.bot.currency_service.is_enabled():
+                    success, msg = await self.bot.currency_service.grant(
+                        user_id=member.id,
+                        amount=10000,
+                        reason=f"Level up to {new_level}",
+                        target="bank"
+                    )
+                    if success:
+                        log.tree("Level Up Currency Reward", [
+                            ("User", f"{member.name} ({member.display_name})"),
+                            ("ID", str(member.id)),
+                            ("Level", str(new_level)),
+                            ("Amount", "10,000 coins → Bank"),
+                        ], emoji="🏦")
+
         except Exception as e:
             log.error_tree("XP Grant Error", e, [
                 ("User", f"{member.name} ({member.display_name})"),

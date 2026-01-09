@@ -27,6 +27,8 @@ from src.services.presence import PresenceHandler
 from src.services.bump_service import bump_service
 from src.services.confessions import ConfessionService
 from src.services.suggestions import SuggestionService
+from src.services.currency_service import CurrencyService
+from src.services.giveaway import GiveawayService
 from src.services.action_service import action_service
 from src.services.database import db
 from src.utils.http import http_session
@@ -60,6 +62,8 @@ class SyriaBot(commands.Bot):
         self.presence_handler: Optional[PresenceHandler] = None
         self.confession_service: Optional[ConfessionService] = None
         self.suggestion_service: Optional[SuggestionService] = None
+        self.currency_service: Optional[CurrencyService] = None
+        self.giveaway_service: Optional[GiveawayService] = None
 
     async def setup_hook(self) -> None:
         """Called when the bot is starting up."""
@@ -97,6 +101,7 @@ class SyriaBot(commands.Bot):
             "src.commands.confess",
             "src.commands.rules",
             "src.commands.suggest",
+            "src.commands.giveaway",
         ]
         loaded_commands = []
         for cmd in commands_list:
@@ -112,6 +117,10 @@ class SyriaBot(commands.Bot):
             ("Handlers", ", ".join(loaded_handlers)),
             ("Commands", ", ".join(loaded_commands)),
         ], emoji="✅")
+
+        # Register persistent views
+        from src.services.giveaway.views import GiveawayEntryView
+        self.add_view(GiveawayEntryView(giveaway_id=0))
 
         # Set up app command completion tracking
         self.tree.on_error = self._on_app_command_error
@@ -257,9 +266,25 @@ class SyriaBot(commands.Bot):
         except Exception as e:
             log.error_tree("Suggestions Init Failed", e)
 
+        # Currency (JawdatBot integration)
+        try:
+            self.currency_service = CurrencyService()
+            await self.currency_service.setup()
+            initialized.append("Currency")
+        except Exception as e:
+            log.error_tree("Currency Service Init Failed", e)
+
+        # Giveaways
+        try:
+            self.giveaway_service = GiveawayService(self)
+            await self.giveaway_service.setup()
+            initialized.append("Giveaways")
+        except Exception as e:
+            log.error_tree("Giveaway Service Init Failed", e)
+
         log.tree("Services Init Complete", [
             ("Services", ", ".join(initialized)),
-            ("Count", f"{len(initialized)}/10"),
+            ("Count", f"{len(initialized)}/12"),
         ], emoji="✅")
 
     async def close(self) -> None:
@@ -344,6 +369,22 @@ class SyriaBot(commands.Bot):
                 stopped.append("Suggestions")
             except Exception as e:
                 log.error_tree("Suggestions Stop Error", e)
+
+        # Currency
+        if self.currency_service:
+            try:
+                await self.currency_service.stop()
+                stopped.append("Currency")
+            except Exception as e:
+                log.error_tree("Currency Service Stop Error", e)
+
+        # Giveaways
+        if self.giveaway_service:
+            try:
+                self.giveaway_service.stop()
+                stopped.append("Giveaways")
+            except Exception as e:
+                log.error_tree("Giveaway Service Stop Error", e)
 
         # Close HTTP session
         try:

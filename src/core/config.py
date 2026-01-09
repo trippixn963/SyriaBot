@@ -146,6 +146,11 @@ class Config:
     SUGGESTIONS_CHANNEL_ID: int = _env_int("SYRIA_SUGGESTIONS_CH")
 
     # ==========================================================================
+    # Giveaways
+    # ==========================================================================
+    GIVEAWAY_CHANNEL_ID: int = _env_int("SYRIA_GIVEAWAY_CH", 1429448081354522704)
+
+    # ==========================================================================
     # Rate Limits
     # ==========================================================================
     DOWNLOAD_WEEKLY_LIMIT: int = _env_int("SYRIA_DOWNLOAD_LIMIT", 5)
@@ -159,6 +164,12 @@ class Config:
     GOOGLE_API_KEY: str = _env("GOOGLE_API_KEY")
     GOOGLE_CX: str = _env("GOOGLE_CX")
     DEEPL_API_KEY: str = _env("DEEPL_API_KEY")
+
+    # ==========================================================================
+    # JawdatBot Integration (Casino Currency)
+    # ==========================================================================
+    JAWDAT_API_URL: str = _env("JAWDAT_API_URL", "http://188.245.32.205:8089")
+    JAWDAT_API_KEY: str = _env("JAWDAT_API_KEY")
 
     # ==========================================================================
     # Webhooks

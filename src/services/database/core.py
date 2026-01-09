@@ -440,9 +440,58 @@ class DatabaseCore:
             """)
 
             # =====================================================================
+            # Giveaways Tables
+            # =====================================================================
+
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS giveaways (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    message_id INTEGER UNIQUE,
+                    channel_id INTEGER NOT NULL,
+                    host_id INTEGER NOT NULL,
+                    prize_type TEXT NOT NULL,
+                    prize_description TEXT NOT NULL,
+                    prize_amount INTEGER DEFAULT 0,
+                    prize_coins INTEGER DEFAULT 0,
+                    prize_role_id INTEGER,
+                    required_role_id INTEGER,
+                    min_level INTEGER DEFAULT 0,
+                    winner_count INTEGER DEFAULT 1,
+                    ends_at TIMESTAMP NOT NULL,
+                    ended INTEGER DEFAULT 0,
+                    winners TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+
+            # Migration: Add prize_coins column if missing
+            cur.execute("PRAGMA table_info(giveaways)")
+            columns = [row[1] for row in cur.fetchall()]
+            if "prize_coins" not in columns:
+                cur.execute("ALTER TABLE giveaways ADD COLUMN prize_coins INTEGER DEFAULT 0")
+
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS giveaway_entries (
+                    giveaway_id INTEGER NOT NULL,
+                    user_id INTEGER NOT NULL,
+                    entered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (giveaway_id, user_id),
+                    FOREIGN KEY (giveaway_id) REFERENCES giveaways(id) ON DELETE CASCADE
+                )
+            """)
+
+            # =====================================================================
             # Indexes
             # =====================================================================
 
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_giveaways_ends_at
+                ON giveaways(ends_at) WHERE ended = 0
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_giveaways_message
+                ON giveaways(message_id)
+            """)
             cur.execute("""
                 CREATE INDEX IF NOT EXISTS idx_user_xp_leaderboard
                 ON user_xp(guild_id, xp DESC)
