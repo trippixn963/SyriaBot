@@ -212,6 +212,14 @@ QUOTE_FETCH_TIMEOUT = 15        # Banner/avatar fetch timeout
 
 
 # =============================================================================
+# Message Auto-Delete Delays
+# =============================================================================
+
+DELETE_DELAY_SHORT = 5          # Quick auto-delete for errors/cooldowns
+DELETE_DELAY_MEDIUM = 10        # Longer for download status messages
+
+
+# =============================================================================
 # Presence System
 # =============================================================================
 

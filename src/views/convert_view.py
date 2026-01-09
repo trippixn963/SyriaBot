@@ -15,7 +15,7 @@ import discord
 from discord import ui
 from typing import Optional
 from dataclasses import dataclass
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
 from src.core.colors import (
     COLOR_ERROR, COLOR_WARNING, COLOR_GOLD,

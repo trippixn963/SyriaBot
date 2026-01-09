@@ -492,6 +492,9 @@ class Logger:
     # Public Methods - Tree Formatting
     # =========================================================================
 
+    # Error emojis that should route to error webhook
+    ERROR_EMOJIS = {"❌", "⚠️", "🚨", "💥"}
+
     def tree(
         self,
         title: str,
@@ -513,6 +516,14 @@ class Logger:
             items: List of (key, value) tuples
             emoji: Emoji prefix for title
         """
+        # Check if this is an error-level log based on emoji
+        is_error = emoji in self.ERROR_EMOJIS
+
+        if is_error:
+            # Use error tree path (writes to error log + error webhook)
+            self._tree_error(title, items, emoji)
+            return
+
         if not self._last_was_tree:
             self._write_raw("")
 

@@ -26,6 +26,7 @@ from src.services.gallery import GalleryService
 from src.services.presence import PresenceHandler
 from src.services.bump_service import bump_service
 from src.services.confession_service import ConfessionService
+from src.services.action_service import action_service
 from src.services.database import db
 from src.utils.http import http_session
 
@@ -337,6 +338,13 @@ class SyriaBot(commands.Bot):
             stopped.append("RankCard")
         except Exception as e:
             log.error_tree("Rank Card Cleanup Error", e)
+
+        # Close action service session
+        try:
+            await action_service.close()
+            stopped.append("ActionService")
+        except Exception as e:
+            log.error_tree("Action Service Close Error", e)
 
         await super().close()
         log.tree("Bot Shutdown Complete", [

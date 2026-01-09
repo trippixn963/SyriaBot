@@ -8,6 +8,7 @@ import discord
 from discord import ui
 
 from src.core.colors import COLOR_SUCCESS, COLOR_ERROR, COLOR_WARNING, COLOR_NEUTRAL, COLOR_BOOST
+from src.core.constants import CLAIM_APPROVAL_TIMEOUT
 from src.core.logger import log
 from src.services.database import db
 from src.utils.footer import set_footer
@@ -23,7 +24,7 @@ class ClaimApprovalView(ui.View):
     """View for owner to approve/deny claim requests."""
 
     def __init__(self, channel: discord.VoiceChannel, requester: discord.Member, owner: discord.Member, service: "TempVoiceService"):
-        super().__init__(timeout=300)  # 5 minute timeout
+        super().__init__(timeout=CLAIM_APPROVAL_TIMEOUT)
         self.channel = channel
         self.requester = requester
         self.owner = owner

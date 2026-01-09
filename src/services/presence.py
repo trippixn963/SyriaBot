@@ -11,7 +11,7 @@ Server: discord.gg/syria
 
 import asyncio
 from datetime import datetime
-from typing import Optional, List, Callable, Awaitable
+from typing import Optional, List, Callable
 
 import discord
 from discord.ext import commands

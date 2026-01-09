@@ -18,6 +18,7 @@ from typing import Optional
 from src.core.config import config
 from src.core.logger import log
 from src.core.colors import COLOR_ERROR, COLOR_WARNING, COLOR_GOLD
+from src.core.constants import VIEW_TIMEOUT_DEFAULT
 from src.utils.footer import set_footer
 from src.utils.http import http_session
 
@@ -127,7 +128,7 @@ class DownloadView(ui.View):
             label: Label for logging purposes
             requester_id: ID of user who can save
         """
-        super().__init__(timeout=300)
+        super().__init__(timeout=VIEW_TIMEOUT_DEFAULT)
         self.url = url
         self.label = label
         self.requester_id = requester_id
@@ -188,7 +189,7 @@ class AvatarToggleView(ui.View):
             showing_server: Whether to show server avatar first
             requester_id: ID of user who can save
         """
-        super().__init__(timeout=300)
+        super().__init__(timeout=VIEW_TIMEOUT_DEFAULT)
         self.target = target
         self.server_url = server_url
         self.global_url = global_url
@@ -297,7 +298,7 @@ class BannerToggleView(ui.View):
             showing_server: Whether to show server banner first
             requester_id: ID of user who can save
         """
-        super().__init__(timeout=300)
+        super().__init__(timeout=VIEW_TIMEOUT_DEFAULT)
         self.target = target
         self.server_url = server_url
         self.global_url = global_url

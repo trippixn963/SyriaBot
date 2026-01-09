@@ -18,6 +18,7 @@ from collections import OrderedDict
 from src.core.config import config
 from src.core.logger import log
 from src.core.colors import COLOR_SYRIA_GREEN, COLOR_WARNING
+from src.core.constants import DELETE_DELAY_MEDIUM
 from src.services.database import db
 from src.utils.footer import set_footer
 
@@ -117,6 +118,10 @@ class ConfessionService:
         if message.author.bot:
             return False
 
+        # Skip if service not enabled
+        if not self._enabled or not self._channel_id:
+            return False
+
         # Check if in main confessions channel
         if self._channel_id and message.channel.id == self._channel_id:
             try:
@@ -150,7 +155,20 @@ class ConfessionService:
 
         # Check if in a confession thread
         if isinstance(message.channel, discord.Thread):
-            if message.channel.name.startswith("Confession #"):
+            # Verify it's a confession thread (name check + parent channel check)
+            is_confession_thread = (
+                message.channel.name.startswith("Confession #") and
+                message.channel.parent_id == self._channel_id
+            )
+
+            if is_confession_thread:
+                log.tree("Confession Thread Message Detected", [
+                    ("User", f"{message.author.name} ({message.author.display_name})"),
+                    ("ID", str(message.author.id)),
+                    ("Thread", message.channel.name),
+                    ("Content", message.content[:30] if message.content else "(empty)"),
+                ], emoji="🔍")
+
                 # Delete the message
                 try:
                     await message.delete()
@@ -158,7 +176,6 @@ class ConfessionService:
                         ("User", f"{message.author.name} ({message.author.display_name})"),
                         ("ID", str(message.author.id)),
                         ("Thread", message.channel.name),
-                        ("Content", message.content[:30] if message.content else "(empty)"),
                     ], emoji="🗑️")
                 except discord.NotFound:
                     log.tree("Thread Message Already Deleted", [
@@ -171,6 +188,7 @@ class ConfessionService:
                         ("User", f"{message.author.name} ({message.author.display_name})"),
                         ("ID", str(message.author.id)),
                         ("Thread", message.channel.name),
+                        ("Reason", "Missing permissions"),
                     ], emoji="⚠️")
                 except discord.HTTPException as e:
                     log.tree("Thread Message Delete Failed", [
@@ -195,7 +213,7 @@ class ConfessionService:
                         )
                         set_footer(embed)
                         warn_msg = await message.channel.send(embed=embed)
-                        await warn_msg.delete(delay=10)
+                        await warn_msg.delete(delay=DELETE_DELAY_MEDIUM)
 
                         log.tree("Thread Reply Warning Sent", [
                             ("User", f"{message.author.name} ({message.author.display_name})"),
@@ -208,6 +226,13 @@ class ConfessionService:
                             ("ID", str(message.author.id)),
                             ("Error", str(e)[:50]),
                         ], emoji="❌")
+                else:
+                    log.tree("Thread Warning Skipped", [
+                        ("User", f"{message.author.name} ({message.author.display_name})"),
+                        ("ID", str(message.author.id)),
+                        ("Thread", message.channel.name),
+                        ("Reason", "Already warned"),
+                    ], emoji="ℹ️")
 
                 return True
 
@@ -288,6 +313,8 @@ class ConfessionService:
     def _get_anon_id(self, thread_id: int, user_id: int) -> str:
         """
         Get or generate an anonymous ID for a user in a thread.
+        Uses hash-based assignment so the same user gets different letters
+        in different threads (prevents pattern detection across threads).
 
         Args:
             thread_id: The thread ID
@@ -305,18 +332,39 @@ class ConfessionService:
 
         # Return existing ID if user already has one
         if user_id in thread_users:
-            return thread_users[user_id]
+            existing_id = thread_users[user_id]
+            log.tree("Anon-ID Reused", [
+                ("Thread ID", str(thread_id)),
+                ("User ID", str(user_id)),
+                ("Anon-ID", existing_id),
+            ], emoji="🎭")
+            return existing_id
 
-        # Generate new ID based on how many users are in this thread
-        index = len(thread_users)
-        if index < len(self.ANON_LETTERS):
-            anon_id = f"Anon-{self.ANON_LETTERS[index]}"
+        # Generate a hash-based letter index (different per thread+user combo)
+        # This ensures the same user gets different letters in different threads
+        hash_input = f"{thread_id}:{user_id}:syria_anon_salt"
+        hash_value = hash(hash_input)
+        base_index = abs(hash_value) % len(self.ANON_LETTERS)
+
+        # Find an unused letter starting from the hash-based index
+        used_ids = set(thread_users.values())
+        for offset in range(len(self.ANON_LETTERS) + 26):  # Try all letters + overflow
+            if offset < len(self.ANON_LETTERS):
+                check_index = (base_index + offset) % len(self.ANON_LETTERS)
+                candidate = f"Anon-{self.ANON_LETTERS[check_index]}"
+            else:
+                # Overflow: Anon-A1, Anon-B1, etc.
+                overflow_offset = offset - len(self.ANON_LETTERS)
+                letter = self.ANON_LETTERS[overflow_offset % len(self.ANON_LETTERS)]
+                number = (overflow_offset // len(self.ANON_LETTERS)) + 1
+                candidate = f"Anon-{letter}{number}"
+
+            if candidate not in used_ids:
+                anon_id = candidate
+                break
         else:
-            # If more than 26 users, use Anon-A1, Anon-A2, etc.
-            extra = index - len(self.ANON_LETTERS)
-            letter = self.ANON_LETTERS[extra % len(self.ANON_LETTERS)]
-            number = (extra // len(self.ANON_LETTERS)) + 1
-            anon_id = f"Anon-{letter}{number}"
+            # Fallback (should never happen with 26+ slots)
+            anon_id = f"Anon-{len(thread_users) + 1}"
 
         thread_users[user_id] = anon_id
 

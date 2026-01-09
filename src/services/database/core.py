@@ -407,6 +407,22 @@ class DatabaseCore:
                 pass
 
             # =====================================================================
+            # Action Stats Tables
+            # =====================================================================
+
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS action_stats (
+                    user_id INTEGER NOT NULL,
+                    target_id INTEGER,
+                    guild_id INTEGER NOT NULL,
+                    action TEXT NOT NULL,
+                    count INTEGER DEFAULT 1,
+                    last_used_at INTEGER NOT NULL,
+                    PRIMARY KEY (user_id, target_id, guild_id, action)
+                )
+            """)
+
+            # =====================================================================
             # Indexes
             # =====================================================================
 

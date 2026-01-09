@@ -2,7 +2,7 @@
 SyriaBot - Profile Sync Service
 ===============================
 
-Syncs bot avatar and banner with server.
+Syncs bot avatar with server icon.
 
 Author: حَـــــنَّـــــا
 Server: discord.gg/syria
@@ -22,7 +22,7 @@ SYNC_TIME = time(0, 0)  # Midnight
 
 
 class ProfileSyncService:
-    """Syncs bot profile with server icon/banner."""
+    """Syncs bot avatar with server icon."""
 
     def __init__(self, bot):
         self.bot = bot
@@ -104,28 +104,6 @@ class ProfileSyncService:
                     ], emoji="❌")
             except Exception as e:
                 log.tree("Avatar Sync Failed", [
-                    ("Error", str(e)[:100]),
-                ], emoji="❌")
-
-        # Sync banner with server banner (requires Nitro)
-        if guild.banner:
-            try:
-                banner_bytes = await guild.banner.read()
-                await self.bot.user.edit(banner=banner_bytes)
-                changes.append(("Banner", "Synced from server banner"))
-            except discord.HTTPException as e:
-                if "nitro" in str(e).lower() or "premium" in str(e).lower():
-                    pass  # Bot doesn't have Nitro, skip silently
-                elif "rate" in str(e).lower():
-                    log.tree("Banner Update Rate Limited", [
-                        ("Action", "Will retry next sync"),
-                    ], emoji="⏳")
-                else:
-                    log.tree("Banner Sync Failed", [
-                        ("Error", str(e)[:100]),
-                    ], emoji="❌")
-            except Exception as e:
-                log.tree("Banner Sync Failed", [
                     ("Error", str(e)[:100]),
                 ], emoji="❌")
 

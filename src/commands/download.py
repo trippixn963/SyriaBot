@@ -18,6 +18,7 @@ from discord.ext import commands
 from src.core.logger import log
 from src.core.config import config
 from src.core.colors import COLOR_ERROR, COLOR_WARNING
+from src.core.constants import DELETE_DELAY_MEDIUM
 from src.services.downloader import downloader
 from src.services.database import db
 from src.utils.footer import set_footer
@@ -101,8 +102,8 @@ async def handle_download(
             await interaction_or_message.followup.send(embed=embed, ephemeral=True)
         else:
             msg = await interaction_or_message.reply(embed=embed, mention_author=False)
-            # Auto-delete limit message after 10 seconds
-            await msg.delete(delay=10)
+            # Auto-delete limit message after medium delay
+            await msg.delete(delay=DELETE_DELAY_MEDIUM)
             try:
                 await interaction_or_message.delete()
             except discord.HTTPException as e:
@@ -133,7 +134,7 @@ async def handle_download(
             await interaction_or_message.followup.send(embed=embed, ephemeral=True)
         else:
             msg = await interaction_or_message.reply(embed=embed, mention_author=False)
-            await msg.delete(delay=10)
+            await msg.delete(delay=DELETE_DELAY_MEDIUM)
             try:
                 await interaction_or_message.delete()
             except discord.HTTPException as e:
@@ -238,7 +239,7 @@ async def handle_download(
             await interaction_or_message.followup.send(embed=embed, ephemeral=True)
         else:
             msg = await channel.send(embed=embed)
-            await msg.delete(delay=10)
+            await msg.delete(delay=DELETE_DELAY_MEDIUM)
 
         log.tree("Download Failed", [
             ("User", f"{user.name} ({user.display_name})"),
@@ -322,7 +323,7 @@ async def handle_download(
             await interaction_or_message.followup.send(embed=embed, ephemeral=True)
         else:
             msg = await channel.send(embed=embed)
-            await msg.delete(delay=10)
+            await msg.delete(delay=DELETE_DELAY_MEDIUM)
 
         log.tree("Download Upload Failed", [
             ("User", f"{user.name} ({user.display_name})"),

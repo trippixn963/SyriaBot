@@ -99,6 +99,9 @@ class ConvertService:
         # Ensure temp directory exists
         TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
+        # Clean up orphaned files from previous runs/crashes
+        self._cleanup_orphaned_files()
+
         # Find available font
         self._font_path = self._find_font()
 
@@ -114,6 +117,23 @@ class ConvertService:
             ("Font", Path(self._font_path).name if self._font_path else "Default"),
             ("GIF Engine", "ImageMagick (Wand)" if WAND_AVAILABLE else "Pillow"),
         ], emoji="✅" if WAND_AVAILABLE else "⚠️")
+
+    def _cleanup_orphaned_files(self) -> None:
+        """Clean up any leftover temp files from previous runs/crashes."""
+        try:
+            cleaned = 0
+            for item in TEMP_DIR.iterdir():
+                if item.is_file():
+                    item.unlink(missing_ok=True)
+                    cleaned += 1
+            if cleaned > 0:
+                log.tree("Convert Temp Cleanup", [
+                    ("Files Cleaned", str(cleaned)),
+                ], emoji="🧹")
+        except Exception as e:
+            log.tree("Convert Temp Cleanup Failed", [
+                ("Error", str(e)[:50]),
+            ], emoji="⚠️")
 
     def _find_font(self) -> Optional[str]:
         """Find an available font on the system."""

@@ -13,6 +13,7 @@ Structure:
     - afk.py: AFK system
     - downloads.py: Download statistics
     - confessions.py: Anonymous confessions system
+    - actions.py: Action command statistics
 
 Author: حَـــــنَّـــــا
 Server: discord.gg/syria
@@ -26,6 +27,7 @@ from .stats import StatsMixin
 from .afk import AFKMixin
 from .downloads import DownloadsMixin
 from .confessions import ConfessionsMixin
+from .actions import ActionsMixin
 
 
 class Database(
@@ -36,6 +38,7 @@ class Database(
     AFKMixin,
     DownloadsMixin,
     ConfessionsMixin,
+    ActionsMixin,
     DatabaseCore,
 ):
     """

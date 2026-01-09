@@ -9,6 +9,7 @@ from discord import ui
 
 from src.core.colors import COLOR_SUCCESS, COLOR_ERROR, COLOR_WARNING, COLOR_NEUTRAL, COLOR_BOOST
 from src.core.config import config
+from src.core.constants import SELECT_TIMEOUT_DEFAULT
 from src.core.logger import log
 from src.services.database import db
 from src.utils.footer import set_footer
@@ -27,7 +28,7 @@ class ConfirmView(ui.View):
     """Confirmation view for destructive actions."""
 
     def __init__(self, action: str, channel: discord.VoiceChannel, target: discord.Member = None):
-        super().__init__(timeout=60)  # 60 second timeout
+        super().__init__(timeout=SELECT_TIMEOUT_DEFAULT)
         self.action = action
         self.channel = channel
         self.target = target
@@ -184,7 +185,7 @@ class UserSelectView(ui.View):
     """View for user selection actions."""
 
     def __init__(self, channel: discord.VoiceChannel, action: str, service: "TempVoiceService" = None):
-        super().__init__(timeout=60)  # 60 second timeout
+        super().__init__(timeout=SELECT_TIMEOUT_DEFAULT)
         self.channel = channel
         self.action = action
         self.service = service

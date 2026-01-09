@@ -8,7 +8,6 @@ Optimized with page pooling and caching for fast generation.
 
 import asyncio
 import atexit
-import signal
 import time
 from typing import Optional
 from playwright.async_api import async_playwright
@@ -45,6 +44,14 @@ _IDLE_TIMEOUT = 300  # Close browser after 5 minutes of inactivity
 
 # Semaphore to limit concurrent card generations (prevents race conditions)
 _render_semaphore: asyncio.Semaphore = None
+
+
+def get_render_semaphore() -> asyncio.Semaphore:
+    """Get or create the shared render semaphore."""
+    global _render_semaphore
+    if _render_semaphore is None:
+        _render_semaphore = asyncio.Semaphore(2)
+    return _render_semaphore
 
 
 def _sync_cleanup():
@@ -587,11 +594,7 @@ async def generate_rank_card(
     status: str = "online",
 ) -> bytes:
     """Generate rank card using Playwright with caching and page pooling."""
-    global _card_cache, _render_semaphore
-
-    # Initialize semaphore on first use (limits concurrent renders to prevent race conditions)
-    if _render_semaphore is None:
-        _render_semaphore = asyncio.Semaphore(2)
+    global _card_cache
 
     # Create cache key from data that affects appearance
     cache_key = (
@@ -614,7 +617,7 @@ async def generate_rank_card(
         _card_cache.clear()
 
     # Use semaphore to limit concurrent renders
-    async with _render_semaphore:
+    async with get_render_semaphore():
         page = None
         try:
             page = await _get_page()

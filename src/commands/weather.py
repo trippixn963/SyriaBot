@@ -18,6 +18,7 @@ import aiohttp
 from src.core.config import config
 from src.core.logger import log
 from src.core.colors import COLOR_GOLD
+from src.core.constants import VIEW_TIMEOUT_DEFAULT
 from src.utils.footer import set_footer
 
 
@@ -220,7 +221,7 @@ class WeatherView(discord.ui.View):
             city: City name for display
             user_id: ID of user who invoked command
         """
-        super().__init__(timeout=300)
+        super().__init__(timeout=VIEW_TIMEOUT_DEFAULT)
         self.weather_data = weather_data
         self.city = city
         self.user_id = user_id

@@ -16,7 +16,6 @@ import discord
 
 from src.core.config import config
 from src.core.constants import TEMPVOICE_MAX_ALLOWED_USERS_FREE
-from src.core.colors import COLOR_BOOST
 from src.services.database import db
 
 if TYPE_CHECKING:
@@ -260,7 +259,6 @@ def get_locked_overwrite() -> discord.PermissionOverwrite:
 __all__ = [
     # Constants
     "MAX_ALLOWED_USERS_FREE",
-    "COLOR_BOOST",
     "NUMERAL_PREFIX_PATTERN",
     # Roman numerals
     "to_roman",

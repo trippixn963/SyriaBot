@@ -159,5 +159,8 @@ class Config:
     # XP API (for cross-bot XP integration)
     XP_API_KEY: str = os.getenv("SYRIA_XP_API_KEY", "")
 
+    # Fun Commands Channel (ship, simp, howgay)
+    FUN_COMMANDS_CHANNEL_ID: int = _get_env_int("SYRIA_FUN_COMMANDS_CHANNEL_ID", 0)
+
 
 config = Config()
