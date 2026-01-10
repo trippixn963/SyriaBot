@@ -330,11 +330,14 @@ class MembersHandler(commands.Cog):
 
     async def _send_welcome_dm(self, member: discord.Member) -> None:
         """Send a welcome DM to new members with server info and commands."""
+        # Build rules channel mention
+        rules_text = f"<#{config.RULES_CHANNEL_ID}>" if config.RULES_CHANNEL_ID else "the rules"
+
         embed = discord.Embed(
             title=f"Welcome to {member.guild.name}!",
             description=(
                 f"Hey {member.display_name}, we're glad to have you here!\n\n"
-                f"Take a moment to read the rules and explore the server."
+                f"Please read {rules_text} before chatting."
             ),
             color=COLOR_SYRIA_GREEN
         )
