@@ -40,6 +40,15 @@ class TempVoiceMixin:
                     INSERT INTO temp_channels (channel_id, owner_id, guild_id, name, created_at)
                     VALUES (?, ?, ?, ?, ?)
                 """, (channel_id, owner_id, guild_id, name, created_at))
+
+                if cur.rowcount == 0:
+                    log.tree("DB: Channel Create Failed", [
+                        ("Channel ID", str(channel_id)),
+                        ("Owner ID", str(owner_id)),
+                        ("Reason", "No rows inserted"),
+                    ], emoji="⚠️")
+                    return
+
             log.tree("DB: Channel Created", [
                 ("Channel ID", str(channel_id)),
                 ("Owner ID", str(owner_id)),

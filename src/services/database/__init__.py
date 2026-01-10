@@ -14,6 +14,9 @@ Structure:
     - downloads.py: Download statistics
     - confessions.py: Anonymous confessions system
     - actions.py: Action command statistics
+    - suggestions.py: Suggestion system
+    - giveaways.py: Giveaway system
+    - birthdays.py: Birthday tracking
 
 Author: حَـــــنَّـــــا
 Server: discord.gg/syria
@@ -30,6 +33,7 @@ from .confessions import ConfessionsMixin
 from .actions import ActionsMixin
 from .suggestions import SuggestionsMixin
 from .giveaways import GiveawaysMixin
+from .birthdays import BirthdaysMixin
 
 
 class Database(
@@ -43,6 +47,7 @@ class Database(
     ActionsMixin,
     SuggestionsMixin,
     GiveawaysMixin,
+    BirthdaysMixin,
     DatabaseCore,
 ):
     """

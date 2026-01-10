@@ -528,6 +528,29 @@ class DatabaseCore:
             """)
 
             # =====================================================================
+            # Birthdays Table
+            # =====================================================================
+
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS birthdays (
+                    user_id INTEGER NOT NULL,
+                    guild_id INTEGER NOT NULL,
+                    birth_month INTEGER NOT NULL,
+                    birth_day INTEGER NOT NULL,
+                    birth_year INTEGER,
+                    role_granted_at INTEGER,
+                    created_at INTEGER NOT NULL,
+                    PRIMARY KEY (user_id, guild_id)
+                )
+            """)
+
+            # Birthday migration - add birth_year column
+            try:
+                cur.execute("ALTER TABLE birthdays ADD COLUMN birth_year INTEGER")
+            except Exception:
+                pass
+
+            # =====================================================================
             # Indexes
             # =====================================================================
 
@@ -566,6 +589,10 @@ class DatabaseCore:
             cur.execute("""
                 CREATE INDEX IF NOT EXISTS idx_server_daily_stats_guild_date
                 ON server_daily_stats(guild_id, date)
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_birthdays_date
+                ON birthdays(guild_id, birth_month, birth_day)
             """)
 
             log.tree("Database Initialized", [

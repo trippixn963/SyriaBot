@@ -13,7 +13,7 @@ import discord
 from discord.ext import commands
 from typing import Optional
 
-from src.core.config import config
+from src.core.config import config, validate_config
 from src.core.logger import log
 from src.services.tempvoice import TempVoiceService
 from src.services.sync_profile import ProfileSyncService
@@ -30,6 +30,7 @@ from src.services.suggestions import SuggestionService
 from src.services.currency_service import CurrencyService
 from src.services.giveaway import GiveawayService
 from src.services.action_service import action_service
+from src.services.birthday_service import get_birthday_service
 from src.services.database import db
 from src.utils.http import http_session
 
@@ -64,6 +65,7 @@ class SyriaBot(commands.Bot):
         self.suggestion_service: Optional[SuggestionService] = None
         self.currency_service: Optional[CurrencyService] = None
         self.giveaway_service: Optional[GiveawayService] = None
+        self.birthday_service: Optional[BirthdayService] = None
 
     async def setup_hook(self) -> None:
         """Called when the bot is starting up."""
@@ -103,6 +105,7 @@ class SyriaBot(commands.Bot):
             "src.commands.rules",
             "src.commands.suggest",
             "src.commands.giveaway",
+            "src.commands.birthday",
         ]
         loaded_commands = []
         for cmd in commands_list:
@@ -167,6 +170,13 @@ class SyriaBot(commands.Bot):
         log.tree("Services Init", [
             ("Status", "Starting"),
         ], emoji="🔧")
+
+        # Validate configuration first
+        if not validate_config():
+            log.tree("CRITICAL: Config Invalid", [
+                ("Impact", "Bot may not function correctly"),
+                ("Action", "Check environment variables"),
+            ], emoji="🚨")
 
         # Check database health first - critical for most services
         if not db.is_healthy:
@@ -289,9 +299,17 @@ class SyriaBot(commands.Bot):
         except Exception as e:
             log.error_tree("Giveaway Service Init Failed", e)
 
+        # Birthdays
+        try:
+            self.birthday_service = get_birthday_service(self)
+            await self.birthday_service.setup()
+            initialized.append("Birthdays")
+        except Exception as e:
+            log.error_tree("Birthday Service Init Failed", e)
+
         log.tree("Services Init Complete", [
             ("Services", ", ".join(initialized)),
-            ("Count", f"{len(initialized)}/12"),
+            ("Count", f"{len(initialized)}/14"),
         ], emoji="✅")
 
     async def close(self) -> None:
@@ -392,6 +410,14 @@ class SyriaBot(commands.Bot):
                 stopped.append("Giveaways")
             except Exception as e:
                 log.error_tree("Giveaway Service Stop Error", e)
+
+        # Birthdays
+        if self.birthday_service:
+            try:
+                self.birthday_service.stop()
+                stopped.append("Birthdays")
+            except Exception as e:
+                log.error_tree("Birthday Service Stop Error", e)
 
         # Close HTTP session
         try:

@@ -58,6 +58,12 @@ class XPMixin:
                 VALUES (?, ?, 0, 0, 0, 0, ?)
             """, (user_id, guild_id, now))
 
+            if cur.rowcount == 0:
+                log.tree("XP User Create Failed", [
+                    ("User ID", str(user_id)),
+                    ("Guild ID", str(guild_id)),
+                ], emoji="⚠️")
+
         return {
             "user_id": user_id,
             "guild_id": guild_id,

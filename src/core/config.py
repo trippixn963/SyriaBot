@@ -177,6 +177,12 @@ class Config:
     IMAGE_WEEKLY_LIMIT: int = _env_int("SYRIA_IMAGE_LIMIT", 5)
 
     # ==========================================================================
+    # Birthdays
+    # ==========================================================================
+    BIRTHDAY_ROLE_ID: int = _env_int("SYRIA_BIRTHDAY_ROLE")
+    BIRTHDAY_ANNOUNCE_CHANNEL_ID: int = _env_int("SYRIA_BIRTHDAY_CH")
+
+    # ==========================================================================
     # External APIs
     # ==========================================================================
     OPENWEATHER_API_KEY: str = _env("OPENWEATHER_API_KEY")
@@ -208,3 +214,88 @@ class Config:
 
 
 config = Config()
+
+
+def validate_config() -> bool:
+    """
+    Validate configuration at startup.
+
+    Logs warnings for missing optional configs and errors for critical issues.
+
+    Returns:
+        True if critical config is valid, False if bot cannot start
+    """
+    from src.core.logger import log
+
+    is_valid = True
+    warnings = []
+    errors = []
+
+    # Critical: Token must be set
+    if not config.TOKEN:
+        errors.append(("SYRIA_TOKEN", "Bot token is required"))
+        is_valid = False
+
+    # Critical: Guild ID should be set
+    if not config.GUILD_ID:
+        errors.append(("SYRIA_GUILD", "Main guild ID is required"))
+        is_valid = False
+
+    # Important but not critical
+    if not config.MOD_ROLE_ID:
+        warnings.append(("SYRIA_MOD_ROLE", "Moderation features limited"))
+    if not config.BOOSTER_ROLE_ID:
+        warnings.append(("SYRIA_BOOSTER_ROLE", "Booster XP multiplier disabled"))
+
+    # TempVoice config
+    if config.VC_CREATOR_CHANNEL_ID and not config.VC_CATEGORY_ID:
+        warnings.append(("SYRIA_VC_CATEGORY", "TempVoice may not work properly"))
+
+    # XP System
+    if not config.XP_ROLE_REWARDS:
+        warnings.append(("SYRIA_XP_ROLES", "XP level role rewards disabled"))
+
+    # External APIs (info level - expected to be optional)
+    optional_apis = []
+    if not config.OPENWEATHER_API_KEY:
+        optional_apis.append("Weather")
+    if not config.OPENAI_API_KEY:
+        optional_apis.append("AI")
+    if not config.DEEPL_API_KEY:
+        optional_apis.append("Translation")
+    if not config.GOOGLE_API_KEY or not config.GOOGLE_CX:
+        optional_apis.append("ImageSearch")
+
+    # Log results
+    if errors:
+        for key, reason in errors:
+            log.tree("Config Error", [
+                ("Variable", key),
+                ("Reason", reason),
+                ("Impact", "Bot cannot start"),
+            ], emoji="🚨")
+
+    if warnings:
+        for key, reason in warnings:
+            log.tree("Config Warning", [
+                ("Variable", key),
+                ("Reason", reason),
+            ], emoji="⚠️")
+
+    if optional_apis:
+        log.tree("Optional APIs Not Configured", [
+            ("APIs", ", ".join(optional_apis)),
+            ("Impact", "Related commands disabled"),
+        ], emoji="ℹ️")
+
+    if is_valid and not warnings:
+        log.tree("Config Validation", [
+            ("Status", "All checks passed"),
+        ], emoji="✅")
+    elif is_valid:
+        log.tree("Config Validation", [
+            ("Status", "Passed with warnings"),
+            ("Warnings", str(len(warnings))),
+        ], emoji="⚠️")
+
+    return is_valid
