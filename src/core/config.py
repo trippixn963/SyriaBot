@@ -118,7 +118,7 @@ class Config:
     # Channels
     # ==========================================================================
     GENERAL_CHANNEL_ID: int = _env_int("SYRIA_GENERAL_CH")
-    RULES_CHANNEL_ID: int = _env_int("SYRIA_RULES_CH", 1403561804701106309)
+    RULES_CHANNEL_ID: int = _env_int("SYRIA_RULES_CH")
     GALLERY_CHANNEL_ID: int = _env_int("SYRIA_GALLERY_CH")
     MEMES_CHANNEL_ID: int = _env_int("SYRIA_MEMES_CH")
     BUMP_CHANNEL_ID: int = _env_int("SYRIA_BUMP_CH")
