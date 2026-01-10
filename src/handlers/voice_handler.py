@@ -43,11 +43,12 @@ class VoiceHandler(commands.Cog):
             try:
                 await self.bot.tempvoice.on_voice_state_update(member, before, after)
             except Exception as e:
-                log.tree("TempVoice Voice Update Error", [
+                log.error_tree("TempVoice Voice Update Error", e, [
                     ("User", f"{member.name} ({member.display_name})"),
                     ("ID", str(member.id)),
-                    ("Error", str(e)),
-                ], emoji="❌")
+                    ("Before Channel", str(before.channel.id) if before.channel else "None"),
+                    ("After Channel", str(after.channel.id) if after.channel else "None"),
+                ])
 
         # Forward to XP service for voice tracking
         if hasattr(self.bot, 'xp_service') and self.bot.xp_service:

@@ -534,16 +534,20 @@ class TempVoiceService:
             ], emoji="⚠️")
             return
 
+        # Safety check - validate channel objects have required attributes
+        before_channel = before.channel if before and before.channel and hasattr(before.channel, 'id') else None
+        after_channel = after.channel if after and after.channel and hasattr(after.channel, 'id') else None
+
         # Determine if user actually changed channels (ignore mute/deafen/stream changes)
-        left_channel = before.channel and (not after.channel or before.channel.id != after.channel.id)
-        joined_channel = after.channel and (not before.channel or after.channel.id != before.channel.id)
+        left_channel = before_channel and (not after_channel or before_channel.id != after_channel.id)
+        joined_channel = after_channel and (not before_channel or after_channel.id != before_channel.id)
 
         # User left a VC - revoke text permissions
-        if left_channel and before.channel.id != config.VC_CREATOR_CHANNEL_ID:
+        if left_channel and before_channel.id != config.VC_CREATOR_CHANNEL_ID:
             # Skip ignored channels (managed by other bots, e.g. Quran VC)
-            if before.channel.id not in config.VC_IGNORED_CHANNELS:
+            if before_channel.id not in config.VC_IGNORED_CHANNELS:
                 # Re-fetch channel to ensure it still exists
-                channel = member.guild.get_channel(before.channel.id)
+                channel = member.guild.get_channel(before_channel.id)
                 if channel:
                     await self._revoke_text_access(channel, member)
                     # Check if owner left - schedule delayed auto-transfer
@@ -556,12 +560,12 @@ class TempVoiceService:
                             await self._check_empty_channel(channel)
 
         # User joined a VC - grant text permissions (works for dragged-in users too)
-        if joined_channel and after.channel.id != config.VC_CREATOR_CHANNEL_ID:
+        if joined_channel and after_channel.id != config.VC_CREATOR_CHANNEL_ID:
             # Skip ignored channels (managed by other bots, e.g. Quran VC)
-            if after.channel.id in config.VC_IGNORED_CHANNELS:
+            if after_channel.id in config.VC_IGNORED_CHANNELS:
                 return
             # Re-fetch channel to ensure it still exists
-            channel = member.guild.get_channel(after.channel.id)
+            channel = member.guild.get_channel(after_channel.id)
             if channel:
                 await self._grant_text_access(channel, member)
                 # Owner rejoined - cancel pending transfer
@@ -581,7 +585,7 @@ class TempVoiceService:
                 await self._check_booster_name(channel, member)
 
         # User joined the creator channel - create new temp VC
-        if joined_channel and after.channel.id == config.VC_CREATOR_CHANNEL_ID:
+        if joined_channel and after_channel.id == config.VC_CREATOR_CHANNEL_ID:
             await self._create_temp_channel(member)
 
     async def on_message(self, message: discord.Message) -> None:
