@@ -5,7 +5,7 @@ SyriaBot - Birthday Service
 Birthday tracking with automatic role assignment on birthdays.
 
 Features:
-- Users can set/remove their birthday via /birthday command
+- Users can set/remove their birthday via `/birthday` command
 - Daily check at midnight (EST) for birthdays
 - Birthday role granted for 24 hours
 - Announcement in configured channel

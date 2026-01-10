@@ -107,7 +107,7 @@ class ConfessionService:
         """
         Handle messages in confessions channel and threads.
         - Main channel: delete non-bot messages
-        - Threads: warn users to use /reply
+        - Threads: warn users to use `/reply`
 
         Args:
             message: The message to handle
@@ -436,7 +436,7 @@ class ConfessionService:
             ("Channel", channel.name),
             ("Channel ID", str(channel.id)),
             ("Total Published", str(stats["approved"])),
-            ("Commands", "/confess, /reply"),
+            ("Commands", "`/confess`, `/reply`"),
             ("Auto-Approve", "Enabled"),
         ], emoji="✅")
 
@@ -830,7 +830,7 @@ class ConfessionService:
                 f"Someone just shared **Confession #{confession_number}**\n"
                 f"Head over to the confessions channel to read it!\n\n"
                 f"Use `/confess` to share yours anonymously.\n"
-                f"Use `/reply` in threads to respond — stay anonymous!"
+                f"Use `/reply` in threads to respond anonymously!"
             ),
             color=COLOR_SYRIA_GREEN
         )
