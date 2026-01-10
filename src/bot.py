@@ -30,7 +30,7 @@ from src.services.suggestions import SuggestionService
 from src.services.currency_service import CurrencyService
 from src.services.giveaway import GiveawayService
 from src.services.action_service import action_service
-from src.services.birthday_service import get_birthday_service
+from src.services.birthday_service import get_birthday_service, BirthdayService
 from src.services.database import db
 from src.utils.http import http_session
 

@@ -237,29 +237,57 @@ class BirthdayCog(commands.Cog):
                 color=COLOR_SYRIA_GREEN
             )
             set_footer(embed)
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            await interaction.response.send_message(embed=embed)
             return
 
-        # Build the list
+        # Build the list with accurate days calculation
         lines = []
+        current_year = now.year
+
         for i, bday in enumerate(upcoming, 1):
             user = interaction.guild.get_member(bday["user_id"])
             if not user:
                 continue
 
-            month_name = MONTH_NAMES[bday["birth_month"]]
+            month = bday["birth_month"]
             day = bday["birth_day"]
+            birth_year = bday.get("birth_year")
+            month_name = MONTH_NAMES[month]
 
-            # Calculate days until birthday
-            days_until = bday.get("days_until", 0)
+            # Calculate accurate days until birthday
+            try:
+                # Try this year first
+                next_bday = datetime(current_year, month, day)
+                if next_bday.date() < now.date():
+                    # Birthday passed this year, use next year
+                    next_bday = datetime(current_year + 1, month, day)
+                days_until = (next_bday.date() - now.date()).days
+            except ValueError:
+                # Invalid date (e.g., Feb 29 on non-leap year)
+                days_until = bday.get("days_until", 0)
+
+            # Format days text
             if days_until == 0:
-                days_text = "**Today!**"
+                days_text = "**Today!** 🎉"
             elif days_until == 1:
                 days_text = "Tomorrow"
-            else:
+            elif days_until <= 7:
                 days_text = f"in {days_until} days"
+            else:
+                days_text = f"{month_name} {day}"
 
-            lines.append(f"**{i}.** {user.mention} — {month_name} {day} ({days_text})")
+            # Calculate age they'll be turning
+            if birth_year:
+                turning_year = current_year if days_until > 0 or (days_until == 0) else current_year
+                if days_until == 0:
+                    age_text = f"(turning {current_year - birth_year})"
+                else:
+                    next_age = (current_year if datetime(current_year, month, day).date() >= now.date() else current_year + 1) - birth_year
+                    age_text = f"(turning {next_age})"
+            else:
+                age_text = ""
+
+            lines.append(f"**{i}.** {user.mention} — {days_text} {age_text}")
 
         if not lines:
             embed = discord.Embed(
@@ -267,7 +295,7 @@ class BirthdayCog(commands.Cog):
                 color=COLOR_SYRIA_GREEN
             )
             set_footer(embed)
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            await interaction.response.send_message(embed=embed)
             return
 
         embed = discord.Embed(
