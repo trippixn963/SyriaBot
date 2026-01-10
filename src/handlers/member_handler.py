@@ -13,6 +13,7 @@ import discord
 from discord.ext import commands
 
 from src.core.config import config
+from src.core.colors import COLOR_BOOST
 from src.core.logger import log
 from src.services.database import db
 from src.utils.footer import set_footer
@@ -281,42 +282,32 @@ class MembersHandler(commands.Cog):
             ], emoji="⚠️")
             return
 
+        # Get boost count
+        boost_count = member.guild.premium_subscription_count or 0
+
         # Build the thank you embed
         embed = discord.Embed(
-            title="💎 New Server Booster!",
+            title="New Server Booster!",
             description=(
                 f"Thank you {member.mention} for boosting **{member.guild.name}**!\n\n"
-                f"Your support helps keep the community thriving!"
+                f"We now have **{boost_count}** boosts!"
             ),
-            color=0x2ECC71  # Green
+            color=COLOR_BOOST
         )
 
         # Feature unlocks field
         embed.add_field(
-            name="🏆 Booster Perks Unlocked",
+            name="Booster Perks",
             value=(
-                "• **2x XP** on all messages and voice activity\n"
-                "• **Unlimited** weekly uses on rate-limited commands\n"
-                "• **AI Translation** powered by GPT-4o-mini"
+                "• **2x XP** on messages and voice\n"
+                "• **Unlimited** `/download` and `/image`\n"
+                "• **AI Translation** via `/translate`"
             ),
-            inline=False
-        )
-
-        # Check DMs reminder
-        embed.add_field(
-            name="📬 Check Your DMs",
-            value="Other bots may have sent you additional perks and rewards!",
             inline=False
         )
 
         # Set booster avatar as thumbnail
         embed.set_thumbnail(url=member.display_avatar.url)
-
-        # Gold accent on the side (using author field for visual appeal)
-        embed.set_author(
-            name="Server Boost",
-            icon_url="https://cdn.discordapp.com/emojis/857628597716910100.webp"  # Boost emoji
-        )
 
         set_footer(embed)
 
