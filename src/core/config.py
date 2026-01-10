@@ -28,6 +28,25 @@ def _env(key: str, default: str = "") -> str:
     return os.getenv(key, default)
 
 
+def _env_required(key: str) -> str:
+    """Get required environment variable. Raises if not set."""
+    value = os.getenv(key)
+    if not value:
+        raise ValueError(f"Required environment variable {key} is not set")
+    return value
+
+
+def _env_int_required(key: str) -> int:
+    """Get required environment variable as int. Raises if not set."""
+    value = os.getenv(key)
+    if not value:
+        raise ValueError(f"Required environment variable {key} is not set")
+    try:
+        return int(value)
+    except ValueError:
+        raise ValueError(f"Environment variable {key} must be an integer, got: {value}")
+
+
 def _env_int(key: str, default: int = 0) -> int:
     """Get environment variable as int with default."""
     value = os.getenv(key)
@@ -146,9 +165,11 @@ class Config:
     SUGGESTIONS_CHANNEL_ID: int = _env_int("SYRIA_SUGGESTIONS_CH")
 
     # ==========================================================================
-    # Giveaways
+    # Giveaways (no defaults - must be configured via .env)
     # ==========================================================================
-    GIVEAWAY_CHANNEL_ID: int = _env_int("SYRIA_GIVEAWAY_CH", 1429448081354522704)
+    GIVEAWAY_CHANNEL_ID: int = _env_int("SYRIA_GIVEAWAY_CH")
+    GIVEAWAY_NOTIFY_CHANNEL_ID: int = _env_int("SYRIA_GIVEAWAY_NOTIFY_CH")
+    GIVEAWAY_ROLE_ID: int = _env_int("SYRIA_GIVEAWAY_ROLE")
 
     # ==========================================================================
     # Rate Limits
@@ -166,9 +187,9 @@ class Config:
     DEEPL_API_KEY: str = _env("DEEPL_API_KEY")
 
     # ==========================================================================
-    # JawdatBot Integration (Casino Currency)
+    # JawdatBot Integration (Casino Currency) - no defaults, must configure
     # ==========================================================================
-    JAWDAT_API_URL: str = _env("JAWDAT_API_URL", "http://188.245.32.205:8089")
+    JAWDAT_API_URL: str = _env("JAWDAT_API_URL")
     JAWDAT_API_KEY: str = _env("JAWDAT_API_KEY")
 
     # ==========================================================================

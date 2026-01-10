@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 
 from src.core.logger import log
 from src.core.config import config
-from src.core.colors import COLOR_SYRIA_GREEN, COLOR_GOLD, COLOR_ERROR
+from src.core.colors import COLOR_SYRIA_GREEN, COLOR_GOLD, COLOR_ERROR, EMOJI_JOIN, EMOJI_TRANSFER
 from src.utils.footer import set_footer
 
 if TYPE_CHECKING:
@@ -136,7 +136,7 @@ class GiveawaySetupView(ui.View):
     async def update_embed(self, interaction: discord.Interaction) -> None:
         """Update the setup message with current settings (for direct button interactions)."""
         embed = self.build_preview_embed()
-        await interaction.message.edit(embed=embed, view=self)
+        await interaction.edit_original_response(embed=embed, view=self)
 
     async def refresh_original(self) -> None:
         """Refresh the original builder message (for child view callbacks)."""
@@ -144,8 +144,11 @@ class GiveawaySetupView(ui.View):
             embed = self.build_preview_embed()
             try:
                 await self._original_interaction.edit_original_response(embed=embed, view=self)
-            except Exception:
-                pass  # Original message may have been deleted
+            except Exception as e:
+                log.tree("Giveaway Setup - Refresh Failed", [
+                    ("Host", f"{self.host.name} ({self.host.id})"),
+                    ("Reason", str(e)[:50]),
+                ], emoji="⚠️")
 
     # -------------------------------------------------------------------------
     # Row 0: Prize Type
@@ -722,7 +725,7 @@ class GiveawayEntryView(ui.View):
         super().__init__(timeout=None)  # Persistent view
         self.giveaway_id = giveaway_id
 
-    @ui.button(label="Enter", style=discord.ButtonStyle.secondary, emoji="<:join:1459322239311937606>", custom_id="giveaway:enter")
+    @ui.button(label="Enter", style=discord.ButtonStyle.secondary, emoji=EMOJI_JOIN, custom_id="giveaway:enter")
     async def enter_button(self, interaction: discord.Interaction, button: ui.Button) -> None:
         """Enter the giveaway."""
         bot = interaction.client
@@ -758,7 +761,7 @@ class GiveawayEntryView(ui.View):
 
         await interaction.response.send_message(message, ephemeral=True)
 
-    @ui.button(label="Leave", style=discord.ButtonStyle.secondary, emoji="<:transfer:1455710226429902858>", custom_id="giveaway:leave")
+    @ui.button(label="Leave", style=discord.ButtonStyle.secondary, emoji=EMOJI_TRANSFER, custom_id="giveaway:leave")
     async def leave_button(self, interaction: discord.Interaction, button: ui.Button) -> None:
         """Leave the giveaway."""
         bot = interaction.client
@@ -793,3 +796,20 @@ class GiveawayEntryView(ui.View):
         )
 
         await interaction.response.send_message(message, ephemeral=True)
+
+
+# =============================================================================
+# Notification View (for giveaway announcements)
+# =============================================================================
+
+class GiveawayNotificationView(ui.View):
+    """View with link button for giveaway notifications."""
+
+    def __init__(self, giveaway_url: str):
+        super().__init__(timeout=None)
+        self.add_item(ui.Button(
+            label="Enter Giveaway",
+            style=discord.ButtonStyle.link,
+            emoji=EMOJI_JOIN,
+            url=giveaway_url,
+        ))

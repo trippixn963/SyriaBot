@@ -77,6 +77,7 @@ class SyriaBot(commands.Bot):
             "src.handlers.voice_handler",
             "src.handlers.member_handler",
             "src.handlers.message_handler",
+            "src.handlers.giveaway_handler",
         ]
         loaded_handlers = []
         for handler in handlers:
@@ -117,10 +118,6 @@ class SyriaBot(commands.Bot):
             ("Handlers", ", ".join(loaded_handlers)),
             ("Commands", ", ".join(loaded_commands)),
         ], emoji="✅")
-
-        # Register persistent views
-        from src.services.giveaway.views import GiveawayEntryView
-        self.add_view(GiveawayEntryView(giveaway_id=0))
 
         # Set up app command completion tracking
         self.tree.on_error = self._on_app_command_error
@@ -171,6 +168,15 @@ class SyriaBot(commands.Bot):
             ("Status", "Starting"),
         ], emoji="🔧")
 
+        # Check database health first - critical for most services
+        if not db.is_healthy:
+            log.tree("CRITICAL: Database Unhealthy", [
+                ("Reason", db.corruption_reason or "Unknown"),
+                ("Impact", "Most services will not function"),
+                ("Action", "Fix database and restart bot"),
+            ], emoji="🚨")
+            # Continue with limited functionality - some services may work without DB
+
         initialized = []
 
         # TempVoice
@@ -201,9 +207,8 @@ class SyriaBot(commands.Bot):
 
         # Stats API
         try:
-            self.stats_api = SyriaAPI()
-            self.stats_api.set_bot(self)
-            await self.stats_api.start()
+            self.stats_api = SyriaAPI(self)
+            await self.stats_api.setup()
             initialized.append("StatsAPI")
         except Exception as e:
             log.error_tree("Stats API Init Failed", e)
@@ -222,6 +227,7 @@ class SyriaBot(commands.Bot):
         # AFK Service
         try:
             self.afk_service = AFKService(self)
+            await self.afk_service.setup()
             initialized.append("AFK")
         except Exception as e:
             log.error_tree("AFK Service Init Failed", e)
@@ -229,6 +235,7 @@ class SyriaBot(commands.Bot):
         # Gallery Service
         try:
             self.gallery_service = GalleryService(self)
+            await self.gallery_service.setup()
             initialized.append("Gallery")
         except Exception as e:
             log.error_tree("Gallery Service Init Failed", e)
@@ -236,7 +243,7 @@ class SyriaBot(commands.Bot):
         # Presence Handler
         try:
             self.presence_handler = PresenceHandler(self)
-            await self.presence_handler.start()
+            await self.presence_handler.setup()
             initialized.append("Presence")
         except Exception as e:
             log.error_tree("Presence Handler Init Failed", e)

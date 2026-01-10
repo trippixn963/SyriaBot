@@ -46,12 +46,34 @@ class DatabaseCore:
         """Initialize database connection and create tables if needed."""
         self.db_path = config.DATABASE_PATH
         self._healthy = True
+        self._corruption_reason: Optional[str] = None
         self._init_db()
+
+    @property
+    def is_healthy(self) -> bool:
+        """Check if database is healthy and operational."""
+        return self._healthy
+
+    @property
+    def corruption_reason(self) -> Optional[str]:
+        """Get the reason for database corruption if unhealthy."""
+        return self._corruption_reason
+
+    def require_healthy(self) -> None:
+        """Raise RuntimeError if database is unhealthy.
+
+        Use this at service startup to fail fast if DB is corrupted.
+        """
+        if not self._healthy:
+            raise RuntimeError(
+                f"Database is unhealthy: {self._corruption_reason or 'Unknown error'}. "
+                "Manual intervention required - check logs for backup location."
+            )
 
     def _check_integrity(self) -> bool:
         """Check database integrity. Returns True if healthy."""
         try:
-            conn = sqlite3.connect(self.db_path)
+            conn = sqlite3.connect(self.db_path, timeout=10.0)
             cur = conn.cursor()
             cur.execute("PRAGMA integrity_check")
             result = cur.fetchone()
@@ -85,7 +107,7 @@ class DatabaseCore:
 
         conn = None
         try:
-            conn = sqlite3.connect(self.db_path)
+            conn = sqlite3.connect(self.db_path, timeout=10.0)
             conn.row_factory = sqlite3.Row
             yield conn
             conn.commit()
@@ -100,6 +122,7 @@ class DatabaseCore:
             ])
             if is_corruption:
                 self._healthy = False
+                self._corruption_reason = str(e)
                 log.error_tree("Database Corruption Detected", e)
                 self._backup_corrupted()
             else:
@@ -123,6 +146,7 @@ class DatabaseCore:
 
         # Check integrity on startup
         if os.path.exists(self.db_path) and not self._check_integrity():
+            self._corruption_reason = "PRAGMA integrity_check failed on startup"
             log.tree("DATABASE CORRUPTION DETECTED", [
                 ("Path", self.db_path),
                 ("Status", "INTEGRITY CHECK FAILED"),
@@ -507,6 +531,18 @@ class DatabaseCore:
             cur.execute("""
                 CREATE INDEX IF NOT EXISTS idx_boost_history_guild
                 ON boost_history(guild_id, timestamp DESC)
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_afk_users_guild
+                ON afk_users(guild_id)
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_action_stats_guild
+                ON action_stats(guild_id)
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_server_daily_stats_guild_date
+                ON server_daily_stats(guild_id, date)
             """)
 
             log.tree("Database Initialized", [

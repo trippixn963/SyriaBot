@@ -17,10 +17,13 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 import discord
 from zoneinfo import ZoneInfo
 
-from src.core.config import config
+from src.core.config import config, ROOT_DIR
 from src.core.logger import log
-from src.core.colors import COLOR_SYRIA_GREEN, COLOR_SUCCESS, COLOR_ERROR
+from src.core.colors import COLOR_SYRIA_GREEN, COLOR_SUCCESS, COLOR_ERROR, EMOJI_GIVEAWAY
 from src.services.database import db
+
+# Asset paths
+GIVEAWAY_IMAGE_PATH = ROOT_DIR / "assets" / "giveaway.gif"
 from src.utils.footer import set_footer
 
 if TYPE_CHECKING:
@@ -180,7 +183,7 @@ class GiveawayService:
         )
         embed.add_field(
             name="Winners",
-            value=str(winner_count),
+            value=f"`{winner_count}`",
             inline=True
         )
         embed.add_field(
@@ -194,25 +197,28 @@ class GiveawayService:
             inline=False
         )
         embed.add_field(
-            name="Entries",
-            value="0",
-            inline=True
-        )
-        embed.add_field(
             name="Bonus",
-            value=f"Boosters get **{BOOSTER_MULTIPLIER}x** entries!",
-            inline=True
+            value=f"<@&{config.BOOSTER_ROLE_ID}> get **{BOOSTER_MULTIPLIER}x** entries!",
+            inline=False
         )
-        embed.set_footer(text=f"Hosted by {host.display_name} • Ends at")
-        embed.timestamp = ends_at
 
-        # Import view here to avoid circular import
-        from src.services.giveaway.views import GiveawayEntryView
+        # Add giveaway image
+        if GIVEAWAY_IMAGE_PATH.exists():
+            embed.set_image(url="attachment://giveaway.gif")
 
-        view = GiveawayEntryView(giveaway_id=0)  # Placeholder, will update
+        set_footer(embed)
 
         try:
-            msg = await channel.send(embed=embed, view=view)
+            # Ping giveaway role in same message if enabled
+            content = f"<@&{config.GIVEAWAY_ROLE_ID}>" if ping_role and config.GIVEAWAY_ROLE_ID else None
+
+            # Prepare file for embed image
+            file = discord.File(GIVEAWAY_IMAGE_PATH, filename="giveaway.gif") if GIVEAWAY_IMAGE_PATH.exists() else None
+
+            msg = await channel.send(content=content, embed=embed, file=file)
+
+            # Add reaction for entry
+            await msg.add_reaction(EMOJI_GIVEAWAY)
 
             # Save to database
             giveaway_id = await asyncio.to_thread(
@@ -233,16 +239,22 @@ class GiveawayService:
 
             if not giveaway_id:
                 await msg.delete()
+                log.tree("Giveaway Create Failed", [
+                    ("Host", f"{host.name} ({host.id})"),
+                    ("Reason", "Database save failed"),
+                ], emoji="❌")
                 return False, "Failed to save giveaway", None
 
-            # Update view with correct giveaway_id
-            view = GiveawayEntryView(giveaway_id=giveaway_id)
-            await msg.edit(view=view)
-
-            # Ping giveaway role if enabled
-            if ping_role:
-                GIVEAWAY_ROLE_ID = 1403196818992402452
-                await channel.send(f"<@&{GIVEAWAY_ROLE_ID}>", delete_after=1)
+            # Send notification to notification channel
+            await self._send_notification(
+                msg=msg,
+                prize_description=prize_description,
+                winner_count=winner_count,
+                ends_at=ends_at,
+                required_role_id=required_role_id,
+                min_level=min_level,
+                host=host,
+            )
 
             log.tree("Giveaway Started", [
                 ("ID", str(giveaway_id)),
@@ -269,6 +281,85 @@ class GiveawayService:
                 ("Error", str(e)[:50]),
             ], emoji="❌")
             return False, f"Error: {str(e)[:50]}", None
+
+    async def _send_notification(
+        self,
+        msg: discord.Message,
+        prize_description: str,
+        winner_count: int,
+        ends_at: datetime,
+        required_role_id: Optional[int],
+        min_level: int,
+        host: discord.Member,
+    ) -> None:
+        """Send giveaway notification to notification channel."""
+        # Use notification channel, fallback to general channel
+        channel_id = config.GIVEAWAY_NOTIFY_CHANNEL_ID or config.GENERAL_CHANNEL_ID
+        if not channel_id:
+            log.tree("Giveaway Notification Skipped", [
+                ("Reason", "No notification or general channel configured"),
+            ], emoji="ℹ️")
+            return
+
+        notify_channel = self.bot.get_channel(channel_id)
+        if not notify_channel:
+            log.tree("Giveaway Notification Skipped", [
+                ("Reason", "Notification channel not found"),
+            ], emoji="⚠️")
+            return
+
+        try:
+            # Build requirements text
+            requirements = []
+            if required_role_id:
+                role = host.guild.get_role(required_role_id)
+                if role:
+                    requirements.append(f"{role.mention}")
+            if min_level > 0:
+                requirements.append(f"Level `{min_level}+`")
+            req_text = " • ".join(requirements) if requirements else "`None`"
+
+            # Build notification embed
+            embed = discord.Embed(
+                title="🎉 New Giveaway!",
+                description=f"**{prize_description}**",
+                color=COLOR_SYRIA_GREEN,
+            )
+            embed.add_field(
+                name="Winners",
+                value=f"`{winner_count}`",
+                inline=True
+            )
+            embed.add_field(
+                name="Ends",
+                value=f"<t:{int(ends_at.timestamp())}:R>",
+                inline=True
+            )
+            embed.add_field(
+                name="Requirements",
+                value=req_text,
+                inline=True
+            )
+
+            set_footer(embed)
+
+            # Create view with link button
+            giveaway_url = f"https://discord.com/channels/{msg.guild.id}/{msg.channel.id}/{msg.id}"
+
+            from src.services.giveaway.views import GiveawayNotificationView
+            view = GiveawayNotificationView(giveaway_url)
+
+            await notify_channel.send(embed=embed, view=view)
+
+            log.tree("Giveaway Notification Sent", [
+                ("Channel", notify_channel.name),
+                ("Prize", prize_description[:30]),
+            ], emoji="📢")
+
+        except Exception as e:
+            log.tree("Giveaway Notification Failed", [
+                ("Error", str(e)[:50]),
+            ], emoji="❌")
 
     async def enter_giveaway(
         self,
@@ -298,6 +389,17 @@ class GiveawayService:
                 ("Reason", "Giveaway has ended"),
             ], emoji="⚠️")
             return False, "This giveaway has ended"
+
+        # Block moderators from entering
+        if config.MOD_ROLE_ID:
+            mod_role = user.guild.get_role(config.MOD_ROLE_ID)
+            if mod_role and mod_role in user.roles:
+                log.tree("Giveaway Entry Denied", [
+                    ("User", f"{user.name} ({user.id})"),
+                    ("Giveaway ID", str(giveaway_id)),
+                    ("Reason", "Moderator"),
+                ], emoji="🚫")
+                return False, "Moderators cannot enter giveaways"
 
         # Check requirements
         if giveaway["required_role_id"]:
@@ -341,8 +443,6 @@ class GiveawayService:
         )
 
         if success:
-            # Update entry count on embed
-            await self._update_entry_count(giveaway)
 
             # Check if booster for bonus message
             is_booster = False
@@ -396,7 +496,6 @@ class GiveawayService:
         )
 
         if success:
-            await self._update_entry_count(giveaway)
             log.tree("Giveaway Entry Withdrawn", [
                 ("User", f"{user.name} ({user.id})"),
                 ("Giveaway ID", str(giveaway_id)),
@@ -415,10 +514,18 @@ class GiveawayService:
         try:
             channel = self.bot.get_channel(giveaway["channel_id"])
             if not channel:
+                log.tree("Giveaway Entry Count Update Skipped", [
+                    ("Giveaway ID", str(giveaway["id"])),
+                    ("Reason", "Channel not found"),
+                ], emoji="⚠️")
                 return
 
             msg = await channel.fetch_message(giveaway["message_id"])
             if not msg or not msg.embeds:
+                log.tree("Giveaway Entry Count Update Skipped", [
+                    ("Giveaway ID", str(giveaway["id"])),
+                    ("Reason", "Message or embed not found"),
+                ], emoji="⚠️")
                 return
 
             entry_count = await asyncio.to_thread(
@@ -429,7 +536,7 @@ class GiveawayService:
             # Find and update the Entries field
             for i, field in enumerate(embed.fields):
                 if field.name == "Entries":
-                    embed.set_field_at(i, name="Entries", value=str(entry_count), inline=True)
+                    embed.set_field_at(i, name="Entries", value=f"`{entry_count}`", inline=True)
                     break
 
             await msg.edit(embed=embed)
@@ -550,10 +657,18 @@ class GiveawayService:
         try:
             channel = self.bot.get_channel(giveaway["channel_id"])
             if not channel:
+                log.tree("Giveaway Embed Update Skipped", [
+                    ("ID", str(giveaway["id"])),
+                    ("Reason", "Channel not found"),
+                ], emoji="⚠️")
                 return
 
             msg = await channel.fetch_message(giveaway["message_id"])
             if not msg:
+                log.tree("Giveaway Embed Update Skipped", [
+                    ("ID", str(giveaway["id"])),
+                    ("Reason", "Message not found"),
+                ], emoji="⚠️")
                 return
 
             # Build winners text
@@ -583,7 +698,7 @@ class GiveawayService:
             )
             embed.add_field(
                 name="Total Entries",
-                value=str(entry_count),
+                value=f"`{entry_count}`",
                 inline=True
             )
             set_footer(embed)
@@ -684,8 +799,19 @@ class GiveawayService:
                             ("Winner", f"{member.name} ({member.id})"),
                             ("Role", role.name),
                         ], emoji="🏷️")
+                    elif role and role in member.roles:
+                        log.tree("Giveaway Prize Skipped (Role)", [
+                            ("Winner", f"{member.name} ({member.id})"),
+                            ("Reason", "Already has role"),
+                        ], emoji="ℹ️")
 
-                # nitro/custom prizes are manual - just announced
+                elif prize_type in ("nitro", "custom"):
+                    # Manual prizes - just announced
+                    log.tree("Giveaway Prize Pending (Manual)", [
+                        ("Winner", f"{member.name} ({member.id})"),
+                        ("Prize Type", prize_type),
+                        ("Prize", giveaway["prize_description"][:30]),
+                    ], emoji="📋")
             except Exception as e:
                 log.tree("Giveaway Prize Grant Failed", [
                     ("Winner", f"{member.name} ({member.id})"),
@@ -698,23 +824,78 @@ class GiveawayService:
         giveaway: Dict[str, Any],
         winners: List[int]
     ) -> None:
-        """Announce winners in the giveaway channel."""
+        """Announce winners in the giveaway channel and general chat."""
+        guild = self.bot.get_guild(config.GUILD_ID)
+
         try:
             channel = self.bot.get_channel(giveaway["channel_id"])
             if not channel:
+                log.tree("Giveaway Announcement Skipped", [
+                    ("ID", str(giveaway["id"])),
+                    ("Reason", "Giveaway channel not found"),
+                ], emoji="⚠️")
                 return
 
             if not winners:
                 await channel.send(
                     f"🎉 The giveaway for **{giveaway['prize_description']}** ended with no entries!"
                 )
+                log.tree("Giveaway Announcement Sent (No Winners)", [
+                    ("ID", str(giveaway["id"])),
+                    ("Prize", giveaway["prize_description"][:30]),
+                ], emoji="📢")
                 return
 
             winner_mentions = " ".join(f"<@{w}>" for w in winners)
+
+            # Send announcement in giveaway channel with moderator note
             await channel.send(
                 f"🎉 Congratulations {winner_mentions}! "
-                f"You won **{giveaway['prize_description']}**!"
+                f"You won **{giveaway['prize_description']}**!\n"
+                f"-# A moderator will contact you soon to deliver your prize."
             )
+
+            log.tree("Giveaway Announcement Sent", [
+                ("ID", str(giveaway["id"])),
+                ("Channel", channel.name),
+                ("Winners", str(len(winners))),
+            ], emoji="📢")
+
+            # Send notification to general chat
+            general_channel = self.bot.get_channel(config.GENERAL_CHANNEL_ID)
+            if not general_channel:
+                log.tree("Giveaway Winner Notification Skipped", [
+                    ("Reason", "General channel not found"),
+                ], emoji="ℹ️")
+                return
+            if not guild:
+                log.tree("Giveaway Winner Notification Skipped", [
+                    ("Reason", "Guild not found"),
+                ], emoji="ℹ️")
+                return
+
+            if general_channel and guild:
+                # Get first winner for thumbnail
+                first_winner = guild.get_member(winners[0])
+
+                embed = discord.Embed(
+                    title="🎉 Giveaway Winner!",
+                    description=f"Congratulations {winner_mentions}!\n\nYou won **{giveaway['prize_description']}**!",
+                    color=COLOR_SUCCESS,
+                )
+
+                if first_winner:
+                    embed.set_thumbnail(url=first_winner.display_avatar.url)
+
+                set_footer(embed)
+
+                await general_channel.send(embed=embed)
+
+                log.tree("Giveaway Winner Notification Sent", [
+                    ("Channel", general_channel.name),
+                    ("Winners", winner_mentions[:50]),
+                ], emoji="📢")
+
         except Exception as e:
             log.tree("Giveaway Announcement Failed", [
                 ("ID", str(giveaway["id"])),
@@ -746,8 +927,11 @@ class GiveawayService:
                 msg = await channel.fetch_message(giveaway["message_id"])
                 if msg:
                     await msg.delete()
-        except Exception:
-            pass
+        except Exception as e:
+            log.tree("Giveaway Message Delete Failed", [
+                ("ID", str(giveaway_id)),
+                ("Reason", str(e)[:50]),
+            ], emoji="⚠️")
 
         # Delete from database
         await asyncio.to_thread(db.cancel_giveaway, giveaway_id)

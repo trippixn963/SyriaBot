@@ -27,7 +27,10 @@ class AFKService:
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        log.tree("AFK Service Initialized", [], emoji="💤")
+
+    async def setup(self) -> None:
+        """Initialize the AFK service."""
+        log.tree("AFK Service Ready", [], emoji="💤")
 
     def convert_emoji_shortcodes(self, text: str, guild: discord.Guild) -> str:
         """

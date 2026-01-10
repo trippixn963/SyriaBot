@@ -195,8 +195,8 @@ EST_TZ = TIMEZONE_EST
 class SyriaAPI:
     """API server for SyriaBot XP Leaderboard."""
 
-    def __init__(self) -> None:
-        self._bot: Optional["SyriaBot"] = None
+    def __init__(self, bot: "SyriaBot") -> None:
+        self._bot = bot
         self._start_time: Optional[datetime] = None
         self.app = web.Application(middlewares=[
             cors_middleware,
@@ -206,12 +206,6 @@ class SyriaAPI:
         self.runner: Optional[web.AppRunner] = None
         self._cleanup_task: Optional[asyncio.Task] = None
         self._setup_routes()
-
-    def set_bot(self, bot: "SyriaBot") -> None:
-        """Set bot reference."""
-        self._bot = bot
-        if self._start_time is None:
-            self._start_time = datetime.now(DAMASCUS_TZ)
 
     def _setup_routes(self) -> None:
         """Configure API routes."""
@@ -1024,8 +1018,10 @@ class SyriaAPI:
             ("Duration", f"{elapsed}s"),
         ], emoji="✅")
 
-    async def start(self) -> None:
-        """Start the API server."""
+    async def setup(self) -> None:
+        """Initialize and start the API server."""
+        self._start_time = datetime.now(DAMASCUS_TZ)
+
         self.runner = web.AppRunner(self.app)
         await self.runner.setup()
 
@@ -1035,7 +1031,7 @@ class SyriaAPI:
         self._cleanup_task = asyncio.create_task(self._periodic_cleanup())
         self._midnight_task = asyncio.create_task(self._midnight_booster_refresh())
 
-        log.tree("Syria API Started", [
+        log.tree("Syria API Ready", [
             ("Host", STATS_API_HOST),
             ("Port", str(STATS_API_PORT)),
             ("Endpoints", "/api/syria/leaderboard, /api/syria/user/{id}, /api/syria/stats"),

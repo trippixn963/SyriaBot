@@ -61,6 +61,7 @@ EMOJI_SUGGEST = "<:suggest:1459288562859118662>"
 
 # Giveaway System
 EMOJI_GIVEAWAY = "🎉"  # TODO: Replace with custom emoji when uploaded
+EMOJI_JOIN = "<:join:1459322239311937606>"
 
 
 # =============================================================================

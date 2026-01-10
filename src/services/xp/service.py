@@ -8,6 +8,7 @@ Main XP service handling message and voice XP gains.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import random
 import time
 from datetime import time as dt_time
@@ -65,10 +66,16 @@ class XPService:
         # Background task for voice XP
         self._voice_xp_task: Optional[asyncio.Task] = None
 
+        # Background task for cache cleanup
+        self._cleanup_task: Optional[asyncio.Task] = None
+
     async def setup(self) -> None:
         """Initialize XP service."""
         # Start voice XP background task
         self._voice_xp_task = asyncio.create_task(self._voice_xp_loop())
+
+        # Start cache cleanup task (runs hourly)
+        self._cleanup_task = asyncio.create_task(self._cache_cleanup_loop())
 
         # Initialize voice sessions for users already in voice (main server only)
         main_guild = self.bot.get_guild(config.GUILD_ID)
@@ -106,12 +113,25 @@ class XPService:
             except asyncio.CancelledError:
                 pass
 
+        if self._cleanup_task:
+            self._cleanup_task.cancel()
+            try:
+                await self._cleanup_task
+            except asyncio.CancelledError:
+                pass
+
         # Stop midnight sync task
         self.midnight_role_sync.cancel()
 
+        # Clear all caches on shutdown
+        self._message_cooldowns.clear()
+        self._last_messages.clear()
+        self._mute_timestamps.clear()
+        self._dau_cache.clear()
+        self._voice_sessions.clear()
+
         log.tree("XP Service Stopped", [
-            ("Active Voice Sessions", str(sum(len(s) for s in self._voice_sessions.values()))),
-            ("Cached Cooldowns", str(len(self._message_cooldowns))),
+            ("Status", "All caches cleared"),
         ], emoji="🛑")
 
     # =========================================================================
@@ -148,14 +168,16 @@ class XPService:
         if now - last_xp < config.XP_MESSAGE_COOLDOWN:
             return  # Still on cooldown
 
-        # Check for duplicate message (anti-spam)
-        content_lower = message.content.lower().strip()
-        last_content = self._last_messages.get(cache_key)
-        if last_content and last_content == content_lower:
+        # Check for duplicate message (anti-spam) using hash for memory efficiency
+        content_hash = hashlib.md5(
+            message.content.lower().strip().encode(), usedforsecurity=False
+        ).hexdigest()[:16]  # 16 chars is enough for duplicate detection
+        last_hash = self._last_messages.get(cache_key)
+        if last_hash and last_hash == content_hash:
             return  # Same message as before, no XP
 
-        # Update last message tracker
-        self._last_messages[cache_key] = content_lower
+        # Update last message tracker with hash (not full content)
+        self._last_messages[cache_key] = content_hash
 
         # Update cache with current timestamp
         self._message_cooldowns[cache_key] = now
@@ -436,6 +458,70 @@ class XPService:
             except Exception as e:
                 log.error_tree("Voice XP Loop Error", e)
                 await asyncio.sleep(60)  # Wait before retrying
+
+    async def _cache_cleanup_loop(self) -> None:
+        """Background task that cleans stale cache entries every hour."""
+        await self.bot.wait_until_ready()
+
+        while not self.bot.is_closed():
+            try:
+                await asyncio.sleep(3600)  # Wait 1 hour
+
+                now = time.time()
+                cleaned = {"mute": 0, "messages": 0, "cooldowns": 0, "dau": 0}
+
+                # Clean stale mute timestamps (> 2 hours old)
+                # These can accumulate if voice events are missed
+                mute_cutoff = now - 7200  # 2 hours
+                stale_mutes = [
+                    uid for uid, ts in self._mute_timestamps.items()
+                    if ts < mute_cutoff
+                ]
+                for uid in stale_mutes:
+                    self._mute_timestamps.pop(uid, None)
+                    cleaned["mute"] += 1
+
+                # Clean old cooldown entries (> cooldown period)
+                cooldown_cutoff = now - config.XP_MESSAGE_COOLDOWN
+                old_cooldowns = {
+                    k: v for k, v in self._message_cooldowns.items()
+                    if v > cooldown_cutoff
+                }
+                cleaned["cooldowns"] = len(self._message_cooldowns) - len(old_cooldowns)
+                self._message_cooldowns = old_cooldowns
+
+                # Clean last messages to match cooldowns
+                old_messages = {
+                    k: v for k, v in self._last_messages.items()
+                    if k in self._message_cooldowns
+                }
+                cleaned["messages"] = len(self._last_messages) - len(old_messages)
+                self._last_messages = old_messages
+
+                # Clean DAU cache - remove old dates (keep only today)
+                from datetime import datetime
+                from zoneinfo import ZoneInfo
+                est = ZoneInfo("America/New_York")
+                today_date = datetime.now(est).strftime("%Y-%m-%d")
+                old_dau_size = len(self._dau_cache)
+                self._dau_cache = {k for k in self._dau_cache if k[2] == today_date}
+                cleaned["dau"] = old_dau_size - len(self._dau_cache)
+
+                # Only log if we cleaned something
+                if any(v > 0 for v in cleaned.values()):
+                    log.tree("XP Cache Cleanup (Hourly)", [
+                        ("Mute Timestamps", str(cleaned["mute"])),
+                        ("Cooldowns", str(cleaned["cooldowns"])),
+                        ("Last Messages", str(cleaned["messages"])),
+                        ("DAU Entries", str(cleaned["dau"])),
+                        ("Remaining", f"{len(self._message_cooldowns)} cooldowns, {len(self._mute_timestamps)} mutes, {len(self._dau_cache)} dau"),
+                    ], emoji="🧹")
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                log.error_tree("Cache Cleanup Loop Error", e)
+                await asyncio.sleep(3600)
 
     # =========================================================================
     # Core XP Logic

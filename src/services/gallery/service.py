@@ -33,7 +33,10 @@ class GalleryService:
         self.bot = bot
         # Cleanup disabled - let Discord's 7-day auto-archive handle empty threads
         # self.cleanup_task.start()
-        log.tree("Gallery Service Initialized", [
+
+    async def setup(self) -> None:
+        """Initialize the gallery service."""
+        log.tree("Gallery Service Ready", [
             ("Gallery ID", str(config.GALLERY_CHANNEL_ID)),
             ("Memes ID", str(config.MEMES_CHANNEL_ID)),
             ("Thread Cleanup", "Disabled"),

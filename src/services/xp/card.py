@@ -32,7 +32,7 @@ _playwright = None
 # Page pool for reuse (avoid creating/destroying pages)
 _page_pool: list = []
 _page_pool_lock = asyncio.Lock()
-_MAX_POOL_SIZE = 3
+_MAX_POOL_SIZE = 2  # Reduced from 3 to save memory
 
 # Card cache: {cache_key: (bytes, timestamp)}
 _card_cache: dict = {}
@@ -40,7 +40,11 @@ _CACHE_TTL = 30  # Cache cards for 30 seconds
 
 # Track last activity for idle timeout
 _last_activity: float = 0
-_IDLE_TIMEOUT = 300  # Close browser after 5 minutes of inactivity
+_IDLE_TIMEOUT = 120  # Close browser after 2 minutes of inactivity (was 5 min)
+
+# Track renders for periodic browser restart (clears memory leaks)
+_render_count: int = 0
+_RESTART_AFTER_RENDERS = 50  # Restart browser every 50 renders
 
 # Semaphore to limit concurrent card generations (prevents race conditions)
 _render_semaphore: asyncio.Semaphore = None
@@ -50,7 +54,7 @@ def get_render_semaphore() -> asyncio.Semaphore:
     """Get or create the shared render semaphore."""
     global _render_semaphore
     if _render_semaphore is None:
-        _render_semaphore = asyncio.Semaphore(2)
+        _render_semaphore = asyncio.Semaphore(1)  # Reduced from 2 to save memory
     return _render_semaphore
 
 
@@ -85,12 +89,27 @@ async def _check_idle_timeout():
             await cleanup()
 
 
+async def _check_render_restart():
+    """Check if browser should be restarted due to render count (memory cleanup)."""
+    global _render_count
+    if _browser is not None and _render_count >= _RESTART_AFTER_RENDERS:
+        log.tree("Rank Card Browser Restart", [
+            ("Render Count", str(_render_count)),
+            ("Action", "Restarting for memory cleanup"),
+        ], emoji="🔄")
+        await cleanup()
+        _render_count = 0
+
+
 async def _get_context():
     """Get or create browser context (reusable)."""
     global _browser, _context, _playwright, _last_activity
 
     # Check if we should close idle browser first
     await _check_idle_timeout()
+
+    # Check if we should restart browser for memory cleanup
+    await _check_render_restart()
 
     if _context is None:
         log.tree("Rank Card Browser Starting", [
@@ -113,6 +132,15 @@ async def _get_context():
                 '--metrics-recording-only',
                 '--mute-audio',
                 '--no-first-run',
+                '--disable-background-timer-throttling',
+                '--disable-backgrounding-occluded-windows',
+                '--disable-renderer-backgrounding',
+                '--disable-component-update',
+                '--disable-default-apps',
+                '--disable-hang-monitor',
+                '--disable-popup-blocking',
+                '--disable-prompt-on-repost',
+                '--js-flags=--max-old-space-size=128',
             ]
         )
         _context = await _browser.new_context(
@@ -679,6 +707,10 @@ async def generate_rank_card(
             # Screenshot
             screenshot = await page.screenshot(type='png', omit_background=True)
 
+            # Increment render count for memory management
+            global _render_count
+            _render_count += 1
+
             # Return page to pool instead of closing
             await _return_page(page)
             page = None
@@ -689,6 +721,7 @@ async def generate_rank_card(
             log.tree("Rank Card Generated", [
                 ("User", display_name),
                 ("Level", str(level)),
+                ("Renders", str(_render_count)),
             ], emoji="🎨")
 
             return screenshot

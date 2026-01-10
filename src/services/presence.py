@@ -195,8 +195,8 @@ class PresenceHandler:
                 ], emoji="⚠️")
                 await asyncio.sleep(60)
 
-    async def start(self) -> None:
-        """Start the presence handler tasks."""
+    async def setup(self) -> None:
+        """Initialize and start the presence handler tasks."""
         if self._running:
             return
 
@@ -208,7 +208,7 @@ class PresenceHandler:
         # Start promo task
         self._promo_task = asyncio.create_task(self._promo_loop())
 
-        log.tree("Presence Handler Started", [
+        log.tree("Presence Handler Ready", [
             ("Rotation", f"Every {PRESENCE_UPDATE_INTERVAL}s"),
             ("Promo", f"{PROMO_DURATION_MINUTES} min/hour"),
         ], emoji="✅")
