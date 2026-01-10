@@ -13,7 +13,7 @@ import discord
 from discord.ext import commands
 
 from src.core.config import config
-from src.core.colors import COLOR_BOOST
+from src.core.colors import COLOR_BOOST, COLOR_SYRIA_GREEN
 from src.core.logger import log
 from src.services.database import db
 from src.utils.footer import set_footer
@@ -172,6 +172,9 @@ class MembersHandler(commands.Cog):
                 ("Error", str(e)[:50]),
             ], emoji="⚠️")
 
+        # Send welcome DM
+        await self._send_welcome_dm(member)
+
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member) -> None:
         """Called when a member leaves/is kicked/banned."""
@@ -324,6 +327,60 @@ class MembersHandler(commands.Cog):
                 ("ID", str(member.id)),
                 ("Error", str(e)[:100]),
             ], emoji="❌")
+
+    async def _send_welcome_dm(self, member: discord.Member) -> None:
+        """Send a welcome DM to new members with server info and commands."""
+        embed = discord.Embed(
+            title=f"Welcome to {member.guild.name}!",
+            description=(
+                f"Hey {member.display_name}, we're glad to have you here!\n\n"
+                f"Take a moment to read the rules and explore the server."
+            ),
+            color=COLOR_SYRIA_GREEN
+        )
+
+        embed.add_field(
+            name="Useful Commands",
+            value=(
+                "`/rank` — Check your level and XP\n"
+                "`/confess` — Share anonymously\n"
+                "`/suggest` — Submit a suggestion\n"
+                "`/download` — Download social media videos\n"
+                "`/birthday set` — Register your birthday"
+            ),
+            inline=False
+        )
+
+        embed.add_field(
+            name="Earn XP",
+            value=(
+                "Chat in channels and join voice calls to earn XP.\n"
+                "Level up to unlock new permissions!"
+            ),
+            inline=False
+        )
+
+        embed.set_thumbnail(url=member.guild.icon.url if member.guild.icon else None)
+        set_footer(embed)
+
+        try:
+            await member.send(embed=embed)
+            log.tree("Welcome DM Sent", [
+                ("User", f"{member.name} ({member.display_name})"),
+                ("ID", str(member.id)),
+            ], emoji="📬")
+        except discord.Forbidden:
+            log.tree("Welcome DM Failed", [
+                ("User", f"{member.name} ({member.display_name})"),
+                ("ID", str(member.id)),
+                ("Reason", "DMs disabled"),
+            ], emoji="ℹ️")
+        except discord.HTTPException as e:
+            log.tree("Welcome DM Failed", [
+                ("User", f"{member.name} ({member.display_name})"),
+                ("ID", str(member.id)),
+                ("Error", str(e)[:50]),
+            ], emoji="⚠️")
 
 
 async def setup(bot: commands.Bot) -> None:
