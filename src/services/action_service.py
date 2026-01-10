@@ -9,6 +9,7 @@ Author: حَـــــنَّـــــا
 Server: discord.gg/syria
 """
 
+import asyncio
 import aiohttp
 import random
 from typing import Optional, Dict, List
@@ -413,8 +414,16 @@ class ActionService:
                     results = data.get("results", [])
                     if results and results[0].get("url"):
                         return results[0]["url"]
-        except Exception:
-            pass
+        except asyncio.TimeoutError:
+            log.tree("Nekos.best API Timeout", [
+                ("Endpoint", endpoint),
+                ("URL", url),
+            ], emoji="⏳")
+        except Exception as e:
+            log.tree("Nekos.best API Error", [
+                ("Endpoint", endpoint),
+                ("Error", str(e)[:80]),
+            ], emoji="⚠️")
         return None
 
     async def _fetch_from_waifu_pics(self, endpoint: str) -> Optional[str]:
@@ -427,8 +436,16 @@ class ActionService:
                     data = await response.json()
                     # waifu.pics returns {"url": "..."}
                     return data.get("url")
-        except Exception:
-            pass
+        except asyncio.TimeoutError:
+            log.tree("Waifu.pics API Timeout", [
+                ("Endpoint", endpoint),
+                ("URL", url),
+            ], emoji="⏳")
+        except Exception as e:
+            log.tree("Waifu.pics API Error", [
+                ("Endpoint", endpoint),
+                ("Error", str(e)[:80]),
+            ], emoji="⚠️")
         return None
 
     async def get_action_gif(self, action: str) -> Optional[str]:

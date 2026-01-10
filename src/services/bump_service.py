@@ -88,7 +88,9 @@ class BumpService:
                         ("Last Bump", f"{elapsed_min} min ago"),
                     ], emoji="📊")
         except Exception as e:
-            log.warning(f"Failed to load bump data: {e}")
+            log.tree("Bump Data Load Failed", [
+                ("Error", str(e)[:50]),
+            ], emoji="⚠️")
 
     def _save_data(self) -> None:
         """Save bump data to file."""
@@ -100,7 +102,9 @@ class BumpService:
                     "last_reminder_time": self._last_reminder_time,
                 }, f, indent=2)
         except Exception as e:
-            log.warning(f"Failed to save bump data: {e}")
+            log.tree("Bump Data Save Failed", [
+                ("Error", str(e)[:50]),
+            ], emoji="⚠️")
 
     def record_bump(self) -> None:
         """Record that a bump just happened."""
@@ -193,12 +197,17 @@ class BumpService:
     async def _send_reminder(self) -> None:
         """Send a bump reminder in the designated channel."""
         if not self.bot or not self.bump_channel_id:
-            log.warning("Bump service not properly configured")
+            log.tree("Bump Reminder Skipped", [
+                ("Reason", "Service not configured"),
+            ], emoji="⚠️")
             return
 
         channel = self.bot.get_channel(self.bump_channel_id)
         if not channel:
-            log.warning(f"Bump channel {self.bump_channel_id} not found")
+            log.tree("Bump Reminder Skipped", [
+                ("Reason", "Channel not found"),
+                ("Channel ID", str(self.bump_channel_id)),
+            ], emoji="⚠️")
             return
 
         try:
