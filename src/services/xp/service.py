@@ -836,20 +836,50 @@ class XPService:
 
     @tasks.loop(time=dt_time(hour=5, minute=0))  # 5:00 UTC = Midnight EST
     async def midnight_role_sync(self) -> None:
-        """Run role sync and cache cleanup at midnight EST."""
-        log.tree("Midnight Tasks Triggered", [], emoji="🕛")
+        """Run maintenance tasks at midnight EST."""
+        log.tree("Midnight Maintenance Started", [], emoji="🕛")
 
-        # Clear DAU cache (new day = new tracking)
+        # 1. Clear DAU cache (new day = new tracking)
         async with self._dau_cache_lock:
             old_dau_size = len(self._dau_cache)
             self._dau_cache.clear()
-        if old_dau_size > 0:
-            log.tree("DAU Cache Reset", [
-                ("Cleared Entries", str(old_dau_size)),
+
+        # 2. Clear stale mute timestamps
+        stale_mutes = len(self._mute_timestamps)
+        self._mute_timestamps.clear()
+
+        # 3. Clear message cooldowns
+        stale_cooldowns = len(self._message_cooldowns)
+        self._message_cooldowns.clear()
+
+        if old_dau_size > 0 or stale_mutes > 0 or stale_cooldowns > 0:
+            log.tree("Midnight Cache Cleanup", [
+                ("DAU Entries", str(old_dau_size)),
+                ("Mute Timestamps", str(stale_mutes)),
+                ("Message Cooldowns", str(stale_cooldowns)),
             ], emoji="🧹")
 
-        # Sync roles
+        # 4. Sync active/inactive user status
+        await self._sync_active_status()
+
+        # 5. Sync XP roles
         await self._sync_roles()
+
+        # 6. Rate limiter cleanup (backup - also triggers on week boundary)
+        try:
+            from src.services.rate_limiter import get_rate_limiter
+            rate_limiter = get_rate_limiter()
+            deleted = rate_limiter.cleanup_old_records(weeks_to_keep=4)
+            if deleted > 0:
+                log.tree("Rate Limit Records Cleaned", [
+                    ("Deleted", str(deleted)),
+                ], emoji="🧹")
+        except Exception as e:
+            log.tree("Rate Limit Cleanup Failed", [
+                ("Error", str(e)[:50]),
+            ], emoji="⚠️")
+
+        log.tree("Midnight Maintenance Complete", [], emoji="✅")
 
     @midnight_role_sync.before_loop
     async def before_midnight_sync(self) -> None:
