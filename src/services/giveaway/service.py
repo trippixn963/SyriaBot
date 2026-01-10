@@ -24,6 +24,7 @@ from src.services.database import db
 
 # Asset paths
 GIVEAWAY_IMAGE_PATH = ROOT_DIR / "assets" / "giveaway.gif"
+GIVEAWAY_EMOJI_URL = "https://cdn.discordapp.com/emojis/1459518392674549882.png"
 from src.utils.footer import set_footer
 
 if TYPE_CHECKING:
@@ -103,6 +104,45 @@ class GiveawayService:
             ("Active Giveaways", str(len(active))),
         ], emoji="🎉")
 
+    async def _check_member_eligible(
+        self,
+        member: Optional[discord.Member],
+        giveaway: Dict[str, Any],
+    ) -> bool:
+        """
+        Check if a member still meets giveaway requirements.
+
+        Used at winner selection to re-validate eligibility since
+        users may lose required roles or level between entry and end time.
+
+        Args:
+            member: Discord member to check (None if left server)
+            giveaway: Giveaway data dict
+
+        Returns:
+            True if eligible, False otherwise
+        """
+        # User left server
+        if not member:
+            return False
+
+        # Check required role
+        if giveaway["required_role_id"]:
+            role = member.guild.get_role(giveaway["required_role_id"])
+            if role and role not in member.roles:
+                return False
+
+        # Check min level
+        if giveaway["min_level"] > 0:
+            user_data = await asyncio.to_thread(
+                db.get_user_xp, member.id, member.guild.id
+            )
+            user_level = user_data.get("level", 0) if user_data else 0
+            if user_level < giveaway["min_level"]:
+                return False
+
+        return True
+
     async def _check_expired_loop(self) -> None:
         """Background task to check for expired giveaways."""
         await self.bot.wait_until_ready()
@@ -150,6 +190,28 @@ class GiveawayService:
         Returns:
             Tuple of (success, message, giveaway_id)
         """
+        # Validate prize amounts are non-negative
+        if prize_amount < 0:
+            log.tree("Giveaway Create Failed", [
+                ("Host", f"{host.name} ({host.id})"),
+                ("Reason", f"Invalid prize_amount: {prize_amount}"),
+            ], emoji="❌")
+            return False, "Prize amount cannot be negative", None
+
+        if prize_coins < 0:
+            log.tree("Giveaway Create Failed", [
+                ("Host", f"{host.name} ({host.id})"),
+                ("Reason", f"Invalid prize_coins: {prize_coins}"),
+            ], emoji="❌")
+            return False, "Prize coins cannot be negative", None
+
+        if winner_count < 1:
+            log.tree("Giveaway Create Failed", [
+                ("Host", f"{host.name} ({host.id})"),
+                ("Reason", f"Invalid winner_count: {winner_count}"),
+            ], emoji="❌")
+            return False, "Winner count must be at least 1", None
+
         channel = self.bot.get_channel(config.GIVEAWAY_CHANNEL_ID)
         if not channel or not isinstance(channel, discord.TextChannel):
             log.tree("Giveaway Create Failed", [
@@ -202,6 +264,9 @@ class GiveawayService:
             inline=False
         )
 
+        # Add giveaway emoji as thumbnail
+        embed.set_thumbnail(url=GIVEAWAY_EMOJI_URL)
+
         # Add giveaway image
         if GIVEAWAY_IMAGE_PATH.exists():
             embed.set_image(url="attachment://giveaway.gif")
@@ -218,7 +283,12 @@ class GiveawayService:
             msg = await channel.send(content=content, embed=embed, file=file)
 
             # Add reaction for entry
-            await msg.add_reaction(EMOJI_GIVEAWAY)
+            try:
+                await msg.add_reaction(EMOJI_GIVEAWAY)
+            except discord.HTTPException as e:
+                log.tree("Giveaway Reaction Failed", [
+                    ("Error", str(e)[:50]),
+                ], emoji="⚠️")
 
             # Save to database
             giveaway_id = await asyncio.to_thread(
@@ -292,9 +362,8 @@ class GiveawayService:
         min_level: int,
         host: discord.Member,
     ) -> None:
-        """Send giveaway notification to notification channel."""
-        # Use notification channel, fallback to general channel
-        channel_id = config.GIVEAWAY_NOTIFY_CHANNEL_ID or config.GENERAL_CHANNEL_ID
+        """Send giveaway notification to general channel."""
+        channel_id = config.GENERAL_CHANNEL_ID
         if not channel_id:
             log.tree("Giveaway Notification Skipped", [
                 ("Reason", "No notification or general channel configured"),
@@ -340,6 +409,9 @@ class GiveawayService:
                 value=req_text,
                 inline=True
             )
+
+            # Add giveaway emoji as thumbnail
+            embed.set_thumbnail(url=GIVEAWAY_EMOJI_URL)
 
             set_footer(embed)
 
@@ -586,6 +658,7 @@ class GiveawayService:
             return True, "Giveaway ended with no entries", []
 
         # Build weighted entry pool (boosters get multiple entries)
+        # Re-validate eligibility at end time (users may have lost role/level)
         guild = self.bot.get_guild(config.GUILD_ID)
         booster_role = None
         if guild and config.BOOSTER_ROLE_ID:
@@ -593,14 +666,21 @@ class GiveawayService:
 
         weighted_entries = []
         booster_count = 0
+        ineligible_count = 0
+
         for user_id in entries:
+            member = guild.get_member(user_id) if guild else None
+
+            # Re-validate eligibility at end time
+            if not await self._check_member_eligible(member, giveaway):
+                ineligible_count += 1
+                continue
+
             # Check if user is a booster
             is_booster = False
-            if guild and booster_role:
-                member = guild.get_member(user_id)
-                if member and booster_role in member.roles:
-                    is_booster = True
-                    booster_count += 1
+            if member and booster_role and booster_role in member.roles:
+                is_booster = True
+                booster_count += 1
 
             # Add entries (boosters get BOOSTER_MULTIPLIER entries)
             if is_booster:
@@ -608,15 +688,31 @@ class GiveawayService:
             else:
                 weighted_entries.append(user_id)
 
+        # Get unique eligible users for winner count calculation
+        eligible_users = list(set(weighted_entries))
+
+        if not eligible_users:
+            # All entries became ineligible
+            await asyncio.to_thread(db.end_giveaway, giveaway_id, [])
+            await self._update_giveaway_embed_ended(giveaway, [])
+            log.tree("Giveaway Ended (No Eligible Entries)", [
+                ("ID", str(giveaway_id)),
+                ("Original Entries", str(len(entries))),
+                ("Ineligible", str(ineligible_count)),
+            ], emoji="⚠️")
+            return True, "Giveaway ended with no eligible entries", []
+
         log.tree("Giveaway Winner Selection", [
             ("ID", str(giveaway_id)),
             ("Total Entries", str(len(entries))),
+            ("Eligible", str(len(eligible_users))),
+            ("Ineligible", str(ineligible_count)),
             ("Boosters", str(booster_count)),
             ("Weighted Pool", str(len(weighted_entries))),
         ], emoji="🎲")
 
         # Pick winners (unique - no duplicates)
-        winner_count = min(giveaway["winner_count"], len(entries))
+        winner_count = min(giveaway["winner_count"], len(eligible_users))
         winners = []
         pool = weighted_entries.copy()
 

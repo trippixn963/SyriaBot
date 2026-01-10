@@ -18,6 +18,11 @@ from src.core.config import config
 from src.core.logger import log
 
 
+class DatabaseUnavailableError(Exception):
+    """Raised when the database is unhealthy and operations cannot proceed."""
+    pass
+
+
 def get_week_start_timestamp(timestamp: int = None) -> int:
     """Get Monday 00:00:00 UTC for a given timestamp.
 
@@ -97,13 +102,19 @@ class DatabaseCore:
 
     @contextmanager
     def _get_conn(self):
-        """Get database connection context manager."""
+        """Get database connection context manager.
+
+        Raises:
+            DatabaseUnavailableError: If the database is unhealthy.
+        """
         if not self._healthy:
             log.tree("Database Unhealthy", [
-                ("Status", "Operation skipped"),
+                ("Status", "Operation rejected"),
+                ("Reason", self._corruption_reason or "Unknown"),
             ], emoji="⚠️")
-            yield None
-            return
+            raise DatabaseUnavailableError(
+                f"Database is unavailable: {self._corruption_reason or 'unhealthy'}"
+            )
 
         conn = None
         try:
@@ -292,6 +303,12 @@ class DatabaseCore:
             except Exception:
                 pass
 
+            # Safe column definitions - names are validated against whitelist
+            VALID_COLUMN_NAMES = frozenset([
+                "first_message_at", "last_active_at", "streak_days", "last_streak_date",
+                "longest_voice_session", "total_voice_sessions", "commands_used",
+                "reactions_given", "images_shared", "activity_hours", "invited_by", "is_active"
+            ])
             new_columns = [
                 ("first_message_at", "INTEGER DEFAULT 0"),
                 ("last_active_at", "INTEGER DEFAULT 0"),
@@ -307,6 +324,12 @@ class DatabaseCore:
                 ("is_active", "INTEGER DEFAULT 1"),
             ]
             for col_name, col_type in new_columns:
+                # Validate column name against whitelist to prevent injection
+                if col_name not in VALID_COLUMN_NAMES:
+                    log.tree("Invalid Column Name Skipped", [
+                        ("Column", col_name),
+                    ], emoji="⚠️")
+                    continue
                 try:
                     cur.execute(f"ALTER TABLE user_xp ADD COLUMN {col_name} {col_type}")
                 except Exception:

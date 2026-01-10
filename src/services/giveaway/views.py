@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 
 from src.core.logger import log
 from src.core.config import config
-from src.core.colors import COLOR_SYRIA_GREEN, COLOR_GOLD, COLOR_ERROR, EMOJI_JOIN, EMOJI_TRANSFER
+from src.core.colors import COLOR_SYRIA_GREEN, COLOR_GOLD, COLOR_ERROR, EMOJI_JOIN, EMOJI_TRANSFER, EMOJI_GIVEAWAY
 from src.utils.footer import set_footer
 
 if TYPE_CHECKING:
@@ -810,6 +810,6 @@ class GiveawayNotificationView(ui.View):
         self.add_item(ui.Button(
             label="Enter Giveaway",
             style=discord.ButtonStyle.link,
-            emoji=EMOJI_JOIN,
+            emoji=EMOJI_GIVEAWAY,
             url=giveaway_url,
         ))

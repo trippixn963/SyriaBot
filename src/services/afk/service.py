@@ -41,6 +41,10 @@ class AFKService:
         if not text:
             return text
 
+        # Safety check for DMs or missing guild
+        if not guild:
+            return text
+
         original_text = text
 
         # Check if input already has valid Discord emoji format - return unchanged
@@ -92,8 +96,10 @@ class AFKService:
 
         Returns (nickname_changed, converted_reason).
         """
-        # Convert emoji shortcodes in reason
+        # Convert emoji shortcodes in reason and truncate to prevent abuse
         converted_reason = self.convert_emoji_shortcodes(reason, member.guild) if reason else ""
+        if len(converted_reason) > 200:
+            converted_reason = converted_reason[:197] + "..."
 
         # Set in database
         db.set_afk(

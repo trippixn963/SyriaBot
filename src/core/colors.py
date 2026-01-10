@@ -60,7 +60,7 @@ EMOJI_CONFESSION = "<:confession:1458963705256742962>"
 EMOJI_SUGGEST = "<:suggest:1459288562859118662>"
 
 # Giveaway System
-EMOJI_GIVEAWAY = "🎉"  # TODO: Replace with custom emoji when uploaded
+EMOJI_GIVEAWAY = "<:giveaway:1459518392674549882>"
 EMOJI_JOIN = "<:join:1459322239311937606>"
 
 

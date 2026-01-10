@@ -19,7 +19,7 @@ Author: حَـــــنَّـــــا
 Server: discord.gg/syria
 """
 
-from .core import DatabaseCore
+from .core import DatabaseCore, DatabaseUnavailableError
 from .tempvoice import TempVoiceMixin
 from .rate_limits import RateLimitsMixin
 from .xp import XPMixin
@@ -58,4 +58,4 @@ class Database(
 db = Database()
 
 # Re-export for backwards compatibility
-__all__ = ["Database", "db"]
+__all__ = ["Database", "db", "DatabaseUnavailableError"]

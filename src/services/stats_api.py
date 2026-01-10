@@ -111,6 +111,11 @@ def get_client_ip(request: web.Request) -> str:
     if peername:
         return peername[0]
 
+    # Log when we can't determine IP (rate limiting may not work properly)
+    log.tree("API IP Detection Failed", [
+        ("Path", request.path),
+        ("Fallback", "unknown"),
+    ], emoji="⚠️")
     return "unknown"
 
 
@@ -129,35 +134,55 @@ async def rate_limit_middleware(request: web.Request, handler) -> web.Response:
             ("Path", request.path),
             ("Retry-After", f"{retry_after}s"),
         ], emoji="⚠️")
+        # CORS headers will be added by cors_middleware wrapper
         return web.json_response(
             {"error": "Rate limit exceeded", "retry_after": retry_after},
             status=429,
-            headers={
-                "Retry-After": str(retry_after),
-                "Access-Control-Allow-Origin": "*",
-            }
+            headers={"Retry-After": str(retry_after)}
         )
 
     return await handler(request)
 
 
+# Allowed CORS origins for the API
+ALLOWED_ORIGINS = frozenset([
+    "https://trippixn.com",
+    "https://www.trippixn.com",
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+])
+
+
+def _get_cors_origin(request: web.Request) -> str:
+    """Get CORS origin header - return specific origin if allowed, empty otherwise."""
+    origin = request.headers.get("Origin", "")
+    if origin in ALLOWED_ORIGINS:
+        return origin
+    # Allow same-origin requests (no Origin header)
+    return ""
+
+
 @web.middleware
 async def cors_middleware(request: web.Request, handler) -> web.Response:
     """Middleware to add CORS headers to all responses."""
+    origin = _get_cors_origin(request)
+
     # Handle preflight OPTIONS requests
     if request.method == "OPTIONS":
-        return web.Response(
-            status=204,
-            headers={
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-                "Access-Control-Allow-Headers": "Content-Type, X-API-Key",
-                "Access-Control-Max-Age": "86400",
-            }
-        )
+        headers = {
+            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, X-API-Key",
+            "Access-Control-Max-Age": "86400",
+        }
+        if origin:
+            headers["Access-Control-Allow-Origin"] = origin
+        return web.Response(status=204, headers=headers)
 
     response = await handler(request)
-    response.headers["Access-Control-Allow-Origin"] = "*"
+    if origin:
+        response.headers["Access-Control-Allow-Origin"] = origin
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     return response
 
@@ -181,10 +206,12 @@ async def security_headers_middleware(request: web.Request, handler) -> web.Resp
 # Limited to 500 entries to prevent unbounded growth
 _avatar_cache: dict[int, tuple[Optional[str], str, Optional[str], Optional[int], bool]] = {}
 _avatar_cache_date: Optional[str] = None
+_avatar_cache_lock: asyncio.Lock = asyncio.Lock()
 _AVATAR_CACHE_MAX_SIZE = 500
 
 # Response cache for expensive queries
 _response_cache: dict[str, tuple[dict, float]] = {}
+_response_cache_lock: asyncio.Lock = asyncio.Lock()
 _STATS_CACHE_TTL = 60  # 60 seconds for stats
 _LEADERBOARD_CACHE_TTL = 30  # 30 seconds for leaderboard
 
@@ -235,30 +262,32 @@ class SyriaAPI:
             return f"{hours}h {remaining_mins}m"
         return f"{mins}m"
 
-    def _check_cache_refresh(self) -> None:
+    async def _check_cache_refresh(self) -> None:
         """Clear avatar cache if it's a new day in EST or exceeds max size."""
         global _avatar_cache, _avatar_cache_date
         today_est = datetime.now(EST_TZ).strftime("%Y-%m-%d")
 
-        if _avatar_cache_date != today_est:
-            _avatar_cache.clear()
-            _avatar_cache_date = today_est
-        elif len(_avatar_cache) >= _AVATAR_CACHE_MAX_SIZE:
-            # Evict oldest half when cache is full
-            keys_to_remove = list(_avatar_cache.keys())[:len(_avatar_cache) // 2]
-            for key in keys_to_remove:
-                del _avatar_cache[key]
+        async with _avatar_cache_lock:
+            if _avatar_cache_date != today_est:
+                _avatar_cache.clear()
+                _avatar_cache_date = today_est
+            elif len(_avatar_cache) >= _AVATAR_CACHE_MAX_SIZE:
+                # Evict oldest half when cache is full
+                keys_to_remove = list(_avatar_cache.keys())[:len(_avatar_cache) // 2]
+                for key in keys_to_remove:
+                    del _avatar_cache[key]
 
     async def _fetch_user_data(self, uid: int) -> tuple[Optional[str], str, Optional[str], Optional[int], bool]:
         """Fetch avatar, display name, username, join date, and booster status for a user."""
         global _avatar_cache
 
-        self._check_cache_refresh()
+        await self._check_cache_refresh()
 
         # Check cache (includes joined_at and is_booster)
-        if uid in _avatar_cache:
-            cached = _avatar_cache[uid]
-            return cached[0], cached[1], cached[2], cached[3], cached[4]
+        async with _avatar_cache_lock:
+            if uid in _avatar_cache:
+                cached = _avatar_cache[uid]
+                return cached[0], cached[1], cached[2], cached[3], cached[4]
 
         if not self._bot or not self._bot.is_ready():
             return None, str(uid), None, None, False
@@ -285,7 +314,8 @@ class SyriaAPI:
                 avatar_url = member.avatar.url if member.avatar else member.default_avatar.url
                 joined_at = int(member.joined_at.timestamp()) if member.joined_at else None
                 is_booster = member.premium_since is not None
-                _avatar_cache[uid] = (avatar_url, display_name, username, joined_at, is_booster)
+                async with _avatar_cache_lock:
+                    _avatar_cache[uid] = (avatar_url, display_name, username, joined_at, is_booster)
                 return avatar_url, display_name, username, joined_at, is_booster
 
             # Fallback to user if not in guild (can't determine booster status)
@@ -300,7 +330,8 @@ class SyriaAPI:
                 display_name = user.global_name or user.display_name or user.name
                 username = user.name
                 avatar_url = user.avatar.url if user.avatar else user.default_avatar.url
-                _avatar_cache[uid] = (avatar_url, display_name, username, None, False)
+                async with _avatar_cache_lock:
+                    _avatar_cache[uid] = (avatar_url, display_name, username, None, False)
                 return avatar_url, display_name, username, None, False
         except (asyncio.TimeoutError, Exception):
             pass
@@ -308,13 +339,21 @@ class SyriaAPI:
         return None, str(uid), None, None, False
 
     async def _enrich_leaderboard(self, leaderboard: list[dict]) -> list[dict]:
-        """Add avatar URLs, names, and booster status to leaderboard entries (parallel fetch)."""
+        """Add avatar URLs, names, and booster status to leaderboard entries (rate-limited parallel fetch)."""
         if not leaderboard:
             return []
 
-        # Fetch all user data in parallel for better performance
+        # Use semaphore to limit concurrent Discord API calls (prevent rate limit flood)
+        MAX_CONCURRENT_FETCHES = 10
+        semaphore = asyncio.Semaphore(MAX_CONCURRENT_FETCHES)
+
+        async def fetch_with_limit(uid: int):
+            async with semaphore:
+                return await self._fetch_user_data(uid)
+
+        # Fetch all user data with limited concurrency
         user_ids = [entry["user_id"] for entry in leaderboard]
-        user_data_tasks = [self._fetch_user_data(uid) for uid in user_ids]
+        user_data_tasks = [fetch_with_limit(uid) for uid in user_ids]
         user_data_results = await asyncio.gather(*user_data_tasks, return_exceptions=True)
 
         enriched = []
@@ -725,8 +764,9 @@ class SyriaAPI:
                 ("Amount", str(amount)),
                 ("Client IP", client_ip),
             ])
+            # Don't expose internal error details to clients (may contain secrets)
             return web.json_response(
-                {"error": "Internal server error", "message": str(e)[:100]},
+                {"error": "Internal server error"},
                 status=500,
                 headers={"Access-Control-Allow-Origin": "*"}
             )
@@ -857,8 +897,9 @@ class SyriaAPI:
                 ("XP", str(new_xp)),
                 ("Client IP", client_ip),
             ])
+            # Don't expose internal error details to clients (may contain secrets)
             return web.json_response(
-                {"error": "Internal server error", "message": str(e)[:100]},
+                {"error": "Internal server error"},
                 status=500,
                 headers={"Access-Control-Allow-Origin": "*"}
             )
@@ -933,7 +974,10 @@ class SyriaAPI:
             return
 
         start_time = time.time()
-        cached_user_ids = list(_avatar_cache.keys())
+
+        # Copy keys under lock to avoid race condition
+        async with _avatar_cache_lock:
+            cached_user_ids = list(_avatar_cache.keys())
         total_users = len(cached_user_ids)
 
         if total_users == 0:
@@ -960,35 +1004,37 @@ class SyriaAPI:
                         member = await guild.fetch_member(user_id)
                     except Exception:
                         # User left the server, remove from cache
-                        if user_id in _avatar_cache:
-                            del _avatar_cache[user_id]
+                        async with _avatar_cache_lock:
+                            if user_id in _avatar_cache:
+                                del _avatar_cache[user_id]
                         continue
 
                 # Check current booster status
                 current_is_booster = member.premium_since is not None
 
-                # Get cached status
-                if user_id in _avatar_cache:
-                    cached_data = _avatar_cache[user_id]
-                    cached_is_booster = cached_data[4] if len(cached_data) > 4 else False
+                # Get cached status under lock
+                async with _avatar_cache_lock:
+                    if user_id in _avatar_cache:
+                        cached_data = _avatar_cache[user_id]
+                        cached_is_booster = cached_data[4] if len(cached_data) > 4 else False
 
-                    if current_is_booster != cached_is_booster:
-                        # Status changed - update cache
-                        display_name = member.global_name or member.display_name or member.name
-                        username = member.name
-                        avatar_url = member.avatar.url if member.avatar else member.default_avatar.url
-                        joined_at = int(member.joined_at.timestamp()) if member.joined_at else None
+                        if current_is_booster != cached_is_booster:
+                            # Status changed - update cache
+                            display_name = member.global_name or member.display_name or member.name
+                            username = member.name
+                            avatar_url = member.avatar.url if member.avatar else member.default_avatar.url
+                            joined_at = int(member.joined_at.timestamp()) if member.joined_at else None
 
-                        _avatar_cache[user_id] = (avatar_url, display_name, username, joined_at, current_is_booster)
-                        updated += 1
+                            _avatar_cache[user_id] = (avatar_url, display_name, username, joined_at, current_is_booster)
+                            updated += 1
 
-                        log.tree("Booster Status Updated", [
-                            ("User", f"{member.name} ({user_id})"),
-                            ("Old Status", "Booster" if cached_is_booster else "Non-booster"),
-                            ("New Status", "Booster" if current_is_booster else "Non-booster"),
-                        ], emoji="💎" if current_is_booster else "💔")
-                    else:
-                        unchanged += 1
+                            log.tree("Booster Status Updated", [
+                                ("User", f"{member.name} ({user_id})"),
+                                ("Old Status", "Booster" if cached_is_booster else "Non-booster"),
+                                ("New Status", "Booster" if current_is_booster else "Non-booster"),
+                            ], emoji="💎" if current_is_booster else "💔")
+                        else:
+                            unchanged += 1
 
                 # Stagger checks to avoid blocking (10ms between each)
                 if (i + 1) % 50 == 0:

@@ -58,6 +58,7 @@ class XPService:
 
         # Track daily unique users to avoid duplicate DAU counts
         self._dau_cache: set = set()  # {(user_id, guild_id, date)}
+        self._dau_cache_lock: asyncio.Lock = asyncio.Lock()
 
         # Track when users became muted (for anti-AFK farming)
         # {user_id: mute_start_timestamp}
@@ -239,18 +240,19 @@ class XPService:
 
             # Track DAU (unique users) - use cache to avoid duplicate counts
             dau_key = (user_id, guild_id, today_date)
-            if dau_key not in self._dau_cache:
-                self._dau_cache.add(dau_key)
-                db.increment_daily_unique_user(guild_id, today_date)
+            async with self._dau_cache_lock:
+                if dau_key not in self._dau_cache:
+                    self._dau_cache.add(dau_key)
+                    db.increment_daily_unique_user(guild_id, today_date)
 
-                # Clean cache when it gets large (removes stale dates)
-                if len(self._dau_cache) > 1000:
-                    old_size = len(self._dau_cache)
-                    self._dau_cache = {k for k in self._dau_cache if k[2] == today_date}
-                    log.tree("DAU Cache Cleanup", [
-                        ("Before", str(old_size)),
-                        ("After", str(len(self._dau_cache))),
-                    ], emoji="🧹")
+                    # Clean cache when it gets large (removes stale dates)
+                    if len(self._dau_cache) > 1000:
+                        old_size = len(self._dau_cache)
+                        self._dau_cache = {k for k in self._dau_cache if k[2] == today_date}
+                        log.tree("DAU Cache Cleanup", [
+                            ("Before", str(old_size)),
+                            ("After", str(len(self._dau_cache))),
+                        ], emoji="🧹")
         except Exception as e:
             log.tree("Metrics Track Failed", [
                 ("User", f"{member.name} ({member.display_name})"),
@@ -392,12 +394,19 @@ class XPService:
 
                     for user_id, join_time in list(sessions.items()):
                         member = guild.get_member(user_id)
-                        # Validate user is still in voice (cleanup stale entries)
-                        if not member or not member.voice or not member.voice.channel:
-                            stale_users.append((user_id, member.name if member else "Unknown"))
+
+                        # Check member exists first before any attribute access
+                        if not member:
+                            stale_users.append((user_id, "Unknown"))
                             continue
 
-                        channel = member.voice.channel
+                        # Capture voice state once to avoid race conditions
+                        voice = member.voice
+                        channel = voice.channel if voice else None
+
+                        if not channel:
+                            stale_users.append((user_id, member.name))
+                            continue
 
                         # Skip AFK channel
                         if guild.afk_channel and channel.id == guild.afk_channel.id:
@@ -413,11 +422,11 @@ class XPService:
                             continue
 
                         # Anti-abuse: No XP if server deafened (not participating)
-                        if member.voice.deaf:
+                        if voice.deaf:
                             continue
 
                         # Anti-abuse: No XP if muted for > 1 hour (AFK farming prevention)
-                        is_muted = member.voice.self_mute or member.voice.mute
+                        is_muted = voice.self_mute or voice.mute
                         if is_muted:
                             mute_start = self._mute_timestamps.get(user_id)
                             if mute_start:
@@ -503,9 +512,10 @@ class XPService:
                 from zoneinfo import ZoneInfo
                 est = ZoneInfo("America/New_York")
                 today_date = datetime.now(est).strftime("%Y-%m-%d")
-                old_dau_size = len(self._dau_cache)
-                self._dau_cache = {k for k in self._dau_cache if k[2] == today_date}
-                cleaned["dau"] = old_dau_size - len(self._dau_cache)
+                async with self._dau_cache_lock:
+                    old_dau_size = len(self._dau_cache)
+                    self._dau_cache = {k for k in self._dau_cache if k[2] == today_date}
+                    cleaned["dau"] = old_dau_size - len(self._dau_cache)
 
                 # Only log if we cleaned something
                 if any(v > 0 for v in cleaned.values()):
@@ -830,8 +840,9 @@ class XPService:
         log.tree("Midnight Tasks Triggered", [], emoji="🕛")
 
         # Clear DAU cache (new day = new tracking)
-        old_dau_size = len(self._dau_cache)
-        self._dau_cache.clear()
+        async with self._dau_cache_lock:
+            old_dau_size = len(self._dau_cache)
+            self._dau_cache.clear()
         if old_dau_size > 0:
             log.tree("DAU Cache Reset", [
                 ("Cleared Entries", str(old_dau_size)),
@@ -951,6 +962,12 @@ class XPService:
 
             correct_role = guild.get_role(correct_role_id)
             if not correct_role:
+                log.tree("Role Sync Skipped - Role Missing", [
+                    ("User", f"{member.name} ({member.display_name})"),
+                    ("Level", str(level)),
+                    ("Missing Role ID", str(correct_role_id)),
+                    ("Action", "Check SYRIA_XP_ROLES config"),
+                ], emoji="⚠️")
                 continue
 
             # Check current roles

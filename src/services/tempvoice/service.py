@@ -126,8 +126,16 @@ class TempVoiceService:
                 cancelled_tasks.append(f"reorder-{guild_id}")
         self._pending_reorders.clear()
 
+        # Clear all channel tracking caches to prevent memory leaks
+        locks_count = len(self._panel_locks)
+        self._join_cooldowns.clear()
+        self._member_join_times.clear()
+        self._message_counts.clear()
+        self._panel_locks.clear()
+
         log.tree("TempVoice Service Stopped", [
             ("Cancelled Tasks", str(len(cancelled_tasks))),
+            ("Panel Locks Cleared", str(locks_count)),
         ], emoji="🔇")
 
     async def _periodic_cleanup(self) -> None:
@@ -586,10 +594,13 @@ class TempVoiceService:
 
         # Handle interface channel (text channel for main panel)
         if config.VC_INTERFACE_CHANNEL_ID and channel.id == config.VC_INTERFACE_CHANNEL_ID:
-            self._message_counts[channel.id] = self._message_counts.get(channel.id, 0) + 1
-            if self._message_counts[channel.id] >= STICKY_PANEL_MESSAGE_THRESHOLD:
-                self._message_counts[channel.id] = 0
-                await self._resend_interface_panel(channel)
+            # Use lock to prevent race conditions on message count
+            lock = self._get_panel_lock(channel.id)
+            async with lock:
+                self._message_counts[channel.id] = self._message_counts.get(channel.id, 0) + 1
+                if self._message_counts[channel.id] >= STICKY_PANEL_MESSAGE_THRESHOLD:
+                    self._message_counts[channel.id] = 0
+                    await self._resend_interface_panel(channel)
             return
 
         # Handle temp voice channels
@@ -599,13 +610,16 @@ class TempVoiceService:
         if not db.is_temp_channel(channel.id):
             return
 
-        # Increment message count
-        self._message_counts[channel.id] = self._message_counts.get(channel.id, 0) + 1
+        # Use lock to prevent race conditions on message count
+        lock = self._get_panel_lock(channel.id)
+        should_resend = False
+        async with lock:
+            self._message_counts[channel.id] = self._message_counts.get(channel.id, 0) + 1
+            if self._message_counts[channel.id] >= STICKY_PANEL_MESSAGE_THRESHOLD:
+                self._message_counts[channel.id] = 0
+                should_resend = True
 
-        # Check if we've hit the threshold
-        if self._message_counts[channel.id] >= STICKY_PANEL_MESSAGE_THRESHOLD:
-            # Reset count immediately to prevent spam if resend fails
-            self._message_counts[channel.id] = 0
+        if should_resend:
             await self._resend_sticky_panel(channel)
 
     async def _resend_sticky_panel(self, channel: discord.VoiceChannel) -> None:

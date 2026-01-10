@@ -183,7 +183,7 @@ class ReplyHandler:
         if not original:
             try:
                 original = await message.channel.fetch_message(ref.message_id)
-            except (discord.NotFound, discord.Forbidden) as e:
+            except discord.HTTPException as e:
                 log.tree("Convert Fetch Failed", [
                     ("User", f"{message.author.name} ({message.author.display_name})"),
                     ("ID", str(message.author.id)),
@@ -357,7 +357,7 @@ class ReplyHandler:
         if not original:
             try:
                 original = await message.channel.fetch_message(ref.message_id)
-            except (discord.NotFound, discord.Forbidden) as e:
+            except discord.HTTPException as e:
                 log.tree("Quote Fetch Failed", [
                     ("User", f"{message.author.name} ({message.author.display_name})"),
                     ("ID", str(message.author.id)),
@@ -482,7 +482,7 @@ class ReplyHandler:
         if not original:
             try:
                 original = await message.channel.fetch_message(ref.message_id)
-            except (discord.NotFound, discord.Forbidden) as e:
+            except discord.HTTPException as e:
                 log.tree("Translate Fetch Failed", [
                     ("User", f"{message.author.name} ({message.author.display_name})"),
                     ("ID", str(message.author.id)),
@@ -624,7 +624,7 @@ class ReplyHandler:
         if not original:
             try:
                 original = await message.channel.fetch_message(ref.message_id)
-            except (discord.NotFound, discord.Forbidden) as e:
+            except discord.HTTPException as e:
                 log.tree("Download Fetch Failed", [
                     ("User", f"{message.author.name} ({message.author.display_name})"),
                     ("ID", str(message.author.id)),

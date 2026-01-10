@@ -18,7 +18,7 @@ Server: discord.gg/syria
 import discord
 from datetime import datetime, timedelta
 from threading import Lock
-from typing import Optional, Tuple, Set
+from typing import Optional, Tuple, Set, Union
 
 from src.core.colors import COLOR_GOLD
 from src.core.constants import (
@@ -60,6 +60,8 @@ class RateLimiter:
         self._db_lock = Lock()
         self._exempt_role_ids: Set[int] = set()
         self._initialized = False
+        self._background_tasks: Set = set()  # Store background tasks to prevent GC
+        self._last_cleanup_week: Optional[str] = None  # Track last cleanup week
         self._load_config()
         self._init_db()
 
@@ -149,9 +151,12 @@ class RateLimiter:
     # Exemption Checks
     # =========================================================================
 
-    def is_exempt(self, member: discord.Member) -> Tuple[bool, str]:
+    def is_exempt(self, member: Union[discord.Member, discord.User]) -> Tuple[bool, str]:
         """
         Check if a member is exempt from rate limits.
+
+        Args:
+            member: Discord Member or User object
 
         Returns:
             Tuple of (is_exempt, reason)
@@ -159,6 +164,10 @@ class RateLimiter:
         # Check developer
         if config.OWNER_ID and member.id == config.OWNER_ID:
             return True, "Developer"
+
+        # User objects (DMs) don't have guild-specific attributes
+        if not isinstance(member, discord.Member):
+            return False, "None"
 
         # Check if actual booster (premium_since is set when boosting)
         if member.premium_since is not None:
@@ -251,6 +260,11 @@ class RateLimiter:
                         ON CONFLICT(user_id, action_type, week_start)
                         DO UPDATE SET usage_count = usage_count + 1, last_used = ?
                     """, (user_id, action_type, week_start, now, now))
+
+            # Trigger cleanup on week boundary (run once per new week)
+            if self._last_cleanup_week != week_start:
+                self._last_cleanup_week = week_start
+                self.cleanup_old_records()
 
             return True
 
@@ -365,14 +379,20 @@ class RateLimiter:
                 )
 
                 # Schedule deletion after 10 seconds (non-blocking)
-                async def delete_after_delay():
-                    await asyncio.sleep(10)
+                async def delete_after_delay(task_set: Set, msg: discord.Message):
                     try:
-                        await response.delete()
+                        await asyncio.sleep(10)
+                        await msg.delete()
                     except discord.HTTPException:
                         pass  # Response already deleted, no action needed
+                    except asyncio.CancelledError:
+                        pass
+                    finally:
+                        # Remove task from set when done
+                        task_set.discard(asyncio.current_task())
 
-                asyncio.create_task(delete_after_delay())
+                task = asyncio.create_task(delete_after_delay(self._background_tasks, response))
+                self._background_tasks.add(task)
 
             except discord.HTTPException as e:
                 log.tree("Rate Limit Reply Failed", [
@@ -437,7 +457,7 @@ def get_rate_limiter() -> RateLimiter:
 
 
 async def check_rate_limit(
-    member: discord.Member,
+    member: Union[discord.Member, discord.User],
     action_type: str,
     interaction: Optional[discord.Interaction] = None,
     message: Optional[discord.Message] = None,

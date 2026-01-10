@@ -71,8 +71,8 @@ class FunHandler:
             try:
                 old_msg = await channel.fetch_message(self._sticky_message_id)
                 await old_msg.delete()
-            except (discord.NotFound, discord.Forbidden):
-                pass
+            except discord.HTTPException:
+                pass  # Message gone, forbidden, or API error - all ok
 
         embed = discord.Embed(
             title="🎮 Commands Channel",

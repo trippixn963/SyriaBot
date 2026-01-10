@@ -52,6 +52,9 @@ async def _check_download_limit(user: discord.Member) -> tuple[bool, int, str]:
     return (True, remaining, "")
 
 
+MAX_URL_LENGTH = 2048  # Reasonable limit for URLs
+
+
 async def handle_download(
     interaction_or_message: discord.Interaction | discord.Message,
     url: str,
@@ -66,6 +69,16 @@ async def handle_download(
         url: The URL to download from
         is_reply: Whether this is from a reply (for cleanup)
     """
+    # Validate URL length to prevent abuse
+    if len(url) > MAX_URL_LENGTH:
+        is_interaction = isinstance(interaction_or_message, discord.Interaction)
+        error_msg = f"URL too long (max {MAX_URL_LENGTH} characters)"
+        if is_interaction:
+            await interaction_or_message.response.send_message(error_msg, ephemeral=True)
+        else:
+            await interaction_or_message.reply(error_msg, delete_after=10)
+        return
+
     is_interaction = isinstance(interaction_or_message, discord.Interaction)
 
     if is_interaction:

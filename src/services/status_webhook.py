@@ -304,7 +304,7 @@ class StatusWebhookService:
         """Send hourly status alert."""
         log.tree("Sending Hourly Status", [], emoji="📊")
         embed = self._create_status_embed("Online", COLOR_ONLINE, include_health=True)
-        asyncio.create_task(self._send_webhook(embed))
+        await self._send_webhook(embed)
 
     async def send_shutdown_alert(self) -> None:
         """Send shutdown alert."""

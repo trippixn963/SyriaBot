@@ -168,7 +168,6 @@ class Config:
     # Giveaways (no defaults - must be configured via .env)
     # ==========================================================================
     GIVEAWAY_CHANNEL_ID: int = _env_int("SYRIA_GIVEAWAY_CH")
-    GIVEAWAY_NOTIFY_CHANNEL_ID: int = _env_int("SYRIA_GIVEAWAY_NOTIFY_CH")
     GIVEAWAY_ROLE_ID: int = _env_int("SYRIA_GIVEAWAY_ROLE")
 
     # ==========================================================================
