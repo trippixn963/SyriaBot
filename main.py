@@ -26,7 +26,9 @@ from src.core.logger import log
 async def main():
     """Main entry point."""
     if not config.TOKEN:
-        log.error("SYRIA_BOT_TOKEN not set in environment")
+        log.tree("Startup Failed", [
+            ("Reason", "SYRIA_BOT_TOKEN not set"),
+        ], emoji="🚨")
         sys.exit(1)
 
     bot = SyriaBot()
@@ -34,7 +36,9 @@ async def main():
     try:
         await bot.start(config.TOKEN)
     except KeyboardInterrupt:
-        log.info("Received keyboard interrupt")
+        log.tree("Shutdown", [
+            ("Reason", "Keyboard interrupt"),
+        ], emoji="🛑")
     finally:
         await bot.close()
 

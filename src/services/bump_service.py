@@ -71,7 +71,9 @@ class BumpService:
         if self._task:
             self._task.cancel()
             self._task = None
-        log.info("Bump scheduler stopped")
+        log.tree("Bump Scheduler Stopped", [
+            ("Status", "Stopped"),
+        ], emoji="🛑")
 
     def _load_data(self) -> None:
         """Load bump data from file."""
@@ -233,9 +235,15 @@ class BumpService:
             ], emoji="📢")
 
         except discord.Forbidden:
-            log.error("No permission to send bump reminder")
+            log.tree("Bump Reminder Failed", [
+                ("Reason", "Missing permissions"),
+                ("Channel", f"#{channel.name}"),
+            ], emoji="⚠️")
         except discord.HTTPException as e:
-            log.error(f"Failed to send bump reminder: {e}")
+            log.tree("Bump Reminder Failed", [
+                ("Error", str(e)[:50]),
+                ("Channel", f"#{channel.name}"),
+            ], emoji="❌")
 
 
 # Global instance

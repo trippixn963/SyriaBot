@@ -270,5 +270,9 @@ class GiveawaysMixin:
                     UPDATE giveaways SET message_id = ? WHERE id = ?
                 """, (message_id, giveaway_id))
                 return True
-            except Exception:
+            except Exception as e:
+                log.tree("Giveaway Message Update Failed", [
+                    ("ID", str(giveaway_id)),
+                    ("Error", str(e)[:50]),
+                ], emoji="⚠️")
                 return False
