@@ -352,7 +352,10 @@ class ConvertService:
             )
             return result
         except Exception as e:
-            log.tree("Convert Error", [("Type", type(e).__name__), ("Error", str(e)[:50])], emoji="❌")
+            log.error_tree("Image Conversion Failed", e, [
+                ("Text", text[:30] if text else "None"),
+                ("Position", position),
+            ])
             return ConvertResult(
                 success=False,
                 error=f"Failed to convert image: {type(e).__name__}"
@@ -858,7 +861,11 @@ class ConvertService:
             )
             return result
         except Exception as e:
-            log.tree("Video Convert Error", [("Type", type(e).__name__), ("Error", str(e)[:50])], emoji="❌")
+            log.error_tree("Video Conversion Failed", e, [
+                ("Text", text[:30] if text else "None"),
+                ("Position", position),
+                ("Effect", effect or "None"),
+            ])
             return ConvertResult(
                 success=False,
                 error=f"Failed to convert video: {type(e).__name__}"
@@ -1035,9 +1042,13 @@ class ConvertService:
 
             result = subprocess.run(gif_cmd, capture_output=True, timeout=180)
             if result.returncode != 0:
-                error_msg = result.stderr.decode()[:200]
-                log.tree("FFmpeg Error", [("Message", error_msg[:80] if error_msg else "Unknown")], emoji="❌")
-                return ConvertResult(success=False, error=f"FFmpeg error: {error_msg}")
+                error_msg = result.stderr.decode()
+                log.tree("FFmpeg GIF Error", [
+                    ("Return Code", str(result.returncode)),
+                    ("Command", gif_cmd[0]),
+                    ("Error", error_msg[:200] if error_msg else "Unknown"),
+                ], emoji="❌")
+                return ConvertResult(success=False, error=f"FFmpeg error: {error_msg[:100]}")
 
             # Read output GIF
             if not output_path.exists():
