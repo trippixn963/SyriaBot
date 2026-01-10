@@ -197,9 +197,103 @@ class BirthdayCog(commands.Cog):
             ], emoji="ℹ️")
 
 
+    @birthday_group.command(
+        name="list",
+        description="View upcoming birthdays"
+    )
+    async def birthday_list(self, interaction: discord.Interaction) -> None:
+        """List upcoming birthdays."""
+        if not interaction.guild:
+            await interaction.response.send_message(
+                "This command can only be used in a server.",
+                ephemeral=True
+            )
+            return
+
+        service = get_birthday_service()
+        if not service:
+            await interaction.response.send_message(
+                "Birthday feature is not available.",
+                ephemeral=True
+            )
+            return
+
+        # Get upcoming birthdays
+        from src.services.database import db
+        import asyncio
+
+        now = datetime.now()
+        upcoming = await asyncio.to_thread(
+            db.get_upcoming_birthdays,
+            interaction.guild.id,
+            now.month,
+            now.day,
+            10  # Limit to 10
+        )
+
+        if not upcoming:
+            embed = discord.Embed(
+                description="No birthdays registered yet.\n\n*Use `/birthday set` to register yours!*",
+                color=COLOR_SYRIA_GREEN
+            )
+            set_footer(embed)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+
+        # Build the list
+        lines = []
+        for i, bday in enumerate(upcoming, 1):
+            user = interaction.guild.get_member(bday["user_id"])
+            if not user:
+                continue
+
+            month_name = MONTH_NAMES[bday["birth_month"]]
+            day = bday["birth_day"]
+
+            # Calculate days until birthday
+            days_until = bday.get("days_until", 0)
+            if days_until == 0:
+                days_text = "**Today!**"
+            elif days_until == 1:
+                days_text = "Tomorrow"
+            else:
+                days_text = f"in {days_until} days"
+
+            lines.append(f"**{i}.** {user.mention} — {month_name} {day} ({days_text})")
+
+        if not lines:
+            embed = discord.Embed(
+                description="No birthdays registered yet.\n\n*Use `/birthday set` to register yours!*",
+                color=COLOR_SYRIA_GREEN
+            )
+            set_footer(embed)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+
+        embed = discord.Embed(
+            title="Upcoming Birthdays",
+            description="\n".join(lines),
+            color=COLOR_SYRIA_GREEN
+        )
+        embed.add_field(
+            name="\u200b",
+            value="*Use `/birthday set` to register yours!*",
+            inline=False
+        )
+        set_footer(embed)
+
+        await interaction.response.send_message(embed=embed)
+
+        log.tree("Birthday List Viewed", [
+            ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+            ("ID", str(interaction.user.id)),
+            ("Count", str(len(lines))),
+        ], emoji="🎂")
+
+
 async def setup(bot: commands.Bot) -> None:
     """Add the cog to the bot."""
     await bot.add_cog(BirthdayCog(bot))
     log.tree("Command Loaded", [
-        ("Name", "birthday (set, remove)"),
+        ("Name", "birthday (set, remove, list)"),
     ], emoji="✅")
