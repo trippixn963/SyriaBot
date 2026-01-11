@@ -36,6 +36,11 @@ CHANNEL_TOPIC_COOLDOWN = 120  # 2 minutes for same topic in same channel
 # Max tracked entries (memory management)
 MAX_COOLDOWN_ENTRIES = 500
 
+# Channels where auto-FAQ is disabled (manual /faq still works)
+FAQ_IGNORED_CHANNELS = {
+    1457000381702738105,  # Manual FAQ only
+}
+
 
 # =============================================================================
 # Fuzzy Matching
@@ -286,6 +291,10 @@ class FAQAutoResponder:
         """
         # Only in main guild
         if not message.guild or message.guild.id != config.GUILD_ID:
+            return False
+
+        # Skip ignored channels
+        if message.channel.id in FAQ_IGNORED_CHANNELS:
             return False
 
         content = message.content.strip()
