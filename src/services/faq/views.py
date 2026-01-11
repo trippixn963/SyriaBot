@@ -60,7 +60,6 @@ class FAQView(ui.View):
         emoji="🇸🇦",
         style=discord.ButtonStyle.secondary,
         custom_id="faq_arabic",
-        row=0,
     )
     async def arabic_button(self, interaction: discord.Interaction, button: ui.Button) -> None:
         """Switch to Arabic."""
@@ -84,69 +83,10 @@ class FAQView(ui.View):
         ], emoji="🌐")
 
     @ui.button(
-        label="Helpful",
-        emoji="👍",
-        style=discord.ButtonStyle.secondary,
-        custom_id="faq_helpful",
-        row=0,
-    )
-    async def helpful_button(self, interaction: discord.Interaction, button: ui.Button) -> None:
-        """Mark FAQ as helpful."""
-        if interaction.user.id in self._voted_users:
-            await interaction.response.send_message(
-                "You already voted on this FAQ.",
-                ephemeral=True
-            )
-            return
-
-        self._voted_users.add(interaction.user.id)
-        faq_analytics.record_helpful(self.topic)
-
-        await interaction.response.send_message(
-            "Thanks for your feedback! 👍",
-            ephemeral=True
-        )
-
-        log.tree("FAQ Helpful Vote", [
-            ("User", f"{interaction.user.name}"),
-            ("Topic", self.topic),
-        ], emoji="👍")
-
-    @ui.button(
-        label="Not Helpful",
-        emoji="👎",
-        style=discord.ButtonStyle.secondary,
-        custom_id="faq_unhelpful",
-        row=0,
-    )
-    async def unhelpful_button(self, interaction: discord.Interaction, button: ui.Button) -> None:
-        """Mark FAQ as not helpful."""
-        if interaction.user.id in self._voted_users:
-            await interaction.response.send_message(
-                "You already voted on this FAQ.",
-                ephemeral=True
-            )
-            return
-
-        self._voted_users.add(interaction.user.id)
-        faq_analytics.record_unhelpful(self.topic)
-
-        await interaction.response.send_message(
-            "Thanks for your feedback. Consider opening a ticket for more help.",
-            ephemeral=True
-        )
-
-        log.tree("FAQ Unhelpful Vote", [
-            ("User", f"{interaction.user.name}"),
-            ("Topic", self.topic),
-        ], emoji="👎")
-
-    @ui.button(
         label="Open Ticket",
         emoji=discord.PartialEmoji.from_str(EMOJI_COMMENT),
         style=discord.ButtonStyle.secondary,
         custom_id="faq_ticket",
-        row=1,
     )
     async def ticket_button(self, interaction: discord.Interaction, button: ui.Button) -> None:
         """Direct user to open a ticket."""

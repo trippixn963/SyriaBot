@@ -107,52 +107,6 @@ class FAQCog(commands.Cog):
             ("Target User", user.name if user else "None"),
         ], emoji="📋")
 
-    @app_commands.command(
-        name="faqstats",
-        description="View FAQ analytics (Moderator only)"
-    )
-    @app_commands.default_permissions(moderate_members=True)
-    @app_commands.guilds(discord.Object(id=config.GUILD_ID))
-    async def faqstats(self, interaction: discord.Interaction) -> None:
-        """View FAQ usage statistics."""
-        stats = faq_analytics.get_stats()
-        top_faqs = faq_analytics.get_top_faqs(5)
-
-        embed = discord.Embed(
-            title="📊 FAQ Analytics",
-            color=COLOR_SYRIA_GREEN,
-        )
-
-        # Overview
-        embed.add_field(
-            name="Overview",
-            value=f"**Total Triggers:** {stats['total_triggers']}\n"
-                  f"**Helpful Votes:** {stats['total_helpful']}\n"
-                  f"**Unhelpful Votes:** {stats['total_unhelpful']}\n"
-                  f"**Ticket Clicks:** {stats['ticket_clicks']}",
-            inline=False,
-        )
-
-        # Top FAQs
-        if top_faqs:
-            top_list = "\n".join([f"• **{topic}**: {count}" for topic, count in top_faqs])
-            embed.add_field(
-                name="Top FAQs",
-                value=top_list,
-                inline=False,
-            )
-
-        # Language switches
-        total_switches = sum(stats["language_switches"].values())
-        if total_switches > 0:
-            embed.add_field(
-                name="Arabic Switches",
-                value=f"**Total:** {total_switches}",
-                inline=False,
-            )
-
-        set_footer(embed)
-        await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
 # =============================================================================
