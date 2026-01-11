@@ -165,12 +165,20 @@ class BirthdayService:
             if not member:
                 continue
 
-            # Skip if already has the role
+            # Skip if already has the role (prevents double rewards)
             if role in member.roles:
                 log.tree("Birthday Role Skipped", [
                     ("User", f"{member.name} ({member.display_name})"),
                     ("Reason", "Already has role"),
                 ], emoji="ℹ️")
+                continue
+
+            # Skip if already has bonus (extra safeguard against abuse)
+            if user_id in _birthday_bonus_users:
+                log.tree("Birthday Bonus Skipped", [
+                    ("User", f"{member.name} ({member.display_name})"),
+                    ("Reason", "Already has 3x XP bonus"),
+                ], emoji="⚠️")
                 continue
 
             # Get birthday data for age calculation
@@ -196,6 +204,7 @@ class BirthdayService:
                     ("ID", str(user_id)),
                     ("Birthday", f"{MONTH_NAMES[month]} {day}"),
                     ("Age", str(age) if age else "Unknown"),
+                    ("Rewards", "3x XP + 100k coins"),
                 ], emoji="🎂")
 
                 # Send announcement
@@ -252,8 +261,15 @@ class BirthdayService:
                 db.clear_birthday_role_granted, user_id, config.GUILD_ID
             )
 
-            # Remove from birthday bonus users
+            # Remove from birthday bonus users (3x XP ends)
+            had_bonus = user_id in _birthday_bonus_users
             _birthday_bonus_users.discard(user_id)
+
+            if had_bonus:
+                log.tree("Birthday XP Bonus Expired", [
+                    ("User ID", str(user_id)),
+                    ("Bonus", "3x XP ended"),
+                ], emoji="⏰")
 
             if not member:
                 continue
