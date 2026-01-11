@@ -187,6 +187,7 @@ class ImageCog(commands.Cog):
             images=result.images,
             query=query,
             requester_id=user.id,
+            bot=self.bot,
         )
         embed, file = await view.create_embed_with_file()
 

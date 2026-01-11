@@ -446,7 +446,7 @@ class ReplyHandler:
             await message.reply(f"Failed to generate quote: {result.error}", mention_author=False)
             return
 
-        view = QuoteView(image_bytes=result.image_bytes, requester_id=message.author.id)
+        view = QuoteView(image_bytes=result.image_bytes, requester_id=message.author.id, bot=self.bot)
         file = discord.File(
             fp=io.BytesIO(result.image_bytes),
             filename="discord.gg-syria.png"

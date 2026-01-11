@@ -15,11 +15,36 @@ import discord
 from discord import ui
 from typing import Optional, Tuple
 
+from src.core.config import config
 from src.core.logger import log
 from src.core.colors import COLOR_SYRIA_GREEN, COLOR_SYRIA_GOLD, EMOJI_SAVE, EMOJI_DELETE
 from src.services.image.service import ImageResult
 from src.utils.footer import set_footer
 from src.utils.http import http_session
+
+
+async def upload_to_storage(bot, file_bytes: bytes, filename: str) -> Optional[str]:
+    """Upload file to asset storage channel for permanent URL."""
+    if not config.ASSET_STORAGE_CHANNEL_ID:
+        return None
+
+    try:
+        channel = bot.get_channel(config.ASSET_STORAGE_CHANNEL_ID)
+        if not channel:
+            return None
+
+        file = discord.File(fp=io.BytesIO(file_bytes), filename=filename)
+        msg = await channel.send(file=file)
+
+        if msg.attachments:
+            return msg.attachments[0].url
+
+    except Exception as e:
+        log.tree("Image Asset Storage Failed", [
+            ("Error", str(e)[:50]),
+        ], emoji="⚠️")
+
+    return None
 
 
 # =============================================================================
@@ -35,11 +60,13 @@ class ImageView(ui.View):
         query: str,
         requester_id: int,
         timeout: float = 300,  # 5 minutes
+        bot=None,
     ):
         super().__init__(timeout=timeout)
         self.images = images
         self.query = query
         self.requester_id = requester_id
+        self.bot = bot
         self.current_index = 0
         self.message: Optional[discord.Message] = None
 
@@ -326,12 +353,22 @@ class ImageView(ui.View):
             return
 
         try:
-            # Send as public .gif (permanent CDN link)
-            file = discord.File(
-                fp=io.BytesIO(image_bytes),
-                filename="discord.gg-syria.gif"
-            )
-            await interaction.followup.send(file=file)
+            filename = "discord.gg-syria.gif"
+
+            # Upload to asset storage for permanent URL
+            storage_url = None
+            if self.bot:
+                storage_url = await upload_to_storage(self.bot, image_bytes, filename)
+
+            if storage_url:
+                await interaction.followup.send(storage_url)
+            else:
+                # Fallback to direct upload
+                file = discord.File(
+                    fp=io.BytesIO(image_bytes),
+                    filename=filename
+                )
+                await interaction.followup.send(file=file)
 
             # Delete original message
             if self.message:
