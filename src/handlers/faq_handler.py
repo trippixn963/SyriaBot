@@ -38,7 +38,8 @@ MAX_COOLDOWN_ENTRIES = 500
 
 # Channels where auto-FAQ is disabled (manual /faq still works)
 FAQ_IGNORED_CHANNELS = {
-    1457000381702738105,  # Manual FAQ only
+    1457000381702738105,
+    1459144517449158719,
 }
 
 
