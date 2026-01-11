@@ -135,20 +135,19 @@ class BirthdayCog(commands.Cog):
 
     @birthday_group.command(
         name="remove",
-        description="Remove your birthday from the system"
+        description="Remove a user's birthday (Admin only)"
     )
-    async def birthday_remove(self, interaction: discord.Interaction) -> None:
-        """Remove your birthday."""
+    @app_commands.describe(user="The user whose birthday to remove")
+    @app_commands.default_permissions(moderate_members=True)
+    async def birthday_remove(
+        self,
+        interaction: discord.Interaction,
+        user: discord.Member
+    ) -> None:
+        """Remove a user's birthday (Admin only)."""
         if not interaction.guild:
             await interaction.response.send_message(
                 "This command can only be used in a server.",
-                ephemeral=True
-            )
-            return
-
-        if not isinstance(interaction.user, discord.Member):
-            await interaction.response.send_message(
-                "Unable to remove birthday.",
                 ephemeral=True
             )
             return
@@ -161,26 +160,22 @@ class BirthdayCog(commands.Cog):
             )
             return
 
-        success, message = await service.remove_birthday(interaction.user)
+        success, message = await service.remove_birthday(user)
 
         if success:
             embed = discord.Embed(
-                description="Your birthday has been removed.",
+                description=f"Birthday removed for {user.mention}.",
                 color=COLOR_SYRIA_GREEN
             )
-            embed.set_thumbnail(url=interaction.user.display_avatar.url)
-            embed.add_field(
-                name="\u200b",
-                value="*Use `/birthday set` to register it again!*",
-                inline=False
-            )
+            embed.set_thumbnail(url=user.display_avatar.url)
             set_footer(embed)
 
             await interaction.response.send_message(embed=embed, ephemeral=True)
 
-            log.tree("Birthday Removed", [
-                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                ("ID", str(interaction.user.id)),
+            log.tree("Birthday Removed (Admin)", [
+                ("Admin", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("Target", f"{user.name} ({user.display_name})"),
+                ("Target ID", str(user.id)),
             ], emoji="🗑️")
         else:
             embed = discord.Embed(
@@ -191,8 +186,8 @@ class BirthdayCog(commands.Cog):
             await interaction.response.send_message(embed=embed, ephemeral=True)
 
             log.tree("Birthday Remove Failed", [
-                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                ("ID", str(interaction.user.id)),
+                ("Admin", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("Target", f"{user.name} ({user.display_name})"),
                 ("Reason", message),
             ], emoji="ℹ️")
 

@@ -374,7 +374,7 @@ class BirthdayService:
 
     async def remove_birthday(self, user: discord.Member) -> Tuple[bool, str]:
         """
-        Remove a user's birthday.
+        Remove a user's birthday (Admin only).
 
         Args:
             user: Discord member
@@ -387,13 +387,21 @@ class BirthdayService:
         )
 
         if removed:
+            # Also remove any active birthday bonus
+            if user.id in _birthday_bonus_users:
+                _birthday_bonus_users.discard(user.id)
+                log.tree("Birthday Bonus Revoked", [
+                    ("User", f"{user.name} ({user.display_name})"),
+                    ("Reason", "Birthday removed by admin"),
+                ], emoji="⚠️")
+
             log.tree("Birthday Removed", [
                 ("User", f"{user.name} ({user.display_name})"),
                 ("ID", str(user.id)),
             ], emoji="🗑️")
-            return True, "Your birthday has been removed."
+            return True, "Birthday has been removed."
 
-        return False, "You don't have a birthday set."
+        return False, "This user doesn't have a birthday set."
 
     async def get_birthday(self, user: discord.Member) -> Optional[Tuple[int, int]]:
         """
