@@ -28,7 +28,7 @@ FAQ_TEMPLATES = {
         "description": """**Earning XP:**
 • **Messages:** 8-12 XP per message (60 second cooldown)
 • **Voice:** 3 XP per minute (must have 2+ people, not deafened)
-• **Boosters:** Get 2x XP multiplier
+• **Boosters:** <@&1230147693490471023> get 2x XP multiplier
 
 **Level Rewards:**
 • Level 1 → Connect to voice channels
@@ -42,7 +42,7 @@ Check your rank with `/rank`""",
     "roles": {
         "title": "🎭 How to Get Roles",
         "description": """**Auto Roles:**
-• You get <@&{auto_role}> automatically when you join
+• You get <@&1236824194722041876> automatically when you join
 • Level roles are given automatically as you level up
 
 **Self-Assign Roles:**
@@ -56,15 +56,15 @@ Check your rank with `/rank`""",
 • Use Jawdat bot commands to manage your coins
 
 **Special Roles:**
-• Booster roles are given when you boost the server
+• <@&1230147693490471023> roles are given when you boost the server
 • Staff roles are given by admins only""",
     },
     "tempvoice": {
         "title": "🎤 TempVoice (Custom Voice Channels)",
         "description": """**How to Create:**
-1. Join the "Create VC" channel
+1. Join <#1455684848977969399>
 2. You'll be moved to your own private channel
-3. Use the control panel in <#{vc_interface}> to manage it
+3. Use the control panel to manage it
 
 **What You Can Do:**
 • Rename your channel
@@ -78,7 +78,7 @@ Your channel is deleted when everyone leaves.""",
     "report": {
         "title": "📥 How to Report Someone",
         "description": """**To report a rule violation:**
-1. Go to <id:browse> and find 📥・inbox
+1. Go to <#1406750411779604561>
 2. Create a ticket with details
 3. Include screenshots/evidence if possible
 
@@ -94,7 +94,7 @@ Staff will handle it privately.""",
         "description": """**How to Confess:**
 1. Use `/confess` command anywhere
 2. Type your confession (text only)
-3. It will be posted anonymously
+3. It will be posted in <#1459123706189058110>
 
 **Rules:**
 • No hate speech or harassment
@@ -213,12 +213,12 @@ Guess countries from their flags in <#1402445407312941158>
 **Counting:**
 Count together in <#1457434957772488714> - don't break the chain!
 
-Win coins for participating in games.""",
+Win coins by participating in games!""",
     },
     "giveaway": {
         "title": "🎉 Giveaways",
         "description": """**How Giveaways Work:**
-• Staff will post giveaways in the server
+• Giveaways are posted in <#1429448081354522704>
 • Click the button to enter
 • Winners are picked randomly when it ends
 
@@ -227,14 +227,14 @@ Win coins for participating in games.""",
 • Make sure you meet the requirements before entering
 
 **Tips:**
-• Keep notifications on so you don't miss giveaways
+• Get <@&1403196818992402452> for notifications
 • Being active increases your chances in some giveaways""",
     },
     "partnership": {
         "title": "🤝 Partnership Requests",
         "description": """**Want to partner with us?**
 
-1. Go to <id:browse> and find 📥・inbox
+1. Go to <#1406750411779604561>
 2. Open a **Partnership** ticket
 3. Include your server's invite link and member count
 4. Wait for a staff member to review

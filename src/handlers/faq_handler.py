@@ -54,7 +54,7 @@ FAQ_PATTERNS = {
         "description": """**Earning XP:**
 • **Messages:** 8-12 XP per message (60 second cooldown)
 • **Voice:** 3 XP per minute (must have 2+ people, not deafened)
-• **Boosters:** Get 2x XP multiplier
+• **Boosters:** <@&1230147693490471023> get 2x XP multiplier
 
 **Level Rewards:**
 • Level 1 → Connect to voice channels
@@ -77,7 +77,7 @@ Check your rank with `/rank`""",
         ],
         "title": "🎭 How to Get Roles",
         "description": """**Auto Roles:**
-• You get Citizen automatically when you join
+• You get <@&1236824194722041876> automatically when you join
 • Level roles are given automatically as you level up
 
 **Self-Assign Roles:**
@@ -90,7 +90,7 @@ Check your rank with `/rank`""",
 • Buy custom roles in <#1459644341361447181>
 
 **Special Roles:**
-• Booster roles → boost the server
+• <@&1230147693490471023> roles → boost the server
 • Staff roles → given by admins only""",
     },
     "tempvoice": {
@@ -105,7 +105,7 @@ Check your rank with `/rank`""",
         ],
         "title": "🎤 TempVoice (Custom Voice Channels)",
         "description": """**How to Create:**
-1. Join the "Create VC" channel
+1. Join <#1455684848977969399>
 2. You'll be moved to your own private channel
 3. Use the control panel to manage it
 
@@ -128,7 +128,7 @@ Your channel is deleted when everyone leaves.""",
         ],
         "title": "📥 How to Report Someone",
         "description": """**To report a rule violation:**
-1. Go to <id:browse> and find 📥・inbox
+1. Go to <#1406750411779604561>
 2. Create a ticket with details
 3. Include screenshots/evidence if possible
 
@@ -150,7 +150,7 @@ Staff will handle it privately.""",
         "description": """**How to Confess:**
 1. Use `/confess` command anywhere
 2. Type your confession (text only)
-3. It will be posted anonymously
+3. It will be posted in <#1459123706189058110>
 
 **Rules:**
 • No hate speech or harassment
@@ -175,9 +175,8 @@ Confessions can be traced by staff if rules are broken.""",
 • Win minigames and events
 • Daily rewards with `/daily`
 
-**Commands:**
-• Check balance in <#1459658497879707883>
-• Use `/balance` to see your coins
+**Check Balance:**
+• Use commands in <#1459658497879707883>
 
 **Spending:**
 • Buy roles in <#1459644341361447181>
@@ -231,7 +230,7 @@ Feel free to share this with friends!
         "title": "🤝 Partnership Requests",
         "description": """**Want to partner with us?**
 
-1. Go to <id:browse> and find 📥・inbox
+1. Go to <#1406750411779604561>
 2. Open a **Partnership** ticket
 3. Include your server's invite link and member count
 4. Wait for a staff member to review
