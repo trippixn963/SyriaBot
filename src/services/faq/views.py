@@ -13,7 +13,7 @@ from discord import ui
 from typing import Optional
 
 from src.core.logger import log
-from src.core.colors import COLOR_SYRIA_GREEN, EMOJI_COMMENT
+from src.core.colors import COLOR_SYRIA_GREEN, EMOJI_TICKET
 from src.utils.footer import set_footer
 from src.services.faq.service import FAQ_DATA, faq_analytics
 
@@ -71,7 +71,7 @@ class PersistentFAQView(ui.View):
         # Ticket button
         ticket_btn = ui.Button(
             label="Open Ticket",
-            emoji=discord.PartialEmoji.from_str(EMOJI_COMMENT),
+            emoji=discord.PartialEmoji.from_str(EMOJI_TICKET),
             style=discord.ButtonStyle.secondary,
             custom_id=f"faq:ticket:{self.topic}",
         )

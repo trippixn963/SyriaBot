@@ -63,6 +63,9 @@ EMOJI_SUGGEST = "<:suggest:1459288562859118662>"
 EMOJI_GIVEAWAY = "<:giveaway:1459518392674549882>"
 EMOJI_JOIN = "<:join:1459322239311937606>"
 
+# FAQ System
+EMOJI_TICKET = "<:ticket:1459987754942337024>"
+
 
 # =============================================================================
 # AFK Emojis (Unicode)
