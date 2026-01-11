@@ -21,6 +21,7 @@ from src.services.database import db
 from src.handlers.fun_handler import fun_handler
 from src.handlers.action_handler import action_handler
 from src.handlers.reply_handler import ReplyHandler
+from src.handlers.faq_handler import faq_handler
 
 # Disboard bot ID
 DISBOARD_BOT_ID = 302050872383242240
@@ -115,6 +116,16 @@ class MessageHandler(commands.Cog):
                 await self.bot.afk_service.on_message(message)
             except Exception as e:
                 log.tree("AFK Handler Error", [
+                    ("Error", str(e)[:50]),
+                ], emoji="❌")
+
+        # FAQ auto-responder (watches for questions)
+        if message.guild:
+            try:
+                if await faq_handler.handle(message):
+                    return  # FAQ was sent
+            except Exception as e:
+                log.tree("FAQ Handler Error", [
                     ("Error", str(e)[:50]),
                 ], emoji="❌")
 
