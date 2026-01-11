@@ -70,6 +70,14 @@ class ActionHandler:
         if not action_service.is_action(first_word):
             return False
 
+        # Strict matching: only allow action + mentions, no extra text
+        # This prevents "kick boxing" from triggering "kick"
+        words = content.split()
+        for word in words[1:]:  # Skip the action word itself
+            # Allow mentions (<@123> or <@!123>) but reject other text
+            if not word.startswith("<@"):
+                return False
+
         action = first_word
         user_id = message.author.id
         guild_id = message.guild.id

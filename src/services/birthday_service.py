@@ -296,6 +296,13 @@ class BirthdayService:
         Returns:
             Tuple of (success, message)
         """
+        # Check if user already has a birthday set (can only set once)
+        existing = await asyncio.to_thread(
+            db.get_birthday, user.id, user.guild.id
+        )
+        if existing:
+            return False, "You already have a birthday set. If you made a mistake, open a ticket in <#1406750411779604561> to have it fixed."
+
         # Validate month
         if not 1 <= month <= 12:
             return False, "Invalid month. Please choose 1-12."
