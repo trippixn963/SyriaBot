@@ -22,25 +22,48 @@ from src.core.colors import EMOJI_SAVE
 async def upload_to_storage(bot, file_bytes: bytes, filename: str) -> Optional[str]:
     """Upload file to asset storage channel for permanent URL."""
     if not config.ASSET_STORAGE_CHANNEL_ID:
+        log.tree("Quote Asset Storage Skipped", [
+            ("Reason", "SYRIA_ASSET_CH not configured"),
+            ("Filename", filename),
+        ], emoji="ℹ️")
         return None
 
     try:
         channel = bot.get_channel(config.ASSET_STORAGE_CHANNEL_ID)
         if not channel:
+            log.tree("Quote Asset Storage Channel Not Found", [
+                ("Channel ID", str(config.ASSET_STORAGE_CHANNEL_ID)),
+                ("Filename", filename),
+            ], emoji="⚠️")
             return None
 
         file = discord.File(fp=io.BytesIO(file_bytes), filename=filename)
         msg = await channel.send(file=file)
 
         if msg.attachments:
-            return msg.attachments[0].url
+            url = msg.attachments[0].url
+            log.tree("Quote Asset Stored", [
+                ("Filename", filename),
+                ("Size", f"{len(file_bytes) / 1024:.1f} KB"),
+                ("Message ID", str(msg.id)),
+                ("URL", url[:80] + "..." if len(url) > 80 else url),
+            ], emoji="💾")
+            return url
+        else:
+            log.tree("Quote Asset Storage No Attachment", [
+                ("Filename", filename),
+                ("Message ID", str(msg.id)),
+                ("Reason", "Message sent but no attachment returned"),
+            ], emoji="⚠️")
+            return None
 
     except Exception as e:
-        log.tree("Quote Asset Storage Failed", [
-            ("Error", str(e)[:50]),
-        ], emoji="⚠️")
-
-    return None
+        log.error_tree("Quote Asset Storage Failed", e, [
+            ("Filename", filename),
+            ("Size", f"{len(file_bytes) / 1024:.1f} KB"),
+            ("Channel ID", str(config.ASSET_STORAGE_CHANNEL_ID)),
+        ])
+        return None
 
 
 class QuoteView(ui.View):
