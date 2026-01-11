@@ -16,6 +16,7 @@ from typing import Optional
 from src.core.config import config
 from src.core.logger import log
 from src.core.colors import COLOR_SYRIA_GREEN
+from src.utils.footer import set_footer
 
 
 # =============================================================================
@@ -360,7 +361,7 @@ class FAQAutoResponder:
             description=faq["description"],
             color=COLOR_SYRIA_GREEN,
         )
-        embed.set_footer(text="Syria • discord.gg/syria")
+        set_footer(embed)
 
         try:
             await message.reply(embed=embed, mention_author=False)

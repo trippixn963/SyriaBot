@@ -16,6 +16,7 @@ from typing import Optional
 from src.core.config import config
 from src.core.logger import log
 from src.core.colors import COLOR_SYRIA_GREEN
+from src.utils.footer import set_footer
 
 
 # =============================================================================
@@ -319,7 +320,7 @@ class FAQCog(commands.Cog):
             description=description,
             color=COLOR_SYRIA_GREEN,
         )
-        embed.set_footer(text="Syria • discord.gg/syria")
+        set_footer(embed)
 
         # Build response content
         content = None
