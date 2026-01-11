@@ -17,240 +17,7 @@ from src.core.config import config
 from src.core.logger import log
 from src.core.colors import COLOR_SYRIA_GREEN
 from src.utils.footer import set_footer
-
-
-# =============================================================================
-# FAQ Templates
-# =============================================================================
-
-FAQ_TEMPLATES = {
-    "xp": {
-        "title": "📊 How XP & Leveling Works",
-        "description": """**Earning XP:**
-• **Messages:** 8-12 XP per message (60 second cooldown)
-• **Voice:** 3 XP per minute (must have 2+ people, not deafened)
-• **Boosters:** <@&1230147693490471023> get 2x XP multiplier
-
-**Level Rewards:**
-• Level 1 → Connect to voice channels
-• Level 5 → Attach files & embed links
-• Level 10 → Use external emojis
-• Level 20 → Use external stickers
-• Level 30 → Change nickname
-
-Check your rank with `/rank`""",
-    },
-    "roles": {
-        "title": "🎭 How to Get Roles",
-        "description": """**Auto Roles:**
-• You get <@&1236824194722041876> automatically when you join
-• Level roles are given automatically as you level up
-
-**Self-Assign Roles:**
-• Go to <id:customize> to pick your roles
-• Choose colors, pronouns, notifications, etc.
-
-**Purchasable Roles (Economy):**
-• Earn coins by chatting, playing games, and being active
-• Check your balance in <#1459658497879707883>
-• Buy custom roles in <#1459644341361447181>
-• Use Jawdat bot commands to manage your coins
-
-**Special Roles:**
-• <@&1230147693490471023> roles are given when you boost the server
-• Staff roles are given by admins only""",
-    },
-    "tempvoice": {
-        "title": "🎤 TempVoice (Custom Voice Channels)",
-        "description": """**How to Create:**
-1. Join <#1455684848977969399>
-2. You'll be moved to your own private channel
-3. Use the control panel to manage it
-
-**What You Can Do:**
-• Rename your channel
-• Set user limit
-• Lock/unlock the channel
-• Kick/ban users from your channel
-• Transfer ownership
-
-Your channel is deleted when everyone leaves.""",
-    },
-    "report": {
-        "title": "📥 How to Report Someone",
-        "description": """**To report a rule violation:**
-1. Go to <#1406750411779604561>
-2. Create a ticket with details
-3. Include screenshots/evidence if possible
-
-**Do NOT:**
-• Ping staff in public channels
-• Report in general chat
-• Mini-mod or confront the person yourself
-
-Staff will handle it privately.""",
-    },
-    "confess": {
-        "title": "🤫 Anonymous Confessions",
-        "description": """**How to Confess:**
-1. Use `/confess` command anywhere
-2. Type your confession (text only)
-3. It will be posted in <#1459123706189058110>
-
-**Rules:**
-• No hate speech or harassment
-• No doxxing or personal info
-• No NSFW content
-• Keep it respectful
-
-Confessions can be traced by staff if rules are broken.""",
-    },
-    "language": {
-        "title": "🌍 Language Rules",
-        "description": """**Both Arabic and English are welcome!**
-
-• You can chat in either language
-• Keep conversations readable for others
-• Don't spam in other languages to exclude people
-
-**Arabic Channels:**
-Some channels may be Arabic-focused - check channel descriptions.
-
-نرحب بالعربية والإنجليزية في هذا السيرفر 🇸🇾""",
-    },
-    "staff": {
-        "title": "👮 How to Become Staff",
-        "description": """**We don't accept staff applications.**
-
-Staff members are hand-picked based on:
-• Activity and engagement
-• Helpfulness to other members
-• Following the rules consistently
-• Being a positive presence
-
-**Don't ask to be staff** - it won't help your chances.
-Just be a good community member and you might get noticed.""",
-    },
-    "invite": {
-        "title": "🔗 Server Invite",
-        "description": """**Permanent Invite Link:**
-https://discord.gg/syria
-
-Feel free to share this with friends!
-
-**Note:** Advertising other servers in DMs is against the rules.""",
-    },
-    "download": {
-        "title": "📥 Download Command",
-        "description": """**How to Download Videos:**
-Use `/download` with a video URL
-
-**Supported Sites:**
-• YouTube, TikTok, Instagram, Twitter/X
-• Reddit, Facebook, and many more
-
-**Limits:**
-• 5 downloads per week
-• Max file size depends on boost level
-
-Reply to a message with a link and say `download` to download it.""",
-    },
-    "convert": {
-        "title": "🔄 Convert to GIF",
-        "description": """**How to Convert Videos to GIF:**
-1. Reply to a message with a video/image
-2. Type `convert` or `gif`
-3. Use the editor to adjust (crop, speed, etc.)
-4. Save the GIF
-
-**Tip:** Works with videos, images, and stickers!""",
-    },
-    "economy": {
-        "title": "💰 Economy System (Jawdat Bot)",
-        "description": """**How to Earn Coins:**
-• Chat in the server (passive income)
-• Play casino games (roulette, blackjack, slots)
-• Win minigames and events
-• Daily rewards
-
-**Commands:**
-• Check your balance in <#1459658497879707883>
-• Use `/balance` to see your coins
-• Use `/daily` to claim daily reward
-
-**Spending Coins:**
-• Buy custom roles in <#1459644341361447181>
-• Gamble in the casino (at your own risk!)
-
-**Casino Games:**
-Games are in the casino forum - each game has its own post.""",
-    },
-    "casino": {
-        "title": "🎰 Casino Games",
-        "description": """**Available Games:**
-• 🎡 **Roulette** - Bet on numbers, colors, or ranges
-• 🃏 **Blackjack** - Classic 21 card game
-• 🎰 **Slots** - Spin to win
-
-**How to Play:**
-1. Go to the Casino forum
-2. Find the game you want to play
-3. Use the bot commands in that post
-
-**Warning:** Gambling can drain your coins fast!
-Only bet what you're willing to lose.""",
-    },
-    "games": {
-        "title": "🎮 Minigames & Activities",
-        "description": """**Available Games:**
-• 🎰 Casino (roulette, blackjack, slots)
-• 🚩 Flag guessing game
-• 🔢 Counting channel
-• More coming soon!
-
-**Flag Game:**
-Guess countries from their flags in <#1402445407312941158>
-
-**Counting:**
-Count together in <#1457434957772488714> - don't break the chain!
-
-Win coins by participating in games!""",
-    },
-    "giveaway": {
-        "title": "🎉 Giveaways",
-        "description": """**How Giveaways Work:**
-• Giveaways are posted in <#1429448081354522704>
-• Click the button to enter
-• Winners are picked randomly when it ends
-
-**Requirements:**
-• Some giveaways may require certain roles or levels
-• Make sure you meet the requirements before entering
-
-**Tips:**
-• Get <@&1403196818992402452> for notifications
-• Being active increases your chances in some giveaways""",
-    },
-    "partnership": {
-        "title": "🤝 Partnership Requests",
-        "description": """**Want to partner with us?**
-
-1. Go to <#1406750411779604561>
-2. Open a **Partnership** ticket
-3. Include your server's invite link and member count
-4. Wait for a staff member to review
-
-**Requirements:**
-• Your server must have a reasonable member count
-• No NSFW or rule-breaking content
-• Must be an active, established community
-
-**Do NOT:**
-• DM staff or admins directly
-• Advertise in public channels
-• Spam partnership requests""",
-    },
-}
+from src.services.faq import FAQ_DATA, faq_analytics, FAQView
 
 
 # =============================================================================
@@ -270,8 +37,8 @@ class FAQCog(commands.Cog):
     ) -> list[app_commands.Choice[str]]:
         """Autocomplete for FAQ topics."""
         choices = []
-        for key, faq in FAQ_TEMPLATES.items():
-            title = faq["title"]
+        for key, faq in FAQ_DATA.items():
+            title = faq["title"]["en"]
             if current.lower() in key.lower() or current.lower() in title.lower():
                 choices.append(app_commands.Choice(name=title, value=key))
 
@@ -295,32 +62,26 @@ class FAQCog(commands.Cog):
         user: Optional[discord.Member] = None,
     ) -> None:
         """Send a FAQ response."""
-        if topic not in FAQ_TEMPLATES:
+        if topic not in FAQ_DATA:
             await interaction.response.send_message(
                 f"❌ Unknown FAQ topic: `{topic}`\n"
-                f"Available: {', '.join(FAQ_TEMPLATES.keys())}",
+                f"Available: {', '.join(FAQ_DATA.keys())}",
                 ephemeral=True
             )
             return
 
-        faq = FAQ_TEMPLATES[topic]
+        faq = FAQ_DATA[topic]
 
-        # Format description with config values
-        description = faq["description"]
-        try:
-            description = description.format(
-                auto_role=config.AUTO_ROLE_ID,
-                vc_interface=config.VC_INTERFACE_CHANNEL_ID,
-            )
-        except KeyError:
-            pass  # Some templates don't need formatting
-
+        # Create embed (default English)
         embed = discord.Embed(
-            title=faq["title"],
-            description=description,
+            title=faq["title"]["en"],
+            description=faq["description"]["en"],
             color=COLOR_SYRIA_GREEN,
         )
         set_footer(embed)
+
+        # Create view with buttons
+        view = FAQView(topic=topic, current_lang="en")
 
         # Build response content
         content = None
@@ -330,13 +91,68 @@ class FAQCog(commands.Cog):
         await interaction.response.send_message(
             content=content,
             embed=embed,
+            view=view,
         )
+
+        # Store message reference for timeout handling
+        msg = await interaction.original_response()
+        view.message = msg
+
+        # Record analytics
+        faq_analytics.record_trigger(topic)
 
         log.tree("FAQ Sent", [
             ("Moderator", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("Topic", topic),
             ("Target User", user.name if user else "None"),
         ], emoji="📋")
+
+    @app_commands.command(
+        name="faqstats",
+        description="View FAQ analytics (Moderator only)"
+    )
+    @app_commands.default_permissions(moderate_members=True)
+    @app_commands.guilds(discord.Object(id=config.GUILD_ID))
+    async def faqstats(self, interaction: discord.Interaction) -> None:
+        """View FAQ usage statistics."""
+        stats = faq_analytics.get_stats()
+        top_faqs = faq_analytics.get_top_faqs(5)
+
+        embed = discord.Embed(
+            title="📊 FAQ Analytics",
+            color=COLOR_SYRIA_GREEN,
+        )
+
+        # Overview
+        embed.add_field(
+            name="Overview",
+            value=f"**Total Triggers:** {stats['total_triggers']}\n"
+                  f"**Helpful Votes:** {stats['total_helpful']}\n"
+                  f"**Unhelpful Votes:** {stats['total_unhelpful']}\n"
+                  f"**Ticket Clicks:** {stats['ticket_clicks']}",
+            inline=False,
+        )
+
+        # Top FAQs
+        if top_faqs:
+            top_list = "\n".join([f"• **{topic}**: {count}" for topic, count in top_faqs])
+            embed.add_field(
+                name="Top FAQs",
+                value=top_list,
+                inline=False,
+            )
+
+        # Language switches
+        total_switches = sum(stats["language_switches"].values())
+        if total_switches > 0:
+            embed.add_field(
+                name="Arabic Switches",
+                value=f"**Total:** {total_switches}",
+                inline=False,
+            )
+
+        set_footer(embed)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
 # =============================================================================
@@ -348,5 +164,5 @@ async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(FAQCog(bot))
     log.tree("Command Loaded", [
         ("Name", "faq"),
-        ("Topics", str(len(FAQ_TEMPLATES))),
+        ("Topics", str(len(FAQ_DATA))),
     ], emoji="✅")

@@ -17,6 +17,7 @@ from src.core.config import config
 from src.core.logger import log
 from src.core.colors import COLOR_SYRIA_GREEN
 from src.utils.footer import set_footer
+from src.services.faq import FAQ_DATA, faq_analytics, FAQView
 
 
 # =============================================================================
@@ -36,216 +37,79 @@ MAX_COOLDOWN_ENTRIES = 500
 
 
 # =============================================================================
-# FAQ Patterns
+# FAQ Patterns (for auto-detection)
 # =============================================================================
 
-# Each pattern: (topic, keywords/phrases to match, question indicators)
 FAQ_PATTERNS = {
-    "xp": {
-        "keywords": [
-            r"how.*(xp|level|rank)",
-            r"how.*level.*up",
-            r"how.*get.*xp",
-            r"what.*xp",
-            r"xp.*work",
-            r"leveling.*system",
-            r"rank.*work",
-        ],
-        "title": "📊 How XP & Leveling Works",
-        "description": """**Earning XP:**
-• **Messages:** 8-12 XP per message (60 second cooldown)
-• **Voice:** 3 XP per minute (must have 2+ people, not deafened)
-• **Boosters:** <@&1230147693490471023> get 2x XP multiplier
-
-**Level Rewards:**
-• Level 1 → Connect to voice channels
-• Level 5 → Attach files & embed links
-• Level 10 → Use external emojis
-• Level 20 → Use external stickers
-• Level 30 → Change nickname
-
-Check your rank with `/rank`""",
-    },
-    "roles": {
-        "keywords": [
-            r"how.*(get|buy|earn).*role",
-            r"how.*role.*work",
-            r"where.*get.*role",
-            r"can.*i.*get.*role",
-            r"role.*shop",
-            r"buy.*role",
-            r"custom.*role",
-        ],
-        "title": "🎭 How to Get Roles",
-        "description": """**Auto Roles:**
-• You get <@&1236824194722041876> automatically when you join
-• Level roles are given automatically as you level up
-
-**Self-Assign Roles:**
-• Go to <id:customize> to pick your roles
-• Choose colors, pronouns, notifications, etc.
-
-**Purchasable Roles (Economy):**
-• Earn coins by chatting, playing games, and being active
-• Check your balance in <#1459658497879707883>
-• Buy custom roles in <#1459644341361447181>
-
-**Special Roles:**
-• <@&1230147693490471023> roles → boost the server
-• Staff roles → given by admins only""",
-    },
-    "tempvoice": {
-        "keywords": [
-            r"how.*(create|make).*vc",
-            r"how.*(create|make).*voice",
-            r"how.*temp.*voice",
-            r"how.*private.*vc",
-            r"custom.*voice.*channel",
-            r"tempvoice",
-            r"how.*own.*channel",
-        ],
-        "title": "🎤 TempVoice (Custom Voice Channels)",
-        "description": """**How to Create:**
-1. Join <#1455684848977969399>
-2. You'll be moved to your own private channel
-3. Use the control panel to manage it
-
-**What You Can Do:**
-• Rename your channel
-• Set user limit
-• Lock/unlock the channel
-• Kick/ban users from your channel
-• Transfer ownership
-
-Your channel is deleted when everyone leaves.""",
-    },
-    "report": {
-        "keywords": [
-            r"how.*(report|ban)",
-            r"where.*report",
-            r"report.*someone",
-            r"how.*tell.*mod",
-            r"someone.*breaking.*rule",
-        ],
-        "title": "📥 How to Report Someone",
-        "description": """**To report a rule violation:**
-1. Go to <#1406750411779604561>
-2. Create a ticket with details
-3. Include screenshots/evidence if possible
-
-**Do NOT:**
-• Ping staff in public channels
-• Report in general chat
-• Mini-mod or confront the person yourself
-
-Staff will handle it privately.""",
-    },
-    "confess": {
-        "keywords": [
-            r"how.*(confess|confession)",
-            r"where.*(confess|confession)",
-            r"anonymous.*message",
-            r"send.*anonymous",
-        ],
-        "title": "🤫 Anonymous Confessions",
-        "description": """**How to Confess:**
-1. Use `/confess` command anywhere
-2. Type your confession (text only)
-3. It will be posted in <#1459123706189058110>
-
-**Rules:**
-• No hate speech or harassment
-• No doxxing or personal info
-• No NSFW content
-
-Confessions can be traced by staff if rules are broken.""",
-    },
-    "economy": {
-        "keywords": [
-            r"how.*(earn|get).*coin",
-            r"how.*economy",
-            r"how.*money.*work",
-            r"where.*check.*balance",
-            r"how.*get.*rich",
-            r"coin.*system",
-        ],
-        "title": "💰 Economy System",
-        "description": """**How to Earn Coins:**
-• Chat in the server (passive income)
-• Play casino games (roulette, blackjack, slots)
-• Win minigames and events
-• Daily rewards with `/daily`
-
-**Check Balance:**
-• Use commands in <#1459658497879707883>
-
-**Spending:**
-• Buy roles in <#1459644341361447181>
-• Gamble in the casino""",
-    },
-    "casino": {
-        "keywords": [
-            r"how.*casino",
-            r"how.*gambl",
-            r"where.*casino",
-            r"how.*play.*(roulette|blackjack|slot)",
-            r"casino.*game",
-        ],
-        "title": "🎰 Casino Games",
-        "description": """**Available Games:**
-• 🎡 **Roulette** - Bet on numbers, colors, or ranges
-• 🃏 **Blackjack** - Classic 21 card game
-• 🎰 **Slots** - Spin to win
-
-**How to Play:**
-1. Go to the Casino forum
-2. Find the game you want to play
-3. Use the bot commands in that post
-
-**Warning:** Only bet what you're willing to lose!""",
-    },
-    "invite": {
-        "keywords": [
-            r"(server|discord).*(link|invite)",
-            r"invite.*link",
-            r"how.*invite.*friend",
-            r"can.*i.*invite",
-        ],
-        "title": "🔗 Server Invite",
-        "description": """**Permanent Invite Link:**
-https://discord.gg/syria
-
-Feel free to share this with friends!
-
-**Note:** Advertising other servers in DMs is against the rules.""",
-    },
-    "partnership": {
-        "keywords": [
-            r"partner(ship)?",
-            r"how.*(partner|collab)",
-            r"can.*(partner|collab)",
-            r"want.*partner",
-            r"looking.*partner",
-            r"server.*partner",
-        ],
-        "title": "🤝 Partnership Requests",
-        "description": """**Want to partner with us?**
-
-1. Go to <#1406750411779604561>
-2. Open a **Partnership** ticket
-3. Include your server's invite link and member count
-4. Wait for a staff member to review
-
-**Requirements:**
-• Your server must have a reasonable member count
-• No NSFW or rule-breaking content
-• Must be an active, established community
-
-**Do NOT:**
-• DM staff or admins directly
-• Advertise in public channels
-• Spam partnership requests""",
-    },
+    "xp": [
+        r"how.*(xp|level|rank)",
+        r"how.*level.*up",
+        r"how.*get.*xp",
+        r"what.*xp",
+        r"xp.*work",
+        r"leveling.*system",
+        r"rank.*work",
+    ],
+    "roles": [
+        r"how.*(get|buy|earn).*role",
+        r"how.*role.*work",
+        r"where.*get.*role",
+        r"can.*i.*get.*role",
+        r"role.*shop",
+        r"buy.*role",
+        r"custom.*role",
+    ],
+    "tempvoice": [
+        r"how.*(create|make).*vc",
+        r"how.*(create|make).*voice",
+        r"how.*temp.*voice",
+        r"how.*private.*vc",
+        r"custom.*voice.*channel",
+        r"tempvoice",
+        r"how.*own.*channel",
+    ],
+    "report": [
+        r"how.*(report|ban)",
+        r"where.*report",
+        r"report.*someone",
+        r"how.*tell.*mod",
+        r"someone.*breaking.*rule",
+    ],
+    "confess": [
+        r"how.*(confess|confession)",
+        r"where.*(confess|confession)",
+        r"anonymous.*message",
+        r"send.*anonymous",
+    ],
+    "economy": [
+        r"how.*(earn|get).*coin",
+        r"how.*economy",
+        r"how.*money.*work",
+        r"where.*check.*balance",
+        r"how.*get.*rich",
+        r"coin.*system",
+    ],
+    "casino": [
+        r"how.*casino",
+        r"how.*gambl",
+        r"where.*casino",
+        r"how.*play.*(roulette|blackjack|slot)",
+        r"casino.*game",
+    ],
+    "invite": [
+        r"(server|discord).*(link|invite)",
+        r"invite.*link",
+        r"how.*invite.*friend",
+        r"can.*i.*invite",
+    ],
+    "partnership": [
+        r"partner(ship)?",
+        r"how.*(partner|collab)",
+        r"can.*(partner|collab)",
+        r"want.*partner",
+        r"looking.*partner",
+        r"server.*partner",
+    ],
 }
 
 
@@ -259,10 +123,10 @@ class FAQAutoResponder:
     def __init__(self):
         # Compile regex patterns for efficiency
         self._compiled_patterns: dict[str, list[re.Pattern]] = {}
-        for topic, data in FAQ_PATTERNS.items():
+        for topic, patterns in FAQ_PATTERNS.items():
             self._compiled_patterns[topic] = [
                 re.compile(pattern, re.IGNORECASE)
-                for pattern in data["keywords"]
+                for pattern in patterns
             ]
 
     def _check_cooldowns(self, user_id: int, channel_id: int, topic: str) -> bool:
@@ -290,7 +154,6 @@ class FAQAutoResponder:
 
         # Memory cleanup - evict old entries
         if len(_user_cooldowns) > MAX_COOLDOWN_ENTRIES:
-            # Remove oldest 20%
             sorted_entries = sorted(_user_cooldowns.items(), key=lambda x: x[1])
             for uid, _ in sorted_entries[:MAX_COOLDOWN_ENTRIES // 5]:
                 del _user_cooldowns[uid]
@@ -344,6 +207,10 @@ class FAQAutoResponder:
         if not topic:
             return False
 
+        # Check if topic exists in FAQ_DATA
+        if topic not in FAQ_DATA:
+            return False
+
         # Check cooldowns
         if not self._check_cooldowns(message.author.id, message.channel.id, topic):
             log.tree("FAQ Cooldown Active", [
@@ -353,21 +220,28 @@ class FAQAutoResponder:
             return False
 
         # Get FAQ data
-        faq = FAQ_PATTERNS[topic]
+        faq = FAQ_DATA[topic]
 
-        # Create embed
+        # Create embed (default English)
         embed = discord.Embed(
-            title=faq["title"],
-            description=faq["description"],
+            title=faq["title"]["en"],
+            description=faq["description"]["en"],
             color=COLOR_SYRIA_GREEN,
         )
         set_footer(embed)
 
+        # Create view with buttons
+        view = FAQView(topic=topic, current_lang="en")
+
         try:
-            await message.reply(embed=embed, mention_author=False)
+            sent_msg = await message.reply(embed=embed, view=view, mention_author=False)
+            view.message = sent_msg
 
             # Update cooldowns
             self._update_cooldowns(message.author.id, message.channel.id, topic)
+
+            # Record analytics
+            faq_analytics.record_trigger(topic)
 
             log.tree("FAQ Auto-Sent", [
                 ("User", f"{message.author.name} ({message.author.display_name})"),
