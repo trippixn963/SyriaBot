@@ -172,6 +172,11 @@ class Config:
     GIVEAWAY_ROLE_ID: int = _env_int("SYRIA_GIVEAWAY_ROLE")
 
     # ==========================================================================
+    # Asset Storage (for permanent GIF URLs)
+    # ==========================================================================
+    ASSET_STORAGE_CHANNEL_ID: int = _env_int("SYRIA_ASSET_CH")
+
+    # ==========================================================================
     # Rate Limits
     # ==========================================================================
     DOWNLOAD_WEEKLY_LIMIT: int = _env_int("SYRIA_DOWNLOAD_LIMIT", 5)

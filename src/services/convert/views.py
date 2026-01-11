@@ -23,10 +23,60 @@ from src.core.colors import (
     EMOJI_GREEN, EMOJI_YELLOW, EMOJI_PURPLE, EMOJI_PINK,
     EMOJI_RENAME, EMOJI_SAVE, EMOJI_BLOCK,
 )
+from src.core.config import config
 from src.core.logger import log
 from src.services.convert.service import convert_service
 from src.utils.footer import set_footer
 from src.utils.text import wrap_text, find_font, get_font
+
+
+# =============================================================================
+# Asset Storage Helper
+# =============================================================================
+
+async def upload_to_storage(bot, file_bytes: bytes, filename: str) -> Optional[str]:
+    """
+    Upload file to asset storage channel for permanent URL.
+
+    Args:
+        bot: The bot instance
+        file_bytes: Raw file bytes to upload
+        filename: Filename for the upload
+
+    Returns:
+        Permanent CDN URL or None if storage not configured/failed
+    """
+    if not config.ASSET_STORAGE_CHANNEL_ID:
+        return None
+
+    try:
+        channel = bot.get_channel(config.ASSET_STORAGE_CHANNEL_ID)
+        if not channel:
+            log.tree("Asset Storage Channel Not Found", [
+                ("Channel ID", str(config.ASSET_STORAGE_CHANNEL_ID)),
+            ], emoji="⚠️")
+            return None
+
+        # Upload to storage channel
+        file = discord.File(fp=io.BytesIO(file_bytes), filename=filename)
+        msg = await channel.send(file=file)
+
+        if msg.attachments:
+            url = msg.attachments[0].url
+            log.tree("Asset Stored", [
+                ("Filename", filename),
+                ("Size", f"{len(file_bytes) / 1024:.1f} KB"),
+                ("URL", url[:50] + "..."),
+            ], emoji="💾")
+            return url
+
+    except Exception as e:
+        log.tree("Asset Storage Failed", [
+            ("Filename", filename),
+            ("Error", str(e)[:50]),
+        ], emoji="⚠️")
+
+    return None
 
 
 # =============================================================================
@@ -254,12 +304,14 @@ class ConvertView(ui.View):
         initial_text: str = "",
         timeout: float = 300,  # 5 minutes
         original_message: Optional[discord.Message] = None,
+        bot=None,
     ):
         super().__init__(timeout=timeout)
         self.image_data = image_data
         self.source_name = source_name
         self.requester_id = requester_id
         self.original_message = original_message  # For deletion if own message
+        self.bot = bot  # For asset storage
         self.settings = ConvertSettings(text=initial_text)
         self.message: Optional[discord.Message] = None
         self._preview_bytes: Optional[bytes] = None
@@ -427,10 +479,19 @@ class ConvertView(ui.View):
         final_bytes = result.gif_bytes
         filename = "discord.gg-syria.gif"
 
-        file = discord.File(fp=io.BytesIO(final_bytes), filename=filename)
+        # Upload to asset storage for permanent URL (prevents dead links when VC chats are deleted)
+        storage_url = None
+        if self.bot:
+            storage_url = await upload_to_storage(self.bot, final_bytes, filename)
 
         # Send result with user ping
-        await interaction.followup.send(content=interaction.user.mention, file=file)
+        if storage_url:
+            # Send the permanent URL so it survives channel deletion
+            await interaction.followup.send(content=f"{interaction.user.mention}\n{storage_url}")
+        else:
+            # Fallback to direct upload if storage not configured
+            file = discord.File(fp=io.BytesIO(final_bytes), filename=filename)
+            await interaction.followup.send(content=interaction.user.mention, file=file)
 
         # Delete the editor embed
         try:
@@ -503,6 +564,7 @@ class VideoConvertView(ui.View):
         thumbnail_bytes: Optional[bytes] = None,
         timeout: float = 300,  # 5 minutes
         original_message: Optional[discord.Message] = None,
+        bot=None,
     ):
         super().__init__(timeout=timeout)
         self.video_data = video_data
@@ -510,6 +572,7 @@ class VideoConvertView(ui.View):
         self.requester_id = requester_id
         self.thumbnail_bytes = thumbnail_bytes
         self.original_message = original_message  # For deletion if own message
+        self.bot = bot  # For asset storage
         self.settings = ConvertSettings(text=initial_text)
         self.message: Optional[discord.Message] = None
         self._processing = False
@@ -677,10 +740,20 @@ class VideoConvertView(ui.View):
 
         # Success - send the GIF
         filename = "discord.gg-syria.gif"
-        file = discord.File(fp=io.BytesIO(result.gif_bytes), filename=filename)
+
+        # Upload to asset storage for permanent URL (prevents dead links when VC chats are deleted)
+        storage_url = None
+        if self.bot:
+            storage_url = await upload_to_storage(self.bot, result.gif_bytes, filename)
 
         # Send result with user ping
-        await interaction.followup.send(content=interaction.user.mention, file=file)
+        if storage_url:
+            # Send the permanent URL so it survives channel deletion
+            await interaction.followup.send(content=f"{interaction.user.mention}\n{storage_url}")
+        else:
+            # Fallback to direct upload if storage not configured
+            file = discord.File(fp=io.BytesIO(result.gif_bytes), filename=filename)
+            await interaction.followup.send(content=interaction.user.mention, file=file)
 
         # Delete the editor embed
         try:
@@ -747,6 +820,7 @@ async def start_convert_editor(
     initial_text: str = "",
     is_video: bool = False,
     original_message: Optional[discord.Message] = None,
+    bot=None,
 ) -> None:
     """
     Start the interactive convert editor.
@@ -758,14 +832,21 @@ async def start_convert_editor(
         initial_text: Initial caption text
         is_video: Whether the input is a video file
         original_message: Original message with the media (for deletion if own message)
+        bot: Bot instance for asset storage
     """
     # Determine requester ID based on type
     if isinstance(interaction_or_message, discord.Interaction):
         requester_id = interaction_or_message.user.id
         is_interaction = True
+        # Get bot from interaction if not provided
+        if not bot:
+            bot = interaction_or_message.client
     else:
         requester_id = interaction_or_message.author.id
         is_interaction = False
+        # Get bot from message if not provided
+        if not bot and hasattr(interaction_or_message, '_state'):
+            bot = interaction_or_message._state._get_client()
 
     if is_video:
         # Get video duration and preview in a single batched operation
@@ -782,6 +863,7 @@ async def start_convert_editor(
             initial_text=initial_text,
             thumbnail_bytes=preview_strip_bytes,
             original_message=original_message,
+            bot=bot,
         )
 
         embed = view.create_embed()
@@ -824,6 +906,7 @@ async def start_convert_editor(
             requester_id=requester_id,
             initial_text=initial_text,
             original_message=original_message,
+            bot=bot,
         )
 
         # Generate initial preview
