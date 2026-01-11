@@ -3,6 +3,7 @@ SyriaBot - FAQ Auto-Responder
 =============================
 
 Watches messages for common questions and auto-replies with FAQ.
+Includes fuzzy matching to catch typos like "tempvocie" or "tenpvoice".
 
 Author: حَـــــنَّـــــا
 Server: discord.gg/syria
@@ -34,6 +35,91 @@ CHANNEL_TOPIC_COOLDOWN = 120  # 2 minutes for same topic in same channel
 
 # Max tracked entries (memory management)
 MAX_COOLDOWN_ENTRIES = 500
+
+
+# =============================================================================
+# Fuzzy Matching
+# =============================================================================
+
+# Keywords to fuzzy match -> correct spelling
+FUZZY_KEYWORDS = {
+    "tempvoice": ["tempvoice", "temp voice", "temporary voice"],
+    "voice": ["voice", "vc"],
+    "channel": ["channel"],
+    "level": ["level", "lvl"],
+    "rank": ["rank"],
+    "xp": ["xp", "exp"],
+    "role": ["role", "roles"],
+    "casino": ["casino"],
+    "gamble": ["gamble", "gambling"],
+    "economy": ["economy"],
+    "coin": ["coin", "coins", "money"],
+    "confess": ["confess", "confession", "confessions"],
+    "report": ["report"],
+    "invite": ["invite", "invitation"],
+    "partner": ["partner", "partnership"],
+    "giveaway": ["giveaway", "giveaways"],
+}
+
+
+def _levenshtein(s1: str, s2: str) -> int:
+    """Calculate Levenshtein edit distance between two strings."""
+    if len(s1) < len(s2):
+        return _levenshtein(s2, s1)
+
+    if len(s2) == 0:
+        return len(s1)
+
+    prev_row = range(len(s2) + 1)
+    for i, c1 in enumerate(s1):
+        curr_row = [i + 1]
+        for j, c2 in enumerate(s2):
+            insertions = prev_row[j + 1] + 1
+            deletions = curr_row[j] + 1
+            substitutions = prev_row[j] + (c1 != c2)
+            curr_row.append(min(insertions, deletions, substitutions))
+        prev_row = curr_row
+
+    return prev_row[-1]
+
+
+def _fuzzy_correct(text: str) -> str:
+    """
+    Correct typos in text using fuzzy matching.
+
+    Replaces misspelled keywords with correct versions.
+    """
+    words = text.lower().split()
+    corrected = []
+
+    for word in words:
+        # Skip short words (less prone to meaningful typos)
+        if len(word) < 4:
+            corrected.append(word)
+            continue
+
+        best_match = word
+        best_distance = float('inf')
+
+        # Check against all fuzzy keywords
+        for correct, variants in FUZZY_KEYWORDS.items():
+            for variant in variants:
+                # Skip if lengths differ too much
+                if abs(len(word) - len(variant)) > 2:
+                    continue
+
+                distance = _levenshtein(word, variant)
+
+                # Threshold: 1 edit for short words, 2 for longer
+                threshold = 1 if len(variant) <= 5 else 2
+
+                if distance <= threshold and distance < best_distance:
+                    best_distance = distance
+                    best_match = correct
+
+        corrected.append(best_match)
+
+    return " ".join(corrected)
 
 
 # =============================================================================
@@ -175,11 +261,21 @@ class FAQAutoResponder:
         return has_question_word or has_question_mark
 
     def _match_topic(self, content: str) -> Optional[str]:
-        """Match content to a FAQ topic."""
+        """Match content to a FAQ topic with fuzzy typo correction."""
+        # First try exact match
         for topic, patterns in self._compiled_patterns.items():
             for pattern in patterns:
                 if pattern.search(content):
                     return topic
+
+        # If no match, try with fuzzy corrected content
+        corrected = _fuzzy_correct(content)
+        if corrected != content.lower():
+            for topic, patterns in self._compiled_patterns.items():
+                for pattern in patterns:
+                    if pattern.search(corrected):
+                        return topic
+
         return None
 
     async def handle(self, message: discord.Message) -> bool:
@@ -202,10 +298,16 @@ class FAQAutoResponder:
         if not self._detect_question(content):
             return False
 
-        # Try to match a topic
+        # Try to match a topic (with fuzzy correction for typos)
         topic = self._match_topic(content)
         if not topic:
             return False
+
+        # Check if fuzzy matching was used
+        corrected = _fuzzy_correct(content)
+        was_fuzzy = corrected != content.lower() and not any(
+            p.search(content) for patterns in self._compiled_patterns.values() for p in patterns
+        )
 
         # Check if topic exists in FAQ_DATA
         if topic not in FAQ_DATA:
@@ -243,12 +345,15 @@ class FAQAutoResponder:
             # Record analytics
             faq_analytics.record_trigger(topic)
 
-            log.tree("FAQ Auto-Sent", [
+            log_entries = [
                 ("User", f"{message.author.name} ({message.author.display_name})"),
                 ("Topic", topic),
                 ("Channel", message.channel.name if hasattr(message.channel, 'name') else str(message.channel.id)),
                 ("Trigger", content[:50] + "..." if len(content) > 50 else content),
-            ], emoji="📋")
+            ]
+            if was_fuzzy:
+                log_entries.append(("Fuzzy Match", "Yes"))
+            log.tree("FAQ Auto-Sent", log_entries, emoji="📋")
 
             return True
 

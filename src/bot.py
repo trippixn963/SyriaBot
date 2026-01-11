@@ -31,6 +31,7 @@ from src.services.currency_service import CurrencyService
 from src.services.giveaway import GiveawayService
 from src.services.action_service import action_service
 from src.services.birthday_service import get_birthday_service, BirthdayService
+from src.services.faq import setup_persistent_views
 from src.services.database import db
 from src.utils.http import http_session
 
@@ -117,6 +118,9 @@ class SyriaBot(commands.Bot):
                 log.error_tree("Command Load Failed", e, [
                     ("Command", cmd),
                 ])
+
+        # Register persistent views
+        setup_persistent_views(self)
 
         log.tree("Setup Hook Complete", [
             ("Handlers", ", ".join(loaded_handlers)),
