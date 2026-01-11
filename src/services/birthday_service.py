@@ -9,6 +9,7 @@ Features:
 - Daily check at midnight (EST) for birthdays
 - Birthday role granted for 24 hours
 - Announcement in configured channel
+- DM with rewards: 3x XP and 100k coins to bank
 
 Author: حَـــــنَّـــــا
 Server: discord.gg/syria
@@ -18,7 +19,7 @@ import asyncio
 import calendar
 import time
 from datetime import datetime, time as dt_time
-from typing import TYPE_CHECKING, Optional, Tuple
+from typing import TYPE_CHECKING, Optional, Tuple, Set
 from zoneinfo import ZoneInfo
 
 import discord
@@ -39,6 +40,13 @@ NY_TZ = ZoneInfo("America/New_York")
 
 # Birthday role duration (24 hours in seconds)
 BIRTHDAY_ROLE_DURATION = 24 * 60 * 60
+
+# Birthday rewards
+BIRTHDAY_COINS = 100_000
+BIRTHDAY_XP_MULTIPLIER = 3.0
+
+# Track users with active birthday bonus (for 3x XP)
+_birthday_bonus_users: Set[int] = set()
 
 # Month names for display
 MONTH_NAMES = [
@@ -81,10 +89,18 @@ class BirthdayService:
         # Get birthday count for log
         count = await asyncio.to_thread(db.get_birthday_count, config.GUILD_ID)
 
+        # Restore active birthday bonus users (in case of restart during birthday)
+        active_birthday_users = await asyncio.to_thread(
+            db.get_active_birthday_roles, config.GUILD_ID
+        )
+        for user_id in active_birthday_users:
+            _birthday_bonus_users.add(user_id)
+
         log.tree("Birthday Service Ready", [
             ("Role ID", str(self._birthday_role_id)),
             ("Announce Channel", str(self._announcement_channel_id) if self._announcement_channel_id else "None"),
             ("Registered Birthdays", str(count)),
+            ("Active Birthday Bonuses", str(len(_birthday_bonus_users))),
             ("Daily Check", "5:00 AM EST"),
         ], emoji="🎂")
 
@@ -172,6 +188,9 @@ class BirthdayService:
                 )
                 granted_count += 1
 
+                # Add to birthday bonus users (for 3x XP)
+                _birthday_bonus_users.add(user_id)
+
                 log.tree("Birthday Role Granted", [
                     ("User", f"{member.name} ({member.display_name})"),
                     ("ID", str(user_id)),
@@ -181,6 +200,9 @@ class BirthdayService:
 
                 # Send announcement
                 await self._announce_birthday(member, age)
+
+                # DM user with rewards and grant coins
+                await self._send_birthday_rewards(member, age)
 
             except discord.Forbidden:
                 log.tree("Birthday Role Grant Failed", [
@@ -229,6 +251,9 @@ class BirthdayService:
             await asyncio.to_thread(
                 db.clear_birthday_role_granted, user_id, config.GUILD_ID
             )
+
+            # Remove from birthday bonus users
+            _birthday_bonus_users.discard(user_id)
 
             if not member:
                 continue
@@ -431,6 +456,64 @@ class BirthdayService:
                 ("User", f"{member.name} ({member.display_name})"),
                 ("Error", str(e)[:50]),
             ], emoji="❌")
+
+    async def _send_birthday_rewards(self, member: discord.Member, age: int = None) -> None:
+        """DM user with birthday rewards and grant coins to bank."""
+        # Grant coins to bank
+        coins_granted = False
+        if self.bot.currency_service and self.bot.currency_service.is_enabled():
+            success, _ = await self.bot.currency_service.grant(
+                user_id=member.id,
+                amount=BIRTHDAY_COINS,
+                reason="Birthday reward",
+                target="bank"
+            )
+            coins_granted = success
+
+        # Build DM message
+        if age:
+            greeting = f"Happy **{age}th** Birthday! 🎂🎉"
+        else:
+            greeting = "Happy Birthday! 🎂🎉"
+
+        embed = discord.Embed(
+            title=greeting,
+            description=(
+                f"The **Syria** server wishes you an amazing birthday!\n\n"
+                f"As a birthday gift, you receive:\n"
+                f"• **3x XP** for the next 24 hours\n"
+                f"• **{BIRTHDAY_COINS:,} coins** deposited to your bank\n\n"
+                f"Enjoy your special day!"
+            ),
+            color=COLOR_SYRIA_GREEN
+        )
+        embed.set_thumbnail(url=member.guild.icon.url if member.guild.icon else None)
+        set_footer(embed)
+
+        try:
+            await member.send(embed=embed)
+            log.tree("Birthday DM Sent", [
+                ("User", f"{member.name} ({member.display_name})"),
+                ("ID", str(member.id)),
+                ("Coins Granted", f"{BIRTHDAY_COINS:,}" if coins_granted else "Failed"),
+                ("XP Boost", "3x for 24h"),
+            ], emoji="🎁")
+        except discord.Forbidden:
+            log.tree("Birthday DM Failed", [
+                ("User", f"{member.name} ({member.display_name})"),
+                ("Reason", "DMs disabled"),
+                ("Coins Granted", f"{BIRTHDAY_COINS:,}" if coins_granted else "Failed"),
+            ], emoji="⚠️")
+        except discord.HTTPException as e:
+            log.tree("Birthday DM Failed", [
+                ("User", f"{member.name} ({member.display_name})"),
+                ("Error", str(e)[:50]),
+            ], emoji="❌")
+
+
+def has_birthday_bonus(user_id: int) -> bool:
+    """Check if a user has active birthday bonus (3x XP)."""
+    return user_id in _birthday_bonus_users
 
 
 # Singleton instance

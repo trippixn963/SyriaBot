@@ -22,6 +22,7 @@ from src.core.colors import COLOR_GOLD
 from src.core.constants import XP_COOLDOWN_CACHE_THRESHOLD
 from src.core.logger import log
 from src.services.database import db
+from src.services.birthday_service import has_birthday_bonus, BIRTHDAY_XP_MULTIPLIER
 from src.utils.footer import set_footer
 from .utils import level_from_xp, format_xp
 
@@ -212,13 +213,15 @@ class XPService:
                 ("Removed", str(old_count - len(self._message_cooldowns))),
             ], emoji="🧹")
 
-        # Calculate XP with potential booster multiplier
+        # Calculate XP with potential multipliers
         base_xp = random.randint(config.XP_MESSAGE_MIN, config.XP_MESSAGE_MAX)
+        xp_amount = base_xp
 
-        if member.premium_since is not None:
+        # Birthday bonus (3x) takes priority
+        if has_birthday_bonus(member.id):
+            xp_amount = int(base_xp * BIRTHDAY_XP_MULTIPLIER)
+        elif member.premium_since is not None:
             xp_amount = int(base_xp * config.XP_BOOSTER_MULTIPLIER)
-        else:
-            xp_amount = base_xp
 
         # Add XP
         await self._grant_xp(member, xp_amount, "message")
@@ -479,7 +482,10 @@ class XPService:
                     for member in users_to_reward:
                         xp_amount = config.XP_VOICE_PER_MIN
 
-                        if member.premium_since is not None:
+                        # Birthday bonus (3x) takes priority
+                        if has_birthday_bonus(member.id):
+                            xp_amount = int(xp_amount * BIRTHDAY_XP_MULTIPLIER)
+                        elif member.premium_since is not None:
                             xp_amount = int(xp_amount * config.XP_BOOSTER_MULTIPLIER)
 
                         await self._grant_xp(member, xp_amount, "voice")

@@ -391,6 +391,34 @@ class BirthdaysMixin:
             ])
             return False
 
+    def get_active_birthday_roles(self, guild_id: int) -> List[int]:
+        """
+        Get users with currently active birthday roles (for restoring on bot restart).
+
+        Args:
+            guild_id: Guild ID
+
+        Returns:
+            List of user IDs with active birthday roles
+        """
+        try:
+            with self._get_conn() as conn:
+                if conn is None:
+                    return []
+
+                cur = conn.cursor()
+                cur.execute("""
+                    SELECT user_id FROM birthdays
+                    WHERE guild_id = ? AND role_granted_at IS NOT NULL
+                """, (guild_id,))
+                return [row["user_id"] for row in cur.fetchall()]
+
+        except Exception as e:
+            log.error_tree("DB: Get Active Birthday Roles Error", e, [
+                ("Guild ID", str(guild_id)),
+            ])
+            return []
+
     def get_expired_birthday_roles(self, guild_id: int, cutoff_time: int) -> List[int]:
         """
         Get users whose birthday role should be removed (granted > 24h ago).
