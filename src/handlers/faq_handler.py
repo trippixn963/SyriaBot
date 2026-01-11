@@ -219,6 +219,33 @@ Feel free to share this with friends!
 
 **Note:** Advertising other servers in DMs is against the rules.""",
     },
+    "partnership": {
+        "keywords": [
+            r"partner(ship)?",
+            r"how.*(partner|collab)",
+            r"can.*(partner|collab)",
+            r"want.*partner",
+            r"looking.*partner",
+            r"server.*partner",
+        ],
+        "title": "🤝 Partnership Requests",
+        "description": """**Want to partner with us?**
+
+1. Go to <id:browse> and find 📥・inbox
+2. Open a **Partnership** ticket
+3. Include your server's invite link and member count
+4. Wait for a staff member to review
+
+**Requirements:**
+• Your server must have a reasonable member count
+• No NSFW or rule-breaking content
+• Must be an active, established community
+
+**Do NOT:**
+• DM staff or admins directly
+• Advertise in public channels
+• Spam partnership requests""",
+    },
 }
 
 

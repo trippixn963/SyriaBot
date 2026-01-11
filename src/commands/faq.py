@@ -230,6 +230,25 @@ Win coins for participating in games.""",
 • Keep notifications on so you don't miss giveaways
 • Being active increases your chances in some giveaways""",
     },
+    "partnership": {
+        "title": "🤝 Partnership Requests",
+        "description": """**Want to partner with us?**
+
+1. Go to <id:browse> and find 📥・inbox
+2. Open a **Partnership** ticket
+3. Include your server's invite link and member count
+4. Wait for a staff member to review
+
+**Requirements:**
+• Your server must have a reasonable member count
+• No NSFW or rule-breaking content
+• Must be an active, established community
+
+**Do NOT:**
+• DM staff or admins directly
+• Advertise in public channels
+• Spam partnership requests""",
+    },
 }
 
 
