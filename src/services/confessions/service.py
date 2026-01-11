@@ -443,8 +443,7 @@ class ConfessionService:
     async def submit_confession(
         self,
         content: str,
-        submitter: discord.Member,
-        image_url: Optional[str] = None
+        submitter: discord.Member
     ) -> bool:
         """
         Submit and auto-publish a confession.
@@ -452,7 +451,6 @@ class ConfessionService:
         Args:
             content: The confession text (already stripped of mentions/emojis)
             submitter: Discord member who submitted
-            image_url: Optional image URL to attach
 
         Returns:
             True if submitted and published successfully
@@ -466,7 +464,7 @@ class ConfessionService:
             return False
 
         # Create confession in database
-        confession_id = await asyncio.to_thread(db.create_confession, content, submitter.id, image_url)
+        confession_id = await asyncio.to_thread(db.create_confession, content, submitter.id, None)
         if confession_id is None:
             log.tree("Confession Database Error", [
                 ("User", f"{submitter.name} ({submitter.display_name})"),
@@ -480,7 +478,6 @@ class ConfessionService:
             ("User", f"{submitter.name} ({submitter.display_name})"),
             ("User ID", str(submitter.id)),
             ("Length", f"{len(content)} chars"),
-            ("Image", "Yes" if image_url else "No"),
         ], emoji="📝")
 
         # Auto-approve and publish
@@ -506,7 +503,7 @@ class ConfessionService:
         self._trim_cache(self._confession_submitters)
 
         # Publish to channel
-        success = await self._publish_confession(confession_id, confession_number, content, submitter, image_url)
+        success = await self._publish_confession(confession_id, confession_number, content, submitter)
 
         if success:
             log.tree("Confession Published", [
@@ -515,7 +512,6 @@ class ConfessionService:
                 ("User", f"{submitter.name} ({submitter.display_name})"),
                 ("User ID", str(submitter.id)),
                 ("Length", f"{len(content)} chars"),
-                ("Image", "Yes" if image_url else "No"),
             ], emoji="📢")
         else:
             log.tree("Confession Publish Failed", [
@@ -532,8 +528,7 @@ class ConfessionService:
         confession_id: int,
         confession_number: int,
         content: str,
-        submitter: discord.Member,
-        image_url: Optional[str] = None
+        submitter: discord.Member
     ) -> bool:
         """
         Publish a confession to the confessions channel.
@@ -543,7 +538,6 @@ class ConfessionService:
             confession_number: Public confession number
             content: Confession text
             submitter: Who submitted (for logging)
-            image_url: Optional image URL
 
         Returns:
             True if published successfully
@@ -564,10 +558,6 @@ class ConfessionService:
                 description=f"```{content}```",
                 color=COLOR_SYRIA_GREEN
             )
-
-            # Add image if present
-            if image_url:
-                embed.set_image(url=image_url)
 
             # Add tutorial line
             embed.add_field(

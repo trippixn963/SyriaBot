@@ -12,7 +12,6 @@ import re
 import discord
 from discord import app_commands
 from discord.ext import commands
-from typing import Optional
 
 from src.core.logger import log
 from src.core.colors import COLOR_SUCCESS, COLOR_ERROR, COLOR_WARNING
@@ -54,14 +53,6 @@ class ConfessModal(discord.ui.Modal, title="Submit Confession"):
         required=True,
     )
 
-    image_url = discord.ui.TextInput(
-        label="Image URL (Optional)",
-        placeholder="https://example.com/image.png",
-        style=discord.TextStyle.short,
-        required=False,
-        max_length=500,
-    )
-
     def __init__(self, service) -> None:
         super().__init__()
         self.service = service
@@ -69,13 +60,11 @@ class ConfessModal(discord.ui.Modal, title="Submit Confession"):
     async def on_submit(self, interaction: discord.Interaction) -> None:
         """Handle confession submission."""
         content = self.confession_text.value.strip()
-        image: Optional[str] = self.image_url.value.strip() if self.image_url.value else None
 
         log.tree("Confession Modal Submitted", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
             ("Raw Length", f"{len(content)} chars"),
-            ("Image", "Yes" if image else "No"),
         ], emoji="📝")
 
         # Strip mentions and emojis
@@ -108,24 +97,8 @@ class ConfessModal(discord.ui.Modal, title="Submit Confession"):
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
-        # Validate image URL if provided
-        if image and not image.startswith(("http://", "https://")):
-            log.tree("Confession Image Invalid", [
-                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                ("ID", str(interaction.user.id)),
-                ("URL", image[:50]),
-                ("Reason", "Invalid URL format"),
-            ], emoji="⚠️")
-            embed = discord.Embed(
-                description="❌ Invalid image URL. Must start with http:// or https://",
-                color=COLOR_ERROR
-            )
-            set_footer(embed)
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-            return
-
         # Submit to service
-        success = await self.service.submit_confession(content, interaction.user, image)
+        success = await self.service.submit_confession(content, interaction.user)
 
         if success:
             embed = discord.Embed(
@@ -138,7 +111,6 @@ class ConfessModal(discord.ui.Modal, title="Submit Confession"):
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Length", f"{len(content)} chars"),
-                ("Image", "Yes" if image else "No"),
             ], emoji="✅")
         else:
             embed = discord.Embed(
