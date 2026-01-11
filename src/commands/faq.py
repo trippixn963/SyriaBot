@@ -49,6 +49,12 @@ Check your rank with `/rank`""",
 • Go to <id:customize> to pick your roles
 • Choose colors, pronouns, notifications, etc.
 
+**Purchasable Roles (Economy):**
+• Earn coins by chatting, playing games, and being active
+• Check your balance in <#1459658497879707883>
+• Buy custom roles in <#1459644341361447181>
+• Use Jawdat bot commands to manage your coins
+
 **Special Roles:**
 • Booster roles are given when you boost the server
 • Staff roles are given by admins only""",
@@ -157,6 +163,72 @@ Reply to a message with a link and say `download` to download it.""",
 4. Save the GIF
 
 **Tip:** Works with videos, images, and stickers!""",
+    },
+    "economy": {
+        "title": "💰 Economy System (Jawdat Bot)",
+        "description": """**How to Earn Coins:**
+• Chat in the server (passive income)
+• Play casino games (roulette, blackjack, slots)
+• Win minigames and events
+• Daily rewards
+
+**Commands:**
+• Check your balance in <#1459658497879707883>
+• Use `/balance` to see your coins
+• Use `/daily` to claim daily reward
+
+**Spending Coins:**
+• Buy custom roles in <#1459644341361447181>
+• Gamble in the casino (at your own risk!)
+
+**Casino Games:**
+Games are in the casino forum - each game has its own post.""",
+    },
+    "casino": {
+        "title": "🎰 Casino Games",
+        "description": """**Available Games:**
+• 🎡 **Roulette** - Bet on numbers, colors, or ranges
+• 🃏 **Blackjack** - Classic 21 card game
+• 🎰 **Slots** - Spin to win
+
+**How to Play:**
+1. Go to the Casino forum
+2. Find the game you want to play
+3. Use the bot commands in that post
+
+**Warning:** Gambling can drain your coins fast!
+Only bet what you're willing to lose.""",
+    },
+    "games": {
+        "title": "🎮 Minigames & Activities",
+        "description": """**Available Games:**
+• 🎰 Casino (roulette, blackjack, slots)
+• 🚩 Flag guessing game
+• 🔢 Counting channel
+• More coming soon!
+
+**Flag Game:**
+Guess countries from their flags in <#1402445407312941158>
+
+**Counting:**
+Count together in <#1457434957772488714> - don't break the chain!
+
+Win coins for participating in games.""",
+    },
+    "giveaway": {
+        "title": "🎉 Giveaways",
+        "description": """**How Giveaways Work:**
+• Staff will post giveaways in the server
+• Click the button to enter
+• Winners are picked randomly when it ends
+
+**Requirements:**
+• Some giveaways may require certain roles or levels
+• Make sure you meet the requirements before entering
+
+**Tips:**
+• Keep notifications on so you don't miss giveaways
+• Being active increases your chances in some giveaways""",
     },
 }
 
