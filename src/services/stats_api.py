@@ -12,7 +12,7 @@ Server: discord.gg/syria
 
 import asyncio
 import time
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 from datetime import datetime
 from aiohttp import web
 from typing import TYPE_CHECKING, Optional
@@ -203,8 +203,8 @@ async def security_headers_middleware(request: web.Request, handler) -> web.Resp
 # =============================================================================
 
 # Avatar cache: {user_id: (avatar_url, display_name, username, joined_at, is_booster)}
-# Limited to 500 entries to prevent unbounded growth
-_avatar_cache: dict[int, tuple[Optional[str], str, Optional[str], Optional[int], bool]] = {}
+# Uses OrderedDict for LRU eviction, limited to 500 entries
+_avatar_cache: OrderedDict[int, tuple[Optional[str], str, Optional[str], Optional[int], bool]] = OrderedDict()
 _avatar_cache_date: Optional[str] = None
 _avatar_cache_lock: asyncio.Lock = asyncio.Lock()
 _AVATAR_CACHE_MAX_SIZE = 500
@@ -272,10 +272,11 @@ class SyriaAPI:
                 _avatar_cache.clear()
                 _avatar_cache_date = today_est
             elif len(_avatar_cache) >= _AVATAR_CACHE_MAX_SIZE:
-                # Evict oldest half when cache is full
-                keys_to_remove = list(_avatar_cache.keys())[:len(_avatar_cache) // 2]
-                for key in keys_to_remove:
-                    del _avatar_cache[key]
+                # LRU eviction: remove oldest 10% (50 entries) instead of 50%
+                evict_count = max(1, _AVATAR_CACHE_MAX_SIZE // 10)
+                for _ in range(evict_count):
+                    if _avatar_cache:
+                        _avatar_cache.popitem(last=False)  # Remove oldest
 
     async def _fetch_user_data(self, uid: int) -> tuple[Optional[str], str, Optional[str], Optional[int], bool]:
         """Fetch avatar, display name, username, join date, and booster status for a user."""
@@ -286,6 +287,8 @@ class SyriaAPI:
         # Check cache (includes joined_at and is_booster)
         async with _avatar_cache_lock:
             if uid in _avatar_cache:
+                # Move to end for LRU (most recently used)
+                _avatar_cache.move_to_end(uid)
                 cached = _avatar_cache[uid]
                 return cached[0], cached[1], cached[2], cached[3], cached[4]
 

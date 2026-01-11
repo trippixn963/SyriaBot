@@ -9,6 +9,8 @@ Server: discord.gg/syria
 """
 
 
+import asyncio
+
 import discord
 from discord.ext import commands
 
@@ -27,11 +29,14 @@ class MembersHandler(commands.Cog):
         self.bot = bot
         # Cache invites for tracking: {invite_code: uses}
         self._invite_cache: dict[str, int] = {}
+        # Flag to prevent duplicate caching on reconnects
+        self._invites_cached: bool = False
 
     @commands.Cog.listener()
     async def on_ready(self) -> None:
-        """Cache invites on bot ready."""
-        await self._cache_invites()
+        """Cache invites on bot ready (only once, not on reconnects)."""
+        if not self._invites_cached:
+            await self._cache_invites()
 
     async def _cache_invites(self) -> None:
         """Cache all invites for the main guild."""
@@ -43,12 +48,19 @@ class MembersHandler(commands.Cog):
             return
 
         try:
-            invites = await guild.invites()
+            # Add timeout to prevent hanging
+            invites = await asyncio.wait_for(guild.invites(), timeout=10.0)
             self._invite_cache = {inv.code: inv.uses for inv in invites}
+            self._invites_cached = True
             log.tree("Invite Cache Loaded", [
                 ("Guild", guild.name),
                 ("Invites Cached", str(len(self._invite_cache))),
             ], emoji="🔗")
+        except asyncio.TimeoutError:
+            log.tree("Invite Cache Timeout", [
+                ("Guild", guild.name),
+                ("Timeout", "10s"),
+            ], emoji="⚠️")
         except discord.HTTPException as e:
             log.tree("Invite Cache Failed", [
                 ("Error", str(e)[:100]),
@@ -65,7 +77,8 @@ class MembersHandler(commands.Cog):
             The invite that was used, or None if not found
         """
         try:
-            new_invites = await guild.invites()
+            # Add timeout to prevent hanging
+            new_invites = await asyncio.wait_for(guild.invites(), timeout=10.0)
             for invite in new_invites:
                 cached_uses = self._invite_cache.get(invite.code, 0)
                 if invite.uses > cached_uses:
@@ -75,6 +88,11 @@ class MembersHandler(commands.Cog):
 
             # Update cache with any new invites
             self._invite_cache = {inv.code: inv.uses for inv in new_invites}
+        except asyncio.TimeoutError:
+            log.tree("Invite Fetch Timeout", [
+                ("Guild", guild.name),
+                ("Timeout", "10s"),
+            ], emoji="⚠️")
         except discord.HTTPException as e:
             log.tree("Invite Fetch Failed", [
                 ("Guild", guild.name),

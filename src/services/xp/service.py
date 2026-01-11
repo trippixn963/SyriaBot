@@ -60,6 +60,9 @@ class XPService:
         self._dau_cache: set = set()  # {(user_id, guild_id, date)}
         self._dau_cache_lock: asyncio.Lock = asyncio.Lock()
 
+        # Lock for message cooldown to prevent race conditions
+        self._cooldown_lock: asyncio.Lock = asyncio.Lock()
+
         # Track when users became muted (for anti-AFK farming)
         # {user_id: mute_start_timestamp}
         self._mute_timestamps: Dict[int, float] = {}
@@ -72,11 +75,15 @@ class XPService:
 
     async def setup(self) -> None:
         """Initialize XP service."""
-        # Start voice XP background task
-        self._voice_xp_task = asyncio.create_task(self._voice_xp_loop())
+        # Start voice XP background task with auto-restart wrapper
+        self._voice_xp_task = asyncio.create_task(self._run_with_restart(
+            self._voice_xp_loop, "Voice XP Loop"
+        ))
 
-        # Start cache cleanup task (runs hourly)
-        self._cleanup_task = asyncio.create_task(self._cache_cleanup_loop())
+        # Start cache cleanup task (runs hourly) with auto-restart wrapper
+        self._cleanup_task = asyncio.create_task(self._run_with_restart(
+            self._cache_cleanup_loop, "Cache Cleanup Loop"
+        ))
 
         # Initialize voice sessions for users already in voice (main server only)
         main_guild = self.bot.get_guild(config.GUILD_ID)
@@ -163,25 +170,28 @@ class XPService:
         now = int(time.time())
 
         # Check in-memory cooldown cache first (avoids DB query)
+        # Use lock to prevent race condition where concurrent messages bypass cooldown
         cache_key = (user_id, guild_id)
-        last_xp = self._message_cooldowns.get(cache_key, 0)
 
-        if now - last_xp < config.XP_MESSAGE_COOLDOWN:
-            return  # Still on cooldown
+        async with self._cooldown_lock:
+            last_xp = self._message_cooldowns.get(cache_key, 0)
 
-        # Check for duplicate message (anti-spam) using hash for memory efficiency
-        content_hash = hashlib.md5(
-            message.content.lower().strip().encode(), usedforsecurity=False
-        ).hexdigest()[:16]  # 16 chars is enough for duplicate detection
-        last_hash = self._last_messages.get(cache_key)
-        if last_hash and last_hash == content_hash:
-            return  # Same message as before, no XP
+            if now - last_xp < config.XP_MESSAGE_COOLDOWN:
+                return  # Still on cooldown
 
-        # Update last message tracker with hash (not full content)
-        self._last_messages[cache_key] = content_hash
+            # Check for duplicate message (anti-spam) using hash for memory efficiency
+            content_hash = hashlib.md5(
+                message.content.lower().strip().encode(), usedforsecurity=False
+            ).hexdigest()[:16]  # 16 chars is enough for duplicate detection
+            last_hash = self._last_messages.get(cache_key)
+            if last_hash and last_hash == content_hash:
+                return  # Same message as before, no XP
 
-        # Update cache with current timestamp
-        self._message_cooldowns[cache_key] = now
+            # Update last message tracker with hash (not full content)
+            self._last_messages[cache_key] = content_hash
+
+            # Update cache with current timestamp
+            self._message_cooldowns[cache_key] = now
 
         # Periodically clean old entries (every ~100 users)
         if len(self._message_cooldowns) > XP_COOLDOWN_CACHE_THRESHOLD:
@@ -371,6 +381,18 @@ class XPService:
                     ("Channel", after.channel.name),
                     ("Muted For", f"{mute_duration} min" if mute_duration else "Unknown"),
                 ], emoji="🔊")
+
+    async def _run_with_restart(self, coro_func, name: str) -> None:
+        """Wrapper that restarts a coroutine if it crashes unexpectedly."""
+        while not self.bot.is_closed():
+            try:
+                await coro_func()
+            except asyncio.CancelledError:
+                log.tree(f"{name} Cancelled", [], emoji="⏹️")
+                break
+            except Exception as e:
+                log.error_tree(f"{name} Crashed - Restarting", e)
+                await asyncio.sleep(5)  # Brief pause before restart
 
     async def _voice_xp_loop(self) -> None:
         """Background task that awards voice XP every minute."""
