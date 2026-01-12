@@ -551,6 +551,19 @@ class DatabaseCore:
                 pass
 
             # =====================================================================
+            # Guide Panel Table
+            # =====================================================================
+
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS guide_panel (
+                    guild_id INTEGER PRIMARY KEY,
+                    channel_id INTEGER NOT NULL,
+                    message_id INTEGER NOT NULL,
+                    updated_at INTEGER NOT NULL
+                )
+            """)
+
+            # =====================================================================
             # Indexes
             # =====================================================================
 

@@ -34,7 +34,7 @@ from src.services.birthday_service import get_birthday_service, BirthdayService
 from src.services.city_game import get_city_game_service, CityGameService, setup_city_game_cog
 from src.services.faq import setup_persistent_views
 from src.services.confessions.views import setup_confession_views
-from src.services.guide import setup_guide_views
+from src.services.guide import setup_guide_views, get_guide_service, GuideService
 from src.services.database import db
 from src.utils.http import http_session
 
@@ -71,6 +71,7 @@ class SyriaBot(commands.Bot):
         self.giveaway_service: Optional[GiveawayService] = None
         self.birthday_service: Optional[BirthdayService] = None
         self.city_game_service: Optional[CityGameService] = None
+        self.guide_service: Optional[GuideService] = None
 
     async def setup_hook(self) -> None:
         """Called when the bot is starting up."""
@@ -318,6 +319,14 @@ class SyriaBot(commands.Bot):
         except Exception as e:
             log.error_tree("Birthday Service Init Failed", e)
 
+        # Guide (hourly auto-update)
+        try:
+            self.guide_service = get_guide_service(self)
+            await self.guide_service.setup()
+            initialized.append("Guide")
+        except Exception as e:
+            log.error_tree("Guide Service Init Failed", e)
+
         # City Game (dead chat reviver) - DISABLED until images are added manually
         # try:
         #     self.city_game_service = get_city_game_service(self)
@@ -329,7 +338,7 @@ class SyriaBot(commands.Bot):
 
         log.tree("Services Init Complete", [
             ("Services", ", ".join(initialized)),
-            ("Count", f"{len(initialized)}/14"),
+            ("Count", f"{len(initialized)}/15"),
         ], emoji="✅")
 
     async def close(self) -> None:
@@ -438,6 +447,14 @@ class SyriaBot(commands.Bot):
                 stopped.append("Birthdays")
             except Exception as e:
                 log.error_tree("Birthday Service Stop Error", e)
+
+        # Guide
+        if self.guide_service:
+            try:
+                self.guide_service.stop()
+                stopped.append("Guide")
+            except Exception as e:
+                log.error_tree("Guide Service Stop Error", e)
 
         # City Game
         if self.city_game_service:

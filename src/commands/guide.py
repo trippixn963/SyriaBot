@@ -17,6 +17,7 @@ from src.core.logger import log
 from src.core.colors import COLOR_SYRIA_GREEN
 from src.utils.footer import set_footer
 from src.services.guide.views import GuideView
+from src.services.database import db
 
 
 # =============================================================================
@@ -108,7 +109,16 @@ class GuideCog(commands.Cog):
 
             # Send panel with buttons
             view = GuideView()
-            await target.send(embed=embed, view=view)
+            message = await target.send(embed=embed, view=view)
+
+            # Save panel info for auto-updates
+            if guild:
+                db.set_guide_panel(guild.id, target.id, message.id)
+                log.tree("Guide Panel Saved", [
+                    ("Guild", guild.name),
+                    ("Channel", target.name),
+                    ("Message", str(message.id)),
+                ], emoji="💾")
 
             await interaction.followup.send(
                 f"Guide panel posted to {target.mention}",
@@ -118,6 +128,7 @@ class GuideCog(commands.Cog):
             log.tree("Guide Posted", [
                 ("Admin", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("Channel", target.name),
+                ("Message", str(message.id)),
             ], emoji="✅")
 
         except discord.Forbidden:

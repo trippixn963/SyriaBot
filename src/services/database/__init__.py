@@ -34,6 +34,7 @@ from .actions import ActionsMixin
 from .suggestions import SuggestionsMixin
 from .giveaways import GiveawaysMixin
 from .birthdays import BirthdaysMixin
+from .guide import GuideMixin
 
 
 class Database(
@@ -48,6 +49,7 @@ class Database(
     SuggestionsMixin,
     GiveawaysMixin,
     BirthdaysMixin,
+    GuideMixin,
     DatabaseCore,
 ):
     """
