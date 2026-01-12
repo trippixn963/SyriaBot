@@ -46,6 +46,9 @@ def get_cooldown(interaction: discord.Interaction) -> app_commands.Cooldown | No
 # Main embed color (alias for backwards compatibility)
 COLOR_GET = COLOR_GOLD
 
+# Max image size to download (10 MB - Discord avatars/banners are typically under 1 MB)
+MAX_IMAGE_SIZE = 10 * 1024 * 1024
+
 
 async def _download_and_save_image(
     interaction: discord.Interaction,
@@ -75,7 +78,31 @@ async def _download_and_save_image(
                     ("Status", str(response.status)),
                 ], emoji="❌")
                 return
+
+            # Check Content-Length before downloading
+            content_length = response.content_length
+            if content_length and content_length > MAX_IMAGE_SIZE:
+                await interaction.followup.send(f"{label} is too large to save.", ephemeral=True)
+                log.tree(f"{label} Save Failed", [
+                    ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                    ("ID", str(interaction.user.id)),
+                    ("Size", f"{content_length // 1024}KB"),
+                    ("Reason", "Exceeds size limit"),
+                ], emoji="❌")
+                return
+
             image_bytes = await response.read()
+
+            # Double-check actual size after read
+            if len(image_bytes) > MAX_IMAGE_SIZE:
+                await interaction.followup.send(f"{label} is too large to save.", ephemeral=True)
+                log.tree(f"{label} Save Failed", [
+                    ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                    ("ID", str(interaction.user.id)),
+                    ("Size", f"{len(image_bytes) // 1024}KB"),
+                    ("Reason", "Exceeds size limit"),
+                ], emoji="❌")
+                return
 
         # Send as public .gif
         file = discord.File(

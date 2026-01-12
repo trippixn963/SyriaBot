@@ -55,23 +55,35 @@ class ProfileSyncService:
     async def _scheduler(self) -> None:
         """Run sync at midnight every day."""
         while True:
-            now = datetime.now(TIMEZONE)
+            try:
+                now = datetime.now(TIMEZONE)
 
-            # Calculate next midnight
-            tomorrow = now.date()
-            if now.time() >= SYNC_TIME:
-                tomorrow = now.date() + timedelta(days=1)
+                # Calculate next midnight
+                tomorrow = now.date()
+                if now.time() >= SYNC_TIME:
+                    tomorrow = now.date() + timedelta(days=1)
 
-            next_run = datetime.combine(tomorrow, SYNC_TIME, TIMEZONE)
-            wait_seconds = (next_run - now).total_seconds()
+                next_run = datetime.combine(tomorrow, SYNC_TIME, TIMEZONE)
+                wait_seconds = (next_run - now).total_seconds()
 
-            log.tree("Profile Sync Scheduled", [
-                ("Next Run", next_run.strftime("%Y-%m-%d %H:%M EST")),
-                ("Wait Time", f"{wait_seconds / 3600:.1f} hours"),
-            ], emoji="⏰")
+                log.tree("Profile Sync Scheduled", [
+                    ("Next Run", next_run.strftime("%Y-%m-%d %H:%M EST")),
+                    ("Wait Time", f"{wait_seconds / 3600:.1f} hours"),
+                ], emoji="⏰")
 
-            await asyncio.sleep(wait_seconds)
-            await self._sync_profile()
+                await asyncio.sleep(wait_seconds)
+
+                try:
+                    await self._sync_profile()
+                except Exception as e:
+                    log.error_tree("Scheduled Profile Sync Failed", e)
+                    # Continue loop - will retry next day
+
+            except asyncio.CancelledError:
+                raise  # Re-raise to allow clean shutdown
+            except Exception as e:
+                log.error_tree("Profile Scheduler Error", e)
+                await asyncio.sleep(3600)  # Wait 1 hour before retrying
 
     async def _sync_profile(self) -> None:
         """Sync bot avatar and banner with server."""

@@ -47,6 +47,7 @@ BIRTHDAY_XP_MULTIPLIER = 3.0
 
 # Track users with active birthday bonus (for 3x XP)
 _birthday_bonus_users: Set[int] = set()
+_birthday_bonus_lock = asyncio.Lock()
 
 # Month names for display
 MONTH_NAMES = [
@@ -93,8 +94,9 @@ class BirthdayService:
         active_birthday_users = await asyncio.to_thread(
             db.get_active_birthday_roles, config.GUILD_ID
         )
-        for user_id in active_birthday_users:
-            _birthday_bonus_users.add(user_id)
+        async with _birthday_bonus_lock:
+            for user_id in active_birthday_users:
+                _birthday_bonus_users.add(user_id)
 
         log.tree("Birthday Service Ready", [
             ("Role ID", str(self._birthday_role_id)),
@@ -174,7 +176,9 @@ class BirthdayService:
                 continue
 
             # Skip if already has bonus (extra safeguard against abuse)
-            if user_id in _birthday_bonus_users:
+            async with _birthday_bonus_lock:
+                has_bonus = user_id in _birthday_bonus_users
+            if has_bonus:
                 log.tree("Birthday Bonus Skipped", [
                     ("User", f"{member.name} ({member.display_name})"),
                     ("Reason", "Already has 3x XP bonus"),
@@ -197,7 +201,8 @@ class BirthdayService:
                 granted_count += 1
 
                 # Add to birthday bonus users (for 3x XP)
-                _birthday_bonus_users.add(user_id)
+                async with _birthday_bonus_lock:
+                    _birthday_bonus_users.add(user_id)
 
                 log.tree("Birthday Role Granted", [
                     ("User", f"{member.name} ({member.display_name})"),
@@ -262,8 +267,9 @@ class BirthdayService:
             )
 
             # Remove from birthday bonus users (3x XP ends)
-            had_bonus = user_id in _birthday_bonus_users
-            _birthday_bonus_users.discard(user_id)
+            async with _birthday_bonus_lock:
+                had_bonus = user_id in _birthday_bonus_users
+                _birthday_bonus_users.discard(user_id)
 
             if had_bonus:
                 log.tree("Birthday XP Bonus Expired", [
@@ -388,8 +394,10 @@ class BirthdayService:
 
         if removed:
             # Also remove any active birthday bonus
-            if user.id in _birthday_bonus_users:
+            async with _birthday_bonus_lock:
+                had_bonus = user.id in _birthday_bonus_users
                 _birthday_bonus_users.discard(user.id)
+            if had_bonus:
                 log.tree("Birthday Bonus Revoked", [
                     ("User", f"{user.name} ({user.display_name})"),
                     ("Reason", "Birthday removed by admin"),

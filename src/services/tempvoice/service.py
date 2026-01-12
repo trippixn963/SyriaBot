@@ -181,7 +181,20 @@ class TempVoiceService:
                 continue
 
             # Channel exists but is empty - delete it
-            if len(channel.members) == 0:
+            # Wrap in try-except to handle stale channel references
+            try:
+                member_count = len(channel.members)
+            except (AttributeError, TypeError):
+                # Channel reference is stale - clean up DB
+                db.delete_temp_channel(channel_id)
+                cleaned += 1
+                log.tree("Stale Channel Cleaned", [
+                    ("Channel ID", str(channel_id)),
+                    ("Reason", "Stale reference"),
+                ], emoji="🧹")
+                continue
+
+            if member_count == 0:
                 try:
                     channel_name = channel.name
                     db.delete_temp_channel(channel_id)

@@ -124,13 +124,30 @@ class ClaimApprovalView(ui.View):
                 ], emoji="❌")
                 return
 
-            # Remove old owner permissions
-            old_owner = interaction.guild.get_member(self.owner.id)
-            if old_owner:
-                await channel.set_permissions(old_owner, overwrite=None)
+            # Remove old owner permissions and set new owner permissions
+            # Only update DB if Discord accepts the permission changes
+            try:
+                old_owner = interaction.guild.get_member(self.owner.id)
+                if old_owner:
+                    await channel.set_permissions(old_owner, overwrite=None)
 
-            # Give new owner full permissions (no move_members - use kick button instead)
-            await set_owner_permissions(channel, requester)
+                # Give new owner full permissions (no move_members - use kick button instead)
+                await set_owner_permissions(channel, requester)
+            except discord.Forbidden:
+                embed = discord.Embed(
+                    description="❌ Bot lacks permission to transfer ownership",
+                    color=COLOR_ERROR
+                )
+                set_footer(embed)
+                await interaction.response.edit_message(embed=embed, view=None)
+                log.tree("Claim Approve Failed", [
+                    ("Channel", channel.name),
+                    ("Reason", "Missing permissions"),
+                ], emoji="❌")
+                self.stop()
+                return
+
+            # Only update DB after Discord permissions are set successfully
             db.transfer_ownership(channel.id, requester.id)
 
             embed = discord.Embed(

@@ -11,6 +11,8 @@ Author: حَـــــنَّـــــا
 Server: discord.gg/syria
 """
 
+from urllib.parse import urlparse
+
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -69,9 +71,10 @@ async def handle_download(
         url: The URL to download from
         is_reply: Whether this is from a reply (for cleanup)
     """
+    is_interaction = isinstance(interaction_or_message, discord.Interaction)
+
     # Validate URL length to prevent abuse
     if len(url) > MAX_URL_LENGTH:
-        is_interaction = isinstance(interaction_or_message, discord.Interaction)
         error_msg = f"URL too long (max {MAX_URL_LENGTH} characters)"
         if is_interaction:
             await interaction_or_message.response.send_message(error_msg, ephemeral=True)
@@ -79,7 +82,32 @@ async def handle_download(
             await interaction_or_message.reply(error_msg, delete_after=10)
         return
 
-    is_interaction = isinstance(interaction_or_message, discord.Interaction)
+    # Validate URL scheme (security: prevent file://, data://, etc.)
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme.lower() not in ('http', 'https'):
+            error_msg = "Invalid URL. Only http:// and https:// URLs are supported."
+            if is_interaction:
+                await interaction_or_message.response.send_message(error_msg, ephemeral=True)
+            else:
+                await interaction_or_message.reply(error_msg, delete_after=10)
+            log.tree("Download URL Rejected", [
+                ("Reason", "Invalid scheme"),
+                ("Scheme", parsed.scheme or "empty"),
+                ("URL", url[:50] + "..." if len(url) > 50 else url),
+            ], emoji="🚫")
+            return
+    except Exception as e:
+        error_msg = "Invalid URL format."
+        if is_interaction:
+            await interaction_or_message.response.send_message(error_msg, ephemeral=True)
+        else:
+            await interaction_or_message.reply(error_msg, delete_after=10)
+        log.tree("Download URL Parse Failed", [
+            ("Error", str(e)[:100]),
+            ("URL", url[:50] + "..." if len(url) > 50 else url),
+        ], emoji="⚠️")
+        return
 
     if is_interaction:
         user = interaction_or_message.user

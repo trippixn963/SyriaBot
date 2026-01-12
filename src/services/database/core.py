@@ -198,15 +198,15 @@ class DatabaseCore:
                 )
             """)
 
-            # Migrations
+            # Migrations (OperationalError = column already exists, which is expected)
             try:
                 cur.execute("ALTER TABLE temp_channels ADD COLUMN panel_message_id INTEGER")
-            except Exception:
-                pass
+            except sqlite3.OperationalError:
+                pass  # Column already exists
             try:
                 cur.execute("ALTER TABLE temp_channels ADD COLUMN base_name TEXT")
-            except Exception:
-                pass
+            except sqlite3.OperationalError:
+                pass  # Column already exists
 
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS user_settings (
@@ -300,8 +300,8 @@ class DatabaseCore:
             # XP Migrations
             try:
                 cur.execute("ALTER TABLE user_xp ADD COLUMN created_at INTEGER DEFAULT 0")
-            except Exception:
-                pass
+            except sqlite3.OperationalError:
+                pass  # Column already exists
 
             # Safe column definitions - names are validated against whitelist
             VALID_COLUMN_NAMES = frozenset([
@@ -332,8 +332,8 @@ class DatabaseCore:
                     continue
                 try:
                     cur.execute(f"ALTER TABLE user_xp ADD COLUMN {col_name} {col_type}")
-                except Exception:
-                    pass
+                except sqlite3.OperationalError:
+                    pass  # Column already exists
 
             # =====================================================================
             # Server Stats Tables
@@ -450,8 +450,8 @@ class DatabaseCore:
             # Confessions migration - add image_url column
             try:
                 cur.execute("ALTER TABLE confessions ADD COLUMN image_url TEXT")
-            except Exception:
-                pass
+            except sqlite3.OperationalError:
+                pass  # Column already exists
 
             # =====================================================================
             # Action Stats Tables
@@ -547,8 +547,8 @@ class DatabaseCore:
             # Birthday migration - add birth_year column
             try:
                 cur.execute("ALTER TABLE birthdays ADD COLUMN birth_year INTEGER")
-            except Exception:
-                pass
+            except sqlite3.OperationalError:
+                pass  # Column already exists
 
             # =====================================================================
             # Guide Panel Table

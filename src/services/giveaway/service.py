@@ -134,10 +134,24 @@ class GiveawayService:
 
         # Check min level
         if giveaway["min_level"] > 0:
-            user_data = await asyncio.to_thread(
-                db.get_user_xp, member.id, member.guild.id
-            )
-            user_level = user_data.get("level", 0) if user_data else 0
+            try:
+                user_data = await asyncio.to_thread(
+                    db.get_user_xp, member.id, member.guild.id
+                )
+            except Exception as e:
+                log.tree("Giveaway XP Check Failed", [
+                    ("User", f"{member.name} ({member.display_name})"),
+                    ("ID", str(member.id)),
+                    ("Error", str(e)[:50]),
+                ], emoji="⚠️")
+                return False  # Fail closed - don't allow entry if DB fails
+
+            # Validate DB response - treat missing data as level 0
+            if user_data is None:
+                user_level = 0
+            else:
+                user_level = user_data.get("level", 0)
+
             if user_level < giveaway["min_level"]:
                 return False
 
@@ -1058,10 +1072,14 @@ class GiveawayService:
 
         return await self.end_giveaway(giveaway_id, reroll=True)
 
-    def stop(self) -> None:
+    async def stop(self) -> None:
         """Stop the giveaway service."""
         self._running = False
-        if self._check_task:
+        if self._check_task and not self._check_task.done():
             self._check_task.cancel()
+            try:
+                await self._check_task
+            except asyncio.CancelledError:
+                pass
 
         log.tree("Giveaway Service Stopped", [], emoji="🛑")

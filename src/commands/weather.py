@@ -45,6 +45,9 @@ def weather_cooldown(interaction: discord.Interaction) -> app_commands.Cooldown 
 # Main embed color (alias for backwards compatibility)
 COLOR_WEATHER = COLOR_GOLD
 
+# Max query length (city names are typically < 50 chars)
+MAX_CITY_QUERY_LENGTH = 100
+
 
 # =============================================================================
 # Popular Cities for Autocomplete
@@ -151,6 +154,10 @@ def fuzzy_match(query: str, choices: list[str], limit: int = 25) -> list[str]:
     """
     if not query:
         return choices[:limit]
+
+    # Truncate overly long queries
+    if len(query) > MAX_CITY_QUERY_LENGTH:
+        query = query[:MAX_CITY_QUERY_LENGTH]
 
     query_lower = query.lower()
     scored = []
@@ -367,6 +374,19 @@ class WeatherCog(commands.Cog):
     @app_commands.checks.dynamic_cooldown(weather_cooldown)
     async def weather(self, interaction: discord.Interaction, city: str) -> None:
         """Get current weather for a city."""
+        # Validate query length
+        if len(city) > MAX_CITY_QUERY_LENGTH:
+            await interaction.response.send_message(
+                "City name is too long. Please enter a shorter name.",
+                ephemeral=True
+            )
+            log.tree("Weather Query Too Long", [
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("ID", str(interaction.user.id)),
+                ("Length", str(len(city))),
+            ], emoji="⚠️")
+            return
+
         await interaction.response.defer()
 
         if not self.api_key:

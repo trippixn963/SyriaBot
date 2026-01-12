@@ -24,6 +24,7 @@ DOWNLOAD_TIMEOUT = aiohttp.ClientTimeout(
 # Retry settings
 MAX_RETRIES = 3
 RETRY_BASE_DELAY = 1.0  # seconds
+MAX_BACKOFF_DELAY = 300.0  # 5 minutes max
 
 
 class HTTPSessionManager:
@@ -71,12 +72,20 @@ class HTTPSessionManager:
                 response = await self.session.get(url, **kwargs)
 
                 if response.status == 429:
+                    # Consume response body to prevent resource leak
+                    await response.read()
+
                     # Rate limited - use Retry-After header or exponential backoff
                     retry_after = response.headers.get("Retry-After")
+                    delay = RETRY_BASE_DELAY * (2 ** attempt)  # Default fallback
                     if retry_after:
-                        delay = float(retry_after)
-                    else:
-                        delay = RETRY_BASE_DELAY * (2 ** attempt)
+                        try:
+                            delay = float(retry_after)
+                        except ValueError:
+                            pass  # Use default backoff if malformed
+
+                    # Cap the delay to prevent excessive waits
+                    delay = min(delay, MAX_BACKOFF_DELAY)
 
                     log.tree("HTTP Rate Limited", [
                         ("URL", url[:50]),
@@ -101,9 +110,9 @@ class HTTPSessionManager:
                     ("Attempt", f"{attempt + 1}/{max_retries}"),
                 ], emoji="⚠️")
 
-            # Exponential backoff before retry
+            # Exponential backoff before retry (capped)
             if attempt < max_retries - 1:
-                delay = RETRY_BASE_DELAY * (2 ** attempt)
+                delay = min(RETRY_BASE_DELAY * (2 ** attempt), MAX_BACKOFF_DELAY)
                 await asyncio.sleep(delay)
 
         log.tree("HTTP Request Failed", [
@@ -134,11 +143,19 @@ class HTTPSessionManager:
                 response = await self.session.post(url, **kwargs)
 
                 if response.status == 429:
+                    # Consume response body to prevent resource leak
+                    await response.read()
+
                     retry_after = response.headers.get("Retry-After")
+                    delay = RETRY_BASE_DELAY * (2 ** attempt)  # Default fallback
                     if retry_after:
-                        delay = float(retry_after)
-                    else:
-                        delay = RETRY_BASE_DELAY * (2 ** attempt)
+                        try:
+                            delay = float(retry_after)
+                        except ValueError:
+                            pass  # Use default backoff if malformed
+
+                    # Cap the delay to prevent excessive waits
+                    delay = min(delay, MAX_BACKOFF_DELAY)
 
                     log.tree("HTTP Rate Limited", [
                         ("URL", url[:50]),
@@ -163,8 +180,9 @@ class HTTPSessionManager:
                     ("Attempt", f"{attempt + 1}/{max_retries}"),
                 ], emoji="⚠️")
 
+            # Exponential backoff before retry (capped)
             if attempt < max_retries - 1:
-                delay = RETRY_BASE_DELAY * (2 ** attempt)
+                delay = min(RETRY_BASE_DELAY * (2 ** attempt), MAX_BACKOFF_DELAY)
                 await asyncio.sleep(delay)
 
         log.tree("HTTP Request Failed", [

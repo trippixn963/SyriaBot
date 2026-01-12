@@ -19,7 +19,7 @@ from discord.ext import tasks
 
 from src.core.config import config
 from src.core.colors import COLOR_GOLD
-from src.core.constants import XP_COOLDOWN_CACHE_THRESHOLD
+from src.core.constants import XP_COOLDOWN_CACHE_THRESHOLD, XP_COOLDOWN_CACHE_MAX_SIZE
 from src.core.logger import log
 from src.services.database import db
 from src.services.birthday_service import has_birthday_bonus, BIRTHDAY_XP_MULTIPLIER
@@ -49,6 +49,7 @@ class XPService:
 
         # Track users in voice channels: {guild_id: {user_id: join_timestamp}}
         self._voice_sessions: Dict[int, Dict[int, float]] = {}
+        self._voice_sessions_lock: asyncio.Lock = asyncio.Lock()
 
         # In-memory message cooldown cache: {(user_id, guild_id): timestamp}
         # Avoids DB query on every message - most will fail cooldown check
@@ -130,7 +131,10 @@ class XPService:
                 pass
 
         # Stop midnight sync task
-        self.midnight_role_sync.cancel()
+        try:
+            self.midnight_role_sync.cancel()
+        except Exception:
+            pass  # Task may already be stopped
 
         # Clear all caches on shutdown
         self._message_cooldowns.clear()
@@ -194,24 +198,45 @@ class XPService:
             # Update cache with current timestamp
             self._message_cooldowns[cache_key] = now
 
-        # Periodically clean old entries (every ~100 users)
-        if len(self._message_cooldowns) > XP_COOLDOWN_CACHE_THRESHOLD:
-            old_count = len(self._message_cooldowns)
-            cutoff = now - config.XP_MESSAGE_COOLDOWN
-            self._message_cooldowns = {
-                k: v for k, v in self._message_cooldowns.items()
-                if v > cutoff
-            }
-            # Also clean _last_messages to match (keep only users still on cooldown)
-            self._last_messages = {
-                k: v for k, v in self._last_messages.items()
-                if k in self._message_cooldowns
-            }
-            log.tree("XP Cache Cleanup", [
-                ("Before", str(old_count)),
-                ("After", str(len(self._message_cooldowns))),
-                ("Removed", str(old_count - len(self._message_cooldowns))),
-            ], emoji="🧹")
+            # Periodically clean old entries inside the lock to prevent race conditions
+            if len(self._message_cooldowns) > XP_COOLDOWN_CACHE_THRESHOLD:
+                old_count = len(self._message_cooldowns)
+                cutoff = now - config.XP_MESSAGE_COOLDOWN
+                # Build new dicts first, then swap atomically with tuple assignment
+                new_cooldowns = {
+                    k: v for k, v in self._message_cooldowns.items()
+                    if v > cutoff
+                }
+                new_messages = {
+                    k: v for k, v in self._last_messages.items()
+                    if k in new_cooldowns
+                }
+                # Atomic swap to keep both caches in sync
+                self._message_cooldowns, self._last_messages = new_cooldowns, new_messages
+                log.tree("XP Cache Cleanup", [
+                    ("Before", str(old_count)),
+                    ("After", str(len(self._message_cooldowns))),
+                    ("Removed", str(old_count - len(self._message_cooldowns))),
+                ], emoji="🧹")
+
+            # Hard limit enforcement - evict oldest entries if still too large
+            if len(self._message_cooldowns) > XP_COOLDOWN_CACHE_MAX_SIZE:
+                # Sort by timestamp and keep only the newest entries
+                sorted_items = sorted(
+                    self._message_cooldowns.items(),
+                    key=lambda x: x[1],
+                    reverse=True
+                )[:XP_COOLDOWN_CACHE_MAX_SIZE]
+                new_cooldowns = dict(sorted_items)
+                new_messages = {
+                    k: v for k, v in self._last_messages.items()
+                    if k in new_cooldowns
+                }
+                # Atomic swap to keep both caches in sync
+                self._message_cooldowns, self._last_messages = new_cooldowns, new_messages
+                log.tree("XP Cache Hard Limit Enforced", [
+                    ("Max Size", str(XP_COOLDOWN_CACHE_MAX_SIZE)),
+                ], emoji="⚠️")
 
         # Calculate XP with potential multipliers
         base_xp = random.randint(config.XP_MESSAGE_MIN, config.XP_MESSAGE_MAX)
@@ -294,9 +319,10 @@ class XPService:
         guild_id = member.guild.id
         user_id = member.id
 
-        # Ensure guild dict exists
-        if guild_id not in self._voice_sessions:
-            self._voice_sessions[guild_id] = {}
+        # Ensure guild dict exists (with lock to prevent race condition)
+        async with self._voice_sessions_lock:
+            if guild_id not in self._voice_sessions:
+                self._voice_sessions[guild_id] = {}
 
         # Determine actual channel changes
         left_voice = before.channel and (not after.channel or before.channel.id != after.channel.id)

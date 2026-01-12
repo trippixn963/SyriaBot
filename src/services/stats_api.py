@@ -11,9 +11,10 @@ Server: discord.gg/syria
 """
 
 import asyncio
+import hmac
 import time
 from collections import defaultdict, OrderedDict
-from datetime import datetime
+from datetime import datetime, timedelta
 from aiohttp import web
 from typing import TYPE_CHECKING, Optional
 
@@ -40,12 +41,16 @@ DAMASCUS_TZ = TIMEZONE_DAMASCUS
 # =============================================================================
 
 class RateLimiter:
-    """Simple in-memory rate limiter using sliding window."""
+    """Simple in-memory rate limiter using sliding window with LRU eviction."""
+
+    # Max number of unique IPs to track (prevents unbounded memory growth)
+    MAX_TRACKED_IPS = 10000
 
     def __init__(self, requests_per_minute: int = 60, burst_limit: int = 10):
         self.requests_per_minute = requests_per_minute
         self.burst_limit = burst_limit
-        self._requests: dict[str, list[float]] = defaultdict(list)
+        # Use OrderedDict for O(1) LRU eviction - most recent at end
+        self._requests: OrderedDict[str, list[float]] = OrderedDict()
         self._lock = asyncio.Lock()
 
     async def is_allowed(self, client_ip: str) -> tuple[bool, Optional[int]]:
@@ -54,11 +59,17 @@ class RateLimiter:
             now = time.time()
             window_start = now - 60
 
-            # Clean old requests
-            self._requests[client_ip] = [
-                ts for ts in self._requests[client_ip]
-                if ts > window_start
-            ]
+            # Get or create request list for this IP
+            if client_ip in self._requests:
+                # Move to end (most recently used)
+                self._requests.move_to_end(client_ip)
+                # Clean old requests
+                self._requests[client_ip] = [
+                    ts for ts in self._requests[client_ip]
+                    if ts > window_start
+                ]
+            else:
+                self._requests[client_ip] = []
 
             requests = self._requests[client_ip]
 
@@ -75,6 +86,22 @@ class RateLimiter:
 
             # Allow request
             self._requests[client_ip].append(now)
+
+            # Evict oldest IPs (from front of OrderedDict) if we exceed limit
+            # This is O(1) per removal since OrderedDict maintains insertion order
+            if len(self._requests) > self.MAX_TRACKED_IPS:
+                to_remove = len(self._requests) - (self.MAX_TRACKED_IPS * 9 // 10)
+                removed = 0
+                for _ in range(to_remove):
+                    if self._requests:
+                        self._requests.popitem(last=False)  # Remove oldest (front)
+                        removed += 1
+                if removed > 0:
+                    log.tree("Rate Limiter IP Eviction", [
+                        ("Removed", str(removed)),
+                        ("Remaining", str(len(self._requests))),
+                    ], emoji="🧹")
+
             return True, None
 
     async def cleanup(self) -> None:
@@ -212,6 +239,7 @@ _AVATAR_CACHE_MAX_SIZE = 500
 # Response cache for expensive queries
 _response_cache: dict[str, tuple[dict, float]] = {}
 _response_cache_lock: asyncio.Lock = asyncio.Lock()
+_RESPONSE_CACHE_MAX_SIZE = 200  # Limit cache entries to prevent memory abuse
 _STATS_CACHE_TTL = 60  # 60 seconds for stats
 _LEADERBOARD_CACHE_TTL = 30  # 30 seconds for leaderboard
 
@@ -247,12 +275,13 @@ class SyriaAPI:
         self.app.router.add_post("/api/syria/xp/set", self.handle_xp_set)
 
     def _verify_api_key(self, request: web.Request) -> bool:
-        """Verify the API key from request header."""
+        """Verify the API key from request header using constant-time comparison."""
         if not config.XP_API_KEY:
             return False  # API key not configured
 
         api_key = request.headers.get("X-API-Key", "")
-        return api_key == config.XP_API_KEY
+        # Use constant-time comparison to prevent timing attacks
+        return hmac.compare_digest(api_key, config.XP_API_KEY)
 
     def _format_voice_time(self, mins: int) -> str:
         """Format minutes into human-readable string."""
@@ -319,6 +348,9 @@ class SyriaAPI:
                 is_booster = member.premium_since is not None
                 async with _avatar_cache_lock:
                     _avatar_cache[uid] = (avatar_url, display_name, username, joined_at, is_booster)
+                    # Enforce cache size limit after adding
+                    while len(_avatar_cache) > _AVATAR_CACHE_MAX_SIZE:
+                        _avatar_cache.popitem(last=False)
                 return avatar_url, display_name, username, joined_at, is_booster
 
             # Fallback to user if not in guild (can't determine booster status)
@@ -335,9 +367,19 @@ class SyriaAPI:
                 avatar_url = user.avatar.url if user.avatar else user.default_avatar.url
                 async with _avatar_cache_lock:
                     _avatar_cache[uid] = (avatar_url, display_name, username, None, False)
+                    # Enforce cache size limit after adding
+                    while len(_avatar_cache) > _AVATAR_CACHE_MAX_SIZE:
+                        _avatar_cache.popitem(last=False)
                 return avatar_url, display_name, username, None, False
-        except (asyncio.TimeoutError, Exception):
+        except asyncio.TimeoutError:
+            # Timeout is expected for users not in cache - don't log
             pass
+        except Exception as e:
+            # Log unexpected errors (rate limits, API errors, etc.)
+            log.tree("User Fetch Error", [
+                ("User ID", str(uid)),
+                ("Error", str(e)[:50]),
+            ], emoji="⚠️")
 
         return None, str(uid), None, None, False
 
@@ -428,8 +470,12 @@ class SyriaAPI:
                 "updated_at": datetime.now(DAMASCUS_TZ).isoformat(),
             }
 
-            # Cache the response
+            # Cache the response with size limit enforcement
             _response_cache[cache_key] = (response_data, now)
+            # Evict oldest entries if cache exceeds limit
+            while len(_response_cache) > _RESPONSE_CACHE_MAX_SIZE:
+                oldest_key = min(_response_cache, key=lambda k: _response_cache[k][1])
+                del _response_cache[oldest_key]
 
             elapsed_ms = round((time.time() - start_time) * 1000)
             log.tree("Leaderboard API Request", [
@@ -604,8 +650,12 @@ class SyriaAPI:
                 "updated_at": datetime.now(DAMASCUS_TZ).isoformat(),
             }
 
-            # Cache the response
+            # Cache the response with size limit enforcement
             _response_cache[cache_key] = (response_data, now)
+            # Evict oldest entries if cache exceeds limit
+            while len(_response_cache) > _RESPONSE_CACHE_MAX_SIZE:
+                oldest_key = min(_response_cache, key=lambda k: _response_cache[k][1])
+                del _response_cache[oldest_key]
 
             elapsed_ms = round((time.time() - start_time) * 1000)
             log.tree("Stats API Request", [
@@ -933,7 +983,7 @@ class SyriaAPI:
                 now_est = datetime.now(EST_TZ)
                 tomorrow = now_est.replace(hour=0, minute=0, second=0, microsecond=0)
                 if now_est.hour >= 0:
-                    tomorrow += __import__('datetime').timedelta(days=1)
+                    tomorrow += timedelta(days=1)
                 seconds_until_midnight = (tomorrow - now_est).total_seconds()
 
                 log.tree("Midnight Booster Refresh Scheduled", [

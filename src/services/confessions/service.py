@@ -750,13 +750,12 @@ class ConfessionService:
                 )
 
             log.tree("Anonymous Reply Posted", [
+                ("Anon-ID", author_name),
                 ("User", f"{user.name} ({user.display_name})"),
                 ("User ID", str(user.id)),
                 ("Confession", f"#{confession_number}"),
                 ("Thread", thread.name),
-                ("Anon-ID", author_name),
                 ("Length", f"{len(content)} chars"),
-                ("Method", "Webhook"),
             ], emoji="💬")
 
             return True

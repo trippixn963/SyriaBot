@@ -125,10 +125,16 @@ class XPMixin:
                     WHERE user_id = ? AND guild_id = ?
                 """, (new_xp, now, user_id, guild_id))
 
+        # Calculate new level from XP (import here to avoid circular import)
+        from src.services.xp.utils import level_from_xp
+        new_level = level_from_xp(new_xp)
+
         return {
             "old_xp": old_xp,
             "new_xp": new_xp,
             "old_level": old_level,
+            "new_level": new_level,
+            "leveled_up": new_level > old_level,
         }
 
     def set_user_level(self, user_id: int, guild_id: int, level: int) -> None:
@@ -173,8 +179,8 @@ class XPMixin:
                 ("XP", str(xp)),
             ])
 
-    def get_last_message_xp(self, user_id: int, guild_id: int) -> int:
-        """Get timestamp of last message XP gain."""
+    def get_last_message_xp(self, user_id: int, guild_id: int) -> Optional[int]:
+        """Get timestamp of last message XP gain. Returns None if user has no entry."""
         with self._get_conn() as conn:
             cur = conn.cursor()
             cur.execute(
@@ -182,7 +188,9 @@ class XPMixin:
                 (user_id, guild_id)
             )
             row = cur.fetchone()
-            return row["last_message_xp"] if row else 0
+            # Return None if no entry exists, otherwise return the timestamp
+            # (which could be 0 if user exists but never gained message XP)
+            return row["last_message_xp"] if row else None
 
     # =========================================================================
     # Leaderboard Methods

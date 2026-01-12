@@ -45,24 +45,32 @@ class FunHandler:
     def __init__(self) -> None:
         """Initialize the fun handler."""
         self._cooldowns: OrderedDict[int, float] = OrderedDict()
+        self._cooldown_lock = asyncio.Lock()
         self._channel_msg_count: int = 0
         self._sticky_message_id: Optional[int] = None
 
-    def _cleanup_cooldowns(self) -> None:
-        """Remove expired cooldowns to prevent unbounded growth."""
-        if len(self._cooldowns) <= MAX_COOLDOWN_CACHE_SIZE:
-            return
+    async def _cleanup_cooldowns(self) -> None:
+        """Remove expired cooldowns to prevent unbounded growth (thread-safe)."""
+        async with self._cooldown_lock:
+            # Check inside lock to avoid race condition
+            if len(self._cooldowns) <= MAX_COOLDOWN_CACHE_SIZE:
+                return
 
-        now = time.time()
-        expired_users = [
-            uid for uid, ts in self._cooldowns.items()
-            if now - ts > self.FUN_COOLDOWN
-        ]
-        for uid in expired_users:
-            del self._cooldowns[uid]
+            now = time.time()
+            # Build list of expired users safely
+            expired_users = [
+                uid for uid, ts in list(self._cooldowns.items())
+                if now - ts > self.FUN_COOLDOWN
+            ]
+            for uid in expired_users:
+                self._cooldowns.pop(uid, None)  # Use pop to avoid KeyError
 
-        while len(self._cooldowns) > MAX_COOLDOWN_CACHE_SIZE:
-            self._cooldowns.popitem(last=False)
+            # Evict oldest if still over limit
+            while len(self._cooldowns) > MAX_COOLDOWN_CACHE_SIZE:
+                try:
+                    self._cooldowns.popitem(last=False)
+                except KeyError:
+                    break  # Dict is empty
 
     async def _send_sticky(self, channel: discord.TextChannel) -> None:
         """Send sticky message for fun commands channel."""
@@ -178,7 +186,7 @@ class FunHandler:
 
         # Record cooldown
         self._cooldowns[user_id] = time.time()
-        self._cleanup_cooldowns()
+        await self._cleanup_cooldowns()
 
         try:
             result = False

@@ -30,6 +30,7 @@ from src.services.suggestions import SuggestionService
 from src.services.currency_service import CurrencyService
 from src.services.giveaway import GiveawayService
 from src.services.action_service import action_service
+from src.services.quote import quote_service
 from src.services.birthday_service import get_birthday_service, BirthdayService
 from src.services.city_game import get_city_game_service, CityGameService, setup_city_game_cog
 from src.services.faq import setup_persistent_views
@@ -435,7 +436,7 @@ class SyriaBot(commands.Bot):
         # Giveaways
         if self.giveaway_service:
             try:
-                self.giveaway_service.stop()
+                await self.giveaway_service.stop()
                 stopped.append("Giveaways")
             except Exception as e:
                 log.error_tree("Giveaway Service Stop Error", e)
@@ -463,6 +464,13 @@ class SyriaBot(commands.Bot):
                 stopped.append("CityGame")
             except Exception as e:
                 log.error_tree("City Game Service Stop Error", e)
+
+        # Quote Service (close aiohttp session)
+        try:
+            await quote_service.close()
+            stopped.append("QuoteService")
+        except Exception as e:
+            log.error_tree("Quote Service Close Error", e)
 
         # Close HTTP session
         try:

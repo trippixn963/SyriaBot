@@ -163,6 +163,8 @@ async def download(url: str, download_dir: Path, platform: str) -> DownloadResul
                 timeout=aiohttp.ClientTimeout(total=30),
             ) as resp:
                 if resp.status != 200:
+                    # Consume response body to properly close connection
+                    await resp.read()
                     log.tree("Cobalt API HTTP Error", [
                         ("Status", str(resp.status)),
                         ("URL", COBALT_API_URL),

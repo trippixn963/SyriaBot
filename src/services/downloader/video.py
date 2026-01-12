@@ -199,6 +199,15 @@ async def compress_video(file: Path) -> Optional[Path]:
     output_file = file.parent / f"compressed_{file.stem}.mp4"
     duration = await get_video_duration(file)
 
+    # Validate duration to prevent ZeroDivisionError
+    if not duration or duration <= 0:
+        log.tree("Compression Failed", [
+            ("File", file.name),
+            ("Reason", "Invalid or zero duration"),
+            ("Duration", str(duration)),
+        ], emoji="❌")
+        return None
+
     # Calculate target bitrate
     target_size_bits = MAX_FILE_SIZE_MB * 8 * 1024 * 1024
     audio_bitrate = 128 * 1024

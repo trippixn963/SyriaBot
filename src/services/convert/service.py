@@ -1196,6 +1196,14 @@ class ConvertService:
                 ("Size", f"{total_width}x{max_height}"),
             ], emoji="👁️")
 
+            # Close all frame images to free file handles
+            for frame in frames:
+                try:
+                    frame.close()
+                except Exception:
+                    pass
+            strip.close()
+
             return output.getvalue()
 
         except Exception as e:
@@ -1204,7 +1212,19 @@ class ConvertService:
             ], emoji="❌")
             return None
         finally:
-            # Cleanup
+            # Cleanup PIL images (in case of exception before normal close)
+            if 'frames' in locals():
+                for frame in frames:
+                    try:
+                        frame.close()
+                    except Exception:
+                        pass
+            if 'strip' in locals():
+                try:
+                    strip.close()
+                except Exception:
+                    pass
+            # Cleanup temp files
             try:
                 input_path.unlink(missing_ok=True)
             except Exception as e:
@@ -1330,6 +1350,14 @@ class ConvertService:
                         ("Frames", str(len(frames))),
                     ], emoji="👁️")
 
+                    # Close PIL images to free file handles
+                    for frame in frames:
+                        try:
+                            frame.close()
+                        except Exception:
+                            pass
+                    strip.close()
+
             # Fallback to single thumbnail if strip failed
             if not preview_bytes and not is_short_clip:
                 cmd = [
@@ -1356,6 +1384,18 @@ class ConvertService:
             ], emoji="❌")
             return None, None
         finally:
+            # Cleanup PIL images (in case of exception before normal close)
+            if 'frames' in locals():
+                for frame in frames:
+                    try:
+                        frame.close()
+                    except Exception:
+                        pass
+            if 'strip' in locals():
+                try:
+                    strip.close()
+                except Exception:
+                    pass
             # Cleanup all temp files
             for path in [input_path, output_path] + frame_paths:
                 try:

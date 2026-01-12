@@ -16,8 +16,20 @@ from src.core.logger import log
 from src.core.colors import COLOR_SUCCESS, COLOR_ERROR, EMOJI_COMMENT
 
 
-def strip_mentions_and_emojis(text: str) -> str:
-    """Remove mentions and custom emojis from text."""
+def strip_mentions_and_emojis(text: str, max_length: int = 2000) -> str:
+    """Remove mentions and custom emojis from text.
+
+    Args:
+        text: The input text to process
+        max_length: Maximum input length to process (prevents ReDoS)
+
+    Returns:
+        Cleaned text with mentions and emojis removed
+    """
+    # Truncate extremely long inputs to prevent ReDoS attacks
+    if len(text) > max_length:
+        text = text[:max_length]
+
     text = re.sub(r'<@!?\d+>', '', text)
     text = re.sub(r'<@&\d+>', '', text)
     text = re.sub(r'<#\d+>', '', text)

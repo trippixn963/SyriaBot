@@ -9,6 +9,7 @@ Author: حَـــــنَّـــــا
 Server: discord.gg/syria
 """
 
+import asyncio
 import io
 import re
 import time
@@ -98,22 +99,29 @@ class ReplyHandler:
         """Initialize the reply handler with bot reference."""
         self.bot = bot
         self._download_cooldowns: OrderedDict[int, float] = OrderedDict()
+        self._cooldown_lock = asyncio.Lock()
 
-    def _cleanup_download_cooldowns(self) -> None:
-        """Remove expired cooldowns to prevent unbounded growth."""
+    async def _cleanup_download_cooldowns(self) -> None:
+        """Remove expired cooldowns to prevent unbounded growth (thread-safe)."""
         if len(self._download_cooldowns) <= MAX_COOLDOWN_CACHE_SIZE:
             return
 
-        now = time.time()
-        expired_users = [
-            uid for uid, ts in self._download_cooldowns.items()
-            if now - ts > self.DOWNLOAD_REPLY_COOLDOWN
-        ]
-        for uid in expired_users:
-            del self._download_cooldowns[uid]
+        async with self._cooldown_lock:
+            now = time.time()
+            # Build list of expired users safely
+            expired_users = [
+                uid for uid, ts in list(self._download_cooldowns.items())
+                if now - ts > self.DOWNLOAD_REPLY_COOLDOWN
+            ]
+            for uid in expired_users:
+                self._download_cooldowns.pop(uid, None)  # Use pop to avoid KeyError
 
-        while len(self._download_cooldowns) > MAX_COOLDOWN_CACHE_SIZE:
-            self._download_cooldowns.popitem(last=False)
+            # Evict oldest if still over limit
+            while len(self._download_cooldowns) > MAX_COOLDOWN_CACHE_SIZE:
+                try:
+                    self._download_cooldowns.popitem(last=False)
+                except KeyError:
+                    break  # Dict is empty
 
     def _is_translate_trigger(self, content: str) -> bool:
         """Check if content starts with a translate trigger (with typo tolerance)."""
@@ -661,7 +669,7 @@ class ReplyHandler:
 
         # Record cooldown and cleanup old entries
         self._download_cooldowns[user_id] = time.time()
-        self._cleanup_download_cooldowns()
+        await self._cleanup_download_cooldowns()
 
         log.tree("Reply Download", [
             ("User", f"{message.author.name} ({message.author.display_name})"),

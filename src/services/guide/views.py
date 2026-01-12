@@ -974,6 +974,54 @@ class GuideView(ui.View):
     def __init__(self) -> None:
         super().__init__(timeout=None)
 
+    def _build_rules_content(self) -> str:
+        """Build all rules content with config channel/role mentions."""
+        inbox_ch: str = f"<#{config.INBOX_CHANNEL_ID}>" if config.INBOX_CHANNEL_ID else "the inbox channel"
+        mod_role: str = f"<@&{config.MOD_ROLE_ID}>" if config.MOD_ROLE_ID else "staff"
+
+        return (
+            "**🚫 Zero Tolerance**\n"
+            "• No terrorism, extremism, or support for terrorist groups\n"
+            "• No glorifying violence, war crimes, or armed militias\n"
+            "• No sectarian hate or religious extremism\n"
+            "• No political propaganda or recruitment\n"
+            "• No racism, sexism, homophobia, or discrimination\n\n"
+            "**🤝 General Conduct**\n"
+            "• Be respectful to everyone regardless of background\n"
+            "• No harassment, bullying, threats, or doxxing\n"
+            "• No impersonating staff or other members\n"
+            "• No begging for roles, permissions, or currency\n"
+            f"• Keep drama private - use {mod_role} for disputes\n"
+            "• English & Arabic only in main chat\n\n"
+            "**📝 Content Rules**\n"
+            "• No NSFW, gore, or disturbing imagery\n"
+            "• No illegal content, piracy, or hacking services\n"
+            "• No scamming, phishing, or malicious links\n"
+            "• No spam, flooding, or excessive caps/emojis\n"
+            "• No self-promotion or server advertising\n"
+            "• No DM advertising - instant ban\n\n"
+            "**👤 Profile Rules**\n"
+            "• No offensive usernames, avatars, or banners\n"
+            "• No impersonating celebrities or public figures\n"
+            "• No inappropriate custom statuses\n\n"
+            "**🔒 Privacy & Safety**\n"
+            "• Don't share others' personal information\n"
+            "• Don't ask members for personal details\n"
+            "• No unsolicited DMs to members\n"
+            "• You must be 13+ to use Discord (TOS)\n\n"
+            "**🎤 Voice & Chat Rules**\n"
+            "• No mic spam, soundboards, or loud noises\n"
+            "• No channel hopping to annoy others\n"
+            "• Respect TempVoice channel owners\n"
+            "• No recording without consent\n"
+            "• Use channels for their intended purpose\n\n"
+            "**🛡️ Moderation**\n"
+            f"• {mod_role} decisions are final - appeal in tickets\n"
+            "• No mini-modding - report instead of calling out\n"
+            "• No alt accounts - ban evasion = IP ban\n"
+            f"• Use {inbox_ch} to report with evidence"
+        )
+
     @ui.button(
         label="Rules",
         style=discord.ButtonStyle.secondary,
@@ -984,7 +1032,7 @@ class GuideView(ui.View):
     async def rules_button(
         self, interaction: discord.Interaction, button: ui.Button
     ) -> None:
-        """Show rules category dropdown."""
+        """Show server rules."""
         log.tree("Guide Rules Button", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
@@ -994,20 +1042,12 @@ class GuideView(ui.View):
         try:
             embed = discord.Embed(
                 title="Server Rules",
-                description=(
-                    "Select a category from the dropdown below.\n\n"
-                    "**Categories:**\n"
-                    "🤝 General Conduct\n"
-                    "📝 Content Rules\n"
-                    "🎤 Voice & Chat Rules\n"
-                    "🛡️ Moderation Info"
-                ),
+                description=self._build_rules_content(),
                 color=COLOR_GOLD,
             )
             set_footer(embed)
 
-            view = RulesSelectView()
-            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
 
             log.tree("Guide Button Response Sent", [
                 ("Section", "Rules"),
@@ -1031,6 +1071,34 @@ class GuideView(ui.View):
             except discord.HTTPException:
                 pass
 
+    def _build_roles_content(self) -> str:
+        """Build all roles content with config mentions."""
+        citizen: str = f"<@&{config.AUTO_ROLE_ID}>" if config.AUTO_ROLE_ID else "Citizens"
+        booster: str = f"<@&{config.BOOSTER_ROLE_ID}>" if config.BOOSTER_ROLE_ID else "Booster"
+        roles_ch: str = f"<#{config.ROLES_CHANNEL_ID}>" if config.ROLES_CHANNEL_ID else "the roles channel"
+
+        return (
+            f"**🤖 Auto Roles**\n"
+            f"• {citizen} - Given when you join\n"
+            "• Level roles - Earned through activity\n\n"
+            "**✋ Self-Assign Roles**\n"
+            "Go to **Browse Channels** → **Channels & Roles**\n"
+            "• Gender, Age, Ethnicity, Religion\n"
+            "• Notification pings\n\n"
+            f"**💰 Purchasable Roles**\n"
+            f"Visit {roles_ch} to rent cosmetic roles with coins.\n"
+            "Earn coins through chat, minigames, and giveaways.\n\n"
+            f"**⭐ Special Roles**\n"
+            f"• {booster} - 2x XP, unlimited downloads, exclusive channels\n"
+            "• Staff - Admin assigned, apply when apps open\n\n"
+            "**📈 Level Permissions**\n"
+            "• Lv1: Voice channels\n"
+            "• Lv5: Files & embeds\n"
+            "• Lv10: External emojis\n"
+            "• Lv20: External stickers\n"
+            "• Lv30: Change nickname"
+        )
+
     @ui.button(
         label="Roles",
         style=discord.ButtonStyle.secondary,
@@ -1041,7 +1109,7 @@ class GuideView(ui.View):
     async def roles_button(
         self, interaction: discord.Interaction, button: ui.Button
     ) -> None:
-        """Show roles category dropdown."""
+        """Show server roles info."""
         log.tree("Guide Roles Button", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
@@ -1051,21 +1119,12 @@ class GuideView(ui.View):
         try:
             embed = discord.Embed(
                 title="Server Roles",
-                description=(
-                    "Select a category from the dropdown below.\n\n"
-                    "**Categories:**\n"
-                    "🤖 Auto Roles\n"
-                    "✋ Self-Assign Roles\n"
-                    "💰 Purchasable Roles\n"
-                    "⭐ Special Roles\n"
-                    "📈 Level Permissions"
-                ),
+                description=self._build_roles_content(),
                 color=COLOR_SYRIA_GREEN,
             )
             set_footer(embed)
 
-            view = RolesSelectView()
-            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
 
             log.tree("Guide Button Response Sent", [
                 ("Section", "Roles"),
@@ -1223,7 +1282,7 @@ def setup_guide_views(bot: Client) -> None:
         log.tree("Guide Views Registered", [
             ("View", "GuideView"),
             ("Buttons", "4 (Rules, Roles, FAQ, Commands)"),
-            ("Nested", "All sections have dropdowns"),
+            ("Nested", "FAQ and Commands have dropdowns"),
             ("Persistent", "Yes (timeout=None)"),
         ], emoji="✅")
     except Exception as e:

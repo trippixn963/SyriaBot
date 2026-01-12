@@ -36,22 +36,29 @@ class ActionHandler:
     def __init__(self) -> None:
         """Initialize the action handler."""
         self._cooldowns: OrderedDict[int, float] = OrderedDict()
+        self._cooldown_lock = asyncio.Lock()
 
-    def _cleanup_cooldowns(self) -> None:
-        """Remove expired cooldowns to prevent unbounded growth."""
+    async def _cleanup_cooldowns(self) -> None:
+        """Remove expired cooldowns to prevent unbounded growth (thread-safe)."""
         if len(self._cooldowns) <= MAX_COOLDOWN_CACHE_SIZE:
             return
 
-        now = time.time()
-        expired_users = [
-            uid for uid, ts in self._cooldowns.items()
-            if now - ts > self.ACTION_COOLDOWN
-        ]
-        for uid in expired_users:
-            del self._cooldowns[uid]
+        async with self._cooldown_lock:
+            now = time.time()
+            # Build list of expired users safely
+            expired_users = [
+                uid for uid, ts in list(self._cooldowns.items())
+                if now - ts > self.ACTION_COOLDOWN
+            ]
+            for uid in expired_users:
+                self._cooldowns.pop(uid, None)  # Use pop to avoid KeyError
 
-        while len(self._cooldowns) > MAX_COOLDOWN_CACHE_SIZE:
-            self._cooldowns.popitem(last=False)
+            # Evict oldest if still over limit
+            while len(self._cooldowns) > MAX_COOLDOWN_CACHE_SIZE:
+                try:
+                    self._cooldowns.popitem(last=False)
+                except KeyError:
+                    break  # Dict is empty
 
     async def handle(self, message: discord.Message) -> bool:
         """
@@ -141,7 +148,7 @@ class ActionHandler:
 
         # Record cooldown
         self._cooldowns[user_id] = time.time()
-        self._cleanup_cooldowns()
+        await self._cleanup_cooldowns()
 
         # Process each target (combo support)
         user_mention = message.author.mention

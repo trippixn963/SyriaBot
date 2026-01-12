@@ -81,14 +81,50 @@ class BumpService:
             if self.DATA_FILE.exists():
                 with open(self.DATA_FILE, "r") as f:
                     data = json.load(f)
-                    self._last_bump_time = data.get("last_bump_time")
-                    self._last_reminder_time = data.get("last_reminder_time")
+
+                # Validate loaded data types
+                if not isinstance(data, dict):
+                    log.tree("Bump Data Invalid", [
+                        ("Reason", "Expected dict, got " + type(data).__name__),
+                        ("Action", "Resetting to defaults"),
+                    ], emoji="⚠️")
+                    return
+
+                # Validate and load last_bump_time
+                last_bump = data.get("last_bump_time")
+                if last_bump is not None:
+                    if isinstance(last_bump, (int, float)) and last_bump > 0:
+                        self._last_bump_time = float(last_bump)
+                    else:
+                        log.tree("Bump Data Warning", [
+                            ("Field", "last_bump_time"),
+                            ("Value", str(last_bump)[:20]),
+                            ("Action", "Ignoring invalid value"),
+                        ], emoji="⚠️")
+
+                # Validate and load last_reminder_time
+                last_reminder = data.get("last_reminder_time")
+                if last_reminder is not None:
+                    if isinstance(last_reminder, (int, float)) and last_reminder > 0:
+                        self._last_reminder_time = float(last_reminder)
+                    else:
+                        log.tree("Bump Data Warning", [
+                            ("Field", "last_reminder_time"),
+                            ("Value", str(last_reminder)[:20]),
+                            ("Action", "Ignoring invalid value"),
+                        ], emoji="⚠️")
 
                 if self._last_bump_time:
                     elapsed_min = int((time.time() - self._last_bump_time) / 60)
                     log.tree("Bump Data Loaded", [
                         ("Last Bump", f"{elapsed_min} min ago"),
                     ], emoji="📊")
+        except json.JSONDecodeError as e:
+            log.tree("Bump Data Corrupted", [
+                ("File", str(self.DATA_FILE)),
+                ("Error", str(e)[:50]),
+                ("Action", "Resetting to defaults"),
+            ], emoji="⚠️")
         except Exception as e:
             log.error_tree("Bump Data Load Failed", e, [
                 ("File", str(self.DATA_FILE)),

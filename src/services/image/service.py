@@ -18,6 +18,10 @@ from src.core.config import config
 from src.utils.http import http_session
 
 
+# Max query length to prevent abuse
+MAX_QUERY_LENGTH = 200
+
+
 # =============================================================================
 # Data Classes
 # =============================================================================
@@ -97,6 +101,14 @@ class ImageService:
                 total_results=0,
                 error="Image search not configured - missing API keys"
             )
+
+        # Validate and truncate query length
+        if len(query) > MAX_QUERY_LENGTH:
+            log.tree("Image Search Query Truncated", [
+                ("Original Length", str(len(query))),
+                ("Truncated To", str(MAX_QUERY_LENGTH)),
+            ], emoji="⚠️")
+            query = query[:MAX_QUERY_LENGTH]
 
         log.tree("Image Search API Call", [
             ("Query", query[:50] + "..." if len(query) > 50 else query),

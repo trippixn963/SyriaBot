@@ -201,6 +201,7 @@ CLAIM_APPROVAL_TIMEOUT = 300    # 5 minutes for claim approval
 
 XP_BASE_MULTIPLIER = 100        # Base for XP formula: 100 * level^1.5
 XP_COOLDOWN_CACHE_THRESHOLD = 500   # Clean cache when exceeding this size
+XP_COOLDOWN_CACHE_MAX_SIZE = 2000   # Hard limit - evict oldest entries beyond this
 
 
 # =============================================================================

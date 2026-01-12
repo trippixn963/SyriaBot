@@ -60,6 +60,7 @@ class SuggestionService:
         self.bot: "SyriaBot" = bot
         self._enabled: bool = False
         self._channel_id: Optional[int] = None
+        self._submit_lock = asyncio.Lock()
 
     async def setup(self) -> None:
         """Initialize the suggestion service."""
@@ -211,149 +212,151 @@ class SuggestionService:
         if not can_submit:
             return False, reason
 
-        try:
-            # Get next suggestion number
-            stats = await asyncio.to_thread(db.get_suggestion_stats)
-            suggestion_num: int = stats["total"] + 1
-
-            log.tree("Suggestion Processing", [
-                ("User", f"{submitter.name} ({submitter.display_name})"),
-                ("User ID", str(submitter.id)),
-                ("Number", f"#{suggestion_num}"),
-                ("Length", f"{len(content)} chars"),
-            ], emoji="⏳")
-
-            # Create embed
-            embed = discord.Embed(
-                title=f"Suggestion #{suggestion_num}",
-                description=content,
-                color=COLOR_SYRIA_GREEN
-            )
-            embed.set_author(
-                name=submitter.display_name,
-                icon_url=submitter.display_avatar.url
-            )
-            embed.add_field(name="Status", value="⏳ Pending Review", inline=True)
-            embed.add_field(
-                name="\u200b",
-                value="*Use `/suggest` to share yours*",
-                inline=False
-            )
-            set_footer(embed)
-
-            # Send to channel
-            msg = await channel.send(embed=embed)
-
-            log.tree("Suggestion Message Sent", [
-                ("Number", f"#{suggestion_num}"),
-                ("Message ID", str(msg.id)),
-                ("Channel", channel.name),
-            ], emoji="📨")
-
-            # Add heart reaction
+        # Lock to prevent concurrent submissions from getting same number
+        async with self._submit_lock:
             try:
-                await msg.add_reaction(EMOJI_HEART)
-                log.tree("Suggestion Reaction Added", [
-                    ("Number", f"#{suggestion_num}"),
-                    ("Emoji", "Custom heart"),
-                ], emoji="❤️")
-            except discord.Forbidden:
-                log.tree("Suggestion Reaction Forbidden", [
-                    ("Number", f"#{suggestion_num}"),
-                    ("Reason", "Missing permissions"),
-                ], emoji="⚠️")
-            except discord.HTTPException as e:
-                log.tree("Suggestion Reaction Failed", [
-                    ("Number", f"#{suggestion_num}"),
-                    ("Error", str(e)[:LOG_CONTENT_TRUNCATE]),
-                ], emoji="⚠️")
+                # Get next suggestion number
+                stats = await asyncio.to_thread(db.get_suggestion_stats)
+                suggestion_num: int = stats["total"] + 1
 
-            # Create thread for discussion
-            thread: Optional[discord.Thread] = None
-            try:
-                thread = await msg.create_thread(
-                    name=f"Suggestion #{suggestion_num}",
-                    auto_archive_duration=THREAD_AUTO_ARCHIVE_MINUTES
-                )
+                log.tree("Suggestion Processing", [
+                    ("User", f"{submitter.name} ({submitter.display_name})"),
+                    ("User ID", str(submitter.id)),
+                    ("Number", f"#{suggestion_num}"),
+                    ("Length", f"{len(content)} chars"),
+                ], emoji="⏳")
 
-                # Send welcome message in thread
-                thread_embed = discord.Embed(
-                    description=(
-                        "💬 **Discussion Thread**\n\n"
-                        "Share your thoughts on this suggestion!\n"
-                        "Staff will review and update the status."
-                    ),
+                # Create embed
+                embed = discord.Embed(
+                    title=f"Suggestion #{suggestion_num}",
+                    description=content,
                     color=COLOR_SYRIA_GREEN
                 )
-                set_footer(thread_embed)
-                await thread.send(embed=thread_embed)
+                embed.set_author(
+                    name=submitter.display_name,
+                    icon_url=submitter.display_avatar.url
+                )
+                embed.add_field(name="Status", value="⏳ Pending Review", inline=True)
+                embed.add_field(
+                    name="\u200b",
+                    value="*Use `/suggest` to share yours*",
+                    inline=False
+                )
+                set_footer(embed)
 
-                log.tree("Suggestion Thread Created", [
+                # Send to channel
+                msg = await channel.send(embed=embed)
+
+                log.tree("Suggestion Message Sent", [
                     ("Number", f"#{suggestion_num}"),
-                    ("Thread ID", str(thread.id)),
-                    ("Thread Name", thread.name),
-                ], emoji="🧵")
+                    ("Message ID", str(msg.id)),
+                    ("Channel", channel.name),
+                ], emoji="📨")
+
+                # Add heart reaction
+                try:
+                    await msg.add_reaction(EMOJI_HEART)
+                    log.tree("Suggestion Reaction Added", [
+                        ("Number", f"#{suggestion_num}"),
+                        ("Emoji", "Custom heart"),
+                    ], emoji="❤️")
+                except discord.Forbidden:
+                    log.tree("Suggestion Reaction Forbidden", [
+                        ("Number", f"#{suggestion_num}"),
+                        ("Reason", "Missing permissions"),
+                    ], emoji="⚠️")
+                except discord.HTTPException as e:
+                    log.tree("Suggestion Reaction Failed", [
+                        ("Number", f"#{suggestion_num}"),
+                        ("Error", str(e)[:LOG_CONTENT_TRUNCATE]),
+                    ], emoji="⚠️")
+
+                # Create thread for discussion
+                thread: Optional[discord.Thread] = None
+                try:
+                    thread = await msg.create_thread(
+                        name=f"Suggestion #{suggestion_num}",
+                        auto_archive_duration=THREAD_AUTO_ARCHIVE_MINUTES
+                    )
+
+                    # Send welcome message in thread
+                    thread_embed = discord.Embed(
+                        description=(
+                            "💬 **Discussion Thread**\n\n"
+                            "Share your thoughts on this suggestion!\n"
+                            "Staff will review and update the status."
+                        ),
+                        color=COLOR_SYRIA_GREEN
+                    )
+                    set_footer(thread_embed)
+                    await thread.send(embed=thread_embed)
+
+                    log.tree("Suggestion Thread Created", [
+                        ("Number", f"#{suggestion_num}"),
+                        ("Thread ID", str(thread.id)),
+                        ("Thread Name", thread.name),
+                    ], emoji="🧵")
+                except discord.Forbidden:
+                    log.tree("Suggestion Thread Forbidden", [
+                        ("Number", f"#{suggestion_num}"),
+                        ("Reason", "Missing permissions"),
+                    ], emoji="⚠️")
+                except discord.HTTPException as e:
+                    log.tree("Suggestion Thread Failed", [
+                        ("Number", f"#{suggestion_num}"),
+                        ("Error", str(e)[:LOG_CONTENT_TRUNCATE]),
+                    ], emoji="⚠️")
+
+                # Save to database
+                suggestion_id = await asyncio.to_thread(
+                    db.create_suggestion,
+                    content,
+                    submitter.id,
+                    msg.id
+                )
+
+                if suggestion_id is None:
+                    log.tree("Suggestion Database Failed", [
+                        ("Number", f"#{suggestion_num}"),
+                        ("User", f"{submitter.name}"),
+                        ("Reason", "Failed to create in database"),
+                    ], emoji="❌")
+                    try:
+                        await msg.delete()
+                        if thread:
+                            await thread.delete()
+                    except discord.HTTPException:
+                        pass
+                    return False, "Failed to save suggestion"
+
+                log.tree("Suggestion Submitted", [
+                    ("ID", str(suggestion_id)),
+                    ("Number", f"#{suggestion_num}"),
+                    ("User", f"{submitter.name} ({submitter.display_name})"),
+                    ("User ID", str(submitter.id)),
+                    ("Message ID", str(msg.id)),
+                    ("Thread", thread.name if thread else "None"),
+                    ("Length", f"{len(content)} chars"),
+                ], emoji="💡")
+
+                # Send notification to general
+                await self._send_notification(msg, suggestion_num, thread)
+
+                return True, f"Suggestion #{suggestion_num} submitted!"
+
             except discord.Forbidden:
-                log.tree("Suggestion Thread Forbidden", [
-                    ("Number", f"#{suggestion_num}"),
+                log.tree("Suggestion Submit Forbidden", [
+                    ("User", f"{submitter.name} ({submitter.display_name})"),
+                    ("User ID", str(submitter.id)),
                     ("Reason", "Missing permissions"),
                 ], emoji="⚠️")
+                return False, "Missing permissions to post suggestions"
             except discord.HTTPException as e:
-                log.tree("Suggestion Thread Failed", [
-                    ("Number", f"#{suggestion_num}"),
-                    ("Error", str(e)[:LOG_CONTENT_TRUNCATE]),
-                ], emoji="⚠️")
-
-            # Save to database
-            suggestion_id = await asyncio.to_thread(
-                db.create_suggestion,
-                content,
-                submitter.id,
-                msg.id
-            )
-
-            if suggestion_id is None:
-                log.tree("Suggestion Database Failed", [
-                    ("Number", f"#{suggestion_num}"),
-                    ("User", f"{submitter.name}"),
-                    ("Reason", "Failed to create in database"),
-                ], emoji="❌")
-                try:
-                    await msg.delete()
-                    if thread:
-                        await thread.delete()
-                except discord.HTTPException:
-                    pass
-                return False, "Failed to save suggestion"
-
-            log.tree("Suggestion Submitted", [
-                ("ID", str(suggestion_id)),
-                ("Number", f"#{suggestion_num}"),
-                ("User", f"{submitter.name} ({submitter.display_name})"),
-                ("User ID", str(submitter.id)),
-                ("Message ID", str(msg.id)),
-                ("Thread", thread.name if thread else "None"),
-                ("Length", f"{len(content)} chars"),
-            ], emoji="💡")
-
-            # Send notification to general
-            await self._send_notification(msg, suggestion_num, thread)
-
-            return True, f"Suggestion #{suggestion_num} submitted!"
-
-        except discord.Forbidden:
-            log.tree("Suggestion Submit Forbidden", [
-                ("User", f"{submitter.name} ({submitter.display_name})"),
-                ("User ID", str(submitter.id)),
-                ("Reason", "Missing permissions"),
-            ], emoji="⚠️")
-            return False, "Missing permissions to post suggestions"
-        except discord.HTTPException as e:
-            log.error_tree("Suggestion Submit Failed", e, [
-                ("User", f"{submitter.name} ({submitter.display_name})"),
-                ("User ID", str(submitter.id)),
-            ])
-            return False, "Failed to submit suggestion"
+                log.error_tree("Suggestion Submit Failed", e, [
+                    ("User", f"{submitter.name} ({submitter.display_name})"),
+                    ("User ID", str(submitter.id)),
+                ])
+                return False, "Failed to submit suggestion"
 
     async def update_status(
         self,

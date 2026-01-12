@@ -53,9 +53,10 @@ class AFKService:
             return text
 
         # Step 2: Remove malformed emoji syntax (leaked IDs without proper format)
+        # Only remove IDs that look like broken emoji/mention syntax (preceded by : or <)
         text = re.sub(r'<[^>]*\d{17,20}[^>]*>', '', text)
-        text = re.sub(r'\d{17,20}>?', '', text)
-        text = re.sub(r'<a?:?\s*', '', text)
+        text = re.sub(r':\d{17,20}>?', '', text)  # :12345678901234567> patterns
+        text = re.sub(r'<a?:\w*(?=\s|$)', '', text)  # Incomplete <a:name patterns
 
         # Step 3: Clean up extra spaces
         text = re.sub(r'\s+', ' ', text).strip()

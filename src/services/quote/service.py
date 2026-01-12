@@ -9,6 +9,7 @@ Author: حَـــــنَّـــــا
 Server: discord.gg/syria
 """
 
+import asyncio
 import io
 import re
 import aiohttp
@@ -81,6 +82,7 @@ class QuoteService:
         self._font_path: Optional[str] = None
         self._font_italic_path: Optional[str] = None
         self._banner_cache: Dict[int, Tuple[Image.Image, str]] = {}
+        self._banner_lock = asyncio.Lock()
         self._find_fonts()
 
     def _find_fonts(self) -> None:
@@ -148,22 +150,27 @@ class QuoteService:
         return datetime.now(EASTERN_TZ).strftime("%Y-%m-%d")
 
     async def _get_banner(self, guild_id: int, banner_url: str) -> Optional[Image.Image]:
-        """Get banner from cache or fetch fresh."""
+        """Get banner from cache or fetch fresh (thread-safe)."""
         today = self._get_today_est()
 
-        # Check cache
-        if guild_id in self._banner_cache:
-            cached_img, cache_date = self._banner_cache[guild_id]
-            if cache_date == today:
-                return cached_img.copy()
+        # Check cache with lock to prevent race conditions
+        async with self._banner_lock:
+            if guild_id in self._banner_cache:
+                cached_img, cache_date = self._banner_cache[guild_id]
+                if cache_date == today:
+                    try:
+                        return cached_img.copy()
+                    except Exception:
+                        # Image copy failed, refetch
+                        del self._banner_cache[guild_id]
 
-        # Evict oldest entries if cache is full (simple LRU)
-        if len(self._banner_cache) >= MAX_BANNER_CACHE_SIZE:
-            # Remove first (oldest) entry
-            oldest_key = next(iter(self._banner_cache))
-            del self._banner_cache[oldest_key]
+            # Evict oldest entries if cache is full (simple LRU)
+            if len(self._banner_cache) >= MAX_BANNER_CACHE_SIZE:
+                # Remove first (oldest) entry
+                oldest_key = next(iter(self._banner_cache))
+                del self._banner_cache[oldest_key]
 
-        # Fetch fresh
+        # Fetch fresh (outside lock to avoid blocking other requests)
         banner_img = await self._fetch_image(banner_url)
         if banner_img:
             # Process banner
@@ -193,8 +200,9 @@ class QuoteService:
             # Blur and darken
             banner_img = banner_img.filter(ImageFilter.GaussianBlur(8))
 
-            # Cache it
-            self._banner_cache[guild_id] = (banner_img, today)
+            # Cache it (with lock for thread safety)
+            async with self._banner_lock:
+                self._banner_cache[guild_id] = (banner_img, today)
             return banner_img.copy()
 
         return None
