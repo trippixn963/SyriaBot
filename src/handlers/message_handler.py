@@ -51,6 +51,18 @@ class MessageHandler(commands.Cog):
         if message.author.bot:
             return
 
+        # City game - track activity and check guesses
+        if hasattr(self.bot, 'city_game_service') and self.bot.city_game_service:
+            try:
+                # Track message for inactivity
+                self.bot.city_game_service.on_message(message.channel.id)
+                # Check if this is a correct guess
+                await self.bot.city_game_service.check_guess(message)
+            except Exception as e:
+                log.tree("City Game Handler Error", [
+                    ("Error", str(e)[:50]),
+                ], emoji="❌")
+
         # Confession channel (auto-delete messages to keep it clean)
         if hasattr(self.bot, 'confession_service') and self.bot.confession_service:
             try:
