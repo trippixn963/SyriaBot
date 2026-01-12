@@ -112,6 +112,9 @@ class ConfessionsMixin:
         """
         Approve a confession and assign it a number.
 
+        Since all confessions are auto-approved, we use the DB ID as the
+        confession number to keep them in sync.
+
         Args:
             confession_id: The confession to approve
             mod_id: Discord user ID of the moderator
@@ -120,7 +123,8 @@ class ConfessionsMixin:
             The assigned confession number, or None on error
         """
         try:
-            confession_number = self.get_next_confession_number()
+            # Use DB ID as confession number (they'll always match)
+            confession_number = confession_id
 
             with self._get_conn() as conn:
                 if conn is None:
