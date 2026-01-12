@@ -600,18 +600,21 @@ class ConfessionService:
                     ("Thread Name", thread.name),
                 ], emoji="🧵")
 
-                # Send welcome message
+                # Send welcome message with reply button
+                from src.services.confessions.views import ConfessionReplyView
+
                 thread_embed = discord.Embed(
                     description=(
                         "💬 **Discussion Thread**\n\n"
-                        "Use `/reply` to respond anonymously.\n"
+                        "Click the button or use `/reply` to respond anonymously.\n"
                         "You'll get a unique ID (Anon-A, Anon-B, etc.)\n"
                         "The confessor shows as **OP** when they reply."
                     ),
                     color=COLOR_SYRIA_GREEN
                 )
                 set_footer(thread_embed)
-                await thread.send(embed=thread_embed)
+                view = ConfessionReplyView(confession_number)
+                await thread.send(embed=thread_embed, view=view)
 
                 log.tree("Thread Welcome Sent", [
                     ("Number", f"#{confession_number}"),

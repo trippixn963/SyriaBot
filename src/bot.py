@@ -32,6 +32,7 @@ from src.services.giveaway import GiveawayService
 from src.services.action_service import action_service
 from src.services.birthday_service import get_birthday_service, BirthdayService
 from src.services.faq import setup_persistent_views
+from src.services.confessions.views import setup_confession_views
 from src.services.database import db
 from src.utils.http import http_session
 
@@ -121,6 +122,7 @@ class SyriaBot(commands.Bot):
 
         # Register persistent views
         setup_persistent_views(self)
+        setup_confession_views(self)
 
         log.tree("Setup Hook Complete", [
             ("Handlers", ", ".join(loaded_handlers)),
