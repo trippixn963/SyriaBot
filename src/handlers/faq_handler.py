@@ -161,9 +161,9 @@ FAQ_PATTERNS = {
         r"how.*own.*channel",
     ],
     "report": [
-        r"how.*(report|ban)",
-        r"where.*report",
-        r"report.*someone",
+        r"how.*\b(report|ban)\b",
+        r"where.*\breport\b",
+        r"\breport\b.*someone",
         r"how.*tell.*mod",
         r"someone.*breaking.*rule",
     ],
