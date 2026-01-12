@@ -55,11 +55,12 @@ class VoiceHandler(commands.Cog):
             try:
                 await self.bot.xp_service.on_voice_update(member, before, after)
             except Exception as e:
-                log.tree("XP Voice Update Error", [
+                log.error_tree("XP Voice Update Error", e, [
                     ("User", f"{member.name} ({member.display_name})"),
                     ("ID", str(member.id)),
-                    ("Error", str(e)),
-                ], emoji="❌")
+                    ("Before Channel", str(before.channel.id) if before.channel else "None"),
+                    ("After Channel", str(after.channel.id) if after.channel else "None"),
+                ])
 
         # Track server-level voice stats (main server only)
         if member.guild.id == config.GUILD_ID:
@@ -79,11 +80,10 @@ class VoiceHandler(commands.Cog):
                     today = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
                     db.update_voice_peak(member.guild.id, today, total_voice_users)
             except Exception as e:
-                log.tree("Voice Stats Track Failed", [
+                log.error_tree("Voice Stats Track Failed", e, [
                     ("User", f"{member.name} ({member.display_name})"),
                     ("ID", str(member.id)),
-                    ("Error", str(e)[:50]),
-                ], emoji="⚠️")
+                ])
 
 
 async def setup(bot: commands.Bot) -> None:

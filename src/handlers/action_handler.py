@@ -169,7 +169,8 @@ class ActionHandler:
             gif_url = await action_service.get_action_gif(action)
             if not gif_url:
                 log.tree("Action GIF Failed", [
-                    ("User", f"{message.author.name}"),
+                    ("User", f"{message.author.name} ({message.author.display_name})"),
+                    ("ID", str(message.author.id)),
                     ("Action", action),
                     ("Reason", "API returned no URL"),
                 ], emoji="⚠️")
@@ -201,11 +202,13 @@ class ActionHandler:
                 target_id = target.id if target else None
                 await asyncio.to_thread(db.record_action, user_id, guild_id, action, target_id)
             except Exception as e:
-                log.tree("Action Stats Record Failed", [
-                    ("User", f"{message.author.name}"),
+                log.error_tree("Action Stats Record Failed", e, [
+                    ("User", f"{message.author.name} ({message.author.display_name})"),
+                    ("ID", str(user_id)),
+                    ("Guild ID", str(guild_id)),
                     ("Action", action),
-                    ("Error", str(e)[:50]),
-                ], emoji="⚠️")
+                    ("Target ID", str(target_id) if target_id else "None"),
+                ])
 
             log.tree("Action Sent", [
                 ("User", f"{message.author.name} ({message.author.display_name})"),

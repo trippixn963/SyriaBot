@@ -123,6 +123,10 @@ class Config:
     MEMES_CHANNEL_ID: int = _env_int("SYRIA_MEMES_CH")
     BUMP_CHANNEL_ID: int = _env_int("SYRIA_BUMP_CH")
     FUN_COMMANDS_CHANNEL_ID: int = _env_int("SYRIA_FUN_CH")
+    ROLES_CHANNEL_ID: int = _env_int("SYRIA_ROLES_CH")
+    BANK_CHANNEL_ID: int = _env_int("SYRIA_BANK_CH")
+    DEBATES_CHANNEL_ID: int = _env_int("SYRIA_DEBATES_CH")
+    INBOX_CHANNEL_ID: int = _env_int("SYRIA_INBOX_CH")
 
     # ==========================================================================
     # TempVoice

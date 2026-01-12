@@ -6,7 +6,7 @@ Dead chat reviver that shows Syrian city images for users to guess.
 
 Features:
 - Triggers after 30 min of chat inactivity
-- Fetches city images from Wikipedia
+- Uses curated local images (assets/cities/)
 - First correct guess wins 1k XP
 - 10 minute time limit per game
 
@@ -15,15 +15,15 @@ Server: discord.gg/syria
 """
 
 import asyncio
+import os
 import random
 import time
+from pathlib import Path
 from typing import TYPE_CHECKING, Optional, Dict, List, Set
-from datetime import datetime
-from zoneinfo import ZoneInfo
 
-import aiohttp
 import discord
-from discord.ext import tasks
+from discord import app_commands
+from discord.ext import commands, tasks
 
 from src.core.config import config
 from src.core.colors import COLOR_SYRIA_GREEN
@@ -32,6 +32,10 @@ from src.utils.footer import set_footer
 
 if TYPE_CHECKING:
     from src.bot import SyriaBot
+
+
+# Path to city images
+ASSETS_PATH = Path(__file__).parent.parent.parent / "assets" / "cities"
 
 
 # =============================================================================
@@ -47,129 +51,93 @@ GAME_COOLDOWN = 60 * 60  # 1 hour cooldown between games
 
 
 # =============================================================================
-# Syrian Cities Data
+# Syrian Governorates Data (14 Governorates)
 # =============================================================================
 
-SYRIAN_CITIES = [
+SYRIAN_GOVERNORATES = [
     {
         "english": "Damascus",
         "arabic": "دمشق",
         "aliases": ["dimashq", "sham", "الشام"],
-        "wiki": "Damascus",
+        "folder": "damascus",
+    },
+    {
+        "english": "Rif Dimashq",
+        "arabic": "ريف دمشق",
+        "aliases": ["rif dimashq", "damascus countryside", "ريف الشام"],
+        "folder": "rif_dimashq",
     },
     {
         "english": "Aleppo",
         "arabic": "حلب",
         "aliases": ["halab"],
-        "wiki": "Aleppo",
+        "folder": "aleppo",
     },
     {
         "english": "Homs",
         "arabic": "حمص",
         "aliases": ["hims"],
-        "wiki": "Homs",
-    },
-    {
-        "english": "Latakia",
-        "arabic": "اللاذقية",
-        "aliases": ["lattakia", "al-ladhiqiyah", "اللازقية"],
-        "wiki": "Latakia",
+        "folder": "homs",
     },
     {
         "english": "Hama",
         "arabic": "حماة",
         "aliases": ["hamah", "حماه"],
-        "wiki": "Hama",
+        "folder": "hama",
+    },
+    {
+        "english": "Latakia",
+        "arabic": "اللاذقية",
+        "aliases": ["lattakia", "al-ladhiqiyah", "اللازقية"],
+        "folder": "latakia",
     },
     {
         "english": "Tartus",
         "arabic": "طرطوس",
-        "aliases": ["tartous", "tartous"],
-        "wiki": "Tartus",
-    },
-    {
-        "english": "Deir ez-Zor",
-        "arabic": "دير الزور",
-        "aliases": ["deir ezzor", "deir al-zor", "دير ازور"],
-        "wiki": "Deir_ez-Zor",
-    },
-    {
-        "english": "Raqqa",
-        "arabic": "الرقة",
-        "aliases": ["ar-raqqah", "rakka", "الرقه"],
-        "wiki": "Raqqa",
+        "aliases": ["tartous"],
+        "folder": "tartus",
     },
     {
         "english": "Idlib",
         "arabic": "إدلب",
         "aliases": ["adlib", "ادلب"],
-        "wiki": "Idlib",
+        "folder": "idlib",
+    },
+    {
+        "english": "Deir ez-Zor",
+        "arabic": "دير الزور",
+        "aliases": ["deir ezzor", "deir al-zor", "دير ازور"],
+        "folder": "deir_ez_zor",
+    },
+    {
+        "english": "Raqqa",
+        "arabic": "الرقة",
+        "aliases": ["ar-raqqah", "rakka", "الرقه"],
+        "folder": "raqqa",
+    },
+    {
+        "english": "Hasakah",
+        "arabic": "الحسكة",
+        "aliases": ["al-hasakah", "hasaka", "الحسكه"],
+        "folder": "hasakah",
     },
     {
         "english": "Daraa",
         "arabic": "درعا",
         "aliases": ["deraa", "dar'a"],
-        "wiki": "Daraa",
-    },
-    {
-        "english": "Qamishli",
-        "arabic": "القامشلي",
-        "aliases": ["qamishlo", "kamishli", "القامشلى"],
-        "wiki": "Qamishli",
-    },
-    {
-        "english": "Palmyra",
-        "arabic": "تدمر",
-        "aliases": ["tadmor", "tadmur"],
-        "wiki": "Palmyra",
-    },
-    {
-        "english": "Bosra",
-        "arabic": "بصرى",
-        "aliases": ["busra", "bosra al-sham"],
-        "wiki": "Bosra",
+        "folder": "daraa",
     },
     {
         "english": "Sweida",
         "arabic": "السويداء",
         "aliases": ["suwayda", "as-suwayda", "السويدا"],
-        "wiki": "As-Suwayda",
+        "folder": "sweida",
     },
     {
-        "english": "Masyaf",
-        "arabic": "مصياف",
-        "aliases": ["masyaf castle", "مصيف"],
-        "wiki": "Masyaf",
-    },
-    {
-        "english": "Safita",
-        "arabic": "صافيتا",
-        "aliases": ["chastel blanc"],
-        "wiki": "Safita",
-    },
-    {
-        "english": "Maaloula",
-        "arabic": "معلولا",
-        "aliases": ["maalula", "ma'loula"],
-        "wiki": "Maaloula",
-    },
-    {
-        "english": "Apamea",
-        "arabic": "أفاميا",
-        "aliases": ["afamia", "apameia"],
-        "wiki": "Apamea,_Syria",
-    },
-    {
-        "english": "Krak des Chevaliers",
-        "arabic": "قلعة الحصن",
-        "aliases": ["krak", "qalaat al-hosn", "حصن الاكراد", "قلعه الحصن"],
-        "wiki": "Krak_des_Chevaliers",
-    },
-    {
-        "english": "Ugarit",
-        "arabic": "أوغاريت",
-        "aliases": ["ras shamra", "رأس شمرا"],
-        "wiki": "Ugarit",
+        "english": "Quneitra",
+        "arabic": "القنيطرة",
+        "aliases": ["kuneitra", "al-quneitra", "القنيطره"],
+        "folder": "quneitra",
     },
 ]
 
@@ -189,12 +157,11 @@ class CityGameService:
         self._game_message: Optional[discord.Message] = None
         self._game_start_time: float = 0
         self._last_game_time: float = 0
-        self._session: Optional[aiohttp.ClientSession] = None
+        self._timeout_task: Optional[asyncio.Task] = None
         self._recently_used: List[str] = []  # Track recently used cities
 
     async def setup(self) -> None:
         """Initialize the city game service."""
-        self._session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15))
         self._last_message_time = time.time()
 
         # Start the inactivity checker
@@ -206,21 +173,21 @@ class CityGameService:
             ("Inactivity", f"{INACTIVITY_THRESHOLD // 60} min"),
             ("Time Limit", f"{GUESS_TIME_LIMIT // 60} min"),
             ("Reward", f"{XP_REWARD:,} XP"),
-            ("Cities", str(len(SYRIAN_CITIES))),
+            ("Governorates", str(len(SYRIAN_GOVERNORATES))),
         ], emoji="🏙️")
 
     def stop(self) -> None:
         """Stop the city game service."""
         if self.inactivity_check.is_running():
             self.inactivity_check.cancel()
+        # Cancel any running timeout task
+        if self._timeout_task and not self._timeout_task.done():
+            self._timeout_task.cancel()
         log.tree("City Game Service Stopped", [], emoji="🛑")
 
     async def close(self) -> None:
         """Clean up resources."""
         self.stop()
-        if self._session:
-            await self._session.close()
-            self._session = None
 
     def on_message(self, channel_id: int) -> None:
         """Update last message time when a message is sent in the tracked channel."""
@@ -251,48 +218,32 @@ class CityGameService:
         """Wait for bot to be ready."""
         await self.bot.wait_until_ready()
 
-    async def _get_city_image(self, wiki_title: str) -> Optional[str]:
-        """Fetch the main image URL for a Wikipedia article."""
-        if not self._session:
+    def _get_random_image_from_folder(self, folder_name: str) -> Optional[Path]:
+        """Get a random image from a city's folder."""
+        folder_path = ASSETS_PATH / folder_name
+        if not folder_path.exists() or not folder_path.is_dir():
             return None
 
-        try:
-            # Use Wikipedia API to get page image
-            url = "https://en.wikipedia.org/api/rest_v1/page/summary/" + wiki_title
+        # Get all image files in folder
+        valid_extensions = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
+        images = [
+            f for f in folder_path.iterdir()
+            if f.is_file() and f.suffix.lower() in valid_extensions
+        ]
 
-            async with self._session.get(url) as resp:
-                if resp.status != 200:
-                    log.tree("Wiki Image Fetch Failed", [
-                        ("City", wiki_title),
-                        ("Status", str(resp.status)),
-                    ], emoji="⚠️")
-                    return None
-
-                data = await resp.json()
-
-                # Get the original image URL
-                if "originalimage" in data:
-                    return data["originalimage"]["source"]
-                elif "thumbnail" in data:
-                    return data["thumbnail"]["source"]
-
-                return None
-
-        except Exception as e:
-            log.tree("Wiki Image Error", [
-                ("City", wiki_title),
-                ("Error", str(e)[:50]),
-            ], emoji="❌")
+        if not images:
             return None
+
+        return random.choice(images)
 
     def _get_random_city(self) -> Dict:
         """Get a random city that hasn't been used recently."""
-        available = [c for c in SYRIAN_CITIES if c["english"] not in self._recently_used]
+        available = [c for c in SYRIAN_GOVERNORATES if c["english"] not in self._recently_used]
 
         if not available:
             # Reset if all cities used
             self._recently_used = []
-            available = SYRIAN_CITIES
+            available = SYRIAN_GOVERNORATES
 
         city = random.choice(available)
         self._recently_used.append(city["english"])
@@ -303,26 +254,27 @@ class CityGameService:
 
         return city
 
-    async def _start_game(self) -> None:
-        """Start a new city guessing game."""
+    async def _start_game(self, manual: bool = False) -> bool:
+        """Start a new city guessing game. Returns True if game started."""
         channel = self.bot.get_channel(GENERAL_CHANNEL_ID)
         if not channel or not isinstance(channel, discord.TextChannel):
             log.tree("City Game Channel Not Found", [
                 ("Channel ID", str(GENERAL_CHANNEL_ID)),
             ], emoji="⚠️")
-            return
+            return False
 
         # Select a city
         city = self._get_random_city()
 
-        # Get image
-        image_url = await self._get_city_image(city["wiki"])
-        if not image_url:
+        # Get random image from city folder
+        image_path = self._get_random_image_from_folder(city["folder"])
+        if not image_path:
             log.tree("City Game Skipped", [
                 ("City", city["english"]),
-                ("Reason", "No image found"),
+                ("Folder", city["folder"]),
+                ("Reason", "No images in folder"),
             ], emoji="⚠️")
-            return
+            return False
 
         self._game_active = True
         self._current_city = city
@@ -339,29 +291,38 @@ class CityGameService:
             ),
             color=COLOR_SYRIA_GREEN
         )
-        embed.set_image(url=image_url)
+        # Use attachment for local image
+        embed.set_image(url=f"attachment://{image_path.name}")
         set_footer(embed)
 
         try:
+            # Create file attachment from local image
+            file = discord.File(image_path, filename=image_path.name)
+
             self._game_message = await channel.send(
                 content=f"<@&{DEAD_CHAT_ROLE_ID}>",
                 embed=embed,
+                file=file,
                 allowed_mentions=discord.AllowedMentions(roles=True)
             )
 
+            trigger = "Manual" if manual else "Inactivity"
             log.tree("City Game Started", [
                 ("City", city["english"]),
                 ("Arabic", city["arabic"]),
                 ("Channel", channel.name),
+                ("Trigger", trigger),
             ], emoji="🏙️")
 
-            # Start timeout task
-            asyncio.create_task(self._game_timeout())
+            # Start timeout task (and store reference for cleanup)
+            self._timeout_task = asyncio.create_task(self._game_timeout())
+            return True
 
         except Exception as e:
             self._game_active = False
             self._current_city = None
             log.error_tree("City Game Start Failed", e)
+            return False
 
     async def _game_timeout(self) -> None:
         """Handle game timeout after time limit."""
@@ -413,6 +374,11 @@ class CityGameService:
 
         self._game_active = False
         self._last_game_time = time.time()
+
+        # Cancel timeout task if game ended early (correct guess)
+        if not timed_out and self._timeout_task and not self._timeout_task.done():
+            self._timeout_task.cancel()
+            self._timeout_task = None
 
         if timed_out:
             # No winner
@@ -479,6 +445,46 @@ class CityGameService:
         self._current_city = None
         self._game_message = None
 
+    async def manual_start(self) -> tuple[bool, str]:
+        """
+        Manually trigger a city game (for admin testing).
+
+        Returns (success, message).
+        """
+        if self._game_active:
+            return False, "A game is already in progress!"
+
+        # Bypass cooldown for manual trigger
+        success = await self._start_game(manual=True)
+        if success:
+            return True, "City guessing game started!"
+        return False, "Failed to start game (check if city images exist in assets/cities/)"
+
+
+# =============================================================================
+# Admin Command
+# =============================================================================
+
+class CityGameCog(commands.Cog):
+    """Admin commands for city game."""
+
+    def __init__(self, bot: "SyriaBot") -> None:
+        self.bot = bot
+
+    @app_commands.command(name="deadchat", description="Manually start a governorate guessing game (Admin)")
+    @app_commands.default_permissions(administrator=True)
+    async def deadchat(self, interaction: discord.Interaction) -> None:
+        """Manually trigger a governorate guessing game."""
+        if not self.bot.city_game_service:
+            await interaction.response.send_message(
+                "City game service is not running.",
+                ephemeral=True
+            )
+            return
+
+        success, message = await self.bot.city_game_service.manual_start()
+        await interaction.response.send_message(message, ephemeral=True)
+
 
 # Singleton
 city_game_service: Optional[CityGameService] = None
@@ -490,3 +496,11 @@ def get_city_game_service(bot: "SyriaBot" = None) -> Optional[CityGameService]:
     if city_game_service is None and bot is not None:
         city_game_service = CityGameService(bot)
     return city_game_service
+
+
+async def setup_city_game_cog(bot: "SyriaBot") -> None:
+    """Add the city game admin command cog."""
+    await bot.add_cog(CityGameCog(bot))
+    log.tree("City Game Cog Loaded", [
+        ("Command", "/deadchat"),
+    ], emoji="🏙️")

@@ -446,10 +446,11 @@ class SyriaAPI:
             })
 
         except Exception as e:
-            log.tree("Leaderboard API Error", [
+            log.error_tree("Leaderboard API Error", e, [
                 ("Client IP", client_ip),
-                ("Error", str(e)),
-            ], emoji="❌")
+                ("Limit", str(request.query.get("limit", "50"))),
+                ("Offset", str(request.query.get("offset", "0"))),
+            ])
             return web.json_response(
                 {"error": "Internal server error"},
                 status=500,
@@ -528,10 +529,10 @@ class SyriaAPI:
                 headers={"Access-Control-Allow-Origin": "*"}
             )
         except Exception as e:
-            log.tree("User API Error", [
+            log.error_tree("User API Error", e, [
                 ("Client IP", client_ip),
-                ("Error", str(e)),
-            ], emoji="❌")
+                ("User ID", request.match_info.get("user_id", "unknown")),
+            ])
             return web.json_response(
                 {"error": "Internal server error"},
                 status=500,
@@ -619,10 +620,9 @@ class SyriaAPI:
             })
 
         except Exception as e:
-            log.tree("Stats API Error", [
+            log.error_tree("Stats API Error", e, [
                 ("Client IP", client_ip),
-                ("Error", str(e)),
-            ], emoji="❌")
+            ])
             return web.json_response(
                 {"error": "Internal server error"},
                 status=500,
@@ -952,9 +952,7 @@ class SyriaAPI:
                 ], emoji="⏹️")
                 break
             except Exception as e:
-                log.tree("Midnight Refresh Scheduler Error", [
-                    ("Error", str(e)[:100]),
-                ], emoji="❌")
+                log.error_tree("Midnight Refresh Scheduler Error", e)
                 # Wait an hour before retrying on error
                 await asyncio.sleep(3600)
 

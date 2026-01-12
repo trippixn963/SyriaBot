@@ -545,6 +545,30 @@ class TranslateService:
                 source_name, source_flag = self.get_language_info(source_lang)
                 target_name, target_flag = self.get_language_info(target_lang)
 
+                # Verify DeepL actually returned the target language
+                # DeepL sometimes returns English when it can't translate to target
+                result_lang = self.detect_language(translated)
+                if result_lang and result_lang != target_lang:
+                    # Check if result is English but we wanted something else
+                    if result_lang == "en" and target_lang != "en":
+                        log.tree("DeepL Wrong Language", [
+                            ("Expected", f"{target_name} ({target_lang})"),
+                            ("Got", f"English ({result_lang})"),
+                            ("Fallback", "Google Translate"),
+                        ], emoji="⚠️")
+                        return TranslationResult(
+                            success=False,
+                            original_text=text,
+                            translated_text="",
+                            source_lang=source_lang,
+                            target_lang=target_lang,
+                            source_name="",
+                            target_name="",
+                            source_flag="",
+                            target_flag="",
+                            error="DeepL returned wrong language"
+                        )
+
                 log.tree("DeepL Translation Complete", [
                     ("From", f"{source_name} {source_flag}"),
                     ("To", f"{target_name} {target_flag}"),
@@ -597,6 +621,12 @@ class TranslateService:
                 error=str(e)
             )
 
+    # GoogleTranslator uses ISO codes, not legacy Google codes
+    GOOGLE_LANG_MAP = {
+        "iw": "he",  # Hebrew: iw → he (ISO standard)
+        "jw": "jv",  # Javanese: jw → jv
+    }
+
     async def _translate_google(
         self,
         text: str,
@@ -604,8 +634,12 @@ class TranslateService:
         target_lang: str
     ) -> TranslationResult:
         """Translate using Google Translate (fallback)."""
+        # Map legacy codes to ISO codes for deep_translator
+        google_source = self.GOOGLE_LANG_MAP.get(source_lang, source_lang)
+        google_target = self.GOOGLE_LANG_MAP.get(target_lang, target_lang)
+
         try:
-            translator = GoogleTranslator(source=source_lang, target=target_lang)
+            translator = GoogleTranslator(source=google_source, target=google_target)
             translated = await asyncio.to_thread(translator.translate, text)
 
             source_name, source_flag = self.get_language_info(source_lang)

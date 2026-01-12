@@ -31,9 +31,10 @@ from src.services.currency_service import CurrencyService
 from src.services.giveaway import GiveawayService
 from src.services.action_service import action_service
 from src.services.birthday_service import get_birthday_service, BirthdayService
-from src.services.city_game import get_city_game_service, CityGameService
+from src.services.city_game import get_city_game_service, CityGameService, setup_city_game_cog
 from src.services.faq import setup_persistent_views
 from src.services.confessions.views import setup_confession_views
+from src.services.guide import setup_guide_views
 from src.services.database import db
 from src.utils.http import http_session
 
@@ -106,11 +107,11 @@ class SyriaBot(commands.Bot):
             "src.commands.afk",
             "src.commands.image",
             "src.commands.confess",
-            "src.commands.rules",
             "src.commands.suggest",
             "src.commands.giveaway",
             "src.commands.birthday",
             "src.commands.faq",
+            "src.commands.guide",
         ]
         loaded_commands = []
         for cmd in commands_list:
@@ -125,6 +126,7 @@ class SyriaBot(commands.Bot):
         # Register persistent views
         setup_persistent_views(self)
         setup_confession_views(self)
+        setup_guide_views(self)
 
         log.tree("Setup Hook Complete", [
             ("Handlers", ", ".join(loaded_handlers)),
@@ -316,13 +318,14 @@ class SyriaBot(commands.Bot):
         except Exception as e:
             log.error_tree("Birthday Service Init Failed", e)
 
-        # City Game (dead chat reviver)
-        try:
-            self.city_game_service = get_city_game_service(self)
-            await self.city_game_service.setup()
-            initialized.append("CityGame")
-        except Exception as e:
-            log.error_tree("City Game Service Init Failed", e)
+        # City Game (dead chat reviver) - DISABLED until images are added manually
+        # try:
+        #     self.city_game_service = get_city_game_service(self)
+        #     await self.city_game_service.setup()
+        #     await setup_city_game_cog(self)
+        #     initialized.append("CityGame")
+        # except Exception as e:
+        #     log.error_tree("City Game Service Init Failed", e)
 
         log.tree("Services Init Complete", [
             ("Services", ", ".join(initialized)),

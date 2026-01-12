@@ -5,6 +5,7 @@ XP System - Utility Functions
 Level calculations and XP formulas.
 """
 
+import math
 from typing import Tuple
 
 from src.core.constants import XP_BASE_MULTIPLIER
@@ -14,28 +15,47 @@ def xp_for_level(level: int) -> int:
     """
     Calculate total XP needed to reach a level.
 
-    Formula: XP_BASE_MULTIPLIER * level^1.5
+    Formula:
+        Levels 1-5:  100 * level^1.5 (easy early game)
+        Levels 6+:   1118 + 100 * (level-5)^2 (harder scaling)
 
     Examples:
-        Level 1:   100 XP
-        Level 10:  3,162 XP
-        Level 50:  35,355 XP
-        Level 100: 100,000 XP
+        Level 1:     100 XP
+        Level 5:     1,118 XP
+        Level 10:    3,618 XP
+        Level 50:    203,618 XP
+        Level 100:   903,618 XP
     """
     if level <= 0:
         return 0
-    return int(XP_BASE_MULTIPLIER * (level ** 1.5))
+    if level <= 5:
+        # Easy early levels
+        return int(XP_BASE_MULTIPLIER * (level ** 1.5))
+    else:
+        # Harder scaling after level 5 (quadratic growth)
+        xp_at_5 = int(XP_BASE_MULTIPLIER * (5 ** 1.5))  # 1118
+        return xp_at_5 + int(XP_BASE_MULTIPLIER * ((level - 5) ** 2))
 
 
 def level_from_xp(xp: int) -> int:
     """
     Calculate level from total XP.
 
-    Inverse of xp_for_level: level = (xp / XP_BASE_MULTIPLIER)^(2/3)
+    Inverse of xp_for_level (piecewise).
     """
     if xp <= 0:
         return 0
-    return int((xp / XP_BASE_MULTIPLIER) ** (2 / 3))
+
+    # XP threshold at level 5
+    xp_at_5 = int(XP_BASE_MULTIPLIER * (5 ** 1.5))  # 1118
+
+    if xp < xp_at_5:
+        # Easy formula: level = (xp / 100)^(2/3)
+        return int((xp / XP_BASE_MULTIPLIER) ** (2 / 3))
+    else:
+        # Hard formula: level = 5 + sqrt((xp - 1118) / 100)
+        # At exactly xp_at_5, this returns 5
+        return 5 + int(math.sqrt((xp - xp_at_5) / XP_BASE_MULTIPLIER))
 
 
 def xp_progress(xp: int) -> Tuple[int, int, int, float]:

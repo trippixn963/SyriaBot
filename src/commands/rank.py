@@ -262,10 +262,10 @@ class RankCog(commands.Cog):
                     ephemeral=True,
                 )
             except discord.HTTPException as e:
-                log.tree("Rank Cooldown Response Failed", [
-                    ("User", f"{interaction.user.name}"),
-                    ("Error", str(e)[:50]),
-                ], emoji="⚠️")
+                log.error_tree("Rank Cooldown Response Failed", e, [
+                    ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                    ("ID", str(interaction.user.id)),
+                ])
 
             log.tree("Rank Cooldown", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
@@ -274,11 +274,10 @@ class RankCog(commands.Cog):
             ], emoji="⏳")
             return
 
-        log.tree("Rank Command Error", [
+        log.error_tree("Rank Command Error", error, [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
-            ("Error", str(error)),
-        ], emoji="❌")
+        ])
 
         try:
             if not interaction.response.is_done():
@@ -292,10 +291,10 @@ class RankCog(commands.Cog):
                     ephemeral=True,
                 )
         except discord.HTTPException as e:
-            log.tree("Rank Error Response Failed", [
-                ("User", f"{interaction.user.name}"),
-                ("Error", str(e)[:50]),
-            ], emoji="⚠️")
+            log.error_tree("Rank Error Response Failed", e, [
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("ID", str(interaction.user.id)),
+            ])
 
 
 async def setup(bot: commands.Bot) -> None:

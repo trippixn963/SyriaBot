@@ -420,10 +420,9 @@ class ActionService:
                 ("URL", url),
             ], emoji="⏳")
         except Exception as e:
-            log.tree("Nekos.best API Error", [
+            log.error_tree("Nekos.best API Error", e, [
                 ("Endpoint", endpoint),
-                ("Error", str(e)[:80]),
-            ], emoji="⚠️")
+            ])
         return None
 
     async def _fetch_from_waifu_pics(self, endpoint: str) -> Optional[str]:
@@ -442,10 +441,9 @@ class ActionService:
                 ("URL", url),
             ], emoji="⏳")
         except Exception as e:
-            log.tree("Waifu.pics API Error", [
+            log.error_tree("Waifu.pics API Error", e, [
                 ("Endpoint", endpoint),
-                ("Error", str(e)[:80]),
-            ], emoji="⚠️")
+            ])
         return None
 
     async def get_action_gif(self, action: str) -> Optional[str]:

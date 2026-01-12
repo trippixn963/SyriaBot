@@ -201,11 +201,11 @@ class FunHandler:
 
             return result
         except Exception as e:
-            log.tree("Fun Command Failed", [
+            log.error_tree("Fun Command Failed", e, [
                 ("Command", command),
-                ("User", f"{message.author.name}"),
-                ("Error", str(e)[:50]),
-            ], emoji="❌")
+                ("User", f"{message.author.name} ({message.author.display_name})"),
+                ("ID", str(message.author.id)),
+            ])
             embed = discord.Embed(
                 description="Failed to generate image. Please try again.",
                 color=COLOR_ERROR

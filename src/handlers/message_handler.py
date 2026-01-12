@@ -59,9 +59,11 @@ class MessageHandler(commands.Cog):
                 # Check if this is a correct guess
                 await self.bot.city_game_service.check_guess(message)
             except Exception as e:
-                log.tree("City Game Handler Error", [
-                    ("Error", str(e)[:50]),
-                ], emoji="❌")
+                log.error_tree("City Game Handler Error", e, [
+                    ("User", f"{message.author.name} ({message.author.display_name})"),
+                    ("ID", str(message.author.id)),
+                    ("Channel", str(message.channel.id)),
+                ])
 
         # Confession channel (auto-delete messages to keep it clean)
         if hasattr(self.bot, 'confession_service') and self.bot.confession_service:
@@ -69,9 +71,10 @@ class MessageHandler(commands.Cog):
                 if await self.bot.confession_service.handle_message(message):
                     return  # Message was deleted
             except Exception as e:
-                log.tree("Confession Handler Error", [
-                    ("Error", str(e)[:50]),
-                ], emoji="❌")
+                log.error_tree("Confession Handler Error", e, [
+                    ("User", f"{message.author.name} ({message.author.display_name})"),
+                    ("ID", str(message.author.id)),
+                ])
 
         # Suggestions channel (auto-delete messages to keep it clean)
         if hasattr(self.bot, 'suggestion_service') and self.bot.suggestion_service:
@@ -79,9 +82,10 @@ class MessageHandler(commands.Cog):
                 if await self.bot.suggestion_service.handle_message(message):
                     return  # Message was deleted
             except Exception as e:
-                log.tree("Suggestion Handler Error", [
-                    ("Error", str(e)[:50]),
-                ], emoji="❌")
+                log.error_tree("Suggestion Handler Error", e, [
+                    ("User", f"{message.author.name} ({message.author.display_name})"),
+                    ("ID", str(message.author.id)),
+                ])
 
         # Gallery service (media-only channel)
         if hasattr(self.bot, 'gallery_service') and self.bot.gallery_service:
@@ -89,47 +93,51 @@ class MessageHandler(commands.Cog):
                 if await self.bot.gallery_service.on_message(message):
                     return  # Gallery handled it
             except Exception as e:
-                log.tree("Gallery Handler Error", [
-                    ("Error", str(e)[:50]),
-                ], emoji="❌")
+                log.error_tree("Gallery Handler Error", e, [
+                    ("User", f"{message.author.name} ({message.author.display_name})"),
+                    ("ID", str(message.author.id)),
+                    ("Channel", str(message.channel.id)),
+                ])
 
         # TempVoice sticky panel
         if hasattr(self.bot, 'tempvoice') and self.bot.tempvoice:
             try:
                 await self.bot.tempvoice.on_message(message)
             except Exception as e:
-                log.tree("TempVoice Handler Error", [
-                    ("Error", str(e)[:50]),
-                ], emoji="❌")
+                log.error_tree("TempVoice Handler Error", e, [
+                    ("User", f"{message.author.name} ({message.author.display_name})"),
+                    ("ID", str(message.author.id)),
+                ])
 
         # XP gain from messages
         if hasattr(self.bot, 'xp_service') and self.bot.xp_service:
             try:
                 await self.bot.xp_service.on_message(message)
             except Exception as e:
-                log.tree("XP Handler Error", [
-                    ("Error", str(e)[:50]),
-                ], emoji="❌")
+                log.error_tree("XP Handler Error", e, [
+                    ("User", f"{message.author.name} ({message.author.display_name})"),
+                    ("ID", str(message.author.id)),
+                ])
 
         # Track images shared (non-blocking)
         if message.guild and message.guild.id == config.GUILD_ID and message.attachments:
             try:
                 await asyncio.to_thread(db.increment_images_shared, message.author.id, message.guild.id)
             except Exception as e:
-                log.tree("Image Track Failed", [
+                log.error_tree("Image Track Failed", e, [
                     ("User", f"{message.author.name} ({message.author.display_name})"),
                     ("ID", str(message.author.id)),
-                    ("Error", str(e)[:50]),
-                ], emoji="⚠️")
+                ])
 
         # AFK service
         if message.guild and hasattr(self.bot, 'afk_service') and self.bot.afk_service:
             try:
                 await self.bot.afk_service.on_message(message)
             except Exception as e:
-                log.tree("AFK Handler Error", [
-                    ("Error", str(e)[:50]),
-                ], emoji="❌")
+                log.error_tree("AFK Handler Error", e, [
+                    ("User", f"{message.author.name} ({message.author.display_name})"),
+                    ("ID", str(message.author.id)),
+                ])
 
         # FAQ auto-responder (watches for questions)
         if message.guild:
@@ -137,9 +145,10 @@ class MessageHandler(commands.Cog):
                 if await faq_handler.handle(message):
                     return  # FAQ was sent
             except Exception as e:
-                log.tree("FAQ Handler Error", [
-                    ("Error", str(e)[:50]),
-                ], emoji="❌")
+                log.error_tree("FAQ Handler Error", e, [
+                    ("User", f"{message.author.name} ({message.author.display_name})"),
+                    ("ID", str(message.author.id)),
+                ])
 
         # Action commands (slap @user, hug @user, cry, etc.)
         if message.guild:
@@ -147,9 +156,10 @@ class MessageHandler(commands.Cog):
                 if await action_handler.handle(message):
                     return  # Action was handled
             except Exception as e:
-                log.tree("Action Handler Error", [
-                    ("Error", str(e)[:50]),
-                ], emoji="❌")
+                log.error_tree("Action Handler Error", e, [
+                    ("User", f"{message.author.name} ({message.author.display_name})"),
+                    ("ID", str(message.author.id)),
+                ])
 
         # Fun commands (ship, simp, howgay, howsmart, bodyfat)
         if message.guild:
@@ -157,18 +167,20 @@ class MessageHandler(commands.Cog):
                 if await fun_handler.handle(message):
                     return  # Fun command was handled
             except Exception as e:
-                log.tree("Fun Handler Error", [
-                    ("Error", str(e)[:50]),
-                ], emoji="❌")
+                log.error_tree("Fun Handler Error", e, [
+                    ("User", f"{message.author.name} ({message.author.display_name})"),
+                    ("ID", str(message.author.id)),
+                ])
 
         # Reply commands (convert, quote, translate, download)
         try:
             if await self.reply_handler.handle(message):
                 return  # Reply command was handled
         except Exception as e:
-            log.tree("Reply Handler Error", [
-                ("Error", str(e)[:50]),
-            ], emoji="❌")
+            log.error_tree("Reply Handler Error", e, [
+                ("User", f"{message.author.name} ({message.author.display_name})"),
+                ("ID", str(message.author.id)),
+            ])
 
     @commands.Cog.listener()
     async def on_reaction_add(self, reaction: discord.Reaction, user: discord.User) -> None:
@@ -185,9 +197,10 @@ class MessageHandler(commands.Cog):
                 if await self.bot.gallery_service.on_reaction_add(reaction, user):
                     return  # Gallery handled it
             except Exception as e:
-                log.tree("Gallery Reaction Handler Error", [
-                    ("Error", str(e)[:50]),
-                ], emoji="❌")
+                log.error_tree("Gallery Reaction Handler Error", e, [
+                    ("User", f"{user.name} ({user.display_name})"),
+                    ("ID", str(user.id)),
+                ])
 
         # Track reactions in main server (non-blocking)
         if reaction.message.guild.id != config.GUILD_ID:
@@ -196,11 +209,10 @@ class MessageHandler(commands.Cog):
         try:
             await asyncio.to_thread(db.increment_reactions_given, user.id, reaction.message.guild.id)
         except Exception as e:
-            log.tree("Reaction Track Failed", [
+            log.error_tree("Reaction Track Failed", e, [
                 ("User", f"{user.name} ({user.display_name})"),
                 ("ID", str(user.id)),
-                ("Error", str(e)[:50]),
-            ], emoji="⚠️")
+            ])
 
 
 async def setup(bot: commands.Bot) -> None:

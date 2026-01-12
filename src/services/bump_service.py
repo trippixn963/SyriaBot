@@ -90,9 +90,9 @@ class BumpService:
                         ("Last Bump", f"{elapsed_min} min ago"),
                     ], emoji="📊")
         except Exception as e:
-            log.tree("Bump Data Load Failed", [
-                ("Error", str(e)[:50]),
-            ], emoji="⚠️")
+            log.error_tree("Bump Data Load Failed", e, [
+                ("File", str(self.DATA_FILE)),
+            ])
 
     def _save_data(self) -> None:
         """Save bump data to file."""
@@ -104,9 +104,9 @@ class BumpService:
                     "last_reminder_time": self._last_reminder_time,
                 }, f, indent=2)
         except Exception as e:
-            log.tree("Bump Data Save Failed", [
-                ("Error", str(e)[:50]),
-            ], emoji="⚠️")
+            log.error_tree("Bump Data Save Failed", e, [
+                ("File", str(self.DATA_FILE)),
+            ])
 
     def record_bump(self) -> None:
         """Record that a bump just happened."""
@@ -234,16 +234,17 @@ class BumpService:
                 ("Time", datetime.now(timezone.utc).strftime("%H:%M UTC")),
             ], emoji="📢")
 
-        except discord.Forbidden:
-            log.tree("Bump Reminder Failed", [
+        except discord.Forbidden as e:
+            log.error_tree("Bump Reminder Failed", e, [
                 ("Reason", "Missing permissions"),
                 ("Channel", f"#{channel.name}"),
-            ], emoji="⚠️")
+                ("Channel ID", str(channel.id)),
+            ])
         except discord.HTTPException as e:
-            log.tree("Bump Reminder Failed", [
-                ("Error", str(e)[:50]),
+            log.error_tree("Bump Reminder Failed", e, [
                 ("Channel", f"#{channel.name}"),
-            ], emoji="❌")
+                ("Channel ID", str(channel.id)),
+            ])
 
 
 # Global instance

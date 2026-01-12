@@ -83,9 +83,7 @@ class PresenceHandler:
                 messages.append(f"🎙️ {format_number(voice_hours)}h in voice")
 
         except Exception as e:
-            log.tree("Presence Stats Error", [
-                ("Error", str(e)[:50]),
-            ], emoji="⚠️")
+            log.error_tree("Presence Stats Error", e)
 
         # Fallback if no stats available
         if not messages:
@@ -134,9 +132,7 @@ class PresenceHandler:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                log.tree("Presence Rotation Error", [
-                    ("Error", str(e)[:50]),
-                ], emoji="⚠️")
+                log.error_tree("Presence Rotation Error", e)
                 await asyncio.sleep(PRESENCE_UPDATE_INTERVAL)
 
     async def _promo_loop(self) -> None:
@@ -190,9 +186,7 @@ class PresenceHandler:
                 break
             except Exception as e:
                 self._is_promo_active = False
-                log.tree("Promo Loop Error", [
-                    ("Error", str(e)[:50]),
-                ], emoji="⚠️")
+                log.error_tree("Promo Loop Error", e)
                 await asyncio.sleep(60)
 
     async def setup(self) -> None:
