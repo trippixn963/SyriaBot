@@ -473,30 +473,23 @@ class ConfessionService:
             ], emoji="❌")
             return False
 
-        log.tree("Confession Submitted", [
-            ("ID", str(confession_id)),
-            ("User", f"{submitter.name} ({submitter.display_name})"),
-            ("User ID", str(submitter.id)),
-            ("Length", f"{len(content)} chars"),
-        ], emoji="📝")
-
         # Auto-approve and publish
         confession_number = await asyncio.to_thread(db.approve_confession, confession_id, self.bot.user.id)
         if confession_number is None:
             log.tree("Confession Auto-Approve Failed", [
-                ("ID", str(confession_id)),
+                ("DB ID", str(confession_id)),
                 ("User", f"{submitter.name} ({submitter.display_name})"),
                 ("User ID", str(submitter.id)),
                 ("Reason", "Database approval failed"),
             ], emoji="❌")
             return False
 
-        log.tree("Confession Auto-Approved", [
-            ("ID", str(confession_id)),
-            ("Number", f"#{confession_number}"),
+        log.tree("Confession Submitted", [
+            ("Confession", f"#{confession_number}"),
             ("User", f"{submitter.name} ({submitter.display_name})"),
             ("User ID", str(submitter.id)),
-        ], emoji="✅")
+            ("Length", f"{len(content)} chars"),
+        ], emoji="📝")
 
         # Store submitter for OP tracking in replies
         self._confession_submitters[confession_number] = submitter.id
@@ -507,16 +500,13 @@ class ConfessionService:
 
         if success:
             log.tree("Confession Published", [
-                ("ID", str(confession_id)),
-                ("Number", f"#{confession_number}"),
+                ("Confession", f"#{confession_number}"),
                 ("User", f"{submitter.name} ({submitter.display_name})"),
                 ("User ID", str(submitter.id)),
-                ("Length", f"{len(content)} chars"),
             ], emoji="📢")
         else:
             log.tree("Confession Publish Failed", [
-                ("ID", str(confession_id)),
-                ("Number", f"#{confession_number}"),
+                ("Confession", f"#{confession_number}"),
                 ("User", f"{submitter.name} ({submitter.display_name})"),
                 ("User ID", str(submitter.id)),
             ], emoji="❌")
