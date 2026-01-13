@@ -36,6 +36,7 @@ from src.services.city_game import get_city_game_service, CityGameService, setup
 from src.services.faq import setup_persistent_views
 from src.services.confessions.views import setup_confession_views
 from src.services.guide import setup_guide_views, get_guide_service, GuideService
+from src.services.social_monitor import SocialMonitorService
 from src.services.database import db
 from src.utils.http import http_session
 
@@ -73,6 +74,7 @@ class SyriaBot(commands.Bot):
         self.birthday_service: Optional[BirthdayService] = None
         self.city_game_service: Optional[CityGameService] = None
         self.guide_service: Optional[GuideService] = None
+        self.social_monitor: Optional[SocialMonitorService] = None
 
     async def setup_hook(self) -> None:
         """Called when the bot is starting up."""
@@ -328,6 +330,15 @@ class SyriaBot(commands.Bot):
         except Exception as e:
             log.error_tree("Guide Service Init Failed", e)
 
+        # Social Media Monitor
+        if config.SOCIAL_MONITOR_CH:
+            try:
+                self.social_monitor = SocialMonitorService(self)
+                await self.social_monitor.setup()
+                initialized.append("SocialMonitor")
+            except Exception as e:
+                log.error_tree("Social Monitor Init Failed", e)
+
         # City Game (dead chat reviver) - DISABLED until images are added manually
         # try:
         #     self.city_game_service = get_city_game_service(self)
@@ -339,7 +350,7 @@ class SyriaBot(commands.Bot):
 
         log.tree("Services Init Complete", [
             ("Services", ", ".join(initialized)),
-            ("Count", f"{len(initialized)}/15"),
+            ("Count", f"{len(initialized)}/16"),
         ], emoji="✅")
 
     async def close(self) -> None:
@@ -456,6 +467,14 @@ class SyriaBot(commands.Bot):
                 stopped.append("Guide")
             except Exception as e:
                 log.error_tree("Guide Service Stop Error", e)
+
+        # Social Media Monitor
+        if self.social_monitor:
+            try:
+                self.social_monitor.stop()
+                stopped.append("SocialMonitor")
+            except Exception as e:
+                log.error_tree("Social Monitor Stop Error", e)
 
         # City Game
         if self.city_game_service:

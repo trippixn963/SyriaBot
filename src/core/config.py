@@ -208,6 +208,13 @@ class Config:
     JAWDAT_API_KEY: str = _env("JAWDAT_API_KEY")
 
     # ==========================================================================
+    # Social Media Monitor
+    # ==========================================================================
+    SOCIAL_MONITOR_CH: int = _env_int("SYRIA_SOCIAL_CH")
+    TIKTOK_USERNAME: str = _env("SYRIA_TIKTOK_USER")
+    INSTAGRAM_USERNAME: str = _env("SYRIA_INSTAGRAM_USER")
+
+    # ==========================================================================
     # Webhooks
     # ==========================================================================
     STATUS_WEBHOOK_URL: str = _env("SYRIA_STATUS_WEBHOOK")
