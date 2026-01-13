@@ -656,6 +656,9 @@ class SocialMonitorService:
                 ("Has Thumbnail", str(bool(post["thumbnail"]))),
             ], emoji="check")
 
+            # Send ping to general chat
+            await self._notify_general_chat(platform_name, platform_emoji, channel.id)
+
         except discord.Forbidden as e:
             log.error_tree("Social Monitor Post Error", e, [
                 ("Reason", "Missing permissions"),
@@ -671,3 +674,41 @@ class SocialMonitorService:
                 ("Platform", platform),
                 ("Video ID", post.get("id", "unknown")),
             ])
+
+    async def _notify_general_chat(
+        self,
+        platform_name: str,
+        platform_emoji: str,
+        socials_channel_id: int
+    ) -> None:
+        """
+        Send a notification to general chat about a new social media post.
+
+        Args:
+            platform_name: "TikTok" or "Instagram"
+            platform_emoji: The platform emoji string
+            socials_channel_id: The socials channel ID to link to
+        """
+        if not config.GENERAL_CHANNEL_ID:
+            return
+
+        general_channel = self.bot.get_channel(config.GENERAL_CHANNEL_ID)
+        if general_channel is None or not isinstance(general_channel, discord.TextChannel):
+            return
+
+        try:
+            message = f"{platform_emoji} **New {platform_name} post!** Check it out in <#{socials_channel_id}>"
+            await general_channel.send(message)
+
+            log.tree("Social Monitor", [
+                ("Status", "General chat notified"),
+                ("Channel", f"#{general_channel.name}"),
+            ], emoji="bell")
+
+        except discord.Forbidden:
+            log.tree("Social Monitor", [
+                ("Status", "Cannot send to general"),
+                ("Reason", "Missing permissions"),
+            ], emoji="warn")
+        except Exception as e:
+            log.error_tree("Social Monitor General Notify Error", e)
