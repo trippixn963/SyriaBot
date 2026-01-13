@@ -608,7 +608,101 @@ class DatabaseCore:
                 ON birthdays(guild_id, birth_month, birth_day)
             """)
 
+            # =====================================================================
+            # Migrations Table
+            # =====================================================================
+
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS migrations (
+                    name TEXT PRIMARY KEY,
+                    applied_at INTEGER NOT NULL
+                )
+            """)
+
+            # Run one-time migrations
+            self._run_migrations(cur)
+
             log.tree("Database Initialized", [
                 ("Tables", "All created/verified"),
                 ("Status", "Ready"),
             ], emoji="✅")
+
+    def _run_migrations(self, cur) -> None:
+        """Run one-time data migrations."""
+        # Check which migrations have been applied
+        cur.execute("SELECT name FROM migrations")
+        applied = {row[0] for row in cur.fetchall()}
+
+        # Migration: Adjust XP to match levels for new formula (Jan 2026)
+        if "xp_formula_v2_adjustment" not in applied:
+            self._migrate_xp_formula_v2(cur)
+            cur.execute(
+                "INSERT INTO migrations (name, applied_at) VALUES (?, ?)",
+                ("xp_formula_v2_adjustment", int(time.time()))
+            )
+
+    def _migrate_xp_formula_v2(self, cur) -> None:
+        """
+        Migrate XP values to match current levels under the new formula.
+
+        The XP formula changed from:
+            Old: 100 * level^1.5 (linear-ish growth)
+            New: Levels 1-5: 100 * level^1.5
+                 Levels 6+: 1118 + 100 * (level-5)^2 (quadratic growth)
+
+        This migration preserves everyone's current level by setting their XP
+        to the exact amount required for that level in the new formula.
+        """
+        # Inline formula to avoid circular import during DB init
+        def xp_for_level(level: int) -> int:
+            if level <= 0:
+                return 0
+            if level <= 5:
+                return int(100 * (level ** 1.5))
+            xp_at_5 = int(100 * (5 ** 1.5))  # 1118
+            return xp_at_5 + int(100 * ((level - 5) ** 2))
+
+        log.tree("XP Formula Migration Starting", [
+            ("Migration", "xp_formula_v2_adjustment"),
+            ("Action", "Adjusting XP to match levels in new formula"),
+        ], emoji="🔄")
+
+        # Get all users with their current levels
+        cur.execute("SELECT user_id, guild_id, level, xp FROM user_xp WHERE level > 0")
+        users = cur.fetchall()
+
+        if not users:
+            log.tree("XP Formula Migration", [
+                ("Status", "No users to migrate"),
+            ], emoji="ℹ️")
+            return
+
+        migrated = 0
+        total_xp_before = 0
+        total_xp_after = 0
+
+        for row in users:
+            user_id = row[0]
+            guild_id = row[1]
+            current_level = row[2]
+            old_xp = row[3]
+
+            # Calculate the XP needed for their current level in new formula
+            new_xp = xp_for_level(current_level)
+
+            total_xp_before += old_xp
+            total_xp_after += new_xp
+
+            # Update XP to match level in new formula
+            cur.execute(
+                "UPDATE user_xp SET xp = ? WHERE user_id = ? AND guild_id = ?",
+                (new_xp, user_id, guild_id)
+            )
+            migrated += 1
+
+        log.tree("XP Formula Migration Complete", [
+            ("Users Migrated", str(migrated)),
+            ("Total XP Before", f"{total_xp_before:,}"),
+            ("Total XP After", f"{total_xp_after:,}"),
+            ("Note", "All levels preserved, XP adjusted to new formula"),
+        ], emoji="✅")

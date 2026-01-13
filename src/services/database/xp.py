@@ -95,6 +95,8 @@ class XPMixin:
         Returns:
             Dict with old_level, new_level, old_xp, new_xp, leveled_up
         """
+        from src.services.xp.utils import level_from_xp
+
         now = int(time.time())
 
         self.ensure_user_xp(user_id, guild_id)
@@ -111,23 +113,20 @@ class XPMixin:
             old_level = row["level"]
 
             new_xp = old_xp + amount
+            new_level = level_from_xp(new_xp)
 
             if source == "message":
                 cur.execute("""
                     UPDATE user_xp
-                    SET xp = ?, last_message_xp = ?, total_messages = total_messages + 1
+                    SET xp = ?, level = ?, last_message_xp = ?, total_messages = total_messages + 1
                     WHERE user_id = ? AND guild_id = ?
-                """, (new_xp, now, user_id, guild_id))
+                """, (new_xp, new_level, now, user_id, guild_id))
             else:  # voice
                 cur.execute("""
                     UPDATE user_xp
-                    SET xp = ?, last_voice_xp = ?, voice_minutes = voice_minutes + 1
+                    SET xp = ?, level = ?, last_voice_xp = ?, voice_minutes = voice_minutes + 1
                     WHERE user_id = ? AND guild_id = ?
-                """, (new_xp, now, user_id, guild_id))
-
-        # Calculate new level from XP (import here to avoid circular import)
-        from src.services.xp.utils import level_from_xp
-        new_level = level_from_xp(new_xp)
+                """, (new_xp, new_level, now, user_id, guild_id))
 
         return {
             "old_xp": old_xp,
