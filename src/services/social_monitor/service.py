@@ -657,7 +657,7 @@ class SocialMonitorService:
             ], emoji="check")
 
             # Send ping to general chat
-            await self._notify_general_chat(platform_name, platform_emoji, channel.id)
+            await self._notify_general_chat(platform_name, platform_emoji, platform, video_url, channel.id)
 
         except discord.Forbidden as e:
             log.error_tree("Social Monitor Post Error", e, [
@@ -679,6 +679,8 @@ class SocialMonitorService:
         self,
         platform_name: str,
         platform_emoji: str,
+        platform: str,
+        video_url: str,
         socials_channel_id: int
     ) -> None:
         """
@@ -687,6 +689,8 @@ class SocialMonitorService:
         Args:
             platform_name: "TikTok" or "Instagram"
             platform_emoji: The platform emoji string
+            platform: "tiktok" or "instagram" for the view
+            video_url: Direct URL to the post
             socials_channel_id: The socials channel ID to link to
         """
         if not config.GENERAL_CHANNEL_ID:
@@ -698,7 +702,8 @@ class SocialMonitorService:
 
         try:
             message = f"{platform_emoji} **New {platform_name} post!** Check it out in <#{socials_channel_id}>"
-            await general_channel.send(message)
+            view = SocialLinkView(url=video_url, platform=platform)
+            await general_channel.send(message, view=view)
 
             log.tree("Social Monitor", [
                 ("Status", "General chat notified"),
