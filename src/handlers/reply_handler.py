@@ -19,6 +19,7 @@ from typing import Optional, TYPE_CHECKING
 import discord
 
 from src.core.logger import log
+from src.core.config import config
 from src.core.constants import MAX_IMAGE_SIZE, MAX_VIDEO_SIZE, DELETE_DELAY_SHORT
 from src.core.colors import COLOR_ERROR, COLOR_WARNING
 from src.services.convert import convert_service
@@ -593,31 +594,35 @@ class ReplyHandler:
 
         user_id = message.author.id
 
-        # Check cooldown (everyone has cooldown, boosters only get unlimited weekly downloads)
-        last_use = self._download_cooldowns.get(user_id, 0)
-        time_since = time.time() - last_use
-        if time_since < self.DOWNLOAD_REPLY_COOLDOWN:
-            remaining = self.DOWNLOAD_REPLY_COOLDOWN - time_since
-            embed = discord.Embed(
-                description=f"Please wait **{remaining:.0f}s** before downloading again.",
-                color=COLOR_WARNING
-            )
-            set_footer(embed)
-            msg = await message.reply(embed=embed, mention_author=False)
-            await msg.delete(delay=DELETE_DELAY_SHORT)
-            try:
-                await message.delete()
-            except discord.HTTPException as e:
-                log.tree("Download Cooldown Delete Failed", [
-                    ("User", f"{message.author.name}"),
-                    ("Error", str(e)[:50]),
-                ], emoji="⚠️")
-            log.tree("Download Reply Cooldown", [
-                ("User", f"{message.author.name} ({message.author.display_name})"),
-                ("ID", str(user_id)),
-                ("Remaining", f"{remaining:.0f}s"),
-            ], emoji="⏳")
-            return
+        # Developer bypasses cooldowns
+        is_developer = config.OWNER_ID and user_id == config.OWNER_ID
+
+        # Check cooldown (developer bypasses, boosters only get unlimited weekly downloads)
+        if not is_developer:
+            last_use = self._download_cooldowns.get(user_id, 0)
+            time_since = time.time() - last_use
+            if time_since < self.DOWNLOAD_REPLY_COOLDOWN:
+                remaining = self.DOWNLOAD_REPLY_COOLDOWN - time_since
+                embed = discord.Embed(
+                    description=f"Please wait **{remaining:.0f}s** before downloading again.",
+                    color=COLOR_WARNING
+                )
+                set_footer(embed)
+                msg = await message.reply(embed=embed, mention_author=False)
+                await msg.delete(delay=DELETE_DELAY_SHORT)
+                try:
+                    await message.delete()
+                except discord.HTTPException as e:
+                    log.tree("Download Cooldown Delete Failed", [
+                        ("User", f"{message.author.name}"),
+                        ("Error", str(e)[:50]),
+                    ], emoji="⚠️")
+                log.tree("Download Reply Cooldown", [
+                    ("User", f"{message.author.name} ({message.author.display_name})"),
+                    ("ID", str(user_id)),
+                    ("Remaining", f"{remaining:.0f}s"),
+                ], emoji="⏳")
+                return
 
         ref = message.reference
         if not ref or not ref.message_id:
@@ -667,9 +672,10 @@ class ReplyHandler:
 
         url = urls[0]
 
-        # Record cooldown and cleanup old entries
-        self._download_cooldowns[user_id] = time.time()
-        await self._cleanup_download_cooldowns()
+        # Record cooldown and cleanup old entries (skip for developer)
+        if not is_developer:
+            self._download_cooldowns[user_id] = time.time()
+            await self._cleanup_download_cooldowns()
 
         log.tree("Reply Download", [
             ("User", f"{message.author.name} ({message.author.display_name})"),

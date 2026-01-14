@@ -208,6 +208,10 @@ class FAQAutoResponder:
 
     def _check_cooldowns(self, user_id: int, channel_id: int, topic: str) -> bool:
         """Check if we should respond (cooldowns not active)."""
+        # Developer bypasses cooldowns
+        if config.OWNER_ID and user_id == config.OWNER_ID:
+            return True
+
         now = time.time()
 
         # Check user cooldown

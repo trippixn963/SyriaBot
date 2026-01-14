@@ -138,6 +138,9 @@ class FunHandler:
         user_id = message.author.id
         guild_id = message.guild.id
 
+        # Developer bypasses cooldowns
+        is_developer = config.OWNER_ID and user_id == config.OWNER_ID
+
         # Check if in correct channel
         if config.FUN_COMMANDS_CHANNEL_ID and message.channel.id != config.FUN_COMMANDS_CHANNEL_ID:
             embed = discord.Embed(
@@ -155,38 +158,40 @@ class FunHandler:
             ], emoji="⚠️")
             return True
 
-        # Check cooldown
-        last_use = self._cooldowns.get(user_id, 0)
-        time_since = time.time() - last_use
-        if time_since < self.FUN_COOLDOWN:
-            # Calculate when cooldown ends as Discord timestamp
-            remaining = self.FUN_COOLDOWN - time_since
-            cooldown_ends = int(time.time() + remaining)
-            cooldown_msg = await message.reply(
-                f"You're on cooldown. Try again <t:{cooldown_ends}:R>",
-                mention_author=False
-            )
-            # Delete both messages after short delay
-            await asyncio.gather(
-                message.delete(delay=DELETE_DELAY_SHORT),
-                cooldown_msg.delete(delay=DELETE_DELAY_SHORT),
-                return_exceptions=True
-            )
-            log.tree("Fun Cooldown", [
-                ("User", f"{message.author.name}"),
-                ("ID", str(user_id)),
-                ("Command", command),
-                ("Ends", f"<t:{cooldown_ends}:R>"),
-            ], emoji="⏳")
-            return True
+        # Check cooldown (developer bypasses)
+        if not is_developer:
+            last_use = self._cooldowns.get(user_id, 0)
+            time_since = time.time() - last_use
+            if time_since < self.FUN_COOLDOWN:
+                # Calculate when cooldown ends as Discord timestamp
+                remaining = self.FUN_COOLDOWN - time_since
+                cooldown_ends = int(time.time() + remaining)
+                cooldown_msg = await message.reply(
+                    f"You're on cooldown. Try again <t:{cooldown_ends}:R>",
+                    mention_author=False
+                )
+                # Delete both messages after short delay
+                await asyncio.gather(
+                    message.delete(delay=DELETE_DELAY_SHORT),
+                    cooldown_msg.delete(delay=DELETE_DELAY_SHORT),
+                    return_exceptions=True
+                )
+                log.tree("Fun Cooldown", [
+                    ("User", f"{message.author.name}"),
+                    ("ID", str(user_id)),
+                    ("Command", command),
+                    ("Ends", f"<t:{cooldown_ends}:R>"),
+                ], emoji="⏳")
+                return True
 
         # Get server banner
         banner_url = None
         if message.guild and message.guild.banner:
             banner_url = str(message.guild.banner.url)
 
-        # Record cooldown
-        self._cooldowns[user_id] = time.time()
+        # Record cooldown (skip for developer)
+        if not is_developer:
+            self._cooldowns[user_id] = time.time()
         await self._cleanup_cooldowns()
 
         try:
