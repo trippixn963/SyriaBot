@@ -19,6 +19,7 @@ from src.core.colors import COLOR_GOLD, COLOR_ERROR, EMOJI_LEADERBOARD
 from src.core.logger import log
 from src.services.database import db
 from src.utils.footer import set_footer
+from src.utils.permissions import is_cooldown_exempt
 from src.services.xp.utils import (
     xp_progress,
     xp_for_level,
@@ -31,7 +32,7 @@ from src.services.xp.card import generate_rank_card
 
 def rank_cooldown(interaction: discord.Interaction) -> app_commands.Cooldown | None:
     """
-    Dynamic cooldown - None for mods/owners, 5 min for everyone else.
+    Dynamic cooldown - None for exempt users, 5 min for everyone else.
 
     Args:
         interaction: The Discord interaction
@@ -39,18 +40,8 @@ def rank_cooldown(interaction: discord.Interaction) -> app_commands.Cooldown | N
     Returns:
         Cooldown object or None if user is exempt
     """
-    # Owner bypass
-    if interaction.user.id == config.OWNER_ID:
+    if is_cooldown_exempt(interaction.user):
         return None
-
-    # Mod bypass
-    if isinstance(interaction.user, discord.Member):
-        if config.MOD_ROLE_ID:
-            mod_role = interaction.user.get_role(config.MOD_ROLE_ID)
-            if mod_role:
-                return None
-
-    # Normal users: 1 use per 5 minutes
     return app_commands.Cooldown(1, 300.0)
 
 

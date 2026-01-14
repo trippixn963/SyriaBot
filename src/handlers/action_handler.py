@@ -16,12 +16,12 @@ from collections import OrderedDict
 import discord
 
 from src.core.logger import log
-from src.core.config import config
 from src.core.colors import COLOR_ERROR, COLOR_GOLD
 from src.core.constants import DELETE_DELAY_SHORT
 from src.services.action_service import action_service
 from src.services.database import db
 from src.utils.footer import set_footer
+from src.utils.permissions import is_cooldown_exempt
 
 
 # Max cooldown cache size before cleanup
@@ -90,14 +90,11 @@ class ActionHandler:
         user_id = message.author.id
         guild_id = message.guild.id
 
-        # Developer bypasses cooldowns
-        is_developer = config.OWNER_ID and user_id == config.OWNER_ID
-
         # Check cooldown (atomically with lock to prevent race conditions)
-        # Developer bypasses all cooldowns
+        # Exempt users (developer, mods) bypass cooldowns
         on_cooldown = False
         cooldown_ends = 0
-        if not is_developer:
+        if not is_cooldown_exempt(message.author):
             async with self._cooldown_lock:
                 last_use = self._cooldowns.get(user_id, 0)
                 time_since = time.time() - last_use

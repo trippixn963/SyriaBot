@@ -19,9 +19,9 @@ from typing import Optional, TYPE_CHECKING
 import discord
 
 from src.core.logger import log
-from src.core.config import config
 from src.core.constants import MAX_IMAGE_SIZE, MAX_VIDEO_SIZE, DELETE_DELAY_SHORT
 from src.core.colors import COLOR_ERROR, COLOR_WARNING
+from src.utils.permissions import is_cooldown_exempt
 from src.services.convert import convert_service
 from src.services.quote import quote_service
 from src.services.translate import translate_service, find_similar_language
@@ -594,11 +594,11 @@ class ReplyHandler:
 
         user_id = message.author.id
 
-        # Developer bypasses cooldowns
-        is_developer = config.OWNER_ID and user_id == config.OWNER_ID
+        # Check if user is exempt from cooldowns
+        exempt = is_cooldown_exempt(message.author)
 
-        # Check cooldown (developer bypasses, boosters only get unlimited weekly downloads)
-        if not is_developer:
+        # Check cooldown (exempt users bypass, boosters only get unlimited weekly downloads)
+        if not exempt:
             last_use = self._download_cooldowns.get(user_id, 0)
             time_since = time.time() - last_use
             if time_since < self.DOWNLOAD_REPLY_COOLDOWN:
@@ -672,8 +672,8 @@ class ReplyHandler:
 
         url = urls[0]
 
-        # Record cooldown and cleanup old entries (skip for developer)
-        if not is_developer:
+        # Record cooldown and cleanup old entries (skip for exempt users)
+        if not exempt:
             self._download_cooldowns[user_id] = time.time()
             await self._cleanup_download_cooldowns()
 

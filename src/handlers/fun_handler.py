@@ -24,6 +24,7 @@ from src.core.colors import COLOR_ERROR, COLOR_WARNING, COLOR_SYRIA_GREEN
 from src.core.constants import DELETE_DELAY_SHORT
 from src.services.fun import fun_service, generate_ship_card, generate_meter_card
 from src.utils.footer import set_footer
+from src.utils.permissions import is_cooldown_exempt
 
 
 # Max cooldown cache size before cleanup
@@ -138,8 +139,8 @@ class FunHandler:
         user_id = message.author.id
         guild_id = message.guild.id
 
-        # Developer bypasses cooldowns
-        is_developer = config.OWNER_ID and user_id == config.OWNER_ID
+        # Check if user is exempt from cooldowns
+        exempt = is_cooldown_exempt(message.author)
 
         # Check if in correct channel
         if config.FUN_COMMANDS_CHANNEL_ID and message.channel.id != config.FUN_COMMANDS_CHANNEL_ID:
@@ -158,8 +159,8 @@ class FunHandler:
             ], emoji="⚠️")
             return True
 
-        # Check cooldown (developer bypasses)
-        if not is_developer:
+        # Check cooldown (exempt users bypass)
+        if not exempt:
             last_use = self._cooldowns.get(user_id, 0)
             time_since = time.time() - last_use
             if time_since < self.FUN_COOLDOWN:
@@ -189,8 +190,8 @@ class FunHandler:
         if message.guild and message.guild.banner:
             banner_url = str(message.guild.banner.url)
 
-        # Record cooldown (skip for developer)
-        if not is_developer:
+        # Record cooldown (skip for exempt users)
+        if not exempt:
             self._cooldowns[user_id] = time.time()
         await self._cleanup_cooldowns()
 

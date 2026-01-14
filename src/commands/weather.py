@@ -19,11 +19,12 @@ from src.core.colors import COLOR_GOLD, COLOR_ERROR, EMOJI_TRANSFER
 from src.core.constants import VIEW_TIMEOUT_DEFAULT
 from src.utils.footer import set_footer
 from src.utils.http import http_session
+from src.utils.permissions import is_cooldown_exempt
 
 
 def weather_cooldown(interaction: discord.Interaction) -> app_commands.Cooldown | None:
     """
-    Dynamic cooldown - None for mods/owners, 5 min for everyone else.
+    Dynamic cooldown - None for exempt users, 5 min for everyone else.
 
     Args:
         interaction: The Discord interaction
@@ -31,15 +32,8 @@ def weather_cooldown(interaction: discord.Interaction) -> app_commands.Cooldown 
     Returns:
         Cooldown object or None if user is exempt
     """
-    if interaction.user.id == config.OWNER_ID:
+    if is_cooldown_exempt(interaction.user):
         return None
-
-    if isinstance(interaction.user, discord.Member):
-        if config.MOD_ROLE_ID:
-            mod_role = interaction.user.get_role(config.MOD_ROLE_ID)
-            if mod_role:
-                return None
-
     return app_commands.Cooldown(1, 300.0)
 
 # Main embed color (alias for backwards compatibility)

@@ -18,6 +18,7 @@ from src.core.config import config
 from src.core.logger import log
 from src.core.colors import COLOR_SYRIA_GREEN
 from src.utils.footer import set_footer
+from src.utils.permissions import is_cooldown_exempt
 from src.services.faq import FAQ_DATA, faq_analytics, FAQView
 
 
@@ -208,8 +209,8 @@ class FAQAutoResponder:
 
     def _check_cooldowns(self, user_id: int, channel_id: int, topic: str) -> bool:
         """Check if we should respond (cooldowns not active)."""
-        # Developer bypasses cooldowns
-        if config.OWNER_ID and user_id == config.OWNER_ID:
+        # Exempt users bypass cooldowns
+        if is_cooldown_exempt(user_id):
             return True
 
         now = time.time()
