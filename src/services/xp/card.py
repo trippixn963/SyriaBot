@@ -105,11 +105,8 @@ async def _get_context():
     """Get or create browser context (reusable)."""
     global _browser, _context, _playwright, _last_activity
 
-    # Check if we should close idle browser first
-    await _check_idle_timeout()
-
-    # Check if we should restart browser for memory cleanup
-    await _check_render_restart()
+    # Note: cleanup checks are now done in _get_page() before calling this
+    # to prevent race conditions with the page pool
 
     if _context is None:
         log.tree("Rank Card Browser Starting", [
@@ -158,20 +155,43 @@ async def _get_context():
 
 async def _get_page():
     """Get a page from pool or create new one."""
+    # First, run cleanup checks BEFORE getting a page
+    # This ensures we don't get a page that's about to become stale
+    await _check_idle_timeout()
+    await _check_render_restart()
+
     async with _page_pool_lock:
-        if _page_pool:
-            return _page_pool.pop()
+        while _page_pool:
+            page = _page_pool.pop()
+            # Verify page is still connected
+            try:
+                if not page.is_closed():
+                    return page
+            except Exception:
+                pass
+            # Page is stale, discard it
+
     context = await _get_context()
     return await context.new_page()
 
 
 async def _return_page(page):
     """Return page to pool for reuse."""
+    # Don't pool closed/invalid pages
+    try:
+        if page.is_closed():
+            return
+    except Exception:
+        return
+
     async with _page_pool_lock:
         if len(_page_pool) < _MAX_POOL_SIZE:
             _page_pool.append(page)
         else:
-            await page.close()
+            try:
+                await page.close()
+            except Exception:
+                pass
 
 
 def _generate_html(
