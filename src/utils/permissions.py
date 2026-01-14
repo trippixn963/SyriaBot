@@ -21,6 +21,7 @@ def is_cooldown_exempt(user: Union[int, discord.Member, discord.User]) -> bool:
     Exempt users:
     - Developer (OWNER_ID)
     - Moderators (MOD_ROLE_ID)
+    - Server Boosters (BOOSTER_ROLE_ID)
 
     Args:
         user: User ID, Member, or User object
@@ -35,9 +36,11 @@ def is_cooldown_exempt(user: Union[int, discord.Member, discord.User]) -> bool:
     if config.OWNER_ID and user_id == config.OWNER_ID:
         return True
 
-    # Mod bypass (only works with Member objects)
+    # Role-based bypasses (only works with Member objects)
     if isinstance(user, discord.Member):
         if config.MOD_ROLE_ID and user.get_role(config.MOD_ROLE_ID):
+            return True
+        if config.BOOSTER_ROLE_ID and user.get_role(config.BOOSTER_ROLE_ID):
             return True
 
     return False

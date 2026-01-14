@@ -321,8 +321,9 @@ class MembersHandler(commands.Cog):
             name="Booster Perks",
             value=(
                 "• **2x XP** on messages and voice\n"
-                "• **Unlimited** \`/download\` and \`/image\`\n"
-                "• **AI Translation** via \`/translate\`"
+                "• **No cooldowns** on commands\n"
+                "• **Unlimited** `/download` and `/image`\n"
+                "• **AI Translation** via `/translate`"
             ),
             inline=False
         )
