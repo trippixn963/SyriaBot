@@ -134,73 +134,58 @@ def _fuzzy_correct(text: str) -> str:
 
 FAQ_PATTERNS = {
     "xp": [
-        r"how.*(xp|level|rank)",
-        r"how.*level.*up",
-        r"how.*get.*xp",
-        r"what.*xp",
-        r"xp.*work",
-        r"leveling.*system",
-        r"rank.*work",
+        r"how\s+(do\s+)?(i|we|you)\s+(get|earn|gain)\s+(xp|level|rank)",
+        r"how\s+(does|do)\s+(the\s+)?(xp|leveling|ranking)\s+(system\s+)?work",
+        r"how\s+(do\s+)?(i|you)\s+level\s+up",
+        r"what\s+is\s+(the\s+)?(xp|leveling)\s+system",
+        r"how\s+to\s+(get|earn)\s+(xp|level)",
     ],
     "roles": [
-        r"how.*(get|buy|earn).*role",
-        r"how.*role.*work",
-        r"where.*get.*role",
-        r"can.*i.*get.*role",
-        r"role.*shop",
-        r"buy.*role",
-        r"custom.*role",
+        r"how\s+(do\s+)?(i|we|you)\s+(get|buy|earn|obtain)\s+(a\s+)?(custom\s+)?role",
+        r"how\s+(does|do)\s+(the\s+)?role(s)?\s+(system\s+)?work",
+        r"where\s+(can\s+)?(i|we)\s+(get|buy)\s+(a\s+)?role",
+        r"how\s+to\s+(get|buy|earn)\s+(a\s+)?role",
     ],
     "tempvoice": [
-        r"how.*(create|make).*vc",
-        r"how.*(create|make).*voice",
-        r"how.*temp.*voice",
-        r"how.*private.*vc",
-        r"custom.*voice.*channel",
-        r"tempvoice",
-        r"how.*own.*channel",
+        r"how\s+(do\s+)?(i|we|you)\s+(create|make)\s+(a\s+)?(private\s+)?(vc|voice(\s+channel)?)",
+        r"how\s+(does|do)\s+(the\s+)?temp\s*voice\s+work",
+        r"how\s+to\s+(create|make|get)\s+(a\s+)?(my\s+)?(own\s+)?(private\s+)?(vc|voice(\s+channel)?)",
+        r"what\s+is\s+temp\s*voice",
     ],
     "report": [
-        r"how.*\b(report|ban)\b",
-        r"where.*\breport\b",
-        r"\breport\b.*someone",
-        r"how.*tell.*mod",
-        r"someone.*breaking.*rule",
+        r"how\s+(do\s+)?(i|we)\s+report\s+(a\s+)?(someone|user|person|member)",
+        r"where\s+(can\s+)?(i|we)\s+report\s+(someone|a\s+user)",
+        r"how\s+to\s+report\s+(someone|a\s+user|a\s+person)",
+        r"how\s+(do\s+)?(i|we)\s+(contact|tell|reach)\s+(the\s+)?(mods?|staff|admin)",
     ],
     "confess": [
-        r"how.*(confess|confession)",
-        r"where.*(confess|confession)",
-        r"anonymous.*message",
-        r"send.*anonymous",
+        r"how\s+(do\s+)?(i|we|you)\s+(send|make|post)\s+(a\s+)?(an?\s+)?(anonymous\s+)?(confess(ion)?|message)",
+        r"where\s+(can\s+)?(i|we)\s+(confess|send\s+confessions?)",
+        r"how\s+(does|do)\s+(the\s+)?confess(ion)?(s)?\s+(system\s+)?work",
+        r"how\s+to\s+(confess|send\s+a\s+confession)",
     ],
     "economy": [
-        r"how.*(earn|get).*coin",
-        r"how.*economy",
-        r"how.*money.*work",
-        r"where.*check.*balance",
-        r"how.*get.*rich",
-        r"coin.*system",
+        r"how\s+(do\s+)?(i|we|you)\s+(earn|get|make)\s+(server\s+)?(coins?|money|currency)",
+        r"how\s+(does|do)\s+(the\s+)?(economy|coin|money)\s+(system\s+)?work",
+        r"where\s+(can\s+)?(i|we)\s+(check|see)\s+(my\s+)?balance",
+        r"how\s+to\s+(earn|get|make)\s+(coins?|money)",
     ],
     "casino": [
-        r"how.*casino",
-        r"how.*gambl",
-        r"where.*casino",
-        r"how.*play.*(roulette|blackjack|slot)",
-        r"casino.*game",
+        r"how\s+(do\s+)?(i|we|you)\s+(use|play|access)\s+(the\s+)?casino",
+        r"how\s+(does|do)\s+(the\s+)?casino\s+(games?\s+)?work",
+        r"where\s+is\s+(the\s+)?casino",
+        r"how\s+to\s+play\s+(roulette|blackjack|slots?)",
     ],
     "invite": [
-        r"(server|discord).*(link|invite)",
-        r"invite.*link",
-        r"how.*invite.*friend",
-        r"can.*i.*invite",
+        r"what\s+is\s+(the\s+)?(server\s+)?(invite\s+)?(link|url)",
+        r"(can\s+)?(i|we)\s+(have|get)\s+(the\s+)?(server\s+)?invite(\s+link)?",
+        r"(share|send)\s+(me\s+)?(the\s+)?(server\s+)?invite(\s+link)?",
     ],
     "partnership": [
-        r"partner(ship)?",
-        r"how.*(partner|collab)",
-        r"can.*(partner|collab)",
-        r"want.*partner",
-        r"looking.*partner",
-        r"server.*partner",
+        r"how\s+(do\s+)?(i|we)\s+(request|apply\s+for|get)\s+(a\s+)?partnership",
+        r"how\s+(does|do)\s+(the\s+)?partnership(s)?\s+work",
+        r"(can|how\s+to)\s+partner\s+with\s+(this\s+)?(server|you)",
+        r"where\s+(do\s+)?(i|we)\s+(apply|request)\s+(for\s+)?(a\s+)?partnership",
     ],
 }
 
@@ -256,15 +241,22 @@ class FAQAutoResponder:
                 del _channel_topic_cooldowns[key]
 
     def _detect_question(self, content: str) -> bool:
-        """Check if message looks like a question."""
-        content_lower = content.lower()
+        """Check if message looks like a genuine question about server features."""
+        content_lower = content.lower().strip()
 
-        # Must have question indicators
-        question_starters = ["how", "what", "where", "can i", "how do", "how to", "why"]
-        has_question_word = any(content_lower.startswith(w) or f" {w}" in content_lower for w in question_starters)
-        has_question_mark = "?" in content
+        # Must START with a question word (not just contain it somewhere)
+        question_starters = ["how ", "what ", "where ", "can i ", "can we ", "how do ", "how to ", "how does "]
+        starts_with_question = any(content_lower.startswith(w) for w in question_starters)
 
-        return has_question_word or has_question_mark
+        # Or have a question mark AND start with a question-like structure
+        has_question_mark = content.endswith("?")
+
+        # Reject if it's clearly just a statement or conversation
+        # (contains multiple sentences, starts with "i ", etc.)
+        if content_lower.startswith(("i ", "my ", "im ", "i'm ", "lol", "lmao", "haha", "bruh")):
+            return False
+
+        return starts_with_question or (has_question_mark and len(content) < 100)
 
     def _match_topic(self, content: str) -> Optional[str]:
         """Match content to a FAQ topic with fuzzy typo correction."""
@@ -300,8 +292,12 @@ class FAQAutoResponder:
 
         content = message.content.strip()
 
-        # Skip short messages
-        if len(content) < 10:
+        # Skip short messages (need enough context to be a real question)
+        if len(content) < 15:
+            return False
+
+        # Skip long messages (likely conversations, not simple questions)
+        if len(content) > 200:
             return False
 
         # Must look like a question
