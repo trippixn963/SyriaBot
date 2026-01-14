@@ -199,19 +199,9 @@ async def handle_download(
         ("Remaining", "Unlimited" if remaining == -1 else str(remaining)),
     ], emoji="📥")
 
-    # Delete the "download" reply message immediately (clean UI)
-    if is_reply and isinstance(interaction_or_message, discord.Message):
-        try:
-            await interaction_or_message.delete()
-            log.tree("Download Reply Deleted", [
-                ("User", f"{user.name}"),
-                ("Channel", str(channel.id)),
-            ], emoji="🗑️")
-        except discord.HTTPException as e:
-            log.tree("Download Reply Delete Failed", [
-                ("User", f"{user.name}"),
-                ("Error", str(e)[:50]),
-            ], emoji="⚠️")
+    # Track the reply message for deletion AFTER successful download
+    # (don't delete early - user needs the URL if download fails)
+    reply_to_delete = interaction_or_message if is_reply and isinstance(interaction_or_message, discord.Message) else None
 
     # Send progress message
     progress_msg = None
@@ -329,6 +319,20 @@ async def handle_download(
 
         # Send just files with ping - no embed
         await channel.send(content=f"<@{user.id}>", files=files)
+
+        # Delete the original reply message NOW (after success)
+        if reply_to_delete:
+            try:
+                await reply_to_delete.delete()
+                log.tree("Download Reply Deleted", [
+                    ("User", f"{user.name}"),
+                    ("Channel", str(channel.id)),
+                ], emoji="🗑️")
+            except discord.HTTPException as e:
+                log.tree("Download Reply Delete Failed", [
+                    ("User", f"{user.name}"),
+                    ("Error", str(e)[:50]),
+                ], emoji="⚠️")
 
         log.tree("Download Complete", [
             ("User", f"{user.name} ({user.display_name})"),

@@ -12,13 +12,13 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from difflib import SequenceMatcher
-import aiohttp
 
 from src.core.config import config
 from src.core.logger import log
 from src.core.colors import COLOR_GOLD, COLOR_ERROR, EMOJI_TRANSFER
 from src.core.constants import VIEW_TIMEOUT_DEFAULT
 from src.utils.footer import set_footer
+from src.utils.http import http_session
 
 
 def weather_cooldown(interaction: discord.Interaction) -> app_commands.Cooldown | None:
@@ -339,28 +339,28 @@ class WeatherCog(commands.Cog):
         ]
 
         try:
-            async with aiohttp.ClientSession() as session:
-                for query in queries_to_try:
-                    params = {
-                        "q": query,
-                        "appid": self.api_key,
-                        "units": "metric",
-                    }
-                    async with session.get(url, params=params, timeout=10) as resp:
-                        if resp.status == 200:
-                            return await resp.json()
-                        elif resp.status == 401:
-                            log.tree("Weather API Error", [
-                                ("City", city),
-                                ("Status", str(resp.status)),
-                                ("Reason", "Invalid API key"),
-                            ], emoji="❌")
-                            return None
+            session = http_session.session
+            for query in queries_to_try:
+                params = {
+                    "q": query,
+                    "appid": self.api_key,
+                    "units": "metric",
+                }
+                async with session.get(url, params=params, timeout=10) as resp:
+                    if resp.status == 200:
+                        return await resp.json()
+                    elif resp.status == 401:
+                        log.tree("Weather API Error", [
+                            ("City", city),
+                            ("Status", str(resp.status)),
+                            ("Reason", "Invalid API key"),
+                        ], emoji="❌")
+                        return None
 
-                log.tree("Weather City Not Found", [
-                    ("Query", city),
-                ], emoji="⚠️")
-                return None
+            log.tree("Weather City Not Found", [
+                ("Query", city),
+            ], emoji="⚠️")
+            return None
 
         except Exception as e:
             log.tree("Weather Fetch Error", [

@@ -27,7 +27,7 @@ async def main():
     """Main entry point."""
     if not config.TOKEN:
         log.tree("Startup Failed", [
-            ("Reason", "SYRIA_BOT_TOKEN not set"),
+            ("Reason", "SYRIA_TOKEN not set"),
         ], emoji="🚨")
         sys.exit(1)
 

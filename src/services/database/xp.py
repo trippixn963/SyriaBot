@@ -84,7 +84,7 @@ class XPMixin:
         source: str = "message"
     ) -> Dict[str, Any]:
         """
-        Add XP to a user.
+        Add XP to a user atomically.
 
         Args:
             user_id: User's Discord ID
@@ -104,29 +104,39 @@ class XPMixin:
         with self._get_conn() as conn:
             cur = conn.cursor()
 
-            cur.execute(
-                "SELECT xp, level FROM user_xp WHERE user_id = ? AND guild_id = ?",
-                (user_id, guild_id)
-            )
-            row = cur.fetchone()
-            old_xp = row["xp"]
-            old_level = row["level"]
+            # Use BEGIN IMMEDIATE to acquire write lock before reading
+            # This prevents race conditions between SELECT and UPDATE
+            cur.execute("BEGIN IMMEDIATE")
 
-            new_xp = old_xp + amount
-            new_level = level_from_xp(new_xp)
+            try:
+                cur.execute(
+                    "SELECT xp, level FROM user_xp WHERE user_id = ? AND guild_id = ?",
+                    (user_id, guild_id)
+                )
+                row = cur.fetchone()
+                old_xp = row["xp"]
+                old_level = row["level"]
 
-            if source == "message":
-                cur.execute("""
-                    UPDATE user_xp
-                    SET xp = ?, level = ?, last_message_xp = ?, total_messages = total_messages + 1
-                    WHERE user_id = ? AND guild_id = ?
-                """, (new_xp, new_level, now, user_id, guild_id))
-            else:  # voice
-                cur.execute("""
-                    UPDATE user_xp
-                    SET xp = ?, level = ?, last_voice_xp = ?, voice_minutes = voice_minutes + 1
-                    WHERE user_id = ? AND guild_id = ?
-                """, (new_xp, new_level, now, user_id, guild_id))
+                new_xp = old_xp + amount
+                new_level = level_from_xp(new_xp)
+
+                if source == "message":
+                    cur.execute("""
+                        UPDATE user_xp
+                        SET xp = ?, level = ?, last_message_xp = ?, total_messages = total_messages + 1
+                        WHERE user_id = ? AND guild_id = ?
+                    """, (new_xp, new_level, now, user_id, guild_id))
+                else:  # voice
+                    cur.execute("""
+                        UPDATE user_xp
+                        SET xp = ?, level = ?, last_voice_xp = ?, voice_minutes = voice_minutes + 1
+                        WHERE user_id = ? AND guild_id = ?
+                    """, (new_xp, new_level, now, user_id, guild_id))
+
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
 
         return {
             "old_xp": old_xp,

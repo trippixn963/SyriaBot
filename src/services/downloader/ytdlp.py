@@ -248,6 +248,7 @@ async def download(url: str, download_dir: Path, platform: str) -> DownloadResul
             )
         except asyncio.TimeoutError:
             process.kill()
+            await process.wait()  # Ensure process is fully cleaned up
             log.tree("yt-dlp Timeout", [
                 ("Platform", platform.title()),
                 ("Timeout", "120s"),

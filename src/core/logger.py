@@ -106,6 +106,9 @@ class Logger:
         # Error webhook (from env var)
         self._error_webhook_url: str = os.getenv("SYRIA_ERROR_WEBHOOK", "")
 
+        # Shared aiohttp session for webhook calls (lazily created)
+        self._webhook_session: Optional[aiohttp.ClientSession] = None
+
         # Base logs directory
         self.logs_base_dir = Path(__file__).parent.parent.parent / "logs"
         self.logs_base_dir.mkdir(exist_ok=True)
@@ -322,8 +325,9 @@ class Logger:
         }
         try:
             await self._async_send_webhook(payload, self._live_logs_webhook_url)
-        except Exception:
-            pass
+        except Exception as e:
+            # Log to file only to avoid recursion
+            self._write_to_file_only(f"[LIVE LOG WEBHOOK] Failed: {type(e).__name__}: {e}")
 
     def _send_error_webhook(
         self,
@@ -348,20 +352,24 @@ class Logger:
         except RuntimeError:
             pass
 
+    async def _get_webhook_session(self) -> aiohttp.ClientSession:
+        """Get or create shared webhook session."""
+        if self._webhook_session is None or self._webhook_session.closed:
+            self._webhook_session = aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=5)
+            )
+        return self._webhook_session
+
     async def _async_send_webhook(self, payload: dict, webhook_url: str) -> None:
-        """Send webhook payload asynchronously."""
+        """Send webhook payload asynchronously using shared session."""
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    webhook_url,
-                    json=payload,
-                    timeout=aiohttp.ClientTimeout(total=5)
-                ) as response:
-                    if response.status >= 400:
-                        # Log to file only (avoid recursion)
-                        self._write_to_file_only(
-                            f"[WEBHOOK] HTTP {response.status} sending to webhook"
-                        )
+            session = await self._get_webhook_session()
+            async with session.post(webhook_url, json=payload) as response:
+                if response.status >= 400:
+                    # Log to file only (avoid recursion)
+                    self._write_to_file_only(
+                        f"[WEBHOOK] HTTP {response.status} sending to webhook"
+                    )
         except asyncio.TimeoutError:
             self._write_to_file_only("[WEBHOOK] Timeout sending to webhook")
         except aiohttp.ClientError as e:

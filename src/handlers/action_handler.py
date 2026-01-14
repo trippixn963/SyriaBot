@@ -89,12 +89,21 @@ class ActionHandler:
         user_id = message.author.id
         guild_id = message.guild.id
 
-        # Check cooldown
-        last_use = self._cooldowns.get(user_id, 0)
-        time_since = time.time() - last_use
-        if time_since < self.ACTION_COOLDOWN:
-            remaining = self.ACTION_COOLDOWN - time_since
-            cooldown_ends = int(time.time() + remaining)
+        # Check cooldown (atomically with lock to prevent race conditions)
+        async with self._cooldown_lock:
+            last_use = self._cooldowns.get(user_id, 0)
+            time_since = time.time() - last_use
+            if time_since < self.ACTION_COOLDOWN:
+                remaining = self.ACTION_COOLDOWN - time_since
+                cooldown_ends = int(time.time() + remaining)
+                # Release lock before async operations
+                on_cooldown = True
+            else:
+                # Record cooldown immediately while we have the lock
+                self._cooldowns[user_id] = time.time()
+                on_cooldown = False
+
+        if on_cooldown:
             cooldown_msg = await message.reply(
                 f"You're on cooldown. Try again <t:{cooldown_ends}:R>",
                 mention_author=False
@@ -111,6 +120,9 @@ class ActionHandler:
                 ("Ends", f"<t:{cooldown_ends}:R>"),
             ], emoji="⏳")
             return True
+
+        # Cleanup old cooldowns (after releasing the main lock)
+        await self._cleanup_cooldowns()
 
         # Build targets list
         targets = []
@@ -145,10 +157,6 @@ class ActionHandler:
                 ("Reason", "Invalid action type"),
             ], emoji="⚠️")
             return False
-
-        # Record cooldown
-        self._cooldowns[user_id] = time.time()
-        await self._cleanup_cooldowns()
 
         # Process each target (combo support)
         user_mention = message.author.mention

@@ -66,12 +66,22 @@ class GuideCog(commands.Cog):
 
         try:
             # Optionally purge all messages in channel first
+            # Safety limit: max 500 messages to prevent accidental mass deletion
+            PURGE_LIMIT = 500
             if purge:
-                deleted = await target.purge(limit=None)
-                log.tree("Channel Purged", [
-                    ("Channel", target.name),
-                    ("Messages Deleted", str(len(deleted))),
-                ], emoji="🗑️")
+                deleted = await target.purge(limit=PURGE_LIMIT)
+                if len(deleted) >= PURGE_LIMIT:
+                    log.tree("Channel Purge Hit Limit", [
+                        ("Channel", target.name),
+                        ("Messages Deleted", str(len(deleted))),
+                        ("Limit", str(PURGE_LIMIT)),
+                        ("Warning", "More messages may remain"),
+                    ], emoji="⚠️")
+                else:
+                    log.tree("Channel Purged", [
+                        ("Channel", target.name),
+                        ("Messages Deleted", str(len(deleted))),
+                    ], emoji="🗑️")
 
             # Build the main guide panel embed
             guild = interaction.guild

@@ -48,6 +48,7 @@ class FunHandler:
         self._cooldown_lock = asyncio.Lock()
         self._channel_msg_count: int = 0
         self._sticky_message_id: Optional[int] = None
+        self._sticky_lock = asyncio.Lock()  # Lock for sticky message counter
 
     async def _cleanup_cooldowns(self) -> None:
         """Remove expired cooldowns to prevent unbounded growth (thread-safe)."""
@@ -96,7 +97,7 @@ class FunHandler:
 
         sticky_msg = await channel.send(embed=embed)
         self._sticky_message_id = sticky_msg.id
-        self._channel_msg_count = 0
+        # Counter is reset by caller under lock
 
         log.tree("Fun Sticky Sent", [
             ("Channel", channel.name),
@@ -201,10 +202,15 @@ class FunHandler:
             elif command == "bodyfat":
                 result = await self._handle_bodyfat(message, banner_url)
 
-            # Track message count and send sticky every N messages
+            # Track message count and send sticky every N messages (atomic)
             if result:
-                self._channel_msg_count += 1
-                if self._channel_msg_count >= self.FUN_STICKY_INTERVAL:
+                should_send_sticky = False
+                async with self._sticky_lock:
+                    self._channel_msg_count += 1
+                    if self._channel_msg_count >= self.FUN_STICKY_INTERVAL:
+                        self._channel_msg_count = 0  # Reset counter while holding lock
+                        should_send_sticky = True
+                if should_send_sticky:
                     await self._send_sticky(message.channel)
 
             return result
