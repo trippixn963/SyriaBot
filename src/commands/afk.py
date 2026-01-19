@@ -16,6 +16,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from src.core.config import config
 from src.core.logger import log
 from src.core.colors import COLOR_SYRIA_GREEN
 from src.utils.footer import set_footer

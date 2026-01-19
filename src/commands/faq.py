@@ -54,7 +54,6 @@ class FAQCog(commands.Cog):
     )
     @app_commands.autocomplete(topic=faq_autocomplete)
     @app_commands.default_permissions(moderate_members=True)
-    @app_commands.guilds(discord.Object(id=config.GUILD_ID))
     async def faq(
         self,
         interaction: discord.Interaction,

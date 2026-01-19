@@ -34,7 +34,6 @@ class TranslateCog(commands.Cog):
         text="The text to translate",
         to="Target language (e.g., 'ar', 'arabic', 'en', 'english')",
     )
-    @app_commands.guilds(discord.Object(id=config.GUILD_ID))
     async def translate(
         self,
         interaction: discord.Interaction,

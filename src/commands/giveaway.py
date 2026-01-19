@@ -236,7 +236,6 @@ class GiveawayCog(commands.Cog):
         name="giveaway",
         description="Create a new giveaway (Admin only)"
     )
-    @app_commands.guilds(discord.Object(id=config.GUILD_ID))
     async def giveaway(self, interaction: discord.Interaction) -> None:
         """Open giveaway setup builder."""
         log.tree("Giveaway Command", [

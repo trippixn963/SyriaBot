@@ -67,7 +67,6 @@ class RankCog(commands.Cog):
 
     @app_commands.command(name="rank", description="View your XP and level")
     @app_commands.describe(user="User to check (defaults to yourself)")
-    @app_commands.guilds(discord.Object(id=config.GUILD_ID))
     @app_commands.checks.dynamic_cooldown(rank_cooldown)
     async def rank(
         self,

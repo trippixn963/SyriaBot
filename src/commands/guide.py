@@ -39,7 +39,6 @@ class GuideCog(commands.Cog):
         purge="Purge all messages in the channel first (default: True)"
     )
     @app_commands.default_permissions(administrator=True)
-    @app_commands.guilds(discord.Object(id=config.GUILD_ID))
     async def guide(
         self,
         interaction: discord.Interaction,

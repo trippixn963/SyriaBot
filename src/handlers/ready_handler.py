@@ -66,22 +66,13 @@ class ReadyHandler(commands.Cog):
 
         # Sync slash commands to Syria guild only (not globally)
         try:
-            # Clear global commands so they don't appear in other servers
-            self.bot.tree.clear_commands(guild=None)
-            await self.bot.tree.sync()
-            log.tree("Global Commands Cleared", [], emoji="🧹")
+            guild_obj = discord.Object(id=config.GUILD_ID)
+            self.bot.tree.copy_global_to(guild=guild_obj)
+            synced = await self.bot.tree.sync(guild=guild_obj)
 
-            # Sync all commands only to the main Syria guild
-            guild_synced = []
-            if config.GUILD_ID:
-                guild_obj = discord.Object(id=config.GUILD_ID)
-                self.bot.tree.copy_global_to(guild=guild_obj)
-                guild_synced = await self.bot.tree.sync(guild=guild_obj)
-
-            log.tree("Commands Synced To Syria Only", [
-                ("Guild ID", str(config.GUILD_ID)),
-                ("Commands", str(len(guild_synced))),
-                ("Names", ", ".join(sorted(c.name for c in guild_synced))),
+            log.tree("Commands Synced", [
+                ("Guild", str(config.GUILD_ID)),
+                ("Commands", str(len(synced))),
             ], emoji="🔄")
         except Exception as e:
             log.error_tree("Command Sync Failed", e)

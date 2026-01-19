@@ -196,7 +196,6 @@ class SuggestCog(commands.Cog):
         name="suggest",
         description="Submit a suggestion for the server"
     )
-    @app_commands.guilds(discord.Object(id=config.GUILD_ID))
     async def suggest(self, interaction: discord.Interaction) -> None:
         """Open suggestion modal."""
         log.tree("Suggest Command", [

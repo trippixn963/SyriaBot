@@ -13,6 +13,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from src.core.config import config
 from src.core.logger import log
 from src.core.colors import COLOR_SUCCESS, COLOR_ERROR, COLOR_WARNING
 from src.utils.footer import set_footer
@@ -268,7 +269,6 @@ class ConfessCog(commands.Cog):
         self.bot: commands.Bot = bot
 
     @app_commands.command(name="confess", description="Submit an anonymous confession")
-    @app_commands.guild_only()
     async def confess(self, interaction: discord.Interaction) -> None:
         """Open the confession submission modal."""
         log.tree("Confess Command", [
@@ -323,7 +323,6 @@ class ConfessCog(commands.Cog):
         await interaction.response.send_modal(modal)
 
     @app_commands.command(name="reply", description="Reply anonymously to a confession")
-    @app_commands.guild_only()
     async def reply(self, interaction: discord.Interaction) -> None:
         """Open the anonymous reply modal - must be used in a confession thread."""
         log.tree("Reply Command", [
