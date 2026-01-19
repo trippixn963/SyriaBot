@@ -13,6 +13,7 @@ import io
 import aiohttp
 import discord
 from discord import ui
+from discord.ext import commands
 from typing import Optional, Tuple
 
 from src.core.config import config
@@ -23,7 +24,7 @@ from src.utils.footer import set_footer
 from src.utils.http import http_session
 
 
-async def upload_to_storage(bot, file_bytes: bytes, filename: str) -> Optional[str]:
+async def upload_to_storage(bot: commands.Bot, file_bytes: bytes, filename: str) -> Optional[str]:
     """Upload file to asset storage channel for permanent URL."""
     if not config.ASSET_STORAGE_CHANNEL_ID:
         log.tree("Image Asset Storage Skipped", [
@@ -83,8 +84,8 @@ class ImageView(ui.View):
         query: str,
         requester_id: int,
         timeout: float = 300,  # 5 minutes
-        bot=None,
-    ):
+        bot: Optional[commands.Bot] = None,
+    ) -> None:
         super().__init__(timeout=timeout)
         self.images = images
         self.query = query
@@ -106,14 +107,14 @@ class ImageView(ui.View):
             ("Requester ID", str(requester_id)),
         ], emoji="🖼️")
 
-    def _update_buttons(self):
+    def _update_buttons(self) -> None:
         """Update button disabled states based on current index."""
         # Previous button
         self.prev_button.disabled = self.current_index == 0
         # Next button
         self.next_button.disabled = self.current_index >= len(self.images) - 1
 
-    def _get_file_extension(self, url: str, content_type: str = None) -> str:
+    def _get_file_extension(self, url: str, content_type: Optional[str] = None) -> str:
         """Determine file extension from URL or content type."""
         url_lower = url.lower()
         if ".gif" in url_lower:
@@ -133,9 +134,73 @@ class ImageView(ui.View):
                 return "webp"
         return "jpg"  # Default to jpg
 
+    async def _try_fetch_url(self, url: str) -> Tuple[Optional[bytes], str]:
+        """
+        Try to fetch an image from a URL with browser-like headers.
+        Returns (image_bytes, content_type) or (None, "") on failure.
+        """
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Referer": "https://www.google.com/",
+        }
+
+        try:
+            timeout = aiohttp.ClientTimeout(total=10)
+            async with http_session.session.get(url, headers=headers, timeout=timeout) as response:
+                if response.status != 200:
+                    log.tree("Image Fetch HTTP Error", [
+                        ("URL", url[:60] + "..." if len(url) > 60 else url),
+                        ("Status", str(response.status)),
+                    ], emoji="⚠️")
+                    return None, ""
+
+                content_type = response.headers.get("Content-Type", "")
+
+                # Verify it's actually an image
+                if content_type and not content_type.startswith("image/"):
+                    log.tree("Image Fetch Invalid Content-Type", [
+                        ("URL", url[:60] + "..." if len(url) > 60 else url),
+                        ("Content-Type", content_type),
+                    ], emoji="⚠️")
+                    return None, ""
+
+                image_bytes = await response.read()
+
+                # Check minimum size (avoid placeholder images)
+                if len(image_bytes) < 1000:
+                    log.tree("Image Fetch Too Small", [
+                        ("URL", url[:60] + "..." if len(url) > 60 else url),
+                        ("Size", f"{len(image_bytes)} bytes"),
+                        ("Min Required", "1000 bytes"),
+                    ], emoji="⚠️")
+                    return None, ""
+
+                return image_bytes, content_type
+
+        except aiohttp.ClientError as e:
+            log.tree("Image Fetch Client Error", [
+                ("URL", url[:60] + "..." if len(url) > 60 else url),
+                ("Error", str(e)[:50]),
+            ], emoji="⚠️")
+            return None, ""
+        except TimeoutError:
+            log.tree("Image Fetch Timeout", [
+                ("URL", url[:60] + "..." if len(url) > 60 else url),
+                ("Timeout", "10s"),
+            ], emoji="⏳")
+            return None, ""
+        except Exception as e:
+            log.error_tree("Image Fetch Unexpected Error", e, [
+                ("URL", url[:60] + "..." if len(url) > 60 else url),
+            ])
+            return None, ""
+
     async def fetch_current_image(self) -> Tuple[Optional[bytes], str]:
         """
         Download the current image and cache it.
+        Tries main URL first, then thumbnail as fallback.
         Returns (image_bytes, extension) or (None, "") on failure.
         """
         if not self.images:
@@ -152,38 +217,47 @@ class ImageView(ui.View):
 
         image = self.images[self.current_index]
 
-        try:
-            timeout = aiohttp.ClientTimeout(total=15)
-            async with http_session.session.get(image.url, timeout=timeout) as response:
-                if response.status != 200:
-                    log.tree("Image Fetch Failed", [
-                        ("URL", image.url[:60]),
-                        ("Status", str(response.status)),
-                    ], emoji="❌")
-                    return None, ""
+        # Try main URL first
+        image_bytes, content_type = await self._try_fetch_url(image.url)
 
-                content_type = response.headers.get("Content-Type", "")
-                image_bytes = await response.read()
-                ext = self._get_file_extension(image.url, content_type)
+        if image_bytes:
+            ext = self._get_file_extension(image.url, content_type)
+            self._cached_image = image_bytes
+            self._cached_index = self.current_index
 
-                # Cache the image
+            log.tree("Image Fetched", [
+                ("Size", f"{len(image_bytes) // 1024}KB"),
+                ("Type", ext),
+                ("Source", "Main URL"),
+            ], emoji="📥")
+            return image_bytes, ext
+
+        # Fallback to Google's thumbnail (always works)
+        if image.thumbnail_url:
+            log.tree("Image Main URL Failed, Trying Thumbnail", [
+                ("Main URL", image.url[:50]),
+                ("Thumbnail", image.thumbnail_url[:50]),
+            ], emoji="🔄")
+
+            image_bytes, content_type = await self._try_fetch_url(image.thumbnail_url)
+
+            if image_bytes:
+                ext = self._get_file_extension(image.thumbnail_url, content_type)
                 self._cached_image = image_bytes
                 self._cached_index = self.current_index
 
-                log.tree("Image Fetched", [
+                log.tree("Image Fetched From Thumbnail", [
                     ("Size", f"{len(image_bytes) // 1024}KB"),
                     ("Type", ext),
-                    ("Cached", "Yes"),
+                    ("Source", "Google Thumbnail"),
                 ], emoji="📥")
-
                 return image_bytes, ext
 
-        except Exception as e:
-            log.tree("Image Fetch Error", [
-                ("URL", image.url[:60]),
-                ("Error", str(e)[:50]),
-            ], emoji="❌")
-            return None, ""
+        log.tree("Image Fetch Failed", [
+            ("URL", image.url[:60]),
+            ("Thumbnail", "Also failed" if image.thumbnail_url else "None"),
+        ], emoji="❌")
+        return None, ""
 
     def create_embed(self, use_attachment: bool = False, extension: str = "jpg") -> discord.Embed:
         """
@@ -214,7 +288,8 @@ class ImageView(ui.View):
         if use_attachment:
             embed.set_image(url=f"attachment://image.{extension}")
         else:
-            embed.set_image(url=image.url)
+            # Prefer thumbnail URL for fallback (Google-hosted, always works)
+            embed.set_image(url=image.thumbnail_url if image.thumbnail_url else image.url)
 
         # Add image info fields
         embed.add_field(
@@ -240,8 +315,10 @@ class ImageView(ui.View):
     async def create_embed_with_file(self) -> Tuple[discord.Embed, Optional[discord.File]]:
         """
         Create embed with downloaded image as attachment.
-        Returns (embed, file) - file may be None if download fails.
+        Always downloads - if current image fails, tries next images until one works.
+        Returns (embed, file) - file is None only if ALL images fail.
         """
+        # Try current image first
         image_bytes, ext = await self.fetch_current_image()
 
         if image_bytes:
@@ -256,14 +333,63 @@ class ImageView(ui.View):
                 ("Type", ext.upper()),
             ], emoji="📎")
             return embed, file
-        else:
-            # Fallback to URL-based embed if download fails
-            embed = self.create_embed(use_attachment=False)
-            log.tree("Embed Created With URL Fallback", [
-                ("Position", f"{self.current_index + 1}/{len(self.images)}"),
-                ("Reason", "Image fetch failed"),
-            ], emoji="🔗")
-            return embed, None
+
+        # Current image failed - try remaining images until one works
+        original_index = self.current_index
+        tried_indices = {self.current_index}
+
+        while len(tried_indices) < len(self.images):
+            # Move to next image
+            self.current_index = (self.current_index + 1) % len(self.images)
+
+            if self.current_index in tried_indices:
+                continue
+
+            tried_indices.add(self.current_index)
+
+            log.tree("Image Failed, Trying Next", [
+                ("Failed Index", str(original_index + 1)),
+                ("Trying Index", str(self.current_index + 1)),
+                ("Total Images", str(len(self.images))),
+            ], emoji="🔄")
+
+            # Clear cache to force fresh fetch
+            self._cached_image = None
+            self._cached_index = -1
+
+            image_bytes, ext = await self.fetch_current_image()
+
+            if image_bytes:
+                file = discord.File(
+                    fp=io.BytesIO(image_bytes),
+                    filename=f"image.{ext}"
+                )
+                embed = self.create_embed(use_attachment=True, extension=ext)
+                self._update_buttons()
+
+                log.tree("Embed Created After Skip", [
+                    ("Original Index", str(original_index + 1)),
+                    ("Working Index", str(self.current_index + 1)),
+                    ("Skipped", str(len(tried_indices) - 1)),
+                    ("Size", f"{len(image_bytes) // 1024}KB"),
+                ], emoji="📎")
+                return embed, file
+
+        # ALL images failed
+        log.tree("All Images Failed", [
+            ("Total Tried", str(len(tried_indices))),
+            ("Query", self.query[:30]),
+        ], emoji="❌")
+
+        # Reset to original index and return error embed
+        self.current_index = original_index
+        embed = discord.Embed(
+            title="Failed to Load Images",
+            description=f"All {len(self.images)} images failed to load.\nTry a different search query.",
+            color=COLOR_SYRIA_GOLD
+        )
+        set_footer(embed)
+        return embed, None
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         """Only allow the requester to use buttons."""
@@ -283,7 +409,8 @@ class ImageView(ui.View):
     async def on_timeout(self) -> None:
         """Disable buttons on timeout."""
         for item in self.children:
-            item.disabled = True
+            if isinstance(item, ui.Button):
+                item.disabled = True
 
         if self.message:
             try:
@@ -309,8 +436,8 @@ class ImageView(ui.View):
                 ("Reason", "No message reference"),
             ], emoji="⏳")
 
-    async def _update_message(self, interaction: discord.Interaction, nav_action: str):
-        """Update the message with new image (downloaded and attached)."""
+    async def _update_message(self, interaction: discord.Interaction, nav_action: str) -> None:
+        """Update the message with new image (always downloaded and attached)."""
         await interaction.response.defer()
 
         self._update_buttons()
@@ -318,19 +445,20 @@ class ImageView(ui.View):
 
         try:
             if file:
-                # Edit with new attachment
                 await interaction.message.edit(embed=embed, attachments=[file], view=self)
+                log.tree("Image Navigation", [
+                    ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                    ("ID", str(interaction.user.id)),
+                    ("Action", nav_action),
+                    ("Position", f"{self.current_index + 1}/{len(self.images)}"),
+                ], emoji="🔄")
             else:
-                # Fallback to URL-based (no attachment)
-                await interaction.message.edit(embed=embed, view=self)
-
-            log.tree("Image Navigation", [
-                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                ("ID", str(interaction.user.id)),
-                ("Action", nav_action),
-                ("Position", f"{self.current_index + 1}/{len(self.images)}"),
-                ("Attached", "Yes" if file else "No (fallback)"),
-            ], emoji="🔄")
+                # All images failed - show error
+                await interaction.message.edit(embed=embed, attachments=[], view=self)
+                log.tree("Image Navigation All Failed", [
+                    ("User", f"{interaction.user.name}"),
+                    ("Action", nav_action),
+                ], emoji="❌")
         except discord.HTTPException as e:
             log.tree("Image Navigation Failed", [
                 ("User", f"{interaction.user.name}"),

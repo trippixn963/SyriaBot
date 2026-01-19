@@ -10,7 +10,7 @@ Server: discord.gg/syria
 
 import asyncio
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 import aiohttp
 
 from src.core.logger import log
@@ -34,6 +34,7 @@ class ImageResult:
     source_url: str
     width: int
     height: int
+    thumbnail_url: str = ""  # Google-hosted thumbnail (always works)
 
 
 @dataclass
@@ -53,10 +54,10 @@ class ImageSearchResult:
 class ImageService:
     """Service for searching images via Google Custom Search API."""
 
-    GOOGLE_API_URL = "https://www.googleapis.com/customsearch/v1"
+    GOOGLE_API_URL: str = "https://www.googleapis.com/customsearch/v1"
 
-    def __init__(self):
-        self._available = bool(config.GOOGLE_API_KEY and config.GOOGLE_CX)
+    def __init__(self) -> None:
+        self._available: bool = bool(config.GOOGLE_API_KEY and config.GOOGLE_CX)
 
         if self._available:
             log.tree("Image Service Initialized", [
@@ -117,15 +118,15 @@ class ImageService:
         ], emoji="🔍")
 
         # Map safe search levels
-        safe_map = {
+        safe_map: dict[str, str] = {
             "off": "off",
             "medium": "medium",
             "high": "high",
         }
-        safe_param = safe_map.get(safe_search, "medium")
+        safe_param: str = safe_map.get(safe_search, "medium")
 
         # Google CSE params
-        params = {
+        params: dict[str, Any] = {
             "key": config.GOOGLE_API_KEY,
             "cx": config.GOOGLE_CX,
             "q": query,
@@ -182,17 +183,18 @@ class ImageService:
             )
 
         # Parse results
-        images = []
-        items = data.get("items", [])
+        images: list[ImageResult] = []
+        items: list[dict[str, Any]] = data.get("items", [])
 
         for item in items:
-            img_info = item.get("image", {})
+            img_info: dict[str, Any] = item.get("image", {})
             images.append(ImageResult(
                 url=item.get("link", ""),
                 title=item.get("title", "No title"),
                 source_url=item.get("image", {}).get("contextLink", ""),
                 width=img_info.get("width", 0),
                 height=img_info.get("height", 0),
+                thumbnail_url=img_info.get("thumbnailLink", ""),  # Google-hosted
             ))
 
         if not images:
@@ -221,4 +223,4 @@ class ImageService:
 
 
 # Global instance
-image_service = ImageService()
+image_service: ImageService = ImageService()

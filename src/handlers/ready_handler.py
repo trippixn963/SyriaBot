@@ -64,22 +64,24 @@ class ReadyHandler(commands.Cog):
         except Exception as e:
             log.error_tree("Footer Init Failed", e)
 
-        # Sync slash commands (global + guild-specific)
+        # Sync slash commands to Syria guild only (not globally)
         try:
-            # Sync global commands
-            global_synced = await self.bot.tree.sync()
+            # Clear global commands so they don't appear in other servers
+            self.bot.tree.clear_commands(guild=None)
+            await self.bot.tree.sync()
+            log.tree("Global Commands Cleared", [], emoji="🧹")
 
-            # Sync guild-specific commands (rank, translate use @guilds decorator)
+            # Sync all commands only to the main Syria guild
             guild_synced = []
             if config.GUILD_ID:
                 guild_obj = discord.Object(id=config.GUILD_ID)
+                self.bot.tree.copy_global_to(guild=guild_obj)
                 guild_synced = await self.bot.tree.sync(guild=guild_obj)
 
-            all_commands = set(c.name for c in global_synced) | set(c.name for c in guild_synced)
-            log.tree("Commands Synced", [
-                ("Global", str(len(global_synced))),
-                ("Guild", str(len(guild_synced))),
-                ("Commands", ", ".join(sorted(all_commands))),
+            log.tree("Commands Synced To Syria Only", [
+                ("Guild ID", str(config.GUILD_ID)),
+                ("Commands", str(len(guild_synced))),
+                ("Names", ", ".join(sorted(c.name for c in guild_synced))),
             ], emoji="🔄")
         except Exception as e:
             log.error_tree("Command Sync Failed", e)

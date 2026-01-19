@@ -16,6 +16,7 @@ from collections import OrderedDict
 import discord
 
 from src.core.logger import log
+from src.core.config import config
 from src.core.colors import COLOR_ERROR, COLOR_GOLD
 from src.core.constants import DELETE_DELAY_SHORT
 from src.services.action_service import action_service
@@ -71,6 +72,10 @@ class ActionHandler:
 
         Returns True if an action was processed, False otherwise.
         """
+        # Only allow action commands in main Syria server
+        if not message.guild or message.guild.id != config.GUILD_ID:
+            return False
+
         content = message.content.strip().lower()
 
         # Fast path: Check if first word could be an action

@@ -193,20 +193,26 @@ class ImageCog(commands.Cog):
 
         if file:
             msg = await interaction.followup.send(embed=embed, file=file, view=view)
+            view.message = msg
+
+            log.tree("Image Search Complete", [
+                ("User", f"{user.name} ({user.display_name})"),
+                ("ID", str(user.id)),
+                ("Query", query[:50] + "..." if len(query) > 50 else query),
+                ("Results", str(len(result.images))),
+                ("Position", f"{view.current_index + 1}/{len(result.images)}"),
+                ("Remaining", "Unlimited" if new_remaining == -1 else str(new_remaining)),
+            ], emoji="✅")
         else:
-            # Fallback to URL-based if download failed
-            msg = await interaction.followup.send(embed=embed, view=view)
+            # All images failed to download
+            await interaction.followup.send(embed=embed, ephemeral=True)
 
-        view.message = msg
-
-        log.tree("Image Search Complete", [
-            ("User", f"{user.name} ({user.display_name})"),
-            ("ID", str(user.id)),
-            ("Query", query[:50] + "..." if len(query) > 50 else query),
-            ("Results", str(len(result.images))),
-            ("Attached", "Yes" if file else "No (fallback)"),
-            ("Remaining", "Unlimited" if new_remaining == -1 else str(new_remaining)),
-        ], emoji="✅")
+            log.tree("Image Search All Failed", [
+                ("User", f"{user.name} ({user.display_name})"),
+                ("ID", str(user.id)),
+                ("Query", query[:50] + "..." if len(query) > 50 else query),
+                ("Results Tried", str(len(result.images))),
+            ], emoji="❌")
 
     @image.error
     async def image_error(
