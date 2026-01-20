@@ -46,7 +46,7 @@ class GiveawayReactionHandler(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         self._warned_users: dict[int, float] = {}  # user_id -> timestamp
-        self._warn_cooldown = 60  # seconds
+        self._warn_cooldown = 3600  # 1 hour
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent) -> None:
