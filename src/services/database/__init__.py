@@ -15,7 +15,6 @@ Structure:
     - confessions.py: Anonymous confessions system
     - actions.py: Action command statistics
     - suggestions.py: Suggestion system
-    - giveaways.py: Giveaway system
     - birthdays.py: Birthday tracking
 
 Author: حَـــــنَّـــــا
@@ -32,7 +31,6 @@ from .downloads import DownloadsMixin
 from .confessions import ConfessionsMixin
 from .actions import ActionsMixin
 from .suggestions import SuggestionsMixin
-from .giveaways import GiveawaysMixin
 from .birthdays import BirthdaysMixin
 from .guide import GuideMixin
 
@@ -47,7 +45,6 @@ class Database(
     ConfessionsMixin,
     ActionsMixin,
     SuggestionsMixin,
-    GiveawaysMixin,
     BirthdaysMixin,
     GuideMixin,
     DatabaseCore,

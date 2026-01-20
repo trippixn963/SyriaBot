@@ -170,12 +170,6 @@ class Config:
     SUGGESTIONS_CHANNEL_ID: int = _env_int("SYRIA_SUGGESTIONS_CH")
 
     # ==========================================================================
-    # Giveaways (no defaults - must be configured via .env)
-    # ==========================================================================
-    GIVEAWAY_CHANNEL_ID: int = _env_int("SYRIA_GIVEAWAY_CH")
-    GIVEAWAY_ROLE_ID: int = _env_int("SYRIA_GIVEAWAY_ROLE")
-
-    # ==========================================================================
     # Asset Storage (for permanent GIF URLs)
     # ==========================================================================
     ASSET_STORAGE_CHANNEL_ID: int = _env_int("SYRIA_ASSET_CH")

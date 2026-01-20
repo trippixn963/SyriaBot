@@ -65,7 +65,6 @@ FUZZY_KEYWORDS = {
     "report": ["report"],
     "invite": ["invite", "invitation"],
     "partner": ["partner", "partnership"],
-    "giveaway": ["giveaway", "giveaways"],
 }
 
 

@@ -416,38 +416,6 @@ Win coins by participating in games!""",
 اربح عملات بالمشاركة في الألعاب!""",
         },
     },
-    "giveaway": {
-        "title": {
-            "en": "🎉 Giveaways",
-            "ar": "🎉 السحوبات",
-        },
-        "description": {
-            "en": """**How Giveaways Work:**
-• Giveaways are posted in <#1429448081354522704>
-• Click the button to enter
-• Winners are picked randomly when it ends
-
-**Requirements:**
-• Some giveaways may require certain roles or levels
-• Make sure you meet the requirements before entering
-
-**Tips:**
-• Get <@&1403196818992402452> for notifications
-• Being active increases your chances in some giveaways""",
-            "ar": """**كيف تعمل السحوبات:**
-• السحوبات تُنشر في <#1429448081354522704>
-• اضغط الزر للمشاركة
-• يتم اختيار الفائزين عشوائياً عند الانتهاء
-
-**المتطلبات:**
-• بعض السحوبات قد تتطلب رولات أو مستويات معينة
-• تأكد من استيفاء المتطلبات قبل المشاركة
-
-**نصائح:**
-• احصل على <@&1403196818992402452> للإشعارات
-• النشاط يزيد فرصك في بعض السحوبات""",
-        },
-    },
     "partnership": {
         "title": {
             "en": "🤝 Partnership Requests",

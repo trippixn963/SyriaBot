@@ -744,7 +744,6 @@ FAQ_OPTIONS: Dict[str, Tuple[str, str]] = {
     "economy": ("Economy System", "💰"),
     "casino": ("Casino Games", "🎰"),
     "games": ("Minigames", "🎮"),
-    "giveaway": ("Giveaways", "🎉"),
     "partnership": ("Partnerships", "🤝"),
 }
 

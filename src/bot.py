@@ -28,7 +28,6 @@ from src.services.bump_service import bump_service
 from src.services.confessions import ConfessionService
 from src.services.suggestions import SuggestionService
 from src.services.currency_service import CurrencyService
-from src.services.giveaway import GiveawayService
 from src.services.action_service import action_service
 from src.services.quote import quote_service
 from src.services.birthday_service import get_birthday_service, BirthdayService
@@ -70,7 +69,6 @@ class SyriaBot(commands.Bot):
         self.confession_service: Optional[ConfessionService] = None
         self.suggestion_service: Optional[SuggestionService] = None
         self.currency_service: Optional[CurrencyService] = None
-        self.giveaway_service: Optional[GiveawayService] = None
         self.birthday_service: Optional[BirthdayService] = None
         self.city_game_service: Optional[CityGameService] = None
         self.guide_service: Optional[GuideService] = None
@@ -88,7 +86,6 @@ class SyriaBot(commands.Bot):
             "src.handlers.voice_handler",
             "src.handlers.member_handler",
             "src.handlers.message_handler",
-            "src.handlers.giveaway_handler",
         ]
         loaded_handlers = []
         for handler in handlers:
@@ -112,7 +109,6 @@ class SyriaBot(commands.Bot):
             "src.commands.image",
             "src.commands.confess",
             "src.commands.suggest",
-            "src.commands.giveaway",
             "src.commands.birthday",
             "src.commands.faq",
             "src.commands.guide",
@@ -306,14 +302,6 @@ class SyriaBot(commands.Bot):
         except Exception as e:
             log.error_tree("Currency Service Init Failed", e)
 
-        # Giveaways
-        try:
-            self.giveaway_service = GiveawayService(self)
-            await self.giveaway_service.setup()
-            initialized.append("Giveaways")
-        except Exception as e:
-            log.error_tree("Giveaway Service Init Failed", e)
-
         # Birthdays
         try:
             self.birthday_service = get_birthday_service(self)
@@ -443,14 +431,6 @@ class SyriaBot(commands.Bot):
                 stopped.append("Currency")
             except Exception as e:
                 log.error_tree("Currency Service Stop Error", e)
-
-        # Giveaways
-        if self.giveaway_service:
-            try:
-                await self.giveaway_service.stop()
-                stopped.append("Giveaways")
-            except Exception as e:
-                log.error_tree("Giveaway Service Stop Error", e)
 
         # Birthdays
         if self.birthday_service:
