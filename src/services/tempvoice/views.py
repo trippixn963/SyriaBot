@@ -628,9 +628,9 @@ class TempVoiceControlPanel(ui.View):
                 await interaction.response.send_message(embed=embed, ephemeral=True)
                 log.tree("Channel Claimed", [
                     ("Channel", channel.name),
-                    ("New Owner", f"{interaction.user.name} ({interaction.user.display_name})"),
+                    ("New Owner", f"{interaction.user.name}"),
                     ("New Owner ID", str(interaction.user.id)),
-                    ("Previous Owner", f"User ID {owner_id} (left server)"),
+                    ("Previous Owner", f"ID {owner_id} (left server)"),
                 ], emoji="👑")
 
                 if self.service:

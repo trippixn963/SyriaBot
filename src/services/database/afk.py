@@ -31,7 +31,7 @@ class AFKMixin:
             """, (user_id, guild_id, reason, now, reason, now))
 
         log.tree("AFK Set", [
-            ("User ID", str(user_id)),
+            ("ID", str(user_id)),
             ("Guild ID", str(guild_id)),
             ("Reason", reason[:50] if reason else "None"),
         ], emoji="💤")
@@ -56,7 +56,7 @@ class AFKMixin:
             """, (user_id, guild_id))
 
         log.tree("AFK Removed", [
-            ("User ID", str(user_id)),
+            ("ID", str(user_id)),
             ("Guild ID", str(guild_id)),
         ], emoji="👋")
 
@@ -104,7 +104,7 @@ class AFKMixin:
                 """, (user_id, guild_id, pinger_id, pinger_name, int(time.time())))
 
         log.tree("AFK Mention Tracked", [
-            ("User ID", str(user_id)),
+            ("ID", str(user_id)),
             ("Pinger", pinger_name or "Unknown"),
         ], emoji="📬")
 
@@ -142,7 +142,7 @@ class AFKMixin:
 
             if count > 0:
                 log.tree("AFK Mentions Cleared", [
-                    ("User ID", str(user_id)),
+                    ("ID", str(user_id)),
                     ("Count", str(count)),
                     ("Pingers", ", ".join(pinger_names) if pinger_names else "None"),
                 ], emoji="📭")

@@ -54,7 +54,7 @@ class ActionsMixin:
             """, (user_id, target_key, guild_id, action.lower(), now, now))
 
         log.tree("Action Recorded", [
-            ("User ID", str(user_id)),
+            ("ID", str(user_id)),
             ("Target ID", str(target_id) if target_id else "Self"),
             ("Action", action),
             ("Guild ID", str(guild_id)),

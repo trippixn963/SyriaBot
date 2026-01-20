@@ -178,12 +178,12 @@ class StatsMixin:
                     VALUES (?, ?, ?, ?)
                 """, (user_id, guild_id, action, int(time.time())))
             log.tree("DB: Boost Recorded", [
-                ("User ID", str(user_id)),
+                ("ID", str(user_id)),
                 ("Action", action),
             ], emoji="💎" if action == "boost" else "💔")
         except Exception as e:
             log.tree("DB: Record Boost Error", [
-                ("User ID", str(user_id)),
+                ("ID", str(user_id)),
                 ("Action", action),
                 ("Error", str(e)[:50]),
             ], emoji="❌")

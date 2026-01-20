@@ -205,7 +205,7 @@ class RateLimiter:
 
         except Exception as e:
             log.tree("Rate Limit Get Usage Failed", [
-                ("User ID", str(user_id)),
+                ("ID", str(user_id)),
                 ("Action", action_type),
                 ("Error", str(e)),
             ], emoji="❌")
@@ -270,7 +270,7 @@ class RateLimiter:
 
         except Exception as e:
             log.tree("Rate Limit Consume Failed", [
-                ("User ID", str(user_id)),
+                ("ID", str(user_id)),
                 ("Action", action_type),
                 ("Error", str(e)),
             ], emoji="❌")

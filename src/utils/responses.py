@@ -59,7 +59,7 @@ async def safe_send(
         log.tree("Response Failed", [
             ("User", f"{interaction.user.name}"),
             ("Error", str(e)[:50]),
-        ], emoji="⚠️")
+        ], emoji="❌")
         return False
 
 
@@ -87,7 +87,7 @@ async def safe_defer(
         log.tree("Defer Failed", [
             ("User", f"{interaction.user.name}"),
             ("Error", str(e)[:50]),
-        ], emoji="⚠️")
+        ], emoji="❌")
         return False
 
 
@@ -120,7 +120,7 @@ async def safe_edit(
         log.tree("Edit Failed", [
             ("User", f"{interaction.user.name}"),
             ("Error", str(e)[:50]),
-        ], emoji="⚠️")
+        ], emoji="❌")
         return False
 
 

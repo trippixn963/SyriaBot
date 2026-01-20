@@ -60,7 +60,7 @@ class XPMixin:
 
             if cur.rowcount == 0:
                 log.tree("XP User Create Failed", [
-                    ("User ID", str(user_id)),
+                    ("ID", str(user_id)),
                     ("Guild ID", str(guild_id)),
                 ], emoji="⚠️")
 
@@ -156,7 +156,7 @@ class XPMixin:
                 """, (level, user_id, guild_id))
         except Exception as e:
             log.tree("DB: Set Level Error", [
-                ("User ID", str(user_id)),
+                ("ID", str(user_id)),
                 ("Level", str(level)),
                 ("Error", str(e)[:50]),
             ], emoji="❌")
@@ -178,13 +178,13 @@ class XPMixin:
                 """, (xp, level, user_id, guild_id))
 
             log.tree("DB: XP Set", [
-                ("User ID", str(user_id)),
+                ("ID", str(user_id)),
                 ("XP", str(xp)),
                 ("Level", str(level)),
             ], emoji="✏️")
         except Exception as e:
             log.error_tree("DB: Set XP Error", e, [
-                ("User ID", str(user_id)),
+                ("ID", str(user_id)),
                 ("XP", str(xp)),
             ])
 
@@ -293,12 +293,12 @@ class XPMixin:
                 """, (user_id, guild_id))
                 conn.commit()
             log.tree("DB: User Active", [
-                ("User ID", str(user_id)),
+                ("ID", str(user_id)),
                 ("Status", "Active"),
             ], emoji="✅")
         except Exception as e:
             log.tree("DB: Set Active Error", [
-                ("User ID", str(user_id)),
+                ("ID", str(user_id)),
                 ("Error", str(e)[:50]),
             ], emoji="❌")
 
@@ -313,12 +313,12 @@ class XPMixin:
                 """, (user_id, guild_id))
                 conn.commit()
             log.tree("DB: User Inactive", [
-                ("User ID", str(user_id)),
+                ("ID", str(user_id)),
                 ("Status", "Inactive"),
             ], emoji="👋")
         except Exception as e:
             log.tree("DB: Set Inactive Error", [
-                ("User ID", str(user_id)),
+                ("ID", str(user_id)),
                 ("Error", str(e)[:50]),
             ], emoji="❌")
 

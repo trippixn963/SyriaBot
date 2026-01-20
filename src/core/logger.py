@@ -1,6 +1,6 @@
 """
-SyriaBot - Logger
-=================
+Unified Tree Logger
+===================
 
 Custom logging system with tree-style formatting and EST timezone support.
 Provides structured logging for Discord bot events with visual formatting
@@ -16,16 +16,21 @@ Features:
 - Automatic cleanup of old logs (7+ days)
 - Live logs streaming to Discord webhook in tree format
 - Separate error webhook for error-only logs
+- Persistent aiohttp session for efficient webhook delivery
+- Proper session cleanup on shutdown
 
 Log Structure:
     logs/
     ├── 2025-12-06/
-    │   ├── Syria-2025-12-06.log
-    │   └── Syria-Errors-2025-12-06.log
-    ├── 2025-12-07/
-    │   ├── Syria-2025-12-07.log
-    │   └── Syria-Errors-2025-12-07.log
+    │   ├── {BOT_NAME}-2025-12-06.log
+    │   └── {BOT_NAME}-Errors-2025-12-06.log
     └── ...
+
+Environment Variables:
+    BOT_NAME          - Name for log files and webhook usernames (default: Bot)
+    LOGS_WEBHOOK_URL  - Discord webhook URL for live logs
+    ERROR_WEBHOOK_URL - Discord webhook URL for error-only logs
+    DEBUG             - Enable debug logging (1/true/yes)
 
 Author: حَـــــنَّـــــا
 Server: discord.gg/syria
@@ -53,6 +58,9 @@ TIMEZONE = ZoneInfo("America/New_York")
 
 # Log retention period in days
 LOG_RETENTION_DAYS = 7
+
+# Bot name for log files and webhook usernames
+BOT_NAME = os.getenv("BOT_NAME", "Bot")
 
 # Regex to match emojis (for stripping from file logs)
 EMOJI_PATTERN = re.compile(
@@ -91,22 +99,28 @@ class TreeSymbols:
 class Logger:
     """Custom logger with tree-style formatting and webhook streaming."""
 
+    # Error emojis that should route to error webhook
+    ERROR_EMOJIS = {"❌", "⚠️", "🚨", "💥"}
+
     def __init__(self) -> None:
         """Initialize the logger with unique run ID and daily log folder rotation."""
         # Unique run ID for this session
         self.run_id: str = str(uuid.uuid4())[:8]
 
+        # Track start time for uptime calculation
+        self._start_time: datetime = datetime.now(TIMEZONE)
+
         # Track last log type for spacing between trees
         self._last_was_tree: bool = False
 
         # Live logs Discord webhook streaming (from env var)
-        self._live_logs_webhook_url: str = os.getenv("SYRIA_LOGS_WEBHOOK", "")
+        self._live_logs_webhook_url: str = os.getenv("LOGS_WEBHOOK_URL", "")
         self._live_logs_enabled: bool = bool(self._live_logs_webhook_url)
 
         # Error webhook (from env var)
-        self._error_webhook_url: str = os.getenv("SYRIA_ERROR_WEBHOOK", "")
+        self._error_webhook_url: str = os.getenv("ERROR_WEBHOOK_URL", "")
 
-        # Shared aiohttp session for webhook calls (lazily created)
+        # Persistent aiohttp session for webhooks (lazy initialized)
         self._webhook_session: Optional[aiohttp.ClientSession] = None
 
         # Base logs directory
@@ -121,8 +135,8 @@ class Logger:
         self.log_dir.mkdir(exist_ok=True)
 
         # Create log files inside daily folder
-        self.log_file: Path = self.log_dir / f"Syria-{self.current_date}.log"
-        self.error_file: Path = self.log_dir / f"Syria-Errors-{self.current_date}.log"
+        self.log_file: Path = self.log_dir / f"{BOT_NAME}-{self.current_date}.log"
+        self.error_file: Path = self.log_dir / f"{BOT_NAME}-Errors-{self.current_date}.log"
 
         # Clean up old log folders (older than 7 days)
         self._cleanup_old_logs()
@@ -170,8 +184,8 @@ class Logger:
             self.current_date = current_date
             self.log_dir = self.logs_base_dir / self.current_date
             self.log_dir.mkdir(exist_ok=True)
-            self.log_file = self.log_dir / f"Syria-{self.current_date}.log"
-            self.error_file = self.log_dir / f"Syria-Errors-{self.current_date}.log"
+            self.log_file = self.log_dir / f"{BOT_NAME}-{self.current_date}.log"
+            self.error_file = self.log_dir / f"{BOT_NAME}-Errors-{self.current_date}.log"
 
             # Write continuation header to new log files
             header = (
@@ -231,6 +245,62 @@ class Logger:
             prefix = TreeSymbols.LAST if is_last else TreeSymbols.BRANCH
             lines.append(f"  {prefix} {key}: {value}")
         return "\n".join(lines)
+
+    def _format_duration(self, seconds: float) -> str:
+        """Format seconds into human-readable duration (e.g., '2d 5h 30m')."""
+        if seconds < 0:
+            return "0s"
+
+        days, remainder = divmod(int(seconds), 86400)
+        hours, remainder = divmod(remainder, 3600)
+        minutes, secs = divmod(remainder, 60)
+
+        parts = []
+        if days > 0:
+            parts.append(f"{days}d")
+        if hours > 0:
+            parts.append(f"{hours}h")
+        if minutes > 0:
+            parts.append(f"{minutes}m")
+        if secs > 0 and not parts:  # Only show seconds if no larger units
+            parts.append(f"{secs}s")
+
+        return " ".join(parts) if parts else "0s"
+
+    def _format_user(self, user: Any) -> Tuple[str, str]:
+        """
+        Extract user info for consistent logging.
+
+        Returns:
+            Tuple of (display_string, user_id_string)
+
+        Handles discord.User, discord.Member, and Interaction objects.
+        """
+        try:
+            # Handle Interaction objects
+            if hasattr(user, "user"):
+                user = user.user
+
+            # Extract name and display name
+            name = getattr(user, "name", "Unknown")
+            display_name = getattr(user, "display_name", name)
+            user_id = getattr(user, "id", "Unknown")
+
+            # Format: "username (display_name)" or just "username" if same
+            if name != display_name:
+                display_str = f"{name} ({display_name})"
+            else:
+                display_str = name
+
+            return (display_str, str(user_id))
+        except Exception:
+            return ("Unknown", "Unknown")
+
+    def _get_uptime(self) -> str:
+        """Get formatted uptime since logger initialization."""
+        now = datetime.now(TIMEZONE)
+        delta = now - self._start_time
+        return self._format_duration(delta.total_seconds())
 
     # =========================================================================
     # Private Methods - File Writing
@@ -312,16 +382,26 @@ class Logger:
 
         try:
             loop = asyncio.get_running_loop()
-            loop.create_task(self._async_send_live_log(formatted_tree))
+            task = loop.create_task(self._async_send_live_log(formatted_tree))
+            task.add_done_callback(self._handle_webhook_task_exception)
         except RuntimeError:
             # No event loop running yet
+            pass
+
+    def _handle_webhook_task_exception(self, task: asyncio.Task) -> None:
+        """Handle exceptions from webhook tasks silently (already logged to file)."""
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc:
+            # Already logged to file in _async_send_webhook, just consume the exception
             pass
 
     async def _async_send_live_log(self, formatted_tree: str) -> None:
         """Send a single tree log to Discord webhook."""
         payload = {
             "content": f"```\n{formatted_tree}\n```",
-            "username": "SyriaBot Logs",
+            "username": f"{BOT_NAME} Logs",
         }
         try:
             await self._async_send_webhook(payload, self._live_logs_webhook_url)
@@ -343,17 +423,18 @@ class Logger:
         formatted = self._format_tree_for_live(title, items, emoji)
         payload = {
             "content": f"```\n{formatted}\n```",
-            "username": "SyriaBot Errors",
+            "username": f"{BOT_NAME} Errors",
         }
 
         try:
             loop = asyncio.get_running_loop()
-            loop.create_task(self._async_send_webhook(payload, self._error_webhook_url))
+            task = loop.create_task(self._async_send_webhook(payload, self._error_webhook_url))
+            task.add_done_callback(self._handle_webhook_task_exception)
         except RuntimeError:
             pass
 
     async def _get_webhook_session(self) -> aiohttp.ClientSession:
-        """Get or create shared webhook session."""
+        """Get or create persistent webhook session."""
         if self._webhook_session is None or self._webhook_session.closed:
             self._webhook_session = aiohttp.ClientSession(
                 timeout=aiohttp.ClientTimeout(total=5)
@@ -361,7 +442,7 @@ class Logger:
         return self._webhook_session
 
     async def _async_send_webhook(self, payload: dict, webhook_url: str) -> None:
-        """Send webhook payload asynchronously using shared session."""
+        """Send webhook payload asynchronously using persistent session."""
         try:
             session = await self._get_webhook_session()
             async with session.post(webhook_url, json=payload) as response:
@@ -376,6 +457,12 @@ class Logger:
             self._write_to_file_only(f"[WEBHOOK] Client error: {type(e).__name__}")
         except Exception as e:
             self._write_to_file_only(f"[WEBHOOK] Error: {type(e).__name__}: {e}")
+
+    async def close_webhook_session(self) -> None:
+        """Close the persistent webhook session (call on shutdown)."""
+        if self._webhook_session and not self._webhook_session.closed:
+            await self._webhook_session.close()
+            self._webhook_session = None
 
     def _format_tree_for_live(
         self,
@@ -499,9 +586,6 @@ class Logger:
     # =========================================================================
     # Public Methods - Tree Formatting
     # =========================================================================
-
-    # Error emojis that should route to error webhook
-    ERROR_EMOJIS = {"❌", "⚠️", "🚨", "💥"}
 
     def tree(
         self,
@@ -717,6 +801,69 @@ class Logger:
 
         self._tree_error(title, items, emoji="❌")
 
+    def startup_banner(
+        self,
+        bot_name: str,
+        bot_id: int,
+        guilds: int,
+        latency: float,
+        extra: Optional[List[Tuple[str, Any]]] = None
+    ) -> None:
+        """
+        Log bot startup with a banner and tree format.
+
+        Example output:
+            ═══════════════════════════════════════
+                    SyriaBot │ Run: a1b2c3d4
+            ═══════════════════════════════════════
+
+            [12:00:00 PM EST] 🤖 Bot Ready
+              ├─ Bot ID: 123456789
+              ├─ Guilds: 5
+              └─ Latency: 50ms
+
+        Args:
+            bot_name: Name of the bot
+            bot_id: Discord bot ID
+            guilds: Number of guilds
+            latency: WebSocket latency in ms
+            extra: Additional startup info
+        """
+        # Build the banner
+        banner_text = f"{bot_name} │ Run: {self.run_id}"
+        banner_width = 43
+        padding = (banner_width - len(banner_text)) // 2
+        centered_text = " " * padding + banner_text
+
+        banner = (
+            f"{'═' * banner_width}\n"
+            f"{centered_text}\n"
+            f"{'═' * banner_width}"
+        )
+
+        # Print banner to console and file
+        print(f"\n{banner}\n")
+        try:
+            with open(self.log_file, "a", encoding="utf-8") as f:
+                f.write(f"\n{banner}\n\n")
+        except (OSError, IOError):
+            pass
+
+        # Send banner to webhook
+        self._send_live_log(banner)
+
+        # Now log the tree with details
+        items: List[Tuple[str, Any]] = [
+            ("Bot ID", bot_id),
+            ("Guilds", guilds),
+            ("Latency", f"{latency:.0f}ms"),
+        ]
+
+        if extra:
+            items.extend(extra)
+
+        self.tree("Bot Ready", items, emoji="🤖")
+
     def startup_tree(
         self,
         bot_name: str,
@@ -726,7 +873,8 @@ class Logger:
         extra: Optional[List[Tuple[str, Any]]] = None
     ) -> None:
         """
-        Log bot startup information in tree format.
+        Log bot startup information in tree format (legacy method).
+        Consider using startup_banner() for a nicer output.
 
         Args:
             bot_name: Name of the bot
@@ -747,11 +895,149 @@ class Logger:
 
         self.tree(f"Bot Ready: {bot_name}", items, emoji="🤖")
 
+    def shutdown_tree(
+        self,
+        bot_name: str,
+        reason: str = "Shutdown requested",
+        extra: Optional[List[Tuple[str, Any]]] = None
+    ) -> None:
+        """
+        Log bot shutdown with banner and tree format.
+
+        Example output:
+            ═══════════════════════════════════════════
+               SyriaBot │ Shutdown │ Run: a1b2c3d4
+            ═══════════════════════════════════════════
+
+            [12:00:00 PM EST] 👋 Bot Shutting Down
+              ├─ Reason: Restart requested
+              └─ Uptime: 3d 12h 5m
+
+        Args:
+            bot_name: Name of the bot
+            reason: Reason for shutdown
+            extra: Additional context as (key, value) tuples
+        """
+        # Build the shutdown banner
+        banner_text = f"{bot_name} │ Shutdown │ Run: {self.run_id}"
+        banner_width = max(43, len(banner_text) + 4)
+        padding = (banner_width - len(banner_text)) // 2
+        centered_text = " " * padding + banner_text
+
+        banner = (
+            f"{'═' * banner_width}\n"
+            f"{centered_text}\n"
+            f"{'═' * banner_width}"
+        )
+
+        # Print banner to console and file
+        print(f"\n{banner}\n")
+        try:
+            with open(self.log_file, "a", encoding="utf-8") as f:
+                f.write(f"\n{banner}\n\n")
+        except (OSError, IOError):
+            pass
+
+        # Send banner to webhook
+        self._send_live_log(banner)
+
+        # Now log the tree with details
+        items: List[Tuple[str, Any]] = [
+            ("Reason", reason),
+            ("Uptime", self._get_uptime()),
+        ]
+
+        if extra:
+            items.extend(extra)
+
+        self.tree("Bot Shutting Down", items, emoji="👋")
+
+    def cooldown(
+        self,
+        user: Any,
+        command: str,
+        remaining: float,
+        extra: Optional[List[Tuple[str, Any]]] = None
+    ) -> None:
+        """
+        Log a command cooldown event.
+
+        Example output:
+            [12:00:00 PM EST] ⏳ Command Cooldown
+              ├─ User: john (Johnny)
+              ├─ ID: 123456789
+              ├─ Command: daily
+              └─ Remaining: 2h 30m
+
+        Args:
+            user: Discord User, Member, or Interaction object
+            command: Name of the command on cooldown
+            remaining: Remaining cooldown in seconds
+            extra: Additional context as (key, value) tuples
+        """
+        user_str, user_id = self._format_user(user)
+
+        items: List[Tuple[str, Any]] = [
+            ("User", user_str),
+            ("ID", user_id),
+            ("Command", command),
+            ("Remaining", self._format_duration(remaining)),
+        ]
+
+        if extra:
+            items.extend(extra)
+
+        self.tree("Command Cooldown", items, emoji="⏳")
+
+    def command_blocked(
+        self,
+        user: Any,
+        reason: str,
+        command: Optional[str] = None,
+        extra: Optional[List[Tuple[str, Any]]] = None
+    ) -> None:
+        """
+        Log a blocked command attempt.
+
+        Example output:
+            [12:00:00 PM EST] 🚫 Command Blocked
+              ├─ User: john (Johnny)
+              ├─ ID: 123456789
+              ├─ Command: daily
+              └─ Reason: DM not allowed
+
+        Args:
+            user: Discord User, Member, or Interaction object
+            reason: Why the command was blocked
+            command: Optional command name
+            extra: Additional context as (key, value) tuples
+        """
+        user_str, user_id = self._format_user(user)
+
+        items: List[Tuple[str, Any]] = [
+            ("User", user_str),
+            ("ID", user_id),
+        ]
+
+        if command:
+            items.append(("Command", command))
+
+        items.append(("Reason", reason))
+
+        if extra:
+            items.extend(extra)
+
+        self.tree("Command Blocked", items, emoji="🚫")
+
 
 # =============================================================================
 # Module Export
 # =============================================================================
 
-log = Logger()
+# Create singleton instance
+logger = Logger()
 
-__all__ = ["log", "Logger", "TreeSymbols"]
+# Backwards compatibility alias
+log = logger
+
+__all__ = ["logger", "log", "Logger", "TreeSymbols"]

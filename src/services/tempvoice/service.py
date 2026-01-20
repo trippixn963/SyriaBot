@@ -1094,7 +1094,7 @@ class TempVoiceService:
             member = guild.get_member(member_id)
             if not member:
                 log.tree("Create Skipped", [
-                    ("User ID", str(member_id)),
+                    ("ID", str(member_id)),
                     ("Reason", "Member not found in guild"),
                 ], emoji="⏭️")
                 return
@@ -1119,7 +1119,7 @@ class TempVoiceService:
             ], emoji="🔍")
         except Exception as e:
             log.error_tree("Create Member Fetch Failed", e, [
-                ("User ID", str(member_id)),
+                ("ID", str(member_id)),
             ])
             return
 

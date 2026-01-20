@@ -377,7 +377,7 @@ class SyriaAPI:
         except Exception as e:
             # Log unexpected errors (rate limits, API errors, etc.)
             log.tree("User Fetch Error", [
-                ("User ID", str(uid)),
+                ("ID", str(uid)),
                 ("Error", str(e)[:50]),
             ], emoji="⚠️")
 
@@ -577,7 +577,7 @@ class SyriaAPI:
         except Exception as e:
             log.error_tree("User API Error", e, [
                 ("Client IP", client_ip),
-                ("User ID", request.match_info.get("user_id", "unknown")),
+                ("ID", request.match_info.get("user_id", "unknown")),
             ])
             return web.json_response(
                 {"error": "Internal server error"},
@@ -748,7 +748,7 @@ class SyriaAPI:
         if amount is None or not isinstance(amount, int):
             log.tree("XP Grant Bad Request", [
                 ("Client IP", client_ip),
-                ("User ID", str(user_id)),
+                ("ID", str(user_id)),
                 ("Error", "amount (int) is required"),
                 ("Received", str(amount)[:50]),
             ], emoji="⚠️")
@@ -761,7 +761,7 @@ class SyriaAPI:
         if amount <= 0 or amount > 100000:
             log.tree("XP Grant Bad Request", [
                 ("Client IP", client_ip),
-                ("User ID", str(user_id)),
+                ("ID", str(user_id)),
                 ("Error", "amount out of range"),
                 ("Amount", str(amount)),
             ], emoji="⚠️")
@@ -789,7 +789,7 @@ class SyriaAPI:
             await asyncio.to_thread(db.add_xp, user_id, guild_id, amount)
 
             log.tree("XP Granted via API", [
-                ("User ID", str(user_id)),
+                ("ID", str(user_id)),
                 ("Amount", f"+{amount}"),
                 ("New XP", str(new_xp)),
                 ("Level", f"{current_level} → {new_level}" if new_level != current_level else str(new_level)),
@@ -813,7 +813,7 @@ class SyriaAPI:
 
         except Exception as e:
             log.error_tree("XP Grant API Error", e, [
-                ("User ID", str(user_id)),
+                ("ID", str(user_id)),
                 ("Amount", str(amount)),
                 ("Client IP", client_ip),
             ])
@@ -885,7 +885,7 @@ class SyriaAPI:
         if new_xp is None or not isinstance(new_xp, int):
             log.tree("XP Set Bad Request", [
                 ("Client IP", client_ip),
-                ("User ID", str(user_id)),
+                ("ID", str(user_id)),
                 ("Error", "xp (int) is required"),
                 ("Received", str(new_xp)[:50]),
             ], emoji="⚠️")
@@ -898,7 +898,7 @@ class SyriaAPI:
         if new_xp < 0 or new_xp > 10000000:
             log.tree("XP Set Bad Request", [
                 ("Client IP", client_ip),
-                ("User ID", str(user_id)),
+                ("ID", str(user_id)),
                 ("Error", "xp out of range"),
                 ("XP", str(new_xp)),
             ], emoji="⚠️")
@@ -924,7 +924,7 @@ class SyriaAPI:
             await asyncio.to_thread(db.set_xp, user_id, guild_id, new_xp, new_level)
 
             log.tree("XP Set via API", [
-                ("User ID", str(user_id)),
+                ("ID", str(user_id)),
                 ("XP", f"{old_xp} → {new_xp}"),
                 ("Level", f"{old_level} → {new_level}"),
                 ("Reason", reason[:50]),
@@ -946,7 +946,7 @@ class SyriaAPI:
 
         except Exception as e:
             log.error_tree("XP Set API Error", e, [
-                ("User ID", str(user_id)),
+                ("ID", str(user_id)),
                 ("XP", str(new_xp)),
                 ("Client IP", client_ip),
             ])

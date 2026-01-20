@@ -136,7 +136,7 @@ class GiveawaysMixin:
 
                 log.tree("Giveaway Entry Added", [
                     ("Giveaway ID", str(giveaway_id)),
-                    ("User ID", str(user_id)),
+                    ("ID", str(user_id)),
                 ], emoji="🎟️")
 
                 return True
@@ -157,7 +157,7 @@ class GiveawaysMixin:
             if cursor.rowcount > 0:
                 log.tree("Giveaway Entry Removed", [
                     ("Giveaway ID", str(giveaway_id)),
-                    ("User ID", str(user_id)),
+                    ("ID", str(user_id)),
                 ], emoji="🎟️")
                 return True
             return False

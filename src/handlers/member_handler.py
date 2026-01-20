@@ -267,12 +267,12 @@ class MembersHandler(commands.Cog):
             # Clear response cache (leaderboard/stats contain booster info)
             stats_api._response_cache.clear()
             log.tree("API Cache Invalidated", [
-                ("User ID", str(user_id)),
+                ("ID", str(user_id)),
                 ("Reason", "Boost status changed"),
             ], emoji="🔄")
         except Exception as e:
             log.tree("API Cache Invalidate Failed", [
-                ("User ID", str(user_id)),
+                ("ID", str(user_id)),
                 ("Error", str(e)[:50]),
             ], emoji="⚠️")
 

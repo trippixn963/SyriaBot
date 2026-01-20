@@ -65,7 +65,7 @@ class RateLimitsMixin:
                     VALUES (?, 1, ?)
                 """, (user_id, week_start))
                 log.tree("Convert Usage Recorded", [
-                    ("User ID", str(user_id)),
+                    ("ID", str(user_id)),
                     ("Uses", "1"),
                     ("Remaining", "2"),
                 ], emoji="🔄")
@@ -79,7 +79,7 @@ class RateLimitsMixin:
                     WHERE user_id = ?
                 """, (week_start, user_id))
                 log.tree("Convert Usage Reset (New Week)", [
-                    ("User ID", str(user_id)),
+                    ("ID", str(user_id)),
                     ("Uses", "1"),
                     ("Remaining", "2"),
                 ], emoji="🔄")
@@ -92,7 +92,7 @@ class RateLimitsMixin:
             """, (new_uses, user_id))
             remaining = max(0, 3 - new_uses)
             log.tree("Convert Usage Recorded", [
-                ("User ID", str(user_id)),
+                ("ID", str(user_id)),
                 ("Uses", str(new_uses)),
                 ("Remaining", str(remaining)),
             ], emoji="🔄")
@@ -155,7 +155,7 @@ class RateLimitsMixin:
                     VALUES (?, 1, ?)
                 """, (user_id, week_start))
                 log.tree("Download Usage Recorded", [
-                    ("User ID", str(user_id)),
+                    ("ID", str(user_id)),
                     ("Uses", "1"),
                     ("Remaining", str(weekly_limit - 1)),
                 ], emoji="📥")
@@ -169,7 +169,7 @@ class RateLimitsMixin:
                     WHERE user_id = ?
                 """, (week_start, user_id))
                 log.tree("Download Usage Reset (New Week)", [
-                    ("User ID", str(user_id)),
+                    ("ID", str(user_id)),
                     ("Uses", "1"),
                     ("Remaining", str(weekly_limit - 1)),
                 ], emoji="📥")
@@ -182,7 +182,7 @@ class RateLimitsMixin:
             """, (new_uses, user_id))
             remaining = max(0, weekly_limit - new_uses)
             log.tree("Download Usage Recorded", [
-                ("User ID", str(user_id)),
+                ("ID", str(user_id)),
                 ("Uses", str(new_uses)),
                 ("Remaining", str(remaining)),
             ], emoji="📥")
@@ -237,7 +237,7 @@ class RateLimitsMixin:
                     VALUES (?, 1, ?)
                 """, (user_id, week_start))
                 log.tree("Image Usage Recorded", [
-                    ("User ID", str(user_id)),
+                    ("ID", str(user_id)),
                     ("Uses", "1"),
                     ("Remaining", str(weekly_limit - 1)),
                 ], emoji="🖼️")
@@ -251,7 +251,7 @@ class RateLimitsMixin:
                     WHERE user_id = ?
                 """, (week_start, user_id))
                 log.tree("Image Usage Reset (New Week)", [
-                    ("User ID", str(user_id)),
+                    ("ID", str(user_id)),
                     ("Uses", "1"),
                     ("Remaining", str(weekly_limit - 1)),
                 ], emoji="🖼️")
@@ -264,7 +264,7 @@ class RateLimitsMixin:
             """, (new_uses, user_id))
             remaining = max(0, weekly_limit - new_uses)
             log.tree("Image Usage Recorded", [
-                ("User ID", str(user_id)),
+                ("ID", str(user_id)),
                 ("Uses", str(new_uses)),
                 ("Remaining", str(remaining)),
             ], emoji="🖼️")

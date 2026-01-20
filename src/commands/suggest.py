@@ -33,8 +33,8 @@ class SuggestionModal(discord.ui.Modal, title="Submit a Suggestion"):
     async def on_submit(self, interaction: discord.Interaction) -> None:
         """Handle modal submission."""
         log.tree("Suggestion Modal Submitted", [
-            ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-            ("User ID", str(interaction.user.id)),
+            ("User", f"{interaction.user.name}"),
+            ("ID", str(interaction.user.id)),
             ("Length", f"{len(self.suggestion.value)} chars"),
         ], emoji="📝")
 
@@ -42,8 +42,8 @@ class SuggestionModal(discord.ui.Modal, title="Submit a Suggestion"):
         bot = interaction.client
         if not hasattr(bot, "suggestion_service") or bot.suggestion_service is None:
             log.tree("Suggestion Modal Failed", [
-                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                ("User ID", str(interaction.user.id)),
+                ("User", f"{interaction.user.name}"),
+                ("ID", str(interaction.user.id)),
                 ("Reason", "Service not initialized"),
             ], emoji="⚠️")
             await interaction.response.send_message(
@@ -69,14 +69,14 @@ class SuggestionModal(discord.ui.Modal, title="Submit a Suggestion"):
 
         if success:
             log.tree("Suggestion Modal Success", [
-                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                ("User ID", str(interaction.user.id)),
+                ("User", f"{interaction.user.name}"),
+                ("ID", str(interaction.user.id)),
                 ("Response", message),
             ], emoji="✅")
         else:
             log.tree("Suggestion Modal Failed", [
-                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                ("User ID", str(interaction.user.id)),
+                ("User", f"{interaction.user.name}"),
+                ("ID", str(interaction.user.id)),
                 ("Error", message),
             ], emoji="❌")
 
@@ -127,8 +127,8 @@ class SuggestCog(commands.Cog):
         # Check permissions
         if not interaction.user.guild_permissions.manage_messages:
             log.tree("Suggestion Status Denied", [
-                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                ("User ID", str(interaction.user.id)),
+                ("User", f"{interaction.user.name}"),
+                ("ID", str(interaction.user.id)),
                 ("Reason", "Missing manage_messages permission"),
             ], emoji="🚫")
             await interaction.response.send_message(
@@ -199,15 +199,15 @@ class SuggestCog(commands.Cog):
     async def suggest(self, interaction: discord.Interaction) -> None:
         """Open suggestion modal."""
         log.tree("Suggest Command", [
-            ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-            ("User ID", str(interaction.user.id)),
+            ("User", f"{interaction.user.name}"),
+            ("ID", str(interaction.user.id)),
         ], emoji="💡")
 
         # Check if service is enabled
         if not hasattr(self.bot, "suggestion_service") or self.bot.suggestion_service is None:
             log.tree("Suggest Command Blocked", [
-                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                ("User ID", str(interaction.user.id)),
+                ("User", f"{interaction.user.name}"),
+                ("ID", str(interaction.user.id)),
                 ("Reason", "Service not initialized"),
             ], emoji="⚠️")
             await interaction.response.send_message(
@@ -219,8 +219,8 @@ class SuggestCog(commands.Cog):
         service = self.bot.suggestion_service
         if not service.is_enabled():
             log.tree("Suggest Command Blocked", [
-                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                ("User ID", str(interaction.user.id)),
+                ("User", f"{interaction.user.name}"),
+                ("ID", str(interaction.user.id)),
                 ("Reason", "Service disabled"),
             ], emoji="⚠️")
             await interaction.response.send_message(
@@ -233,8 +233,8 @@ class SuggestCog(commands.Cog):
         can_submit, reason = await service.can_submit(interaction.user.id)
         if not can_submit:
             log.tree("Suggest Command Blocked", [
-                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                ("User ID", str(interaction.user.id)),
+                ("User", f"{interaction.user.name}"),
+                ("ID", str(interaction.user.id)),
                 ("Reason", reason),
             ], emoji="⏳")
             await interaction.response.send_message(reason, ephemeral=True)
@@ -244,8 +244,8 @@ class SuggestCog(commands.Cog):
         await interaction.response.send_modal(SuggestionModal())
 
         log.tree("Suggest Modal Opened", [
-            ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-            ("User ID", str(interaction.user.id)),
+            ("User", f"{interaction.user.name}"),
+            ("ID", str(interaction.user.id)),
         ], emoji="📝")
 
 

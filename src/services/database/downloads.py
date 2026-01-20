@@ -40,7 +40,7 @@ class DownloadsMixin:
             """, (user_id, platform.lower(), file_count, now, file_count, now))
 
         log.tree("Download Stats Recorded", [
-            ("User ID", str(user_id)),
+            ("ID", str(user_id)),
             ("Platform", platform.title()),
             ("Files", str(file_count)),
         ], emoji="📊")

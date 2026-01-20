@@ -69,14 +69,14 @@ class CurrencyService:
         """
         if not self._enabled or not self._session:
             log.tree("Currency Grant Skipped", [
-                ("User ID", str(user_id)),
+                ("ID", str(user_id)),
                 ("Reason", "Service not enabled"),
             ], emoji="ℹ️")
             return False, "Currency service not enabled"
 
         if amount < 1 or amount > 10_000_000:
             log.tree("Currency Grant Validation Failed", [
-                ("User ID", str(user_id)),
+                ("ID", str(user_id)),
                 ("Amount", str(amount)),
                 ("Reason", "Must be 1-10,000,000"),
             ], emoji="⚠️")
@@ -84,7 +84,7 @@ class CurrencyService:
 
         if target not in ("wallet", "bank"):
             log.tree("Currency Grant Validation Failed", [
-                ("User ID", str(user_id)),
+                ("ID", str(user_id)),
                 ("Target", str(target)),
                 ("Reason", "Must be 'wallet' or 'bank'"),
             ], emoji="⚠️")
@@ -104,7 +104,7 @@ class CurrencyService:
                 if resp.status == 200:
                     data = await resp.json()
                     log.tree("Currency Granted", [
-                        ("User ID", str(user_id)),
+                        ("ID", str(user_id)),
                         ("Target", target.title()),
                         ("Amount", f"+{amount:,}"),
                         ("New Balance", f"{data.get('new_balance', 0):,}"),
@@ -113,14 +113,14 @@ class CurrencyService:
                     return True, f"Granted {amount:,} coins to {target}!"
                 elif resp.status == 401:
                     log.tree("Currency Grant Failed", [
-                        ("User ID", str(user_id)),
+                        ("ID", str(user_id)),
                         ("Reason", "Invalid API key"),
                     ], emoji="🔒")
                     return False, "API authentication failed"
                 else:
                     error = await resp.text()
                     log.tree("Currency Grant Failed", [
-                        ("User ID", str(user_id)),
+                        ("ID", str(user_id)),
                         ("Status", str(resp.status)),
                         ("Error", error[:50]),
                     ], emoji="❌")
@@ -128,13 +128,13 @@ class CurrencyService:
 
         except aiohttp.ClientError as e:
             log.tree("Currency Grant Error", [
-                ("User ID", str(user_id)),
+                ("ID", str(user_id)),
                 ("Error", str(e)[:50]),
             ], emoji="❌")
             return False, "Connection error"
         except Exception as e:
             log.tree("Currency Grant Error", [
-                ("User ID", str(user_id)),
+                ("ID", str(user_id)),
                 ("Error", str(e)[:50]),
             ], emoji="❌")
             return False, "Unexpected error"
@@ -151,7 +151,7 @@ class CurrencyService:
         """
         if not self._enabled or not self._session:
             log.tree("Currency Balance Check Skipped", [
-                ("User ID", str(user_id)),
+                ("ID", str(user_id)),
                 ("Reason", "Service not enabled"),
             ], emoji="ℹ️")
             return None
@@ -164,7 +164,7 @@ class CurrencyService:
                     data = await resp.json()
                     balance = data.get("wallet", 0) + data.get("bank", 0)
                     log.tree("Currency Balance Fetched", [
-                        ("User ID", str(user_id)),
+                        ("ID", str(user_id)),
                         ("Wallet", f"{data.get('wallet', 0):,}"),
                         ("Bank", f"{data.get('bank', 0):,}"),
                         ("Total", f"{balance:,}"),
@@ -172,25 +172,25 @@ class CurrencyService:
                     return balance
                 elif resp.status == 404:
                     log.tree("Currency Balance Not Found", [
-                        ("User ID", str(user_id)),
+                        ("ID", str(user_id)),
                         ("Reason", "User has no economy data"),
                     ], emoji="ℹ️")
                     return None
                 else:
                     log.tree("Currency Balance Fetch Failed", [
-                        ("User ID", str(user_id)),
+                        ("ID", str(user_id)),
                         ("Status", str(resp.status)),
                     ], emoji="⚠️")
                     return None
         except aiohttp.ClientError as e:
             log.tree("Currency Balance Error", [
-                ("User ID", str(user_id)),
+                ("ID", str(user_id)),
                 ("Error", str(e)[:50]),
             ], emoji="❌")
             return None
         except Exception as e:
             log.tree("Currency Balance Error", [
-                ("User ID", str(user_id)),
+                ("ID", str(user_id)),
                 ("Error", str(e)[:50]),
             ], emoji="❌")
             return None

@@ -46,8 +46,8 @@ class ReadyHandler(commands.Cog):
     @commands.Cog.listener()
     async def on_ready(self) -> None:
         """Called when the bot is ready."""
-        # Use startup_tree for bot ready
-        log.startup_tree(
+        # Use startup_banner for bot ready
+        log.startup_banner(
             bot_name=str(self.bot.user),
             bot_id=self.bot.user.id,
             guilds=len(self.bot.guilds),

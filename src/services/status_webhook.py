@@ -21,8 +21,6 @@ import aiohttp
 import psutil
 
 from src.core.logger import log
-from src.core.config import config
-from src.services.database import db
 
 if TYPE_CHECKING:
     from src.bot import SyriaBot
@@ -137,52 +135,6 @@ class StatusWebhookService:
         except Exception:
             return {}
 
-    def _get_bot_stats(self) -> dict:
-        """Get SyriaBot-specific stats."""
-        stats = {
-            "active_voice_channels": 0,
-            "users_in_voice": 0,
-            "total_xp_users": 0,
-            "messages_today": 0,
-        }
-
-        if not self._bot:
-            return stats
-
-        try:
-            # Count active temp voice channels
-            channels = db.get_all_temp_channels()
-            stats["active_voice_channels"] = len(channels)
-
-            # Count users in voice (main guild only)
-            if config.GUILD_ID:
-                guild = self._bot.get_guild(config.GUILD_ID)
-                if guild:
-                    stats["users_in_voice"] = sum(
-                        1 for vc in guild.voice_channels
-                        for m in vc.members if not m.bot
-                    )
-
-            # Get XP stats
-            xp_stats = db.get_xp_stats(config.GUILD_ID)
-            if xp_stats:
-                stats["total_xp_users"] = xp_stats.get("total_users", 0)
-
-            # Get today's message count from daily stats
-            today = datetime.now(NY_TZ).strftime("%Y-%m-%d")
-            daily_stats = db.get_daily_stats(config.GUILD_ID, days=1)
-            if daily_stats and len(daily_stats) > 0:
-                # Check if the most recent entry is today
-                if daily_stats[0].get("date") == today:
-                    stats["messages_today"] = daily_stats[0].get("total_messages", 0)
-
-        except Exception as e:
-            log.tree("Stats Fetch Error", [
-                ("Error", str(e)[:50]),
-            ], emoji="⚠️")
-
-        return stats
-
     def _create_status_embed(self, status: str, color: int, include_health: bool = False) -> dict:
         """Create status embed with uptime and health info."""
         now = datetime.now(NY_TZ)
@@ -198,19 +150,6 @@ class StatusWebhookService:
 
             # Guild count
             description += f"\n**Guilds:** `{len(self._bot.guilds)}`"
-
-            # SyriaBot-specific stats
-            bot_stats = self._get_bot_stats()
-
-            if bot_stats["active_voice_channels"] > 0 or bot_stats["users_in_voice"] > 0:
-                description += f"\n\n**Voice Stats**"
-                description += f"\nActive Channels: `{bot_stats['active_voice_channels']}`"
-                description += f"\nUsers in Voice: `{bot_stats['users_in_voice']}`"
-
-            if bot_stats["total_xp_users"] > 0 or bot_stats["messages_today"] > 0:
-                description += f"\n\n**Activity Stats**"
-                description += f"\nXP Users: `{bot_stats['total_xp_users']}`"
-                description += f"\nMessages Today: `{bot_stats['messages_today']}`"
 
             # System resources with progress bars
             resources = self._get_system_resources()

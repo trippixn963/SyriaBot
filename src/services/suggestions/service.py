@@ -127,29 +127,29 @@ class SuggestionService:
         try:
             await message.delete()
             log.tree("Suggestions Channel Message Deleted", [
-                ("User", f"{message.author.name} ({message.author.display_name})"),
-                ("User ID", str(message.author.id)),
+                ("User", f"{message.author.name}"),
+                ("ID", str(message.author.id)),
                 ("Content", message.content[:LOG_CONTENT_TRUNCATE] if message.content else "(empty)"),
                 ("Channel", message.channel.name if hasattr(message.channel, "name") else str(message.channel.id)),
             ], emoji="🗑️")
             return True
         except discord.NotFound:
             log.tree("Suggestions Message Already Deleted", [
-                ("User", f"{message.author.name} ({message.author.display_name})"),
-                ("User ID", str(message.author.id)),
+                ("User", f"{message.author.name}"),
+                ("ID", str(message.author.id)),
             ], emoji="ℹ️")
             return True
         except discord.Forbidden:
             log.tree("Suggestions Message Delete Forbidden", [
-                ("User", f"{message.author.name} ({message.author.display_name})"),
-                ("User ID", str(message.author.id)),
+                ("User", f"{message.author.name}"),
+                ("ID", str(message.author.id)),
                 ("Reason", "Missing permissions"),
             ], emoji="⚠️")
             return False
         except discord.HTTPException as e:
             log.tree("Suggestions Message Delete Failed", [
-                ("User", f"{message.author.name} ({message.author.display_name})"),
-                ("User ID", str(message.author.id)),
+                ("User", f"{message.author.name}"),
+                ("ID", str(message.author.id)),
                 ("Error", str(e)[:LOG_CONTENT_TRUNCATE]),
             ], emoji="❌")
             return False
@@ -167,7 +167,7 @@ class SuggestionService:
         count = await asyncio.to_thread(db.get_user_suggestion_count_today, user_id)
         if count >= MAX_SUGGESTIONS_PER_DAY:
             log.tree("Suggestion Rate Limited", [
-                ("User ID", str(user_id)),
+                ("ID", str(user_id)),
                 ("Count Today", str(count)),
                 ("Limit", str(MAX_SUGGESTIONS_PER_DAY)),
             ], emoji="⏳")
@@ -191,8 +191,8 @@ class SuggestionService:
         """
         if not self._enabled:
             log.tree("Suggestion Submit Blocked", [
-                ("User", f"{submitter.name} ({submitter.display_name})"),
-                ("User ID", str(submitter.id)),
+                ("User", f"{submitter.name}"),
+                ("ID", str(submitter.id)),
                 ("Reason", "Service disabled"),
             ], emoji="⚠️")
             return False, "Suggestions are not enabled"
@@ -200,8 +200,8 @@ class SuggestionService:
         channel = self.bot.get_channel(self._channel_id)
         if not channel or not isinstance(channel, discord.TextChannel):
             log.tree("Suggestion Submit Blocked", [
-                ("User", f"{submitter.name} ({submitter.display_name})"),
-                ("User ID", str(submitter.id)),
+                ("User", f"{submitter.name}"),
+                ("ID", str(submitter.id)),
                 ("Reason", "Channel not found"),
                 ("Channel ID", str(self._channel_id)),
             ], emoji="⚠️")
@@ -220,8 +220,8 @@ class SuggestionService:
                 suggestion_num: int = stats["total"] + 1
 
                 log.tree("Suggestion Processing", [
-                    ("User", f"{submitter.name} ({submitter.display_name})"),
-                    ("User ID", str(submitter.id)),
+                    ("User", f"{submitter.name}"),
+                    ("ID", str(submitter.id)),
                     ("Number", f"#{suggestion_num}"),
                     ("Length", f"{len(content)} chars"),
                 ], emoji="⏳")
@@ -330,10 +330,10 @@ class SuggestionService:
                     return False, "Failed to save suggestion"
 
                 log.tree("Suggestion Submitted", [
-                    ("ID", str(suggestion_id)),
+                    ("Suggestion ID", str(suggestion_id)),
                     ("Number", f"#{suggestion_num}"),
-                    ("User", f"{submitter.name} ({submitter.display_name})"),
-                    ("User ID", str(submitter.id)),
+                    ("User", f"{submitter.name}"),
+                    ("ID", str(submitter.id)),
                     ("Message ID", str(msg.id)),
                     ("Thread", thread.name if thread else "None"),
                     ("Length", f"{len(content)} chars"),
@@ -346,15 +346,15 @@ class SuggestionService:
 
             except discord.Forbidden:
                 log.tree("Suggestion Submit Forbidden", [
-                    ("User", f"{submitter.name} ({submitter.display_name})"),
-                    ("User ID", str(submitter.id)),
+                    ("User", f"{submitter.name}"),
+                    ("ID", str(submitter.id)),
                     ("Reason", "Missing permissions"),
                 ], emoji="⚠️")
                 return False, "Missing permissions to post suggestions"
             except discord.HTTPException as e:
                 log.error_tree("Suggestion Submit Failed", e, [
-                    ("User", f"{submitter.name} ({submitter.display_name})"),
-                    ("User ID", str(submitter.id)),
+                    ("User", f"{submitter.name}"),
+                    ("ID", str(submitter.id)),
                 ])
                 return False, "Failed to submit suggestion"
 
@@ -378,7 +378,7 @@ class SuggestionService:
         log.tree("Suggestion Status Update Started", [
             ("Message ID", str(message.id)),
             ("New Status", status),
-            ("Mod", f"{mod.name} ({mod.display_name})"),
+            ("Mod", f"{mod.name}"),
             ("Mod ID", str(mod.id)),
         ], emoji="⏳")
 
@@ -449,7 +449,7 @@ class SuggestionService:
                 ("ID", str(suggestion["id"])),
                 ("Status", status),
                 ("Display", status_display),
-                ("Mod", f"{mod.name} ({mod.display_name})"),
+                ("Mod", f"{mod.name}"),
                 ("Mod ID", str(mod.id)),
             ], emoji="✅")
 

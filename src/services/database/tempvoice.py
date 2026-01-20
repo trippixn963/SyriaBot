@@ -172,7 +172,7 @@ class TempVoiceMixin:
                     cur.execute(f"UPDATE user_settings SET {sets} WHERE user_id = ?", values)
         except Exception as e:
             log.tree("DB: Save User Settings Error", [
-                ("User ID", str(user_id)),
+                ("ID", str(user_id)),
                 ("Error", str(e)[:50]),
             ], emoji="❌")
 

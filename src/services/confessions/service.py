@@ -335,7 +335,7 @@ class ConfessionService:
             existing_id = thread_users[user_id]
             log.tree("Anon-ID Reused", [
                 ("Thread ID", str(thread_id)),
-                ("User ID", str(user_id)),
+                ("ID", str(user_id)),
                 ("Anon-ID", existing_id),
             ], emoji="🎭")
             return existing_id
@@ -370,7 +370,7 @@ class ConfessionService:
 
         log.tree("Anon-ID Assigned", [
             ("Thread ID", str(thread_id)),
-            ("User ID", str(user_id)),
+            ("ID", str(user_id)),
             ("Anon-ID", anon_id),
         ], emoji="🎭")
 
@@ -478,16 +478,16 @@ class ConfessionService:
         if confession_number is None:
             log.tree("Confession Auto-Approve Failed", [
                 ("DB ID", str(confession_id)),
-                ("User", f"{submitter.name} ({submitter.display_name})"),
-                ("User ID", str(submitter.id)),
+                ("User", f"{submitter.name}"),
+                ("ID", str(submitter.id)),
                 ("Reason", "Database approval failed"),
             ], emoji="❌")
             return False
 
         log.tree("Confession Submitted", [
             ("Confession", f"#{confession_number}"),
-            ("User", f"{submitter.name} ({submitter.display_name})"),
-            ("User ID", str(submitter.id)),
+            ("User", f"{submitter.name}"),
+            ("ID", str(submitter.id)),
             ("Length", f"{len(content)} chars"),
         ], emoji="📝")
 
@@ -501,14 +501,14 @@ class ConfessionService:
         if success:
             log.tree("Confession Published", [
                 ("Confession", f"#{confession_number}"),
-                ("User", f"{submitter.name} ({submitter.display_name})"),
-                ("User ID", str(submitter.id)),
+                ("User", f"{submitter.name}"),
+                ("ID", str(submitter.id)),
             ], emoji="📢")
         else:
             log.tree("Confession Publish Failed", [
                 ("Confession", f"#{confession_number}"),
-                ("User", f"{submitter.name} ({submitter.display_name})"),
-                ("User ID", str(submitter.id)),
+                ("User", f"{submitter.name}"),
+                ("ID", str(submitter.id)),
             ], emoji="❌")
 
         return success
@@ -693,8 +693,8 @@ class ConfessionService:
                 author_name = "OP"
                 avatar_url = self._get_avatar_url("", is_op=True)
                 log.tree("Reply from OP", [
-                    ("User", f"{user.name} ({user.display_name})"),
-                    ("User ID", str(user.id)),
+                    ("User", f"{user.name}"),
+                    ("ID", str(user.id)),
                     ("Confession", f"#{confession_number}"),
                 ], emoji="👤")
             else:
@@ -751,8 +751,8 @@ class ConfessionService:
 
             log.tree("Anonymous Reply Posted", [
                 ("Anon-ID", author_name),
-                ("User", f"{user.name} ({user.display_name})"),
-                ("User ID", str(user.id)),
+                ("User", f"{user.name}"),
+                ("ID", str(user.id)),
                 ("Confession", f"#{confession_number}"),
                 ("Thread", thread.name),
                 ("Length", f"{len(content)} chars"),
@@ -762,16 +762,16 @@ class ConfessionService:
 
         except discord.Forbidden:
             log.tree("Anonymous Reply Forbidden", [
-                ("User", f"{user.name} ({user.display_name})"),
-                ("User ID", str(user.id)),
+                ("User", f"{user.name}"),
+                ("ID", str(user.id)),
                 ("Confession", f"#{confession_number}"),
                 ("Reason", "Missing permissions"),
             ], emoji="⚠️")
             return False
         except discord.HTTPException as e:
             log.tree("Anonymous Reply Failed", [
-                ("User", f"{user.name} ({user.display_name})"),
-                ("User ID", str(user.id)),
+                ("User", f"{user.name}"),
+                ("ID", str(user.id)),
                 ("Confession", f"#{confession_number}"),
                 ("Error", str(e)[:50]),
             ], emoji="❌")

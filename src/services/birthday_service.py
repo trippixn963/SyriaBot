@@ -273,7 +273,7 @@ class BirthdayService:
 
             if had_bonus:
                 log.tree("Birthday XP Bonus Expired", [
-                    ("User ID", str(user_id)),
+                    ("ID", str(user_id)),
                     ("Bonus", "3x XP ended"),
                 ], emoji="⏰")
 

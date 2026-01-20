@@ -46,7 +46,7 @@ class BirthdaysMixin:
             with self._get_conn() as conn:
                 if conn is None:
                     log.tree("DB: Birthday Set Failed", [
-                        ("User ID", str(user_id)),
+                        ("ID", str(user_id)),
                         ("Reason", "No database connection"),
                     ], emoji="⚠️")
                     return False
@@ -63,21 +63,21 @@ class BirthdaysMixin:
 
                 if cur.rowcount == 0:
                     log.tree("DB: Birthday Set Failed", [
-                        ("User ID", str(user_id)),
+                        ("ID", str(user_id)),
                         ("Birthday", f"{month}/{day}/{year}"),
                         ("Reason", "No rows affected"),
                     ], emoji="⚠️")
                     return False
 
                 log.tree("DB: Birthday Set", [
-                    ("User ID", str(user_id)),
+                    ("ID", str(user_id)),
                     ("Birthday", f"{month}/{day}/{year}"),
                 ], emoji="🎂")
                 return True
 
         except Exception as e:
             log.error_tree("DB: Set Birthday Error", e, [
-                ("User ID", str(user_id)),
+                ("ID", str(user_id)),
                 ("Birthday", f"{month}/{day}/{year}"),
             ])
             return False
@@ -97,7 +97,7 @@ class BirthdaysMixin:
             with self._get_conn() as conn:
                 if conn is None:
                     log.tree("DB: Birthday Remove Failed", [
-                        ("User ID", str(user_id)),
+                        ("ID", str(user_id)),
                         ("Reason", "No database connection"),
                     ], emoji="⚠️")
                     return False
@@ -109,20 +109,20 @@ class BirthdaysMixin:
 
                 if cur.rowcount > 0:
                     log.tree("DB: Birthday Removed", [
-                        ("User ID", str(user_id)),
+                        ("ID", str(user_id)),
                         ("Rows", str(cur.rowcount)),
                     ], emoji="🗑️")
                     return True
 
                 log.tree("DB: Birthday Not Found", [
-                    ("User ID", str(user_id)),
+                    ("ID", str(user_id)),
                     ("Guild ID", str(guild_id)),
                 ], emoji="ℹ️")
                 return False
 
         except Exception as e:
             log.error_tree("DB: Remove Birthday Error", e, [
-                ("User ID", str(user_id)),
+                ("ID", str(user_id)),
                 ("Guild ID", str(guild_id)),
             ])
             return False
@@ -142,7 +142,7 @@ class BirthdaysMixin:
             with self._get_conn() as conn:
                 if conn is None:
                     log.tree("DB: Get Birthday Failed", [
-                        ("User ID", str(user_id)),
+                        ("ID", str(user_id)),
                         ("Reason", "No database connection"),
                     ], emoji="⚠️")
                     return None
@@ -158,7 +158,7 @@ class BirthdaysMixin:
 
         except Exception as e:
             log.error_tree("DB: Get Birthday Error", e, [
-                ("User ID", str(user_id)),
+                ("ID", str(user_id)),
                 ("Guild ID", str(guild_id)),
             ])
             return None
@@ -315,7 +315,7 @@ class BirthdaysMixin:
             with self._get_conn() as conn:
                 if conn is None:
                     log.tree("DB: Set Role Granted Failed", [
-                        ("User ID", str(user_id)),
+                        ("ID", str(user_id)),
                         ("Reason", "No database connection"),
                     ], emoji="⚠️")
                     return False
@@ -328,20 +328,20 @@ class BirthdaysMixin:
 
                 if cur.rowcount == 0:
                     log.tree("DB: Set Role Granted Failed", [
-                        ("User ID", str(user_id)),
+                        ("ID", str(user_id)),
                         ("Reason", "User not found in birthdays"),
                     ], emoji="⚠️")
                     return False
 
                 log.tree("DB: Role Granted Timestamp Set", [
-                    ("User ID", str(user_id)),
+                    ("ID", str(user_id)),
                     ("Granted At", str(granted_at)),
                 ], emoji="🎂")
                 return True
 
         except Exception as e:
             log.error_tree("DB: Set Role Granted Error", e, [
-                ("User ID", str(user_id)),
+                ("ID", str(user_id)),
                 ("Guild ID", str(guild_id)),
             ])
             return False
@@ -361,7 +361,7 @@ class BirthdaysMixin:
             with self._get_conn() as conn:
                 if conn is None:
                     log.tree("DB: Clear Role Granted Failed", [
-                        ("User ID", str(user_id)),
+                        ("ID", str(user_id)),
                         ("Reason", "No database connection"),
                     ], emoji="⚠️")
                     return False
@@ -374,19 +374,19 @@ class BirthdaysMixin:
 
                 if cur.rowcount == 0:
                     log.tree("DB: Clear Role Granted Skipped", [
-                        ("User ID", str(user_id)),
+                        ("ID", str(user_id)),
                         ("Reason", "User not found"),
                     ], emoji="ℹ️")
                     return False
 
                 log.tree("DB: Role Granted Cleared", [
-                    ("User ID", str(user_id)),
+                    ("ID", str(user_id)),
                 ], emoji="🗑️")
                 return True
 
         except Exception as e:
             log.error_tree("DB: Clear Role Granted Error", e, [
-                ("User ID", str(user_id)),
+                ("ID", str(user_id)),
                 ("Guild ID", str(guild_id)),
             ])
             return False
