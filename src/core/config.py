@@ -103,21 +103,21 @@ class Config:
     # ==========================================================================
     # Core
     # ==========================================================================
-    TOKEN: str = _env("SYRIA_TOKEN")
-    GUILD_ID: int = _env_int("SYRIA_GUILD")
-    OWNER_ID: int = _env_int("SYRIA_OWNER")
+    TOKEN: str = _env("DISCORD_TOKEN")
+    GUILD_ID: int = _env_int("GUILD_ID")
+    OWNER_ID: int = _env_int("OWNER_ID")
 
     # ==========================================================================
     # Roles
     # ==========================================================================
-    MOD_ROLE_ID: int = _env_int("SYRIA_MOD_ROLE")
+    MOD_ROLE_ID: int = _env_int("MOD_ROLE_ID")
     AUTO_ROLE_ID: int = _env_int("SYRIA_AUTO_ROLE")
     BOOSTER_ROLE_ID: int = _env_int("SYRIA_BOOSTER_ROLE")
 
     # ==========================================================================
     # Channels
     # ==========================================================================
-    GENERAL_CHANNEL_ID: int = _env_int("SYRIA_GENERAL_CH")
+    GENERAL_CHANNEL_ID: int = _env_int("GENERAL_CHANNEL_ID")
     RULES_CHANNEL_ID: int = _env_int("SYRIA_RULES_CH")
     GALLERY_CHANNEL_ID: int = _env_int("SYRIA_GALLERY_CH")
     MEMES_CHANNEL_ID: int = _env_int("SYRIA_MEMES_CH")
@@ -244,17 +244,17 @@ def validate_config() -> bool:
 
     # Critical: Token must be set
     if not config.TOKEN:
-        errors.append(("SYRIA_TOKEN", "Bot token is required"))
+        errors.append(("DISCORD_TOKEN", "Bot token is required"))
         is_valid = False
 
     # Critical: Guild ID should be set
     if not config.GUILD_ID:
-        errors.append(("SYRIA_GUILD", "Main guild ID is required"))
+        errors.append(("GUILD_ID", "Main guild ID is required"))
         is_valid = False
 
     # Important but not critical
     if not config.MOD_ROLE_ID:
-        warnings.append(("SYRIA_MOD_ROLE", "Moderation features limited"))
+        warnings.append(("MOD_ROLE_ID", "Moderation features limited"))
     if not config.BOOSTER_ROLE_ID:
         warnings.append(("SYRIA_BOOSTER_ROLE", "Booster XP multiplier disabled"))
 
