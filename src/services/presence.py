@@ -2,18 +2,14 @@
 SyriaBot - Presence Handler
 ===========================
 
-Manages rotating Discord presence with stats and hourly promo.
-Modeled after AzabBot's presence system.
+Wrapper around unified presence system with SyriaBot-specific stats.
 
 Author: حَـــــنَّـــــا
 Server: discord.gg/syria
 """
 
-import asyncio
-from datetime import datetime
-from typing import Optional, List, Callable
+from typing import Optional, List
 
-import discord
 from discord.ext import commands
 
 from src.core.logger import log
@@ -25,29 +21,30 @@ from src.core.constants import (
 )
 from src.services.database import db
 
+# Import from shared unified presence system
+from shared.services.presence import BasePresenceHandler
 
-class PresenceHandler:
-    """Handles rotating presence and hourly promo messages."""
+
+# =============================================================================
+# SyriaBot Presence Handler
+# =============================================================================
+
+class PresenceHandler(BasePresenceHandler):
+    """Presence handler configured for SyriaBot with XP/leveling stats."""
 
     def __init__(self, bot: commands.Bot) -> None:
-        """Initialize the presence handler.
+        super().__init__(
+            bot,
+            update_interval=PRESENCE_UPDATE_INTERVAL,
+            promo_duration_minutes=PROMO_DURATION_MINUTES,
+        )
 
-        Args:
-            bot: The Discord bot instance.
-        """
-        self.bot = bot
-        self._rotation_task: Optional[asyncio.Task] = None
-        self._promo_task: Optional[asyncio.Task] = None
-        self._current_index = 0
-        self._is_promo_active = False
-        self._running = False
+    # =========================================================================
+    # Required Implementations
+    # =========================================================================
 
-    def _get_status_messages(self) -> List[str]:
-        """Get list of status messages with all-time stats.
-
-        Returns:
-            List of formatted status messages.
-        """
+    def get_status_messages(self) -> List[str]:
+        """Get XP stats for presence rotation."""
         messages = []
 
         try:
@@ -58,175 +55,96 @@ class PresenceHandler:
             total_messages = stats.get("total_messages", 0)
             total_voice = stats.get("total_voice_minutes", 0)
 
-            # Format numbers nicely
-            def format_number(n: int) -> str:
-                if n >= 1_000_000:
-                    return f"{n/1_000_000:.1f}M"
-                elif n >= 1_000:
-                    return f"{n/1_000:.1f}K"
-                return str(n)
-
             # Format voice time
             voice_hours = total_voice // 60
 
             # Build status messages with all-time stats only
             if total_users > 0:
-                messages.append(f"🏆 {format_number(total_users)} members ranked")
+                messages.append(f"🏆 {self._format_number(total_users)} members ranked")
 
             if total_xp > 0:
-                messages.append(f"⭐ {format_number(total_xp)} total XP earned")
+                messages.append(f"⭐ {self._format_number(total_xp)} total XP earned")
 
             if total_messages > 0:
-                messages.append(f"💬 {format_number(total_messages)} messages sent")
+                messages.append(f"💬 {self._format_number(total_messages)} messages sent")
 
             if voice_hours > 0:
-                messages.append(f"🎙️ {format_number(voice_hours)}h in voice")
+                messages.append(f"🎙️ {self._format_number(voice_hours)}h in voice")
 
         except Exception as e:
             log.error_tree("Presence Stats Error", e)
 
         # Fallback if no stats available
         if not messages:
-            messages = [
-                "🇸🇾 discord.gg/syria",
-            ]
+            messages = ["🇸🇾 discord.gg/syria"]
 
         return messages
 
-    async def _rotation_loop(self) -> None:
-        """Background task that rotates presence every interval."""
-        await self.bot.wait_until_ready()
+    def get_promo_text(self) -> str:
+        """Return SyriaBot promo text."""
+        return PROMO_TEXT
 
+    def get_timezone(self):
+        """Return EST timezone for promo scheduling."""
+        return TIMEZONE_EST
+
+    # =========================================================================
+    # Logging Hooks
+    # =========================================================================
+
+    def on_rotation_start(self) -> None:
         log.tree("Presence Rotation Started", [
-            ("Interval", f"{PRESENCE_UPDATE_INTERVAL}s"),
+            ("Interval", f"{self.update_interval}s"),
         ], emoji="🔄")
 
-        while self._running:
-            try:
-                # Wait first, then check promo status
-                await asyncio.sleep(PRESENCE_UPDATE_INTERVAL)
-
-                # Skip if promo is active (check right before changing)
-                if self._is_promo_active:
-                    continue
-
-                # Get status messages and rotate
-                messages = self._get_status_messages()
-                if messages:
-                    self._current_index = self._current_index % len(messages)
-                    status_text = messages[self._current_index]
-
-                    # Double-check promo isn't active right before changing
-                    if self._is_promo_active:
-                        continue
-
-                    await self.bot.change_presence(
-                        activity=discord.Activity(
-                            type=discord.ActivityType.watching,
-                            name=status_text,
-                        )
-                    )
-
-                    self._current_index += 1
-
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                log.error_tree("Presence Rotation Error", e)
-                await asyncio.sleep(PRESENCE_UPDATE_INTERVAL)
-
-    async def _promo_loop(self) -> None:
-        """Background task that shows promo at the top of each hour."""
-        await self.bot.wait_until_ready()
-
+    def on_promo_start(self) -> None:
         log.tree("Promo Loop Started", [
-            ("Duration", f"{PROMO_DURATION_MINUTES} min/hour"),
+            ("Duration", f"{self.promo_duration_minutes} min/hour"),
             ("Text", PROMO_TEXT),
         ], emoji="📢")
 
-        while self._running:
-            try:
-                # Calculate time until next hour
-                now = datetime.now(TIMEZONE_EST)
-                minutes_until_hour = 60 - now.minute
-                seconds_until_hour = (minutes_until_hour * 60) - now.second
+    def on_promo_activated(self) -> None:
+        log.tree("Promo Active", [
+            ("Text", PROMO_TEXT),
+            ("Duration", f"{self.promo_duration_minutes} min"),
+        ], emoji="📢")
 
-                if seconds_until_hour > 0:
-                    log.tree("Promo Waiting", [
-                        ("Next Promo", f"{minutes_until_hour} min"),
-                    ], emoji="⏳")
-                    await asyncio.sleep(seconds_until_hour)
+    def on_promo_ended(self) -> None:
+        log.tree("Promo Ended", [
+            ("Resuming", "Normal rotation"),
+        ], emoji="🔄")
 
-                # Show promo
-                self._is_promo_active = True
-
-                await self.bot.change_presence(
-                    activity=discord.Activity(
-                        type=discord.ActivityType.playing,
-                        name=PROMO_TEXT,
-                    )
-                )
-
-                log.tree("Promo Active", [
-                    ("Text", PROMO_TEXT),
-                    ("Duration", f"{PROMO_DURATION_MINUTES} min"),
-                ], emoji="📢")
-
-                # Wait for promo duration
-                await asyncio.sleep(PROMO_DURATION_MINUTES * 60)
-
-                # End promo
-                self._is_promo_active = False
-
-                log.tree("Promo Ended", [
-                    ("Resuming", "Normal rotation"),
-                ], emoji="🔄")
-
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                self._is_promo_active = False
-                log.error_tree("Promo Loop Error", e)
-                await asyncio.sleep(60)
-
-    async def setup(self) -> None:
-        """Initialize and start the presence handler tasks."""
-        if self._running:
-            return
-
-        self._running = True
-
-        # Start rotation task
-        self._rotation_task = asyncio.create_task(self._rotation_loop())
-
-        # Start promo task
-        self._promo_task = asyncio.create_task(self._promo_loop())
-
+    def on_handler_ready(self) -> None:
         log.tree("Presence Handler Ready", [
-            ("Rotation", f"Every {PRESENCE_UPDATE_INTERVAL}s"),
-            ("Promo", f"{PROMO_DURATION_MINUTES} min/hour"),
+            ("Rotation", f"Every {self.update_interval}s"),
+            ("Promo", f"{self.promo_duration_minutes} min/hour"),
         ], emoji="✅")
 
-    async def stop(self) -> None:
-        """Stop the presence handler tasks."""
-        self._running = False
-
-        if self._rotation_task:
-            self._rotation_task.cancel()
-            try:
-                await self._rotation_task
-            except asyncio.CancelledError:
-                pass
-            self._rotation_task = None
-
-        if self._promo_task:
-            self._promo_task.cancel()
-            try:
-                await self._promo_task
-            except asyncio.CancelledError:
-                pass
-            self._promo_task = None
-
+    def on_handler_stopped(self) -> None:
         log.tree("Presence Handler Stopped", [
             ("Status", "Tasks cancelled"),
         ], emoji="🛑")
+
+    def on_error(self, context: str, error: Exception) -> None:
+        log.error_tree(f"{context} Error", error)
+
+    # =========================================================================
+    # Helpers
+    # =========================================================================
+
+    @staticmethod
+    def _format_number(n: int) -> str:
+        """Format a number with K/M abbreviations."""
+        if n >= 1_000_000:
+            return f"{n/1_000_000:.1f}M"
+        elif n >= 1_000:
+            return f"{n/1_000:.1f}K"
+        return str(n)
+
+    # =========================================================================
+    # Compatibility Alias
+    # =========================================================================
+
+    async def setup(self) -> None:
+        """Alias for start() for backwards compatibility."""
+        await self.start()

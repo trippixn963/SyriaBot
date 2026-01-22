@@ -933,6 +933,14 @@ class XPService:
                 ("Error", str(e)[:50]),
             ], emoji="⚠️")
 
+        # 7. Guild protection check - leave unauthorized guilds
+        try:
+            await self.bot._leave_unauthorized_guilds()
+        except Exception as e:
+            log.tree("Guild Protection Check Failed", [
+                ("Error", str(e)[:50]),
+            ], emoji="⚠️")
+
         log.tree("Midnight Maintenance Complete", [], emoji="✅")
 
     @midnight_role_sync.before_loop

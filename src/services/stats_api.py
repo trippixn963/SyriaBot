@@ -116,8 +116,8 @@ class RateLimiter:
                 del self._requests[ip]
 
 
-# Global rate limiter
-rate_limiter = RateLimiter(requests_per_minute=60, burst_limit=10)
+# Global rate limiter (disabled for dashboard - own infrastructure)
+rate_limiter = RateLimiter(requests_per_minute=10000, burst_limit=1000)
 
 
 # =============================================================================
@@ -268,7 +268,7 @@ class SyriaAPI:
         self.app.router.add_get("/api/syria/leaderboard", self.handle_leaderboard)
         self.app.router.add_get("/api/syria/user/{user_id}", self.handle_user)
         self.app.router.add_get("/api/syria/stats", self.handle_stats)
-        self.app.router.add_get("/health", self.handle_health)
+        # /health removed - now served by unified HealthCheckServer on port 8085
 
         # XP modification endpoints (require API key)
         self.app.router.add_post("/api/syria/xp/grant", self.handle_xp_grant)
@@ -680,8 +680,37 @@ class SyriaAPI:
             )
 
     async def handle_health(self, request: web.Request) -> web.Response:
-        """GET /health - Health check endpoint."""
-        return web.json_response({"status": "healthy"})
+        """GET /health - Health check endpoint with full status."""
+        now = datetime.now(EST_TZ)
+        start = self._start_time or now
+        uptime_seconds = (now - start).total_seconds()
+
+        # Format uptime as human-readable
+        hours, remainder = divmod(int(uptime_seconds), 3600)
+        minutes, seconds = divmod(remainder, 60)
+        uptime_str = f"{hours}h {minutes}m {seconds}s"
+
+        # Get bot status
+        is_ready = self._bot.is_ready()
+        latency_ms = round(self._bot.latency * 1000) if is_ready else None
+
+        status = {
+            "status": "healthy" if is_ready else "starting",
+            "bot": "SyriaBot",
+            "run_id": getattr(log, "run_id", None),
+            "uptime": uptime_str,
+            "uptime_seconds": int(uptime_seconds),
+            "started_at": start.isoformat(),
+            "timestamp": now.isoformat(),
+            "timezone": "America/New_York (EST)",
+            "discord": {
+                "connected": is_ready,
+                "latency_ms": latency_ms,
+                "guilds": len(self._bot.guilds) if is_ready else 0,
+            },
+        }
+
+        return web.json_response(status)
 
     # =========================================================================
     # XP Modification Endpoints (require API key)

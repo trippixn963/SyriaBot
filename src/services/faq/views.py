@@ -16,10 +16,7 @@ from src.core.logger import log
 from src.core.colors import COLOR_SYRIA_GREEN, EMOJI_TICKET
 from src.utils.footer import set_footer
 from src.services.faq.service import FAQ_DATA, faq_analytics
-
-
-# Inbox channel for tickets
-INBOX_CHANNEL_ID = 1406750411779604561
+from src.core.config import config
 
 
 def _create_faq_embed(topic: str, lang: str) -> discord.Embed:
@@ -118,7 +115,7 @@ class PersistentFAQView(ui.View):
         faq_analytics.record_ticket_click()
 
         await interaction.response.send_message(
-            f"Need more help? Open a ticket in <#{INBOX_CHANNEL_ID}>",
+            f"Need more help? Open a ticket in <#{config.INBOX_CHANNEL_ID}>",
             ephemeral=True
         )
 
@@ -176,7 +173,7 @@ class FAQPersistentHandler(ui.View):
         faq_analytics.record_ticket_click()
 
         await interaction.response.send_message(
-            f"Need more help? Open a ticket in <#{INBOX_CHANNEL_ID}>",
+            f"Need more help? Open a ticket in <#{config.INBOX_CHANNEL_ID}>",
             ephemeral=True
         )
 

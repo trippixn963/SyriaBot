@@ -113,6 +113,7 @@ class Config:
     MOD_ROLE_ID: int = _env_int("MOD_ROLE_ID")
     AUTO_ROLE_ID: int = _env_int("SYRIA_AUTO_ROLE")
     BOOSTER_ROLE_ID: int = _env_int("SYRIA_BOOSTER_ROLE")
+    DEAD_CHAT_ROLE_ID: int = _env_int("SYRIA_DEAD_CHAT_ROLE")
 
     # ==========================================================================
     # Channels
@@ -127,6 +128,7 @@ class Config:
     BANK_CHANNEL_ID: int = _env_int("SYRIA_BANK_CH")
     DEBATES_CHANNEL_ID: int = _env_int("SYRIA_DEBATES_CH")
     INBOX_CHANNEL_ID: int = _env_int("SYRIA_INBOX_CH")
+    GIVEAWAY_CHANNEL_ID: int = _env_int("SYRIA_GIVEAWAY_CH")
 
     # ==========================================================================
     # TempVoice
@@ -211,7 +213,7 @@ class Config:
     # ==========================================================================
     # Webhooks
     # ==========================================================================
-    STATUS_WEBHOOK_URL: str = _env("STATUS_WEBHOOK")
+    STATUS_WEBHOOK_URL: str = _env("STATUS_WEBHOOK_URL")
 
     # ==========================================================================
     # URLs

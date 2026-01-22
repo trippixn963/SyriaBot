@@ -17,6 +17,7 @@ from discord.ext import commands
 from pathlib import Path
 
 from src.core.logger import log
+from src.core.config import config
 from src.services.database import db
 
 
@@ -24,7 +25,7 @@ from src.services.database import db
 # Configuration
 # =============================================================================
 
-GIVEAWAY_CHANNEL_ID = 1429448081354522704
+GIVEAWAY_CHANNEL_ID = config.GIVEAWAY_CHANNEL_ID
 JOIN_EMOJI_ID = 1459322239311937606
 REQUIRED_LEVEL = 10
 GIVEAWAY_ID_FILE = Path(__file__).parent.parent.parent / "data" / "giveaway_message.txt"

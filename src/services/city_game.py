@@ -42,8 +42,7 @@ ASSETS_PATH = Path(__file__).parent.parent.parent / "assets" / "cities"
 # Configuration
 # =============================================================================
 
-DEAD_CHAT_ROLE_ID = 1301584721251405896
-GENERAL_CHANNEL_ID = 1350540215797940245
+DEAD_CHAT_ROLE_ID = config.DEAD_CHAT_ROLE_ID
 INACTIVITY_THRESHOLD = 30 * 60  # 30 minutes in seconds
 GUESS_TIME_LIMIT = 10 * 60  # 10 minutes in seconds
 XP_REWARD = 1000
@@ -168,7 +167,7 @@ class CityGameService:
         self.inactivity_check.start()
 
         log.tree("City Game Service Ready", [
-            ("Channel", str(GENERAL_CHANNEL_ID)),
+            ("Channel", str(config.GENERAL_CHANNEL_ID)),
             ("Role", str(DEAD_CHAT_ROLE_ID)),
             ("Inactivity", f"{INACTIVITY_THRESHOLD // 60} min"),
             ("Time Limit", f"{GUESS_TIME_LIMIT // 60} min"),
@@ -191,7 +190,7 @@ class CityGameService:
 
     def on_message(self, channel_id: int) -> None:
         """Update last message time when a message is sent in the tracked channel."""
-        if channel_id == GENERAL_CHANNEL_ID:
+        if channel_id == config.GENERAL_CHANNEL_ID:
             self._last_message_time = time.time()
 
     @tasks.loop(minutes=5)
@@ -256,10 +255,10 @@ class CityGameService:
 
     async def _start_game(self, manual: bool = False) -> bool:
         """Start a new city guessing game. Returns True if game started."""
-        channel = self.bot.get_channel(GENERAL_CHANNEL_ID)
+        channel = self.bot.get_channel(config.GENERAL_CHANNEL_ID)
         if not channel or not isinstance(channel, discord.TextChannel):
             log.tree("City Game Channel Not Found", [
-                ("Channel ID", str(GENERAL_CHANNEL_ID)),
+                ("Channel ID", str(config.GENERAL_CHANNEL_ID)),
             ], emoji="⚠️")
             return False
 
@@ -342,7 +341,7 @@ class CityGameService:
         if not self._game_active or not self._current_city:
             return False
 
-        if message.channel.id != GENERAL_CHANNEL_ID:
+        if message.channel.id != config.GENERAL_CHANNEL_ID:
             return False
 
         if message.author.bot:
@@ -370,7 +369,7 @@ class CityGameService:
             return
 
         city = self._current_city
-        channel = self.bot.get_channel(GENERAL_CHANNEL_ID)
+        channel = self.bot.get_channel(config.GENERAL_CHANNEL_ID)
 
         self._game_active = False
         self._last_game_time = time.time()
