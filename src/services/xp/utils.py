@@ -1,6 +1,6 @@
 """
-XP System - Utility Functions
-=============================
+SyriaBot - Utility Functions
+============================
 
 Level calculations and XP formulas.
 """

@@ -1,6 +1,6 @@
 """
-XP System - Service
-===================
+SyriaBot - Service
+==================
 
 Main XP service handling message and voice XP gains.
 """

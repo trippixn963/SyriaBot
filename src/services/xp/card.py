@@ -1,6 +1,6 @@
 """
-XP System - Rank Card Generator
-===============================
+SyriaBot - Rank Card Generator
+==============================
 
 HTML/CSS based rank card rendered with Playwright for professional quality.
 Optimized with page pooling and caching for fast generation.

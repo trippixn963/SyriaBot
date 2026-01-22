@@ -1,6 +1,6 @@
 """
-XP System
-=========
+SyriaBot - XP System
+====================
 
 Level-based XP system with message and voice activity tracking.
 """

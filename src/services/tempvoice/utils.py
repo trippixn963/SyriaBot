@@ -1,6 +1,6 @@
 """
-TempVoice - Utility Functions
-=============================
+SyriaBot - Utility Functions
+============================
 
 Centralized utilities for the TempVoice system.
 All shared logic lives here to avoid duplication.

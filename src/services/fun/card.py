@@ -1,6 +1,6 @@
 """
-Fun Commands - Card Generator
-=============================
+SyriaBot - Card Generator
+=========================
 
 HTML/CSS based cards rendered with Playwright for ship, simp, howgay commands.
 Shares browser instance and semaphore with rank card for efficiency.
