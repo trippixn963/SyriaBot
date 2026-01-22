@@ -1,6 +1,6 @@
 """
 SyriaBot - Main Bot
-==================
+===================
 
 Discord bot with TempVoice system.
 
