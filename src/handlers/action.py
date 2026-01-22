@@ -251,4 +251,4 @@ class ActionHandler:
 
 
 # Singleton instance
-action_handler = ActionHandler()
+action = ActionHandler()

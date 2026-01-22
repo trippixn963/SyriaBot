@@ -459,4 +459,4 @@ class FunHandler:
 
 
 # Singleton instance
-fun_handler = FunHandler()
+fun = FunHandler()

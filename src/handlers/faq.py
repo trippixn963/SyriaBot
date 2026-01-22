@@ -381,4 +381,4 @@ class FAQAutoResponder:
 
 
 # Global instance
-faq_handler = FAQAutoResponder()
+faq = FAQAutoResponder()

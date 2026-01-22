@@ -106,11 +106,11 @@ class SyriaBot(commands.Bot):
 
         # Load handlers
         handlers = [
-            "src.handlers.ready_handler",
-            "src.handlers.voice_handler",
-            "src.handlers.member_handler",
-            "src.handlers.message_handler",
-            "src.handlers.giveaway_reaction_handler",
+            "src.handlers.ready",
+            "src.handlers.voice",
+            "src.handlers.member",
+            "src.handlers.message",
+            "src.handlers.giveaway_reaction",
         ]
         loaded_handlers = []
         for handler in handlers:

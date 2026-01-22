@@ -18,10 +18,10 @@ from src.core.logger import log
 from src.core.config import config
 from src.services.bump_service import bump_service
 from src.services.database import db
-from src.handlers.fun_handler import fun_handler
-from src.handlers.action_handler import action_handler
-from src.handlers.reply_handler import ReplyHandler
-from src.handlers.faq_handler import faq_handler
+from src.handlers.fun import fun
+from src.handlers.action import action
+from src.handlers.reply import ReplyHandler
+from src.handlers.faq import faq
 
 # Disboard bot ID
 DISBOARD_BOT_ID = 302050872383242240
@@ -33,7 +33,7 @@ class MessageHandler(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         """Initialize the message handler with bot reference."""
         self.bot = bot
-        self.reply_handler = ReplyHandler(bot)
+        self.reply = ReplyHandler(bot)
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message) -> None:
@@ -142,7 +142,7 @@ class MessageHandler(commands.Cog):
         # FAQ auto-responder (watches for questions)
         if message.guild:
             try:
-                if await faq_handler.handle(message):
+                if await faq.handle(message):
                     return  # FAQ was sent
             except Exception as e:
                 log.error_tree("FAQ Handler Error", e, [
@@ -153,7 +153,7 @@ class MessageHandler(commands.Cog):
         # Action commands (slap @user, hug @user, cry, etc.)
         if message.guild:
             try:
-                if await action_handler.handle(message):
+                if await action.handle(message):
                     return  # Action was handled
             except Exception as e:
                 log.error_tree("Action Handler Error", e, [
@@ -164,7 +164,7 @@ class MessageHandler(commands.Cog):
         # Fun commands (ship, simp, howgay, howsmart, bodyfat)
         if message.guild:
             try:
-                if await fun_handler.handle(message):
+                if await fun.handle(message):
                     return  # Fun command was handled
             except Exception as e:
                 log.error_tree("Fun Handler Error", e, [
@@ -174,7 +174,7 @@ class MessageHandler(commands.Cog):
 
         # Reply commands (convert, quote, translate, download)
         try:
-            if await self.reply_handler.handle(message):
+            if await self.reply.handle(message):
                 return  # Reply command was handled
         except Exception as e:
             log.error_tree("Reply Handler Error", e, [

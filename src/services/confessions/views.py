@@ -160,7 +160,7 @@ class ConfessionReplyHandler(ui.View):
         super().__init__(timeout=None)
 
     @ui.button(custom_id="confession:reply", style=discord.ButtonStyle.secondary)
-    async def reply_handler(self, interaction: discord.Interaction, button: ui.Button) -> None:
+    async def reply(self, interaction: discord.Interaction, button: ui.Button) -> None:
         """Handle reply button from any confession thread."""
         # Parse confession number from actual custom_id
         parts = interaction.data.get("custom_id", "").split(":")
