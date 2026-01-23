@@ -17,7 +17,7 @@ from deep_translator import GoogleTranslator
 from deep_translator.exceptions import TranslationNotFound
 from langdetect import detect, LangDetectException
 
-from src.core.logger import log
+from src.core.logger import logger
 from src.core.config import config
 from src.utils.http import http_session
 
@@ -244,7 +244,7 @@ def find_similar_language(lang_input: str) -> Optional[Tuple[str, str, str]]:
     if lang_lower in LANGUAGE_ALIASES:
         code = LANGUAGE_ALIASES[lang_lower]
         name, flag = LANGUAGES[code]
-        log.tree("Language Alias Match", [
+        logger.tree("Language Alias Match", [
             ("Input", lang_input),
             ("Alias", lang_lower),
             ("Resolved", f"{name} ({code}) {flag}"),
@@ -254,7 +254,7 @@ def find_similar_language(lang_input: str) -> Optional[Tuple[str, str, str]]:
     # Check exact matches in language codes
     if lang_lower in LANGUAGES:
         name, flag = LANGUAGES[lang_lower]
-        log.tree("Language Code Match", [
+        logger.tree("Language Code Match", [
             ("Input", lang_input),
             ("Code", lang_lower),
             ("Language", f"{name} {flag}"),
@@ -279,14 +279,14 @@ def find_similar_language(lang_input: str) -> Optional[Tuple[str, str, str]]:
             match_type = ("name", name)
 
     if best_match:
-        log.tree("Language Fuzzy Match", [
+        logger.tree("Language Fuzzy Match", [
             ("Input", lang_input),
             ("Matched", f"{match_type[0]}: {match_type[1]}"),
             ("Score", f"{best_score:.0%}"),
             ("Resolved", f"{best_match[1]} ({best_match[0]}) {best_match[2]}"),
         ], emoji="🔍")
     else:
-        log.tree("Language Match Failed", [
+        logger.tree("Language Match Failed", [
             ("Input", lang_input),
             ("Reason", "No match found"),
         ], emoji="⚠️")
@@ -330,7 +330,7 @@ class TranslateService:
 
         # Exact match on language codes
         if lang_input in LANGUAGES:
-            log.tree("Language Resolved", [
+            logger.tree("Language Resolved", [
                 ("Input", lang_input),
                 ("Type", "Exact code match"),
                 ("Code", lang_input),
@@ -339,7 +339,7 @@ class TranslateService:
 
         for code in LANGUAGES:
             if code.lower() == lang_lower:
-                log.tree("Language Resolved", [
+                logger.tree("Language Resolved", [
                     ("Input", lang_input),
                     ("Type", "Case-insensitive code match"),
                     ("Code", code),
@@ -350,7 +350,7 @@ class TranslateService:
         if lang_lower in LANGUAGE_ALIASES:
             code = LANGUAGE_ALIASES[lang_lower]
             name, flag = LANGUAGES[code]
-            log.tree("Language Resolved", [
+            logger.tree("Language Resolved", [
                 ("Input", lang_input),
                 ("Type", "Alias/country match"),
                 ("Resolved", f"{name} ({code}) {flag}"),
@@ -419,7 +419,7 @@ class TranslateService:
             detected = self.detect_language(cleaned_text)
             source_lang = detected or "auto"
 
-        log.tree("Translating", [
+        logger.tree("Translating", [
             ("Text", cleaned_text[:50] + "..." if len(cleaned_text) > 50 else cleaned_text),
             ("From", source_lang),
             ("To", resolved_target),
@@ -495,7 +495,7 @@ class TranslateService:
             ) as resp:
                 if resp.status != 200:
                     error_text = await resp.text()
-                    log.tree("DeepL Unavailable", [
+                    logger.tree("DeepL Unavailable", [
                         ("Status", str(resp.status)),
                         ("Fallback", "Google Translate"),
                     ], emoji="🔄")
@@ -551,7 +551,7 @@ class TranslateService:
                 if result_lang and result_lang != target_lang:
                     # Check if result is English but we wanted something else
                     if result_lang == "en" and target_lang != "en":
-                        log.tree("DeepL Wrong Language", [
+                        logger.tree("DeepL Wrong Language", [
                             ("Expected", f"{target_name} ({target_lang})"),
                             ("Got", f"English ({result_lang})"),
                             ("Fallback", "Google Translate"),
@@ -569,7 +569,7 @@ class TranslateService:
                             error="DeepL returned wrong language"
                         )
 
-                log.tree("DeepL Translation Complete", [
+                logger.tree("DeepL Translation Complete", [
                     ("From", f"{source_name} {source_flag}"),
                     ("To", f"{target_name} {target_flag}"),
                     ("Chars Used", str(len(text))),
@@ -589,7 +589,7 @@ class TranslateService:
                 )
 
         except asyncio.TimeoutError:
-            log.tree("DeepL Timeout", [
+            logger.tree("DeepL Timeout", [
                 ("Text Length", str(len(text))),
             ], emoji="⏳")
             return TranslationResult(
@@ -605,7 +605,7 @@ class TranslateService:
                 error="DeepL request timed out"
             )
         except Exception as e:
-            log.error_tree("DeepL Translation Failed", e, [
+            logger.error_tree("DeepL Translation Failed", e, [
                 ("Text", text[:50]),
             ])
             return TranslationResult(
@@ -645,7 +645,7 @@ class TranslateService:
             source_name, source_flag = self.get_language_info(source_lang)
             target_name, target_flag = self.get_language_info(target_lang)
 
-            log.tree("Google Translation Complete", [
+            logger.tree("Google Translation Complete", [
                 ("From", f"{source_name} {source_flag}"),
                 ("To", f"{target_name} {target_flag}"),
                 ("Result Length", str(len(translated))),
@@ -664,7 +664,7 @@ class TranslateService:
             )
 
         except TranslationNotFound:
-            log.tree("Google Translation Not Found", [
+            logger.tree("Google Translation Not Found", [
                 ("Text", text[:50]),
                 ("Target", target_lang),
             ], emoji="⚠️")
@@ -682,7 +682,7 @@ class TranslateService:
             )
 
         except Exception as e:
-            log.error_tree("Google Translation Failed", e, [
+            logger.error_tree("Google Translation Failed", e, [
                 ("Text", text[:50]),
             ])
             return TranslationResult(
@@ -787,14 +787,14 @@ class TranslateService:
         source_lang = detected or "auto"
         source_name, source_flag = self.get_language_info(source_lang)
 
-        log.tree("AI Translating", [
+        logger.tree("AI Translating", [
             ("Text", text[:50] + "..." if len(text) > 50 else text),
             ("From", source_lang),
             ("To", resolved_target),
         ], emoji="🤖")
 
         if not config.OPENAI_API_KEY:
-            log.tree("AI Translation Failed", [
+            logger.tree("AI Translation Failed", [
                 ("Reason", "No OpenAI API key configured"),
             ], emoji="❌")
             return TranslationResult(
@@ -839,7 +839,7 @@ class TranslateService:
             ) as resp:
                 if resp.status != 200:
                     error_text = await resp.text()
-                    log.tree("AI Translation API Error", [
+                    logger.tree("AI Translation API Error", [
                         ("Status", str(resp.status)),
                         ("Error", error_text[:100]),
                     ], emoji="❌")
@@ -859,7 +859,7 @@ class TranslateService:
                 data = await resp.json()
                 translated = data["choices"][0]["message"]["content"].strip()
 
-                log.tree("AI Translation Complete", [
+                logger.tree("AI Translation Complete", [
                     ("From", f"{source_name} {source_flag}"),
                     ("To", f"{target_name} {target_flag}"),
                     ("Result Length", str(len(translated))),
@@ -878,7 +878,7 @@ class TranslateService:
                 )
 
         except asyncio.TimeoutError:
-            log.tree("AI Translation Timeout", [
+            logger.tree("AI Translation Timeout", [
                 ("Text", text[:50]),
             ], emoji="⏳")
             return TranslationResult(
@@ -894,7 +894,7 @@ class TranslateService:
                 error="AI translation timed out"
             )
         except Exception as e:
-            log.error_tree("AI Translation Failed", e, [
+            logger.error_tree("AI Translation Failed", e, [
                 ("Text", text[:50]),
                 ("Target", resolved_target),
             ])
@@ -935,7 +935,7 @@ class TranslateService:
                 percent = (used / limit * 100) if limit > 0 else 0
                 remaining = limit - used
 
-                log.tree("DeepL Usage", [
+                logger.tree("DeepL Usage", [
                     ("Used", f"{used:,} chars"),
                     ("Limit", f"{limit:,} chars"),
                     ("Remaining", f"{remaining:,} chars ({100-percent:.1f}%)"),
@@ -944,7 +944,7 @@ class TranslateService:
                 return (used, limit)
 
         except Exception as e:
-            log.tree("DeepL Usage Check Failed", [
+            logger.tree("DeepL Usage Check Failed", [
                 ("Error", str(e)[:50]),
             ], emoji="⚠️")
             return None

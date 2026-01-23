@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Optional
 import discord
 from discord.ext import tasks
 
-from src.core.logger import log
+from src.core.logger import logger
 from src.core.config import config
 from src.core.colors import COLOR_SYRIA_GREEN
 from src.core.constants import TIMEZONE_EST
@@ -46,14 +46,14 @@ class GuideService:
         self.bot: Bot = bot
         self._running: bool = False
 
-        log.tree("Guide Service Init", [
+        logger.tree("Guide Service Init", [
             ("Status", "Created"),
         ], emoji="📋")
 
     async def setup(self) -> None:
         """Start the hourly update task."""
         if self._running:
-            log.tree("Guide Service Setup", [
+            logger.tree("Guide Service Setup", [
                 ("Status", "Already running"),
             ], emoji="ℹ️")
             return
@@ -61,7 +61,7 @@ class GuideService:
         self._update_task.start()
         self._running = True
 
-        log.tree("Guide Service Started", [
+        logger.tree("Guide Service Started", [
             ("Task", "Hourly update"),
             ("Timezone", "EST"),
         ], emoji="✅")
@@ -71,7 +71,7 @@ class GuideService:
         if self._running:
             self._update_task.cancel()
             self._running = False
-            log.tree("Guide Service Stopped", [], emoji="🛑")
+            logger.tree("Guide Service Stopped", [], emoji="🛑")
 
     @tasks.loop(minutes=1)
     async def _update_task(self) -> None:
@@ -85,7 +85,7 @@ class GuideService:
         if now.minute != 0:
             return
 
-        log.tree("Guide Update Task", [
+        logger.tree("Guide Update Task", [
             ("Time", now.strftime("%Y-%m-%d %H:%M EST")),
             ("Status", "Running"),
         ], emoji="🕐")
@@ -96,7 +96,7 @@ class GuideService:
     async def _before_update_task(self) -> None:
         """Wait until the bot is ready before starting the task."""
         await self.bot.wait_until_ready()
-        log.tree("Guide Update Task Ready", [
+        logger.tree("Guide Update Task Ready", [
             ("Status", "Waiting for top of hour"),
         ], emoji="⏰")
 
@@ -106,7 +106,7 @@ class GuideService:
         """
         guild_id = config.GUILD_ID
         if not guild_id:
-            log.tree("Guide Update Skipped", [
+            logger.tree("Guide Update Skipped", [
                 ("Reason", "No GUILD_ID configured"),
             ], emoji="⚠️")
             return
@@ -114,7 +114,7 @@ class GuideService:
         # Get stored panel info
         panel_info = db.get_guide_panel(guild_id)
         if not panel_info:
-            log.tree("Guide Update Skipped", [
+            logger.tree("Guide Update Skipped", [
                 ("Guild", str(guild_id)),
                 ("Reason", "No panel info stored"),
             ], emoji="ℹ️")
@@ -126,7 +126,7 @@ class GuideService:
         # Get the guild
         guild: Optional[discord.Guild] = self.bot.get_guild(guild_id)
         if not guild:
-            log.tree("Guide Update Failed", [
+            logger.tree("Guide Update Failed", [
                 ("Guild", str(guild_id)),
                 ("Reason", "Guild not found"),
             ], emoji="❌")
@@ -135,7 +135,7 @@ class GuideService:
         # Get the channel
         channel = guild.get_channel(channel_id)
         if not channel or not isinstance(channel, discord.TextChannel):
-            log.tree("Guide Update Failed", [
+            logger.tree("Guide Update Failed", [
                 ("Guild", guild.name),
                 ("Channel", str(channel_id)),
                 ("Reason", "Channel not found or not a text channel"),
@@ -155,14 +155,14 @@ class GuideService:
             # Update timestamp in database
             db.update_guide_panel_timestamp(guild_id)
 
-            log.tree("Guide Panel Updated", [
+            logger.tree("Guide Panel Updated", [
                 ("Guild", guild.name),
                 ("Members", f"{guild.member_count:,}"),
                 ("Boosters", str(guild.premium_subscription_count or 0)),
             ], emoji="✅")
 
         except discord.NotFound:
-            log.tree("Guide Update Failed", [
+            logger.tree("Guide Update Failed", [
                 ("Guild", guild.name),
                 ("Message", str(message_id)),
                 ("Reason", "Message not found - panel may have been deleted"),
@@ -171,20 +171,20 @@ class GuideService:
             db.delete_guide_panel(guild_id)
 
         except discord.Forbidden:
-            log.tree("Guide Update Failed", [
+            logger.tree("Guide Update Failed", [
                 ("Guild", guild.name),
                 ("Reason", "Missing permissions to edit message"),
             ], emoji="❌")
 
         except discord.HTTPException as e:
-            log.error_tree("Guide Update HTTP Error", e, [
+            logger.error_tree("Guide Update HTTP Error", e, [
                 ("Guild", guild.name),
                 ("Channel", str(channel_id)),
                 ("Message", str(message_id)),
             ])
 
         except Exception as e:
-            log.error_tree("Guide Update Error", e, [
+            logger.error_tree("Guide Update Error", e, [
                 ("Guild", guild.name),
             ])
 
@@ -237,14 +237,14 @@ class GuideService:
         Returns:
             True if update was successful, False otherwise.
         """
-        log.tree("Guide Force Update", [
+        logger.tree("Guide Force Update", [
             ("Status", "Triggered"),
         ], emoji="🔄")
         try:
             await self._update_guide_panel()
             return True
         except Exception as e:
-            log.error_tree("Guide Force Update Failed", e)
+            logger.error_tree("Guide Force Update Failed", e)
             return False
 
 

@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Optional, Tuple, Set, Dict
 from collections import OrderedDict
 
 from src.core.config import config
-from src.core.logger import log
+from src.core.logger import logger
 from src.core.colors import COLOR_SYRIA_GREEN, COLOR_WARNING, EMOJI_HEART, EMOJI_CONFESSION
 from src.core.constants import DELETE_DELAY_MEDIUM
 from src.services.database import db
@@ -97,7 +97,7 @@ class ConfessionService:
 
         while len(cache) > max_size:
             removed_key, _ = cache.popitem(last=False)
-            log.tree("Cache Entry Trimmed", [
+            logger.tree("Cache Entry Trimmed", [
                 ("Cache", type(cache).__name__),
                 ("Removed Key", str(removed_key)[:50]),
                 ("Size", str(len(cache))),
@@ -126,27 +126,27 @@ class ConfessionService:
         if self._channel_id and message.channel.id == self._channel_id:
             try:
                 await message.delete()
-                log.tree("Confessions Channel Message Deleted", [
+                logger.tree("Confessions Channel Message Deleted", [
                     ("User", f"{message.author.name} ({message.author.display_name})"),
                     ("ID", str(message.author.id)),
                     ("Content", message.content[:50] if message.content else "(empty)"),
                 ], emoji="🗑️")
                 return True
             except discord.NotFound:
-                log.tree("Confessions Message Already Deleted", [
+                logger.tree("Confessions Message Already Deleted", [
                     ("User", f"{message.author.name} ({message.author.display_name})"),
                     ("ID", str(message.author.id)),
                 ], emoji="ℹ️")
                 return True
             except discord.Forbidden:
-                log.tree("Confessions Message Delete Forbidden", [
+                logger.tree("Confessions Message Delete Forbidden", [
                     ("User", f"{message.author.name} ({message.author.display_name})"),
                     ("ID", str(message.author.id)),
                     ("Reason", "Missing permissions"),
                 ], emoji="⚠️")
                 return False
             except discord.HTTPException as e:
-                log.tree("Confessions Message Delete Failed", [
+                logger.tree("Confessions Message Delete Failed", [
                     ("User", f"{message.author.name} ({message.author.display_name})"),
                     ("ID", str(message.author.id)),
                     ("Error", str(e)[:50]),
@@ -162,7 +162,7 @@ class ConfessionService:
             )
 
             if is_confession_thread:
-                log.tree("Confession Thread Message Detected", [
+                logger.tree("Confession Thread Message Detected", [
                     ("User", f"{message.author.name} ({message.author.display_name})"),
                     ("ID", str(message.author.id)),
                     ("Thread", message.channel.name),
@@ -172,26 +172,26 @@ class ConfessionService:
                 # Delete the message
                 try:
                     await message.delete()
-                    log.tree("Confession Thread Message Deleted", [
+                    logger.tree("Confession Thread Message Deleted", [
                         ("User", f"{message.author.name} ({message.author.display_name})"),
                         ("ID", str(message.author.id)),
                         ("Thread", message.channel.name),
                     ], emoji="🗑️")
                 except discord.NotFound:
-                    log.tree("Thread Message Already Deleted", [
+                    logger.tree("Thread Message Already Deleted", [
                         ("User", f"{message.author.name} ({message.author.display_name})"),
                         ("ID", str(message.author.id)),
                         ("Thread", message.channel.name),
                     ], emoji="ℹ️")
                 except discord.Forbidden:
-                    log.tree("Thread Message Delete Forbidden", [
+                    logger.tree("Thread Message Delete Forbidden", [
                         ("User", f"{message.author.name} ({message.author.display_name})"),
                         ("ID", str(message.author.id)),
                         ("Thread", message.channel.name),
                         ("Reason", "Missing permissions"),
                     ], emoji="⚠️")
                 except discord.HTTPException as e:
-                    log.tree("Thread Message Delete Failed", [
+                    logger.tree("Thread Message Delete Failed", [
                         ("User", f"{message.author.name} ({message.author.display_name})"),
                         ("ID", str(message.author.id)),
                         ("Thread", message.channel.name),
@@ -215,19 +215,19 @@ class ConfessionService:
                         warn_msg = await message.channel.send(embed=embed)
                         await warn_msg.delete(delay=DELETE_DELAY_MEDIUM)
 
-                        log.tree("Thread Reply Warning Sent", [
+                        logger.tree("Thread Reply Warning Sent", [
                             ("User", f"{message.author.name} ({message.author.display_name})"),
                             ("ID", str(message.author.id)),
                             ("Thread", message.channel.name),
                         ], emoji="⚠️")
                     except discord.HTTPException as e:
-                        log.tree("Thread Warning Failed", [
+                        logger.tree("Thread Warning Failed", [
                             ("User", f"{message.author.name} ({message.author.display_name})"),
                             ("ID", str(message.author.id)),
                             ("Error", str(e)[:50]),
                         ], emoji="❌")
                 else:
-                    log.tree("Thread Warning Skipped", [
+                    logger.tree("Thread Warning Skipped", [
                         ("User", f"{message.author.name} ({message.author.display_name})"),
                         ("ID", str(message.author.id)),
                         ("Thread", message.channel.name),
@@ -258,7 +258,7 @@ class ConfessionService:
             for webhook in webhooks:
                 if webhook.name == "Anonymous Confessions":
                     self._webhook = webhook
-                    log.tree("Webhook Found", [
+                    logger.tree("Webhook Found", [
                         ("Channel", channel.name),
                         ("Webhook ID", str(webhook.id)),
                     ], emoji="🔗")
@@ -269,20 +269,20 @@ class ConfessionService:
                 name="Anonymous Confessions",
                 reason="For anonymous confession replies"
             )
-            log.tree("Webhook Created", [
+            logger.tree("Webhook Created", [
                 ("Channel", channel.name),
                 ("Webhook ID", str(self._webhook.id)),
             ], emoji="🔗")
             return self._webhook
 
         except discord.Forbidden:
-            log.tree("Webhook Creation Forbidden", [
+            logger.tree("Webhook Creation Forbidden", [
                 ("Channel", channel.name),
                 ("Reason", "Missing permissions"),
             ], emoji="⚠️")
             return None
         except discord.HTTPException as e:
-            log.tree("Webhook Creation Failed", [
+            logger.tree("Webhook Creation Failed", [
                 ("Channel", channel.name),
                 ("Error", str(e)[:50]),
             ], emoji="❌")
@@ -333,7 +333,7 @@ class ConfessionService:
         # Return existing ID if user already has one
         if user_id in thread_users:
             existing_id = thread_users[user_id]
-            log.tree("Anon-ID Reused", [
+            logger.tree("Anon-ID Reused", [
                 ("Thread ID", str(thread_id)),
                 ("ID", str(user_id)),
                 ("Anon-ID", existing_id),
@@ -368,7 +368,7 @@ class ConfessionService:
 
         thread_users[user_id] = anon_id
 
-        log.tree("Anon-ID Assigned", [
+        logger.tree("Anon-ID Assigned", [
             ("Thread ID", str(thread_id)),
             ("ID", str(user_id)),
             ("Anon-ID", anon_id),
@@ -401,7 +401,7 @@ class ConfessionService:
         """Initialize the confession service."""
         # Check if required channel is configured
         if not config.CONFESSIONS_CHANNEL_ID:
-            log.tree("Confessions Service", [
+            logger.tree("Confessions Service", [
                 ("Status", "Disabled"),
                 ("Reason", "Missing CONFESSIONS_CHANNEL_ID"),
             ], emoji="ℹ️")
@@ -410,7 +410,7 @@ class ConfessionService:
         # Get the confessions channel
         channel = self.bot.get_channel(config.CONFESSIONS_CHANNEL_ID)
         if not channel:
-            log.tree("Confessions Service", [
+            logger.tree("Confessions Service", [
                 ("Status", "Error"),
                 ("Reason", "Channel not found"),
                 ("Channel ID", str(config.CONFESSIONS_CHANNEL_ID)),
@@ -418,7 +418,7 @@ class ConfessionService:
             return
 
         if not isinstance(channel, discord.TextChannel):
-            log.tree("Confessions Service", [
+            logger.tree("Confessions Service", [
                 ("Status", "Error"),
                 ("Reason", "Not a text channel"),
                 ("Channel ID", str(config.CONFESSIONS_CHANNEL_ID)),
@@ -432,7 +432,7 @@ class ConfessionService:
         # Get stats for log
         stats = await asyncio.to_thread(db.get_confession_stats)
 
-        log.tree("Confessions Service Ready", [
+        logger.tree("Confessions Service Ready", [
             ("Channel", channel.name),
             ("Channel ID", str(channel.id)),
             ("Total Published", str(stats["approved"])),
@@ -456,7 +456,7 @@ class ConfessionService:
             True if submitted and published successfully
         """
         if not self._enabled:
-            log.tree("Confession Submit Blocked", [
+            logger.tree("Confession Submit Blocked", [
                 ("User", f"{submitter.name} ({submitter.display_name})"),
                 ("ID", str(submitter.id)),
                 ("Reason", "Service disabled"),
@@ -466,7 +466,7 @@ class ConfessionService:
         # Create confession in database
         confession_id = await asyncio.to_thread(db.create_confession, content, submitter.id, None)
         if confession_id is None:
-            log.tree("Confession Database Error", [
+            logger.tree("Confession Database Error", [
                 ("User", f"{submitter.name} ({submitter.display_name})"),
                 ("ID", str(submitter.id)),
                 ("Reason", "Failed to create in database"),
@@ -476,7 +476,7 @@ class ConfessionService:
         # Auto-approve and publish
         confession_number = await asyncio.to_thread(db.approve_confession, confession_id, self.bot.user.id)
         if confession_number is None:
-            log.tree("Confession Auto-Approve Failed", [
+            logger.tree("Confession Auto-Approve Failed", [
                 ("DB ID", str(confession_id)),
                 ("User", f"{submitter.name}"),
                 ("ID", str(submitter.id)),
@@ -484,7 +484,7 @@ class ConfessionService:
             ], emoji="❌")
             return False
 
-        log.tree("Confession Submitted", [
+        logger.tree("Confession Submitted", [
             ("Confession", f"#{confession_number}"),
             ("User", f"{submitter.name}"),
             ("ID", str(submitter.id)),
@@ -499,13 +499,13 @@ class ConfessionService:
         success = await self._publish_confession(confession_id, confession_number, content, submitter)
 
         if success:
-            log.tree("Confession Published", [
+            logger.tree("Confession Published", [
                 ("Confession", f"#{confession_number}"),
                 ("User", f"{submitter.name}"),
                 ("ID", str(submitter.id)),
             ], emoji="📢")
         else:
-            log.tree("Confession Publish Failed", [
+            logger.tree("Confession Publish Failed", [
                 ("Confession", f"#{confession_number}"),
                 ("User", f"{submitter.name}"),
                 ("ID", str(submitter.id)),
@@ -534,7 +534,7 @@ class ConfessionService:
         """
         channel = self.bot.get_channel(config.CONFESSIONS_CHANNEL_ID)
         if not channel or not isinstance(channel, discord.TextChannel):
-            log.tree("Confession Channel Not Found", [
+            logger.tree("Confession Channel Not Found", [
                 ("ID", str(confession_id)),
                 ("Number", f"#{confession_number}"),
                 ("Expected ID", str(config.CONFESSIONS_CHANNEL_ID)),
@@ -561,7 +561,7 @@ class ConfessionService:
             # Send the confession
             confession_msg = await channel.send(embed=embed)
 
-            log.tree("Confession Message Sent", [
+            logger.tree("Confession Message Sent", [
                 ("ID", str(confession_id)),
                 ("Number", f"#{confession_number}"),
                 ("Message ID", str(confession_msg.id)),
@@ -571,17 +571,17 @@ class ConfessionService:
             # Add heart reaction
             try:
                 await confession_msg.add_reaction(EMOJI_HEART)
-                log.tree("Confession Reaction Added", [
+                logger.tree("Confession Reaction Added", [
                     ("Number", f"#{confession_number}"),
                     ("Emoji", EMOJI_HEART),
                 ], emoji="❤️")
             except discord.Forbidden:
-                log.tree("Confession Reaction Forbidden", [
+                logger.tree("Confession Reaction Forbidden", [
                     ("Number", f"#{confession_number}"),
                     ("Reason", "Missing permissions"),
                 ], emoji="⚠️")
             except discord.HTTPException as e:
-                log.tree("Confession Reaction Failed", [
+                logger.tree("Confession Reaction Failed", [
                     ("Number", f"#{confession_number}"),
                     ("Error", str(e)[:50]),
                 ], emoji="⚠️")
@@ -594,7 +594,7 @@ class ConfessionService:
                     auto_archive_duration=1440
                 )
 
-                log.tree("Confession Thread Created", [
+                logger.tree("Confession Thread Created", [
                     ("Number", f"#{confession_number}"),
                     ("Thread ID", str(thread.id)),
                     ("Thread Name", thread.name),
@@ -616,18 +616,18 @@ class ConfessionService:
                 view = ConfessionReplyView(confession_number)
                 await thread.send(embed=thread_embed, view=view)
 
-                log.tree("Thread Welcome Sent", [
+                logger.tree("Thread Welcome Sent", [
                     ("Number", f"#{confession_number}"),
                     ("Thread", thread.name),
                 ], emoji="👋")
 
             except discord.Forbidden:
-                log.tree("Thread Creation Forbidden", [
+                logger.tree("Thread Creation Forbidden", [
                     ("Number", f"#{confession_number}"),
                     ("Reason", "Missing permissions"),
                 ], emoji="⚠️")
             except discord.HTTPException as e:
-                log.tree("Thread Creation Failed", [
+                logger.tree("Thread Creation Failed", [
                     ("Number", f"#{confession_number}"),
                     ("Error", str(e)[:50]),
                 ], emoji="❌")
@@ -638,14 +638,14 @@ class ConfessionService:
             return True
 
         except discord.Forbidden:
-            log.tree("Confession Send Forbidden", [
+            logger.tree("Confession Send Forbidden", [
                 ("ID", str(confession_id)),
                 ("Number", f"#{confession_number}"),
                 ("Reason", "Missing permissions"),
             ], emoji="⚠️")
             return False
         except discord.HTTPException as e:
-            log.tree("Confession Send Failed", [
+            logger.tree("Confession Send Failed", [
                 ("ID", str(confession_id)),
                 ("Number", f"#{confession_number}"),
                 ("Error", str(e)[:50]),
@@ -682,7 +682,7 @@ class ConfessionService:
                     # Cache it for future lookups
                     self._confession_submitters[confession_number] = submitter_id
                     self._trim_cache(self._confession_submitters)
-                    log.tree("OP Loaded from Database", [
+                    logger.tree("OP Loaded from Database", [
                         ("Confession", f"#{confession_number}"),
                         ("Submitter ID", str(submitter_id)),
                     ], emoji="📥")
@@ -692,7 +692,7 @@ class ConfessionService:
             if is_op:
                 author_name = "OP"
                 avatar_url = self._get_avatar_url("", is_op=True)
-                log.tree("Reply from OP", [
+                logger.tree("Reply from OP", [
                     ("User", f"{user.name}"),
                     ("ID", str(user.id)),
                     ("Confession", f"#{confession_number}"),
@@ -708,7 +708,7 @@ class ConfessionService:
             # Get the parent channel for webhook
             parent_channel = thread.parent
             if not parent_channel or not isinstance(parent_channel, discord.TextChannel):
-                log.tree("Reply Parent Channel Not Found", [
+                logger.tree("Reply Parent Channel Not Found", [
                     ("Thread", thread.name),
                     ("Confession", f"#{confession_number}"),
                 ], emoji="⚠️")
@@ -717,7 +717,7 @@ class ConfessionService:
             # Get or create webhook
             webhook = await self._get_webhook(parent_channel)
             if not webhook:
-                log.tree("Reply Webhook Unavailable", [
+                logger.tree("Reply Webhook Unavailable", [
                     ("Thread", thread.name),
                     ("Confession", f"#{confession_number}"),
                     ("Reason", "Could not get/create webhook"),
@@ -734,7 +734,7 @@ class ConfessionService:
                 )
             except discord.NotFound:
                 # Webhook was deleted, clear cache and retry once
-                log.tree("Webhook Deleted, Retrying", [
+                logger.tree("Webhook Deleted, Retrying", [
                     ("Thread", thread.name),
                     ("Confession", f"#{confession_number}"),
                 ], emoji="🔄")
@@ -749,7 +749,7 @@ class ConfessionService:
                     thread=thread
                 )
 
-            log.tree("Anonymous Reply Posted", [
+            logger.tree("Anonymous Reply Posted", [
                 ("Anon-ID", author_name),
                 ("User", f"{user.name}"),
                 ("ID", str(user.id)),
@@ -761,7 +761,7 @@ class ConfessionService:
             return True
 
         except discord.Forbidden:
-            log.tree("Anonymous Reply Forbidden", [
+            logger.tree("Anonymous Reply Forbidden", [
                 ("User", f"{user.name}"),
                 ("ID", str(user.id)),
                 ("Confession", f"#{confession_number}"),
@@ -769,7 +769,7 @@ class ConfessionService:
             ], emoji="⚠️")
             return False
         except discord.HTTPException as e:
-            log.tree("Anonymous Reply Failed", [
+            logger.tree("Anonymous Reply Failed", [
                 ("User", f"{user.name}"),
                 ("ID", str(user.id)),
                 ("Confession", f"#{confession_number}"),
@@ -792,7 +792,7 @@ class ConfessionService:
             thread: Optional thread to link to
         """
         if not config.GENERAL_CHANNEL_ID:
-            log.tree("Confession Notification Skipped", [
+            logger.tree("Confession Notification Skipped", [
                 ("Number", f"#{confession_number}"),
                 ("Reason", "GENERAL_CHANNEL_ID not configured"),
             ], emoji="ℹ️")
@@ -800,7 +800,7 @@ class ConfessionService:
 
         general_channel = self.bot.get_channel(config.GENERAL_CHANNEL_ID)
         if not general_channel:
-            log.tree("Confession Notification Skipped", [
+            logger.tree("Confession Notification Skipped", [
                 ("Number", f"#{confession_number}"),
                 ("Reason", "General channel not found"),
             ], emoji="⚠️")
@@ -831,17 +831,17 @@ class ConfessionService:
 
         try:
             await general_channel.send(embed=embed, view=view)
-            log.tree("Confession Notification Sent", [
+            logger.tree("Confession Notification Sent", [
                 ("Number", f"#{confession_number}"),
                 ("Channel", general_channel.name),
             ], emoji="📢")
         except discord.Forbidden:
-            log.tree("Confession Notification Forbidden", [
+            logger.tree("Confession Notification Forbidden", [
                 ("Number", f"#{confession_number}"),
                 ("Reason", "Missing permissions"),
             ], emoji="⚠️")
         except discord.HTTPException as e:
-            log.tree("Confession Notification Failed", [
+            logger.tree("Confession Notification Failed", [
                 ("Number", f"#{confession_number}"),
                 ("Error", str(e)[:50]),
             ], emoji="❌")
@@ -849,4 +849,4 @@ class ConfessionService:
     def stop(self) -> None:
         """Stop the confession service."""
         self._enabled = False
-        log.tree("Confessions Service Stopped", [], emoji="🛑")
+        logger.tree("Confessions Service Stopped", [], emoji="🛑")

@@ -13,7 +13,7 @@ import shutil
 from pathlib import Path
 from typing import Optional
 
-from src.core.logger import log
+from src.core.logger import logger
 from .config import (
     YTDLP_PATH,
     GALLERY_DL_PATH,
@@ -48,7 +48,7 @@ def parse_error(stderr: str) -> str:
 
 async def download_images(url: str, download_dir: Path, platform: str) -> DownloadResult:
     """Download images using gallery-dl (fallback when yt-dlp fails on image posts)."""
-    log.tree("Image Download Started", [
+    logger.tree("Image Download Started", [
         ("Platform", platform.title()),
         ("URL", url[:60]),
         ("Tool", "gallery-dl"),
@@ -63,7 +63,7 @@ async def download_images(url: str, download_dir: Path, platform: str) -> Downlo
 
     if COOKIES_FILE.exists():
         cmd.extend(["--cookies", str(COOKIES_FILE)])
-        log.tree("Image Download Using Cookies", [
+        logger.tree("Image Download Using Cookies", [
             ("Platform", platform.title()),
         ], emoji="🍪")
 
@@ -83,7 +83,7 @@ async def download_images(url: str, download_dir: Path, platform: str) -> Downlo
             )
         except asyncio.TimeoutError:
             process.kill()
-            log.tree("Image Download Timeout", [
+            logger.tree("Image Download Timeout", [
                 ("Platform", platform.title()),
                 ("Timeout", "60s"),
             ], emoji="⏳")
@@ -97,7 +97,7 @@ async def download_images(url: str, download_dir: Path, platform: str) -> Downlo
         stderr_text = stderr.decode(errors="ignore")
 
         if process.returncode != 0:
-            log.tree("Image Download Failed", [
+            logger.tree("Image Download Failed", [
                 ("Platform", platform.title()),
                 ("Exit Code", str(process.returncode)),
                 ("Error", stderr_text[:100] if stderr_text else "Unknown"),
@@ -131,7 +131,7 @@ async def download_images(url: str, download_dir: Path, platform: str) -> Downlo
             files.extend(download_dir.rglob(f"*{ext}"))
 
         if not files:
-            log.tree("Image Download No Files", [
+            logger.tree("Image Download No Files", [
                 ("Platform", platform.title()),
             ], emoji="⚠️")
             return DownloadResult(
@@ -158,7 +158,7 @@ async def download_images(url: str, download_dir: Path, platform: str) -> Downlo
                 processed_files.append(file)
 
         if files_moved > 0:
-            log.tree("Image Files Reorganized", [
+            logger.tree("Image Files Reorganized", [
                 ("Files Moved", str(files_moved)),
             ], emoji="📁")
 
@@ -167,7 +167,7 @@ async def download_images(url: str, download_dir: Path, platform: str) -> Downlo
             if item.is_dir():
                 shutil.rmtree(item, ignore_errors=True)
 
-        log.tree("Image Download Complete", [
+        logger.tree("Image Download Complete", [
             ("Platform", platform.title()),
             ("Images", str(len(processed_files))),
         ], emoji="✅")
@@ -179,7 +179,7 @@ async def download_images(url: str, download_dir: Path, platform: str) -> Downlo
         )
 
     except FileNotFoundError:
-        log.tree("Image Download Tool Not Found", [
+        logger.tree("Image Download Tool Not Found", [
             ("Tool", "gallery-dl"),
             ("Path", GALLERY_DL_PATH),
         ], emoji="❌")
@@ -190,7 +190,7 @@ async def download_images(url: str, download_dir: Path, platform: str) -> Downlo
             error="Image download tool not available."
         )
     except Exception as e:
-        log.error_tree("Image Download Exception", e, [
+        logger.error_tree("Image Download Exception", e, [
             ("Platform", platform),
         ])
         return DownloadResult(
@@ -221,7 +221,7 @@ async def download(url: str, download_dir: Path, platform: str) -> DownloadResul
         if platform == "instagram":
             if COOKIES_FILE.exists():
                 cmd.extend(["--cookies", str(COOKIES_FILE)])
-                log.tree("yt-dlp Using Cookies", [
+                logger.tree("yt-dlp Using Cookies", [
                     ("Platform", "Instagram"),
                 ], emoji="🍪")
             cmd.extend(["--no-check-certificates"])
@@ -230,7 +230,7 @@ async def download(url: str, download_dir: Path, platform: str) -> DownloadResul
 
         cmd.append(url)
 
-        log.tree("yt-dlp Started", [
+        logger.tree("yt-dlp Started", [
             ("Platform", platform.title()),
             ("URL", url[:50]),
         ], emoji="🎬")
@@ -249,7 +249,7 @@ async def download(url: str, download_dir: Path, platform: str) -> DownloadResul
         except asyncio.TimeoutError:
             process.kill()
             await process.wait()  # Ensure process is fully cleaned up
-            log.tree("yt-dlp Timeout", [
+            logger.tree("yt-dlp Timeout", [
                 ("Platform", platform.title()),
                 ("Timeout", "120s"),
             ], emoji="⏳")
@@ -263,19 +263,19 @@ async def download(url: str, download_dir: Path, platform: str) -> DownloadResul
         stderr_text = stderr.decode(errors="ignore")
 
         if process.returncode != 0:
-            log.tree("yt-dlp Non-Zero Exit", [
+            logger.tree("yt-dlp Non-Zero Exit", [
                 ("Platform", platform.title()),
                 ("Exit Code", str(process.returncode)),
             ], emoji="⚠️")
 
             if "No video formats found" in stderr_text:
-                log.tree("yt-dlp No Video, Trying Images", [
+                logger.tree("yt-dlp No Video, Trying Images", [
                     ("Platform", platform.title()),
                 ], emoji="🖼️")
                 return await download_images(url, download_dir, platform)
 
             error_msg = parse_error(stderr_text)
-            log.tree("yt-dlp Failed", [
+            logger.tree("yt-dlp Failed", [
                 ("Platform", platform.title()),
                 ("Error", error_msg[:100]),
             ], emoji="❌")
@@ -288,7 +288,7 @@ async def download(url: str, download_dir: Path, platform: str) -> DownloadResul
 
         files = list(download_dir.glob("*"))
         if not files:
-            log.tree("yt-dlp No Files Downloaded", [
+            logger.tree("yt-dlp No Files Downloaded", [
                 ("Platform", platform.title()),
                 ("Download Dir", str(download_dir)),
             ], emoji="⚠️")
@@ -299,7 +299,7 @@ async def download(url: str, download_dir: Path, platform: str) -> DownloadResul
                 error="No media found in this post."
             )
 
-        log.tree("yt-dlp Download Complete", [
+        logger.tree("yt-dlp Download Complete", [
             ("Platform", platform.title()),
             ("Files", str(len(files))),
             ("Names", ", ".join(f.name[:20] for f in files[:3])),
@@ -313,13 +313,13 @@ async def download(url: str, download_dir: Path, platform: str) -> DownloadResul
                 if result:
                     processed_files.append(result)
             except Exception as e:
-                log.tree("yt-dlp File Processing Failed", [
+                logger.tree("yt-dlp File Processing Failed", [
                     ("File", file.name),
                     ("Error", str(e)[:50]),
                 ], emoji="⚠️")
 
         if not processed_files:
-            log.tree("yt-dlp All Files Too Large", [
+            logger.tree("yt-dlp All Files Too Large", [
                 ("Platform", platform.title()),
                 ("Original Files", str(len(files))),
             ], emoji="❌")
@@ -337,7 +337,7 @@ async def download(url: str, download_dir: Path, platform: str) -> DownloadResul
         )
 
     except FileNotFoundError:
-        log.tree("yt-dlp Not Found", [
+        logger.tree("yt-dlp Not Found", [
             ("Path", YTDLP_PATH),
         ], emoji="❌")
         return DownloadResult(
@@ -347,7 +347,7 @@ async def download(url: str, download_dir: Path, platform: str) -> DownloadResul
             error="yt-dlp not installed"
         )
     except Exception as e:
-        log.error_tree("yt-dlp Exception", e, [
+        logger.error_tree("yt-dlp Exception", e, [
             ("Platform", platform),
         ])
         return DownloadResult(

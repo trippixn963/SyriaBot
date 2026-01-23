@@ -238,7 +238,7 @@ def validate_config() -> bool:
     Returns:
         True if critical config is valid, False if bot cannot start
     """
-    from src.core.logger import log
+    from src.core.logger import logger
 
     is_valid = True
     warnings = []
@@ -282,7 +282,7 @@ def validate_config() -> bool:
     # Log results
     if errors:
         for key, reason in errors:
-            log.tree("Config Error", [
+            logger.tree("Config Error", [
                 ("Variable", key),
                 ("Reason", reason),
                 ("Impact", "Bot cannot start"),
@@ -290,23 +290,23 @@ def validate_config() -> bool:
 
     if warnings:
         for key, reason in warnings:
-            log.tree("Config Warning", [
+            logger.tree("Config Warning", [
                 ("Variable", key),
                 ("Reason", reason),
             ], emoji="⚠️")
 
     if optional_apis:
-        log.tree("Optional APIs Not Configured", [
+        logger.tree("Optional APIs Not Configured", [
             ("APIs", ", ".join(optional_apis)),
             ("Impact", "Related commands disabled"),
         ], emoji="ℹ️")
 
     if is_valid and not warnings:
-        log.tree("Config Validation", [
+        logger.tree("Config Validation", [
             ("Status", "All checks passed"),
         ], emoji="✅")
     elif is_valid:
-        log.tree("Config Validation", [
+        logger.tree("Config Validation", [
             ("Status", "Passed with warnings"),
             ("Warnings", str(len(warnings))),
         ], emoji="⚠️")

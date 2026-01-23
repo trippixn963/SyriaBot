@@ -11,7 +11,7 @@ Server: discord.gg/syria
 import time
 from typing import Optional, List, Dict, Any
 
-from src.core.logger import log
+from src.core.logger import logger
 
 
 class AFKMixin:
@@ -30,7 +30,7 @@ class AFKMixin:
                     reason = ?, timestamp = ?
             """, (user_id, guild_id, reason, now, reason, now))
 
-        log.tree("AFK Set", [
+        logger.tree("AFK Set", [
             ("ID", str(user_id)),
             ("Guild ID", str(guild_id)),
             ("Reason", reason[:50] if reason else "None"),
@@ -55,7 +55,7 @@ class AFKMixin:
                 DELETE FROM afk_users WHERE user_id = ? AND guild_id = ?
             """, (user_id, guild_id))
 
-        log.tree("AFK Removed", [
+        logger.tree("AFK Removed", [
             ("ID", str(user_id)),
             ("Guild ID", str(guild_id)),
         ], emoji="👋")
@@ -103,7 +103,7 @@ class AFKMixin:
                     VALUES (?, ?, ?, ?, ?)
                 """, (user_id, guild_id, pinger_id, pinger_name, int(time.time())))
 
-        log.tree("AFK Mention Tracked", [
+        logger.tree("AFK Mention Tracked", [
             ("ID", str(user_id)),
             ("Pinger", pinger_name or "Unknown"),
         ], emoji="📬")
@@ -141,7 +141,7 @@ class AFKMixin:
             """, (user_id, guild_id))
 
             if count > 0:
-                log.tree("AFK Mentions Cleared", [
+                logger.tree("AFK Mentions Cleared", [
                     ("ID", str(user_id)),
                     ("Count", str(count)),
                     ("Pingers", ", ".join(pinger_names) if pinger_names else "None"),

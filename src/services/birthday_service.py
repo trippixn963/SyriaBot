@@ -27,7 +27,7 @@ from discord.ext import tasks
 
 from src.core.config import config
 from src.core.colors import COLOR_SYRIA_GREEN
-from src.core.logger import log
+from src.core.logger import logger
 from src.services.database import db
 from src.utils.footer import set_footer
 
@@ -73,7 +73,7 @@ class BirthdayService:
         self._announcement_channel_id = config.BIRTHDAY_ANNOUNCE_CHANNEL_ID
 
         if not self._birthday_role_id:
-            log.tree("Birthday Service", [
+            logger.tree("Birthday Service", [
                 ("Status", "Disabled"),
                 ("Reason", "BIRTHDAY_ROLE_ID not configured"),
             ], emoji="ℹ️")
@@ -98,7 +98,7 @@ class BirthdayService:
             for user_id in active_birthday_users:
                 _birthday_bonus_users.add(user_id)
 
-        log.tree("Birthday Service Ready", [
+        logger.tree("Birthday Service Ready", [
             ("Role ID", str(self._birthday_role_id)),
             ("Announce Channel", str(self._announcement_channel_id) if self._announcement_channel_id else "None"),
             ("Registered Birthdays", str(count)),
@@ -112,7 +112,7 @@ class BirthdayService:
             self.birthday_check.cancel()
         if self.role_expiry_check.is_running():
             self.role_expiry_check.cancel()
-        log.tree("Birthday Service Stopped", [], emoji="🛑")
+        logger.tree("Birthday Service Stopped", [], emoji="🛑")
 
     # =========================================================================
     # Scheduled Tasks
@@ -128,7 +128,7 @@ class BirthdayService:
         month = now.month
         day = now.day
 
-        log.tree("Birthday Check Starting", [
+        logger.tree("Birthday Check Starting", [
             ("Date", f"{MONTH_NAMES[month]} {day}"),
             ("Time", now.strftime("%I:%M %p EST")),
         ], emoji="🎂")
@@ -139,21 +139,21 @@ class BirthdayService:
         )
 
         if not birthday_user_ids:
-            log.tree("Birthday Check Complete", [
+            logger.tree("Birthday Check Complete", [
                 ("Birthdays Today", "0"),
             ], emoji="🎂")
             return
 
         guild = self.bot.get_guild(config.GUILD_ID)
         if not guild:
-            log.tree("Birthday Check Failed", [
+            logger.tree("Birthday Check Failed", [
                 ("Reason", "Guild not found"),
             ], emoji="⚠️")
             return
 
         role = guild.get_role(self._birthday_role_id)
         if not role:
-            log.tree("Birthday Check Failed", [
+            logger.tree("Birthday Check Failed", [
                 ("Reason", "Birthday role not found"),
                 ("Role ID", str(self._birthday_role_id)),
             ], emoji="⚠️")
@@ -169,7 +169,7 @@ class BirthdayService:
 
             # Skip if already has the role (prevents double rewards)
             if role in member.roles:
-                log.tree("Birthday Role Skipped", [
+                logger.tree("Birthday Role Skipped", [
                     ("User", f"{member.name} ({member.display_name})"),
                     ("Reason", "Already has role"),
                 ], emoji="ℹ️")
@@ -179,7 +179,7 @@ class BirthdayService:
             async with _birthday_bonus_lock:
                 has_bonus = user_id in _birthday_bonus_users
             if has_bonus:
-                log.tree("Birthday Bonus Skipped", [
+                logger.tree("Birthday Bonus Skipped", [
                     ("User", f"{member.name} ({member.display_name})"),
                     ("Reason", "Already has 3x XP bonus"),
                 ], emoji="⚠️")
@@ -204,7 +204,7 @@ class BirthdayService:
                 async with _birthday_bonus_lock:
                     _birthday_bonus_users.add(user_id)
 
-                log.tree("Birthday Role Granted", [
+                logger.tree("Birthday Role Granted", [
                     ("User", f"{member.name} ({member.display_name})"),
                     ("ID", str(user_id)),
                     ("Birthday", f"{MONTH_NAMES[month]} {day}"),
@@ -219,17 +219,17 @@ class BirthdayService:
                 await self._send_birthday_rewards(member, age)
 
             except discord.Forbidden:
-                log.tree("Birthday Role Grant Failed", [
+                logger.tree("Birthday Role Grant Failed", [
                     ("User", f"{member.name} ({member.display_name})"),
                     ("Reason", "Missing permissions"),
                 ], emoji="⚠️")
             except discord.HTTPException as e:
-                log.tree("Birthday Role Grant Failed", [
+                logger.tree("Birthday Role Grant Failed", [
                     ("User", f"{member.name} ({member.display_name})"),
                     ("Error", str(e)[:50]),
                 ], emoji="❌")
 
-        log.tree("Birthday Check Complete", [
+        logger.tree("Birthday Check Complete", [
             ("Birthdays Today", str(len(birthday_user_ids))),
             ("Roles Granted", str(granted_count)),
         ], emoji="🎂")
@@ -272,7 +272,7 @@ class BirthdayService:
                 _birthday_bonus_users.discard(user_id)
 
             if had_bonus:
-                log.tree("Birthday XP Bonus Expired", [
+                logger.tree("Birthday XP Bonus Expired", [
                     ("ID", str(user_id)),
                     ("Bonus", "3x XP ended"),
                 ], emoji="⏰")
@@ -287,25 +287,25 @@ class BirthdayService:
                 await member.remove_roles(role, reason="Birthday celebration ended")
                 removed_count += 1
 
-                log.tree("Birthday Role Removed", [
+                logger.tree("Birthday Role Removed", [
                     ("User", f"{member.name} ({member.display_name})"),
                     ("ID", str(user_id)),
                     ("Duration", "24 hours"),
                 ], emoji="🎂")
 
             except discord.Forbidden:
-                log.tree("Birthday Role Remove Failed", [
+                logger.tree("Birthday Role Remove Failed", [
                     ("User", f"{member.name} ({member.display_name})"),
                     ("Reason", "Missing permissions"),
                 ], emoji="⚠️")
             except discord.HTTPException as e:
-                log.tree("Birthday Role Remove Failed", [
+                logger.tree("Birthday Role Remove Failed", [
                     ("User", f"{member.name} ({member.display_name})"),
                     ("Error", str(e)[:50]),
                 ], emoji="❌")
 
         if removed_count > 0:
-            log.tree("Birthday Role Expiry Check", [
+            logger.tree("Birthday Role Expiry Check", [
                 ("Expired", str(len(expired_user_ids))),
                 ("Removed", str(removed_count)),
             ], emoji="🎂")
@@ -369,7 +369,7 @@ class BirthdayService:
         )
 
         if success:
-            log.tree("Birthday Set", [
+            logger.tree("Birthday Set", [
                 ("User", f"{user.name} ({user.display_name})"),
                 ("ID", str(user.id)),
                 ("Birthday", f"{MONTH_NAMES[month]} {day}, {year}"),
@@ -398,12 +398,12 @@ class BirthdayService:
                 had_bonus = user.id in _birthday_bonus_users
                 _birthday_bonus_users.discard(user.id)
             if had_bonus:
-                log.tree("Birthday Bonus Revoked", [
+                logger.tree("Birthday Bonus Revoked", [
                     ("User", f"{user.name} ({user.display_name})"),
                     ("Reason", "Birthday removed by admin"),
                 ], emoji="⚠️")
 
-            log.tree("Birthday Removed", [
+            logger.tree("Birthday Removed", [
                 ("User", f"{user.name} ({user.display_name})"),
                 ("ID", str(user.id)),
             ], emoji="🗑️")
@@ -439,7 +439,7 @@ class BirthdayService:
 
         channel = self.bot.get_channel(self._announcement_channel_id)
         if not channel or not isinstance(channel, discord.TextChannel):
-            log.tree("Birthday Announce Failed", [
+            logger.tree("Birthday Announce Failed", [
                 ("User", f"{member.name} ({member.display_name})"),
                 ("Reason", "Announcement channel not found"),
             ], emoji="⚠️")
@@ -473,18 +473,18 @@ class BirthdayService:
 
             await channel.send(embed=embed)
 
-            log.tree("Birthday Announced", [
+            logger.tree("Birthday Announced", [
                 ("User", f"{member.name} ({member.display_name})"),
                 ("Channel", channel.name),
             ], emoji="📢")
 
         except discord.Forbidden:
-            log.tree("Birthday Announce Failed", [
+            logger.tree("Birthday Announce Failed", [
                 ("User", f"{member.name} ({member.display_name})"),
                 ("Reason", "Missing permissions"),
             ], emoji="⚠️")
         except discord.HTTPException as e:
-            log.tree("Birthday Announce Failed", [
+            logger.tree("Birthday Announce Failed", [
                 ("User", f"{member.name} ({member.display_name})"),
                 ("Error", str(e)[:50]),
             ], emoji="❌")
@@ -524,20 +524,20 @@ class BirthdayService:
 
         try:
             await member.send(embed=embed)
-            log.tree("Birthday DM Sent", [
+            logger.tree("Birthday DM Sent", [
                 ("User", f"{member.name} ({member.display_name})"),
                 ("ID", str(member.id)),
                 ("Coins Granted", f"{BIRTHDAY_COINS:,}" if coins_granted else "Failed"),
                 ("XP Boost", "3x for 24h"),
             ], emoji="🎁")
         except discord.Forbidden:
-            log.tree("Birthday DM Failed", [
+            logger.tree("Birthday DM Failed", [
                 ("User", f"{member.name} ({member.display_name})"),
                 ("Reason", "DMs disabled"),
                 ("Coins Granted", f"{BIRTHDAY_COINS:,}" if coins_granted else "Failed"),
             ], emoji="⚠️")
         except discord.HTTPException as e:
-            log.tree("Birthday DM Failed", [
+            logger.tree("Birthday DM Failed", [
                 ("User", f"{member.name} ({member.display_name})"),
                 ("Error", str(e)[:50]),
             ], emoji="❌")

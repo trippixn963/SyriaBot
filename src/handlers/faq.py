@@ -15,7 +15,7 @@ import discord
 from typing import Optional
 
 from src.core.config import config
-from src.core.logger import log
+from src.core.logger import logger
 from src.core.colors import COLOR_SYRIA_GREEN
 from src.utils.footer import set_footer
 from src.utils.permissions import is_cooldown_exempt
@@ -325,7 +325,7 @@ class FAQAutoResponder:
 
         # Check cooldowns
         if not self._check_cooldowns(message.author.id, message.channel.id, topic):
-            log.tree("FAQ Cooldown Active", [
+            logger.tree("FAQ Cooldown Active", [
                 ("User", f"{message.author.name}"),
                 ("Topic", topic),
             ], emoji="⏳")
@@ -363,18 +363,18 @@ class FAQAutoResponder:
             ]
             if was_fuzzy:
                 log_entries.append(("Fuzzy Match", "Yes"))
-            log.tree("FAQ Auto-Sent", log_entries, emoji="📋")
+            logger.tree("FAQ Auto-Sent", log_entries, emoji="📋")
 
             return True
 
         except discord.Forbidden:
-            log.tree("FAQ Send Failed", [
+            logger.tree("FAQ Send Failed", [
                 ("Reason", "Missing permissions"),
                 ("Channel", str(message.channel.id)),
             ], emoji="❌")
             return False
         except Exception as e:
-            log.tree("FAQ Send Error", [
+            logger.tree("FAQ Send Error", [
                 ("Error", str(e)[:50]),
             ], emoji="❌")
             return False

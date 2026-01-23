@@ -12,7 +12,7 @@ import sqlite3
 import time
 from typing import Optional, List, Dict, Any
 
-from src.core.logger import log
+from src.core.logger import logger
 
 
 class TempVoiceMixin:
@@ -42,20 +42,20 @@ class TempVoiceMixin:
                 """, (channel_id, owner_id, guild_id, name, created_at))
 
                 if cur.rowcount == 0:
-                    log.tree("DB: Channel Create Failed", [
+                    logger.tree("DB: Channel Create Failed", [
                         ("Channel ID", str(channel_id)),
                         ("Owner ID", str(owner_id)),
                         ("Reason", "No rows inserted"),
                     ], emoji="⚠️")
                     return
 
-            log.tree("DB: Channel Created", [
+            logger.tree("DB: Channel Created", [
                 ("Channel ID", str(channel_id)),
                 ("Owner ID", str(owner_id)),
                 ("Name", name),
             ], emoji="💾")
         except Exception as e:
-            log.tree("DB: Create Channel Error", [
+            logger.tree("DB: Create Channel Error", [
                 ("Channel ID", str(channel_id)),
                 ("Error", str(e)),
             ], emoji="❌")
@@ -68,11 +68,11 @@ class TempVoiceMixin:
                 cur.execute("DELETE FROM temp_channels WHERE channel_id = ?", (channel_id,))
                 cur.execute("DELETE FROM waiting_rooms WHERE channel_id = ?", (channel_id,))
                 cur.execute("DELETE FROM text_channels WHERE channel_id = ?", (channel_id,))
-            log.tree("DB: Channel Deleted", [
+            logger.tree("DB: Channel Deleted", [
                 ("Channel ID", str(channel_id)),
             ], emoji="🗑️")
         except Exception as e:
-            log.tree("DB: Delete Channel Error", [
+            logger.tree("DB: Delete Channel Error", [
                 ("Channel ID", str(channel_id)),
                 ("Error", str(e)),
             ], emoji="❌")
@@ -111,7 +111,7 @@ class TempVoiceMixin:
                 values = list(kwargs.values()) + [channel_id]
                 cur.execute(f"UPDATE temp_channels SET {sets} WHERE channel_id = ?", values)
         except Exception as e:
-            log.tree("DB: Update Channel Error", [
+            logger.tree("DB: Update Channel Error", [
                 ("Channel ID", str(channel_id)),
                 ("Fields", ", ".join(kwargs.keys())),
                 ("Error", str(e)[:50]),
@@ -125,12 +125,12 @@ class TempVoiceMixin:
                 cur.execute("""
                     UPDATE temp_channels SET owner_id = ? WHERE channel_id = ?
                 """, (new_owner_id, channel_id))
-            log.tree("DB: Ownership Transferred", [
+            logger.tree("DB: Ownership Transferred", [
                 ("Channel ID", str(channel_id)),
                 ("New Owner", str(new_owner_id)),
             ], emoji="👑")
         except Exception as e:
-            log.tree("DB: Transfer Error", [
+            logger.tree("DB: Transfer Error", [
                 ("Channel ID", str(channel_id)),
                 ("Error", str(e)),
             ], emoji="❌")
@@ -171,7 +171,7 @@ class TempVoiceMixin:
                     values = list(kwargs.values()) + [user_id]
                     cur.execute(f"UPDATE user_settings SET {sets} WHERE user_id = ?", values)
         except Exception as e:
-            log.tree("DB: Save User Settings Error", [
+            logger.tree("DB: Save User Settings Error", [
                 ("ID", str(user_id)),
                 ("Error", str(e)[:50]),
             ], emoji="❌")
@@ -188,7 +188,7 @@ class TempVoiceMixin:
                 cur.execute("""
                     INSERT INTO trusted_users (owner_id, trusted_id) VALUES (?, ?)
                 """, (owner_id, trusted_id))
-                log.tree("DB: Trusted Added", [
+                logger.tree("DB: Trusted Added", [
                     ("Owner ID", str(owner_id)),
                     ("Trusted ID", str(trusted_id)),
                 ], emoji="✅")
@@ -196,7 +196,7 @@ class TempVoiceMixin:
         except sqlite3.IntegrityError:
             return False
         except Exception as e:
-            log.tree("DB: Add Trusted Error", [
+            logger.tree("DB: Add Trusted Error", [
                 ("Owner ID", str(owner_id)),
                 ("Trusted ID", str(trusted_id)),
                 ("Error", str(e)[:50]),
@@ -213,13 +213,13 @@ class TempVoiceMixin:
                 """, (owner_id, trusted_id))
                 removed = cur.rowcount > 0
                 if removed:
-                    log.tree("DB: Trusted Removed", [
+                    logger.tree("DB: Trusted Removed", [
                         ("Owner ID", str(owner_id)),
                         ("Trusted ID", str(trusted_id)),
                     ], emoji="🗑️")
                 return removed
         except Exception as e:
-            log.tree("DB: Remove Trusted Error", [
+            logger.tree("DB: Remove Trusted Error", [
                 ("Owner ID", str(owner_id)),
                 ("Trusted ID", str(trusted_id)),
                 ("Error", str(e)[:50]),
@@ -254,7 +254,7 @@ class TempVoiceMixin:
                 cur.execute("""
                     INSERT INTO blocked_users (owner_id, blocked_id) VALUES (?, ?)
                 """, (owner_id, blocked_id))
-                log.tree("DB: Blocked Added", [
+                logger.tree("DB: Blocked Added", [
                     ("Owner ID", str(owner_id)),
                     ("Blocked ID", str(blocked_id)),
                 ], emoji="🚫")
@@ -262,7 +262,7 @@ class TempVoiceMixin:
         except sqlite3.IntegrityError:
             return False
         except Exception as e:
-            log.tree("DB: Add Blocked Error", [
+            logger.tree("DB: Add Blocked Error", [
                 ("Owner ID", str(owner_id)),
                 ("Blocked ID", str(blocked_id)),
                 ("Error", str(e)[:50]),
@@ -279,13 +279,13 @@ class TempVoiceMixin:
                 """, (owner_id, blocked_id))
                 removed = cur.rowcount > 0
                 if removed:
-                    log.tree("DB: Blocked Removed", [
+                    logger.tree("DB: Blocked Removed", [
                         ("Owner ID", str(owner_id)),
                         ("Blocked ID", str(blocked_id)),
                     ], emoji="✅")
                 return removed
         except Exception as e:
-            log.tree("DB: Remove Blocked Error", [
+            logger.tree("DB: Remove Blocked Error", [
                 ("Owner ID", str(owner_id)),
                 ("Blocked ID", str(blocked_id)),
                 ("Error", str(e)[:50]),
@@ -349,12 +349,12 @@ class TempVoiceMixin:
                     removed += len(stale_blocked)
 
             if removed > 0:
-                log.tree("DB: Stale Users Cleaned", [
+                logger.tree("DB: Stale Users Cleaned", [
                     ("Owner ID", str(owner_id)),
                     ("Removed", str(removed)),
                 ], emoji="🧹")
         except Exception as e:
-            log.tree("DB: Cleanup Stale Error", [
+            logger.tree("DB: Cleanup Stale Error", [
                 ("Owner ID", str(owner_id)),
                 ("Error", str(e)[:50]),
             ], emoji="❌")
@@ -374,12 +374,12 @@ class TempVoiceMixin:
                     INSERT INTO waiting_rooms (channel_id, waiting_channel_id) VALUES (?, ?)
                     ON CONFLICT(channel_id) DO UPDATE SET waiting_channel_id = ?
                 """, (channel_id, waiting_channel_id, waiting_channel_id))
-            log.tree("DB: Waiting Room Set", [
+            logger.tree("DB: Waiting Room Set", [
                 ("Channel ID", str(channel_id)),
                 ("Waiting ID", str(waiting_channel_id)),
             ], emoji="⏳")
         except Exception as e:
-            log.tree("DB: Set Waiting Room Error", [
+            logger.tree("DB: Set Waiting Room Error", [
                 ("Channel ID", str(channel_id)),
                 ("Error", str(e)[:50]),
             ], emoji="❌")
@@ -398,11 +398,11 @@ class TempVoiceMixin:
             with self._get_conn() as conn:
                 cur = conn.cursor()
                 cur.execute("DELETE FROM waiting_rooms WHERE channel_id = ?", (channel_id,))
-            log.tree("DB: Waiting Room Removed", [
+            logger.tree("DB: Waiting Room Removed", [
                 ("Channel ID", str(channel_id)),
             ], emoji="🗑️")
         except Exception as e:
-            log.tree("DB: Remove Waiting Room Error", [
+            logger.tree("DB: Remove Waiting Room Error", [
                 ("Channel ID", str(channel_id)),
                 ("Error", str(e)[:50]),
             ], emoji="❌")
@@ -420,12 +420,12 @@ class TempVoiceMixin:
                     INSERT INTO text_channels (channel_id, text_channel_id) VALUES (?, ?)
                     ON CONFLICT(channel_id) DO UPDATE SET text_channel_id = ?
                 """, (channel_id, text_channel_id, text_channel_id))
-            log.tree("DB: Text Channel Set", [
+            logger.tree("DB: Text Channel Set", [
                 ("Channel ID", str(channel_id)),
                 ("Text ID", str(text_channel_id)),
             ], emoji="💬")
         except Exception as e:
-            log.tree("DB: Set Text Channel Error", [
+            logger.tree("DB: Set Text Channel Error", [
                 ("Channel ID", str(channel_id)),
                 ("Error", str(e)[:50]),
             ], emoji="❌")
@@ -444,11 +444,11 @@ class TempVoiceMixin:
             with self._get_conn() as conn:
                 cur = conn.cursor()
                 cur.execute("DELETE FROM text_channels WHERE channel_id = ?", (channel_id,))
-            log.tree("DB: Text Channel Removed", [
+            logger.tree("DB: Text Channel Removed", [
                 ("Channel ID", str(channel_id)),
             ], emoji="🗑️")
         except Exception as e:
-            log.tree("DB: Remove Text Channel Error", [
+            logger.tree("DB: Remove Text Channel Error", [
                 ("Channel ID", str(channel_id)),
                 ("Error", str(e)[:50]),
             ], emoji="❌")

@@ -8,7 +8,7 @@ Author: حَـــــنَّـــــا
 Server: discord.gg/syria
 """
 
-from src.core.logger import log
+from src.core.logger import logger
 from .core import get_week_start_timestamp
 
 
@@ -64,7 +64,7 @@ class RateLimitsMixin:
                     INSERT INTO convert_usage (user_id, uses_this_week, week_start_timestamp)
                     VALUES (?, 1, ?)
                 """, (user_id, week_start))
-                log.tree("Convert Usage Recorded", [
+                logger.tree("Convert Usage Recorded", [
                     ("ID", str(user_id)),
                     ("Uses", "1"),
                     ("Remaining", "2"),
@@ -78,7 +78,7 @@ class RateLimitsMixin:
                     UPDATE convert_usage SET uses_this_week = 1, week_start_timestamp = ?
                     WHERE user_id = ?
                 """, (week_start, user_id))
-                log.tree("Convert Usage Reset (New Week)", [
+                logger.tree("Convert Usage Reset (New Week)", [
                     ("ID", str(user_id)),
                     ("Uses", "1"),
                     ("Remaining", "2"),
@@ -91,7 +91,7 @@ class RateLimitsMixin:
                 WHERE user_id = ?
             """, (new_uses, user_id))
             remaining = max(0, 3 - new_uses)
-            log.tree("Convert Usage Recorded", [
+            logger.tree("Convert Usage Recorded", [
                 ("ID", str(user_id)),
                 ("Uses", str(new_uses)),
                 ("Remaining", str(remaining)),
@@ -154,7 +154,7 @@ class RateLimitsMixin:
                     INSERT INTO download_usage (user_id, uses_this_week, week_start_timestamp)
                     VALUES (?, 1, ?)
                 """, (user_id, week_start))
-                log.tree("Download Usage Recorded", [
+                logger.tree("Download Usage Recorded", [
                     ("ID", str(user_id)),
                     ("Uses", "1"),
                     ("Remaining", str(weekly_limit - 1)),
@@ -168,7 +168,7 @@ class RateLimitsMixin:
                     UPDATE download_usage SET uses_this_week = 1, week_start_timestamp = ?
                     WHERE user_id = ?
                 """, (week_start, user_id))
-                log.tree("Download Usage Reset (New Week)", [
+                logger.tree("Download Usage Reset (New Week)", [
                     ("ID", str(user_id)),
                     ("Uses", "1"),
                     ("Remaining", str(weekly_limit - 1)),
@@ -181,7 +181,7 @@ class RateLimitsMixin:
                 WHERE user_id = ?
             """, (new_uses, user_id))
             remaining = max(0, weekly_limit - new_uses)
-            log.tree("Download Usage Recorded", [
+            logger.tree("Download Usage Recorded", [
                 ("ID", str(user_id)),
                 ("Uses", str(new_uses)),
                 ("Remaining", str(remaining)),
@@ -236,7 +236,7 @@ class RateLimitsMixin:
                     INSERT INTO image_usage (user_id, uses_this_week, week_start_timestamp)
                     VALUES (?, 1, ?)
                 """, (user_id, week_start))
-                log.tree("Image Usage Recorded", [
+                logger.tree("Image Usage Recorded", [
                     ("ID", str(user_id)),
                     ("Uses", "1"),
                     ("Remaining", str(weekly_limit - 1)),
@@ -250,7 +250,7 @@ class RateLimitsMixin:
                     UPDATE image_usage SET uses_this_week = 1, week_start_timestamp = ?
                     WHERE user_id = ?
                 """, (week_start, user_id))
-                log.tree("Image Usage Reset (New Week)", [
+                logger.tree("Image Usage Reset (New Week)", [
                     ("ID", str(user_id)),
                     ("Uses", "1"),
                     ("Remaining", str(weekly_limit - 1)),
@@ -263,7 +263,7 @@ class RateLimitsMixin:
                 WHERE user_id = ?
             """, (new_uses, user_id))
             remaining = max(0, weekly_limit - new_uses)
-            log.tree("Image Usage Recorded", [
+            logger.tree("Image Usage Recorded", [
                 ("ID", str(user_id)),
                 ("Uses", str(new_uses)),
                 ("Remaining", str(remaining)),

@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Optional, Tuple, Dict, Any
 import discord
 
 from src.core.config import config
-from src.core.logger import log
+from src.core.logger import logger
 from src.core.colors import COLOR_SYRIA_GREEN, COLOR_SUCCESS, COLOR_ERROR, COLOR_WARNING, EMOJI_HEART, EMOJI_SUGGEST
 from src.services.database import db
 from src.utils.footer import set_footer
@@ -65,7 +65,7 @@ class SuggestionService:
     async def setup(self) -> None:
         """Initialize the suggestion service."""
         if not config.SUGGESTIONS_CHANNEL_ID:
-            log.tree("Suggestions Service", [
+            logger.tree("Suggestions Service", [
                 ("Status", "Disabled"),
                 ("Reason", "Missing SUGGESTIONS_CHANNEL_ID"),
             ], emoji="ℹ️")
@@ -73,7 +73,7 @@ class SuggestionService:
 
         channel = self.bot.get_channel(config.SUGGESTIONS_CHANNEL_ID)
         if not channel:
-            log.tree("Suggestions Service", [
+            logger.tree("Suggestions Service", [
                 ("Status", "Error"),
                 ("Reason", "Channel not found"),
                 ("Channel ID", str(config.SUGGESTIONS_CHANNEL_ID)),
@@ -81,7 +81,7 @@ class SuggestionService:
             return
 
         if not isinstance(channel, discord.TextChannel):
-            log.tree("Suggestions Service", [
+            logger.tree("Suggestions Service", [
                 ("Status", "Error"),
                 ("Reason", "Not a text channel"),
             ], emoji="⚠️")
@@ -92,7 +92,7 @@ class SuggestionService:
 
         stats = await asyncio.to_thread(db.get_suggestion_stats)
 
-        log.tree("Suggestions Service Ready", [
+        logger.tree("Suggestions Service Ready", [
             ("Channel", channel.name),
             ("Total", str(stats["total"])),
             ("Pending", str(stats["pending"])),
@@ -126,7 +126,7 @@ class SuggestionService:
         # Delete the message
         try:
             await message.delete()
-            log.tree("Suggestions Channel Message Deleted", [
+            logger.tree("Suggestions Channel Message Deleted", [
                 ("User", f"{message.author.name}"),
                 ("ID", str(message.author.id)),
                 ("Content", message.content[:LOG_CONTENT_TRUNCATE] if message.content else "(empty)"),
@@ -134,20 +134,20 @@ class SuggestionService:
             ], emoji="🗑️")
             return True
         except discord.NotFound:
-            log.tree("Suggestions Message Already Deleted", [
+            logger.tree("Suggestions Message Already Deleted", [
                 ("User", f"{message.author.name}"),
                 ("ID", str(message.author.id)),
             ], emoji="ℹ️")
             return True
         except discord.Forbidden:
-            log.tree("Suggestions Message Delete Forbidden", [
+            logger.tree("Suggestions Message Delete Forbidden", [
                 ("User", f"{message.author.name}"),
                 ("ID", str(message.author.id)),
                 ("Reason", "Missing permissions"),
             ], emoji="⚠️")
             return False
         except discord.HTTPException as e:
-            log.tree("Suggestions Message Delete Failed", [
+            logger.tree("Suggestions Message Delete Failed", [
                 ("User", f"{message.author.name}"),
                 ("ID", str(message.author.id)),
                 ("Error", str(e)[:LOG_CONTENT_TRUNCATE]),
@@ -166,7 +166,7 @@ class SuggestionService:
         """
         count = await asyncio.to_thread(db.get_user_suggestion_count_today, user_id)
         if count >= MAX_SUGGESTIONS_PER_DAY:
-            log.tree("Suggestion Rate Limited", [
+            logger.tree("Suggestion Rate Limited", [
                 ("ID", str(user_id)),
                 ("Count Today", str(count)),
                 ("Limit", str(MAX_SUGGESTIONS_PER_DAY)),
@@ -190,7 +190,7 @@ class SuggestionService:
             Tuple of (success, message/error)
         """
         if not self._enabled:
-            log.tree("Suggestion Submit Blocked", [
+            logger.tree("Suggestion Submit Blocked", [
                 ("User", f"{submitter.name}"),
                 ("ID", str(submitter.id)),
                 ("Reason", "Service disabled"),
@@ -199,7 +199,7 @@ class SuggestionService:
 
         channel = self.bot.get_channel(self._channel_id)
         if not channel or not isinstance(channel, discord.TextChannel):
-            log.tree("Suggestion Submit Blocked", [
+            logger.tree("Suggestion Submit Blocked", [
                 ("User", f"{submitter.name}"),
                 ("ID", str(submitter.id)),
                 ("Reason", "Channel not found"),
@@ -219,7 +219,7 @@ class SuggestionService:
                 stats = await asyncio.to_thread(db.get_suggestion_stats)
                 suggestion_num: int = stats["total"] + 1
 
-                log.tree("Suggestion Processing", [
+                logger.tree("Suggestion Processing", [
                     ("User", f"{submitter.name}"),
                     ("ID", str(submitter.id)),
                     ("Number", f"#{suggestion_num}"),
@@ -247,7 +247,7 @@ class SuggestionService:
                 # Send to channel
                 msg = await channel.send(embed=embed)
 
-                log.tree("Suggestion Message Sent", [
+                logger.tree("Suggestion Message Sent", [
                     ("Number", f"#{suggestion_num}"),
                     ("Message ID", str(msg.id)),
                     ("Channel", channel.name),
@@ -256,17 +256,17 @@ class SuggestionService:
                 # Add heart reaction
                 try:
                     await msg.add_reaction(EMOJI_HEART)
-                    log.tree("Suggestion Reaction Added", [
+                    logger.tree("Suggestion Reaction Added", [
                         ("Number", f"#{suggestion_num}"),
                         ("Emoji", "Custom heart"),
                     ], emoji="❤️")
                 except discord.Forbidden:
-                    log.tree("Suggestion Reaction Forbidden", [
+                    logger.tree("Suggestion Reaction Forbidden", [
                         ("Number", f"#{suggestion_num}"),
                         ("Reason", "Missing permissions"),
                     ], emoji="⚠️")
                 except discord.HTTPException as e:
-                    log.tree("Suggestion Reaction Failed", [
+                    logger.tree("Suggestion Reaction Failed", [
                         ("Number", f"#{suggestion_num}"),
                         ("Error", str(e)[:LOG_CONTENT_TRUNCATE]),
                     ], emoji="⚠️")
@@ -291,18 +291,18 @@ class SuggestionService:
                     set_footer(thread_embed)
                     await thread.send(embed=thread_embed)
 
-                    log.tree("Suggestion Thread Created", [
+                    logger.tree("Suggestion Thread Created", [
                         ("Number", f"#{suggestion_num}"),
                         ("Thread ID", str(thread.id)),
                         ("Thread Name", thread.name),
                     ], emoji="🧵")
                 except discord.Forbidden:
-                    log.tree("Suggestion Thread Forbidden", [
+                    logger.tree("Suggestion Thread Forbidden", [
                         ("Number", f"#{suggestion_num}"),
                         ("Reason", "Missing permissions"),
                     ], emoji="⚠️")
                 except discord.HTTPException as e:
-                    log.tree("Suggestion Thread Failed", [
+                    logger.tree("Suggestion Thread Failed", [
                         ("Number", f"#{suggestion_num}"),
                         ("Error", str(e)[:LOG_CONTENT_TRUNCATE]),
                     ], emoji="⚠️")
@@ -316,7 +316,7 @@ class SuggestionService:
                 )
 
                 if suggestion_id is None:
-                    log.tree("Suggestion Database Failed", [
+                    logger.tree("Suggestion Database Failed", [
                         ("Number", f"#{suggestion_num}"),
                         ("User", f"{submitter.name}"),
                         ("Reason", "Failed to create in database"),
@@ -329,7 +329,7 @@ class SuggestionService:
                         pass
                     return False, "Failed to save suggestion"
 
-                log.tree("Suggestion Submitted", [
+                logger.tree("Suggestion Submitted", [
                     ("Suggestion ID", str(suggestion_id)),
                     ("Number", f"#{suggestion_num}"),
                     ("User", f"{submitter.name}"),
@@ -345,14 +345,14 @@ class SuggestionService:
                 return True, f"Suggestion #{suggestion_num} submitted!"
 
             except discord.Forbidden:
-                log.tree("Suggestion Submit Forbidden", [
+                logger.tree("Suggestion Submit Forbidden", [
                     ("User", f"{submitter.name}"),
                     ("ID", str(submitter.id)),
                     ("Reason", "Missing permissions"),
                 ], emoji="⚠️")
                 return False, "Missing permissions to post suggestions"
             except discord.HTTPException as e:
-                log.error_tree("Suggestion Submit Failed", e, [
+                logger.error_tree("Suggestion Submit Failed", e, [
                     ("User", f"{submitter.name}"),
                     ("ID", str(submitter.id)),
                 ])
@@ -375,7 +375,7 @@ class SuggestionService:
         Returns:
             True if updated successfully
         """
-        log.tree("Suggestion Status Update Started", [
+        logger.tree("Suggestion Status Update Started", [
             ("Message ID", str(message.id)),
             ("New Status", status),
             ("Mod", f"{mod.name}"),
@@ -384,7 +384,7 @@ class SuggestionService:
 
         suggestion = await asyncio.to_thread(db.get_suggestion_by_message, message.id)
         if not suggestion:
-            log.tree("Suggestion Status Update Failed", [
+            logger.tree("Suggestion Status Update Failed", [
                 ("Message ID", str(message.id)),
                 ("Reason", "Suggestion not found in database"),
             ], emoji="⚠️")
@@ -398,7 +398,7 @@ class SuggestionService:
             mod.id
         )
         if not success:
-            log.tree("Suggestion Status Update Failed", [
+            logger.tree("Suggestion Status Update Failed", [
                 ("ID", str(suggestion["id"])),
                 ("Reason", "Database update failed"),
             ], emoji="❌")
@@ -408,7 +408,7 @@ class SuggestionService:
         try:
             embed = message.embeds[0] if message.embeds else None
             if not embed:
-                log.tree("Suggestion Status Update Failed", [
+                logger.tree("Suggestion Status Update Failed", [
                     ("ID", str(suggestion["id"])),
                     ("Reason", "No embed found on message"),
                 ], emoji="⚠️")
@@ -445,7 +445,7 @@ class SuggestionService:
 
             await message.edit(embed=new_embed)
 
-            log.tree("Suggestion Status Updated", [
+            logger.tree("Suggestion Status Updated", [
                 ("ID", str(suggestion["id"])),
                 ("Status", status),
                 ("Display", status_display),
@@ -456,13 +456,13 @@ class SuggestionService:
             return True
 
         except discord.Forbidden:
-            log.tree("Suggestion Status Update Forbidden", [
+            logger.tree("Suggestion Status Update Forbidden", [
                 ("ID", str(suggestion["id"])),
                 ("Reason", "Missing permissions"),
             ], emoji="⚠️")
             return False
         except discord.HTTPException as e:
-            log.error_tree("Suggestion Status Update Failed", e, [
+            logger.error_tree("Suggestion Status Update Failed", e, [
                 ("ID", str(suggestion["id"])),
                 ("Status", status),
             ])
@@ -483,7 +483,7 @@ class SuggestionService:
             thread: Optional thread to link to
         """
         if not config.GENERAL_CHANNEL_ID:
-            log.tree("Suggestion Notification Skipped", [
+            logger.tree("Suggestion Notification Skipped", [
                 ("Number", f"#{suggestion_num}"),
                 ("Reason", "GENERAL_CHANNEL_ID not configured"),
             ], emoji="ℹ️")
@@ -491,7 +491,7 @@ class SuggestionService:
 
         general_channel = self.bot.get_channel(config.GENERAL_CHANNEL_ID)
         if not general_channel:
-            log.tree("Suggestion Notification Skipped", [
+            logger.tree("Suggestion Notification Skipped", [
                 ("Number", f"#{suggestion_num}"),
                 ("Reason", "General channel not found"),
             ], emoji="⚠️")
@@ -521,17 +521,17 @@ class SuggestionService:
 
         try:
             await general_channel.send(embed=embed, view=view)
-            log.tree("Suggestion Notification Sent", [
+            logger.tree("Suggestion Notification Sent", [
                 ("Number", f"#{suggestion_num}"),
                 ("Channel", general_channel.name),
             ], emoji="📢")
         except discord.Forbidden:
-            log.tree("Suggestion Notification Forbidden", [
+            logger.tree("Suggestion Notification Forbidden", [
                 ("Number", f"#{suggestion_num}"),
                 ("Reason", "Missing permissions"),
             ], emoji="⚠️")
         except discord.HTTPException as e:
-            log.tree("Suggestion Notification Failed", [
+            logger.tree("Suggestion Notification Failed", [
                 ("Number", f"#{suggestion_num}"),
                 ("Error", str(e)[:LOG_CONTENT_TRUNCATE]),
             ], emoji="❌")
@@ -539,4 +539,4 @@ class SuggestionService:
     def stop(self) -> None:
         """Stop the suggestion service."""
         self._enabled = False
-        log.tree("Suggestions Service Stopped", [], emoji="🛑")
+        logger.tree("Suggestions Service Stopped", [], emoji="🛑")

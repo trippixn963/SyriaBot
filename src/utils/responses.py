@@ -13,7 +13,7 @@ from typing import Optional
 
 import discord
 
-from src.core.logger import log
+from src.core.logger import logger
 
 
 async def safe_send(
@@ -56,7 +56,7 @@ async def safe_send(
             )
         return True
     except discord.HTTPException as e:
-        log.tree("Response Failed", [
+        logger.tree("Response Failed", [
             ("User", f"{interaction.user.name}"),
             ("Error", str(e)[:50]),
         ], emoji="❌")
@@ -84,7 +84,7 @@ async def safe_defer(
             await interaction.response.defer(ephemeral=ephemeral, thinking=thinking)
         return True
     except discord.HTTPException as e:
-        log.tree("Defer Failed", [
+        logger.tree("Defer Failed", [
             ("User", f"{interaction.user.name}"),
             ("Error", str(e)[:50]),
         ], emoji="❌")
@@ -117,7 +117,7 @@ async def safe_edit(
         )
         return True
     except discord.HTTPException as e:
-        log.tree("Edit Failed", [
+        logger.tree("Edit Failed", [
             ("User", f"{interaction.user.name}"),
             ("Error", str(e)[:50]),
         ], emoji="❌")

@@ -15,7 +15,7 @@ from collections import OrderedDict
 
 import discord
 
-from src.core.logger import log
+from src.core.logger import logger
 from src.core.config import config
 from src.core.colors import COLOR_ERROR, COLOR_GOLD
 from src.core.constants import DELETE_DELAY_SHORT
@@ -123,7 +123,7 @@ class ActionHandler:
                 cooldown_msg.delete(delay=DELETE_DELAY_SHORT),
                 return_exceptions=True
             )
-            log.tree("Action Cooldown", [
+            logger.tree("Action Cooldown", [
                 ("User", f"{message.author.name}"),
                 ("ID", str(user_id)),
                 ("Action", action),
@@ -151,7 +151,7 @@ class ActionHandler:
             # If no valid targets, treat as self-action (hug alone = self hug)
             if not targets:
                 targets = [None]  # None means self-target
-                log.tree("Action Self-Target", [
+                logger.tree("Action Self-Target", [
                     ("User", f"{message.author.name}"),
                     ("ID", str(user_id)),
                     ("Action", action),
@@ -160,7 +160,7 @@ class ActionHandler:
         elif is_self_action:
             targets = [None]  # Self-actions have no target
         else:
-            log.tree("Action Skipped", [
+            logger.tree("Action Skipped", [
                 ("User", f"{message.author.name}"),
                 ("ID", str(user_id)),
                 ("Action", action),
@@ -175,7 +175,7 @@ class ActionHandler:
         for target in targets:
             # Log the action
             if target:
-                log.tree("Action Command", [
+                logger.tree("Action Command", [
                     ("User", f"{message.author.name} ({message.author.display_name})"),
                     ("ID", str(user_id)),
                     ("Action", action),
@@ -184,7 +184,7 @@ class ActionHandler:
                     ("Combo", f"{sent_count + 1}/{len(targets)}"),
                 ], emoji="🎬")
             else:
-                log.tree("Self Action Command", [
+                logger.tree("Self Action Command", [
                     ("User", f"{message.author.name} ({message.author.display_name})"),
                     ("ID", str(user_id)),
                     ("Action", action),
@@ -193,7 +193,7 @@ class ActionHandler:
             # Fetch GIF (new GIF for each target in combo)
             gif_url = await action_service.get_action_gif(action)
             if not gif_url:
-                log.tree("Action GIF Failed", [
+                logger.tree("Action GIF Failed", [
                     ("User", f"{message.author.name} ({message.author.display_name})"),
                     ("ID", str(message.author.id)),
                     ("Action", action),
@@ -227,7 +227,7 @@ class ActionHandler:
                 target_id = target.id if target else None
                 await asyncio.to_thread(db.record_action, user_id, guild_id, action, target_id)
             except Exception as e:
-                log.error_tree("Action Stats Record Failed", e, [
+                logger.error_tree("Action Stats Record Failed", e, [
                     ("User", f"{message.author.name} ({message.author.display_name})"),
                     ("ID", str(user_id)),
                     ("Guild ID", str(guild_id)),
@@ -235,7 +235,7 @@ class ActionHandler:
                     ("Target ID", str(target_id) if target_id else "None"),
                 ])
 
-            log.tree("Action Sent", [
+            logger.tree("Action Sent", [
                 ("User", f"{message.author.name} ({message.author.display_name})"),
                 ("ID", str(user_id)),
                 ("Action", action),

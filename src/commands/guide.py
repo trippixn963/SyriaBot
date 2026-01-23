@@ -13,7 +13,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from src.core.config import config
-from src.core.logger import log
+from src.core.logger import logger
 from src.core.colors import COLOR_SYRIA_GREEN
 from src.utils.footer import set_footer
 from src.services.guide.views import GuideView
@@ -57,7 +57,7 @@ class GuideCog(commands.Cog):
 
         await interaction.response.defer(ephemeral=True)
 
-        log.tree("Guide Post Started", [
+        logger.tree("Guide Post Started", [
             ("Admin", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("Channel", target.name),
             ("Purge", str(purge)),
@@ -70,14 +70,14 @@ class GuideCog(commands.Cog):
             if purge:
                 deleted = await target.purge(limit=PURGE_LIMIT)
                 if len(deleted) >= PURGE_LIMIT:
-                    log.tree("Channel Purge Hit Limit", [
+                    logger.tree("Channel Purge Hit Limit", [
                         ("Channel", target.name),
                         ("Messages Deleted", str(len(deleted))),
                         ("Limit", str(PURGE_LIMIT)),
                         ("Warning", "More messages may remain"),
                     ], emoji="⚠️")
                 else:
-                    log.tree("Channel Purged", [
+                    logger.tree("Channel Purged", [
                         ("Channel", target.name),
                         ("Messages Deleted", str(len(deleted))),
                     ], emoji="🗑️")
@@ -123,7 +123,7 @@ class GuideCog(commands.Cog):
             # Save panel info for auto-updates
             if guild:
                 db.set_guide_panel(guild.id, target.id, message.id)
-                log.tree("Guide Panel Saved", [
+                logger.tree("Guide Panel Saved", [
                     ("Guild", guild.name),
                     ("Channel", target.name),
                     ("Message", str(message.id)),
@@ -134,7 +134,7 @@ class GuideCog(commands.Cog):
                 ephemeral=True
             )
 
-            log.tree("Guide Posted", [
+            logger.tree("Guide Posted", [
                 ("Admin", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("Channel", target.name),
                 ("Message", str(message.id)),
@@ -145,7 +145,7 @@ class GuideCog(commands.Cog):
                 f"Missing permissions to send messages in {target.mention}",
                 ephemeral=True
             )
-            log.tree("Guide Post Failed", [
+            logger.tree("Guide Post Failed", [
                 ("Channel", target.name),
                 ("Reason", "Missing permissions"),
             ], emoji="❌")
@@ -155,7 +155,7 @@ class GuideCog(commands.Cog):
                 f"Failed to post guide: {e}",
                 ephemeral=True
             )
-            log.error_tree("Guide Post Error", e, [
+            logger.error_tree("Guide Post Error", e, [
                 ("Channel", target.name),
             ])
 
@@ -167,6 +167,6 @@ class GuideCog(commands.Cog):
 async def setup(bot: commands.Bot) -> None:
     """Add the cog to the bot."""
     await bot.add_cog(GuideCog(bot))
-    log.tree("Command Loaded", [
+    logger.tree("Command Loaded", [
         ("Name", "guide"),
     ], emoji="✅")

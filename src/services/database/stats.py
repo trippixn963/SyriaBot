@@ -11,7 +11,7 @@ Server: discord.gg/syria
 import time
 from typing import List, Dict, Any
 
-from src.core.logger import log
+from src.core.logger import logger
 
 
 class StatsMixin:
@@ -177,12 +177,12 @@ class StatsMixin:
                     INSERT INTO boost_history (user_id, guild_id, action, timestamp)
                     VALUES (?, ?, ?, ?)
                 """, (user_id, guild_id, action, int(time.time())))
-            log.tree("DB: Boost Recorded", [
+            logger.tree("DB: Boost Recorded", [
                 ("ID", str(user_id)),
                 ("Action", action),
             ], emoji="💎" if action == "boost" else "💔")
         except Exception as e:
-            log.tree("DB: Record Boost Error", [
+            logger.tree("DB: Record Boost Error", [
                 ("ID", str(user_id)),
                 ("Action", action),
                 ("Error", str(e)[:50]),

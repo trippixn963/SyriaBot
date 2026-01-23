@@ -14,7 +14,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from src.core.config import config
-from src.core.logger import log
+from src.core.logger import logger
 from src.core.colors import COLOR_ERROR, COLOR_WARNING
 from src.services.image import image_service
 from src.services.database import db
@@ -80,7 +80,7 @@ class ImageCog(commands.Cog):
         if not isinstance(user, discord.Member) and interaction.guild:
             user = interaction.guild.get_member(user.id) or user
 
-        log.tree("Image Command", [
+        logger.tree("Image Command", [
             ("User", f"{user.name} ({user.display_name})"),
             ("ID", str(user.id)),
             ("Query", query[:50] + "..." if len(query) > 50 else query),
@@ -96,7 +96,7 @@ class ImageCog(commands.Cog):
             set_footer(embed)
             await interaction.followup.send(embed=embed, ephemeral=True)
 
-            log.tree("Image Search Unavailable", [
+            logger.tree("Image Search Unavailable", [
                 ("User", f"{user.name} ({user.display_name})"),
                 ("ID", str(user.id)),
                 ("Reason", "Service not configured"),
@@ -120,14 +120,14 @@ class ImageCog(commands.Cog):
             set_footer(embed)
             await interaction.followup.send(embed=embed, ephemeral=True)
 
-            log.tree("Image Search Limit Reached", [
+            logger.tree("Image Search Limit Reached", [
                 ("User", f"{user.name} ({user.display_name})"),
                 ("ID", str(user.id)),
                 ("Remaining", "0"),
             ], emoji="⚠️")
             return
 
-        log.tree("Image Search Starting", [
+        logger.tree("Image Search Starting", [
             ("User", f"{user.name} ({user.display_name})"),
             ("ID", str(user.id)),
             ("Query", query[:50] + "..." if len(query) > 50 else query),
@@ -146,7 +146,7 @@ class ImageCog(commands.Cog):
             set_footer(embed)
             await interaction.followup.send(embed=embed, ephemeral=True)
 
-            log.tree("Image Search Failed", [
+            logger.tree("Image Search Failed", [
                 ("User", f"{user.name} ({user.display_name})"),
                 ("ID", str(user.id)),
                 ("Query", query[:30]),
@@ -163,7 +163,7 @@ class ImageCog(commands.Cog):
             set_footer(embed)
             await interaction.followup.send(embed=embed, ephemeral=True)
 
-            log.tree("Image Search No Results", [
+            logger.tree("Image Search No Results", [
                 ("User", f"{user.name} ({user.display_name})"),
                 ("ID", str(user.id)),
                 ("Query", query[:30]),
@@ -173,7 +173,7 @@ class ImageCog(commands.Cog):
         # Record usage (only for non-boosters)
         if remaining != -1:
             new_remaining = db.record_image_usage(user.id, config.IMAGE_WEEKLY_LIMIT)
-            log.tree("Image Usage Recorded", [
+            logger.tree("Image Usage Recorded", [
                 ("User", f"{user.name} ({user.display_name})"),
                 ("ID", str(user.id)),
                 ("Remaining", str(new_remaining)),
@@ -194,7 +194,7 @@ class ImageCog(commands.Cog):
             msg = await interaction.followup.send(embed=embed, file=file, view=view)
             view.message = msg
 
-            log.tree("Image Search Complete", [
+            logger.tree("Image Search Complete", [
                 ("User", f"{user.name} ({user.display_name})"),
                 ("ID", str(user.id)),
                 ("Query", query[:50] + "..." if len(query) > 50 else query),
@@ -206,7 +206,7 @@ class ImageCog(commands.Cog):
             # All images failed to download
             await interaction.followup.send(embed=embed, ephemeral=True)
 
-            log.tree("Image Search All Failed", [
+            logger.tree("Image Search All Failed", [
                 ("User", f"{user.name} ({user.display_name})"),
                 ("ID", str(user.id)),
                 ("Query", query[:50] + "..." if len(query) > 50 else query),
@@ -233,19 +233,19 @@ class ImageCog(commands.Cog):
                 else:
                     await interaction.followup.send(embed=embed, ephemeral=True)
             except discord.HTTPException as e:
-                log.tree("Image Cooldown Response Failed", [
+                logger.tree("Image Cooldown Response Failed", [
                     ("User", f"{interaction.user.name}"),
                     ("Error", str(e)[:50]),
                 ], emoji="⚠️")
 
-            log.tree("Image Command Cooldown", [
+            logger.tree("Image Command Cooldown", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Retry After", f"{error.retry_after:.1f}s"),
             ], emoji="⏳")
             return
 
-        log.error_tree("Image Command Error", error, [
+        logger.error_tree("Image Command Error", error, [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
         ])
@@ -262,7 +262,7 @@ class ImageCog(commands.Cog):
             else:
                 await interaction.followup.send(embed=embed, ephemeral=True)
         except discord.HTTPException as e:
-            log.tree("Image Error Response Failed", [
+            logger.tree("Image Error Response Failed", [
                 ("User", f"{interaction.user.name}"),
                 ("Error", str(e)[:50]),
             ], emoji="⚠️")
@@ -275,7 +275,7 @@ class ImageCog(commands.Cog):
 async def setup(bot: commands.Bot) -> None:
     """Add the cog to the bot."""
     await bot.add_cog(ImageCog(bot))
-    log.tree("Command Loaded", [
+    logger.tree("Command Loaded", [
         ("Name", "image"),
         ("Weekly Limit", str(config.IMAGE_WEEKLY_LIMIT)),
     ], emoji="✅")

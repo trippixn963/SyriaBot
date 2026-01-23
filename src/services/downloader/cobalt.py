@@ -14,7 +14,7 @@ from typing import Optional
 
 import aiohttp
 
-from src.core.logger import log
+from src.core.logger import logger
 from .config import (
     COBALT_API_URL,
     MAX_FILE_SIZE_MB,
@@ -35,31 +35,31 @@ async def check_health() -> bool:
                 if resp.status == 200:
                     data = await resp.json()
                     version = data.get("version", "unknown")
-                    log.tree("Cobalt API Health Check", [
+                    logger.tree("Cobalt API Health Check", [
                         ("Status", "Healthy"),
                         ("Version", version),
                     ], emoji="✅")
                     return True
                 else:
-                    log.tree("Cobalt API Health Check", [
+                    logger.tree("Cobalt API Health Check", [
                         ("Status", "Unhealthy"),
                         ("HTTP Status", str(resp.status)),
                     ], emoji="❌")
                     return False
     except asyncio.TimeoutError:
-        log.tree("Cobalt API Health Check", [
+        logger.tree("Cobalt API Health Check", [
             ("Status", "Timeout"),
             ("URL", COBALT_API_URL),
         ], emoji="❌")
         return False
     except aiohttp.ClientConnectorError as e:
-        log.tree("Cobalt API Health Check", [
+        logger.tree("Cobalt API Health Check", [
             ("Status", "Connection Failed"),
             ("Error", str(e)[:50]),
         ], emoji="❌")
         return False
     except Exception as e:
-        log.tree("Cobalt API Health Check", [
+        logger.tree("Cobalt API Health Check", [
             ("Status", "Error"),
             ("Error", str(e)[:50]),
         ], emoji="❌")
@@ -77,7 +77,7 @@ async def _download_single_file(
     Returns the Path on success, None on failure.
     """
     file_path = download_dir / filename
-    log.tree("File Download Starting", [
+    logger.tree("File Download Starting", [
         ("Filename", filename[:30]),
     ], emoji="⬇️")
 
@@ -88,7 +88,7 @@ async def _download_single_file(
             timeout=aiohttp.ClientTimeout(total=120),
         ) as file_resp:
             if file_resp.status != 200:
-                log.tree("File Download Failed", [
+                logger.tree("File Download Failed", [
                     ("Filename", filename),
                     ("Status", str(file_resp.status)),
                 ], emoji="⚠️")
@@ -100,7 +100,7 @@ async def _download_single_file(
                     f.write(chunk)
 
         file_size_mb = file_path.stat().st_size / (1024 * 1024)
-        log.tree("File Downloaded", [
+        logger.tree("File Downloaded", [
             ("Filename", filename[:30]),
             ("Size", f"{file_size_mb:.1f} MB"),
         ], emoji="✅")
@@ -108,7 +108,7 @@ async def _download_single_file(
         # Check if file is too large for Discord
         if file_size_mb > MAX_FILE_SIZE_MB:
             if file_path.suffix.lower() in VIDEO_EXTENSIONS:
-                log.tree("File Too Large, Compressing", [
+                logger.tree("File Too Large, Compressing", [
                     ("Filename", filename),
                     ("Size", f"{file_size_mb:.1f} MB"),
                 ], emoji="🗜️")
@@ -117,13 +117,13 @@ async def _download_single_file(
                     file_path.unlink()
                     return compressed
                 else:
-                    log.tree("Compression Failed, Skipping", [
+                    logger.tree("Compression Failed, Skipping", [
                         ("Filename", filename),
                     ], emoji="⚠️")
                     file_path.unlink()
                     return None
             else:
-                log.tree("Non-Video Too Large, Skipping", [
+                logger.tree("Non-Video Too Large, Skipping", [
                     ("Filename", filename),
                     ("Size", f"{file_size_mb:.1f} MB"),
                 ], emoji="⚠️")
@@ -133,7 +133,7 @@ async def _download_single_file(
             return file_path
 
     except Exception as e:
-        log.tree("File Download Error", [
+        logger.tree("File Download Error", [
             ("Filename", filename),
             ("Error", str(e)[:50]),
         ], emoji="⚠️")
@@ -145,7 +145,7 @@ async def _download_single_file(
 async def download(url: str, download_dir: Path, platform: str) -> DownloadResult:
     """Download using local Cobalt API - returns Discord-ready files."""
     try:
-        log.tree("Cobalt API Request", [
+        logger.tree("Cobalt API Request", [
             ("Platform", platform.title()),
             ("URL", url[:50]),
             ("API", COBALT_API_URL),
@@ -165,7 +165,7 @@ async def download(url: str, download_dir: Path, platform: str) -> DownloadResul
                 if resp.status != 200:
                     # Consume response body to properly close connection
                     await resp.read()
-                    log.tree("Cobalt API HTTP Error", [
+                    logger.tree("Cobalt API HTTP Error", [
                         ("Status", str(resp.status)),
                         ("URL", COBALT_API_URL),
                     ], emoji="❌")
@@ -180,7 +180,7 @@ async def download(url: str, download_dir: Path, platform: str) -> DownloadResul
 
             # Log full API response for debugging
             status = data.get("status")
-            log.tree("Cobalt API Response", [
+            logger.tree("Cobalt API Response", [
                 ("Status", status),
                 ("Has URL", "Yes" if data.get("url") else "No"),
                 ("Has Picker", "Yes" if data.get("picker") else "No"),
@@ -189,7 +189,7 @@ async def download(url: str, download_dir: Path, platform: str) -> DownloadResul
             if status == "error":
                 error = data.get("error", {})
                 error_code = error.get("code", "unknown") if isinstance(error, dict) else str(error)
-                log.tree("Cobalt API Error Response", [
+                logger.tree("Cobalt API Error Response", [
                     ("Error Code", str(error_code)[:50]),
                     ("Full Error", str(error)[:100]),
                 ], emoji="❌")
@@ -206,7 +206,7 @@ async def download(url: str, download_dir: Path, platform: str) -> DownloadResul
             if status == "tunnel":
                 download_url = data.get("url")
                 filename = data.get("filename", "video.mp4")
-                log.tree("Cobalt Response: Tunnel", [
+                logger.tree("Cobalt Response: Tunnel", [
                     ("Filename", filename[:30]),
                 ], emoji="🔗")
                 if download_url:
@@ -215,7 +215,7 @@ async def download(url: str, download_dir: Path, platform: str) -> DownloadResul
             elif status == "redirect":
                 download_url = data.get("url")
                 filename = data.get("filename", "video.mp4")
-                log.tree("Cobalt Response: Redirect", [
+                logger.tree("Cobalt Response: Redirect", [
                     ("Filename", filename[:30]),
                 ], emoji="🔗")
                 if download_url:
@@ -224,7 +224,7 @@ async def download(url: str, download_dir: Path, platform: str) -> DownloadResul
             elif status == "picker":
                 # Carousel/multi-item post - download ALL items
                 picker = data.get("picker", [])
-                log.tree("Cobalt Response: Picker (Carousel)", [
+                logger.tree("Cobalt Response: Picker (Carousel)", [
                     ("Total Items", str(len(picker))),
                 ], emoji="🎠")
 
@@ -235,19 +235,19 @@ async def download(url: str, download_dir: Path, platform: str) -> DownloadResul
                         ext = ".mp4" if item_type == "video" else ".jpg"
                         filename = f"{item_type}_{idx + 1}{ext}"
                         download_items.append((item_url, filename))
-                        log.tree(f"Carousel Item {idx + 1}", [
+                        logger.tree(f"Carousel Item {idx + 1}", [
                             ("Type", item_type),
                             ("Filename", filename),
                         ], emoji="📎")
 
             else:
-                log.tree("Cobalt Unknown Status", [
+                logger.tree("Cobalt Unknown Status", [
                     ("Status", str(status)),
                     ("Response Keys", ", ".join(data.keys())[:50]),
                 ], emoji="⚠️")
 
             if not download_items:
-                log.tree("Cobalt No Download URLs", [
+                logger.tree("Cobalt No Download URLs", [
                     ("Status", status),
                     ("Response", str(data)[:100]),
                 ], emoji="❌")
@@ -260,7 +260,7 @@ async def download(url: str, download_dir: Path, platform: str) -> DownloadResul
 
             # Download all files (parallel for multiple items)
             if len(download_items) > 1:
-                log.tree("Parallel Download Starting", [
+                logger.tree("Parallel Download Starting", [
                     ("Files", str(len(download_items))),
                 ], emoji="⚡")
                 # Download in parallel for carousels
@@ -272,7 +272,7 @@ async def download(url: str, download_dir: Path, platform: str) -> DownloadResul
                 downloaded_files = [r for r in results if isinstance(r, Path)]
                 failed = len([r for r in results if not isinstance(r, Path)])
                 if failed > 0:
-                    log.tree("Parallel Download Partial", [
+                    logger.tree("Parallel Download Partial", [
                         ("Success", str(len(downloaded_files))),
                         ("Failed", str(failed)),
                     ], emoji="⚠️")
@@ -285,7 +285,7 @@ async def download(url: str, download_dir: Path, platform: str) -> DownloadResul
                         downloaded_files.append(result)
 
             if not downloaded_files:
-                log.tree("Cobalt No Files Downloaded", [
+                logger.tree("Cobalt No Files Downloaded", [
                     ("Attempted", str(len(download_items))),
                 ], emoji="❌")
                 return DownloadResult(
@@ -295,7 +295,7 @@ async def download(url: str, download_dir: Path, platform: str) -> DownloadResul
                     error="Failed to download any files."
                 )
 
-            log.tree("Cobalt Download Complete", [
+            logger.tree("Cobalt Download Complete", [
                 ("Platform", platform.title()),
                 ("Files", str(len(downloaded_files))),
                 ("Total Size", f"{sum(f.stat().st_size for f in downloaded_files) / (1024*1024):.1f} MB"),
@@ -308,7 +308,7 @@ async def download(url: str, download_dir: Path, platform: str) -> DownloadResul
             )
 
     except aiohttp.ClientConnectorError as e:
-        log.tree("Cobalt API Connection Error", [
+        logger.tree("Cobalt API Connection Error", [
             ("Error", str(e)[:50]),
             ("URL", COBALT_API_URL),
             ("Hint", "Is Cobalt container running?"),
@@ -320,7 +320,7 @@ async def download(url: str, download_dir: Path, platform: str) -> DownloadResul
             error=f"Cobalt connection failed: {type(e).__name__}"
         )
     except asyncio.TimeoutError:
-        log.tree("Cobalt API Timeout", [
+        logger.tree("Cobalt API Timeout", [
             ("Timeout", "30s"),
             ("URL", COBALT_API_URL),
         ], emoji="⏳")
@@ -331,7 +331,7 @@ async def download(url: str, download_dir: Path, platform: str) -> DownloadResul
             error="Cobalt request timed out"
         )
     except Exception as e:
-        log.error_tree("Cobalt API Exception", e, [
+        logger.error_tree("Cobalt API Exception", e, [
             ("URL", COBALT_API_URL),
         ])
         return DownloadResult(

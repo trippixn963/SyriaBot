@@ -15,7 +15,7 @@ import time
 import discord
 from discord.ext import commands
 
-from src.core.logger import log
+from src.core.logger import logger
 from src.services.database import db
 
 # Constants
@@ -30,7 +30,7 @@ class AFKService:
 
     async def setup(self) -> None:
         """Initialize the AFK service."""
-        log.tree("AFK Service Ready", [], emoji="💤")
+        logger.tree("AFK Service Ready", [], emoji="💤")
 
     def convert_emoji_shortcodes(self, text: str, guild: discord.Guild) -> str:
         """
@@ -84,7 +84,7 @@ class AFKService:
         converted = shortcode_pattern.sub(replace_emoji, text)
 
         if converted != original_text:
-            log.tree("AFK Emoji Converted", [
+            logger.tree("AFK Emoji Converted", [
                 ("Original", original_text[:50]),
                 ("Result", converted[:50]),
             ], emoji="✨")
@@ -108,7 +108,7 @@ class AFKService:
             guild_id=member.guild.id,
             reason=converted_reason
         )
-        log.tree("AFK Status Set", [
+        logger.tree("AFK Status Set", [
             ("User", f"{member.name} ({member.display_name})"),
             ("ID", str(member.id)),
             ("Guild", member.guild.name),
@@ -123,22 +123,22 @@ class AFKService:
                 new_nick = f"[AFK] {current_name}"[:32]  # Discord limit
                 await member.edit(nick=new_nick)
                 nickname_changed = True
-                log.tree("AFK Nickname Set", [
+                logger.tree("AFK Nickname Set", [
                     ("User", f"{member.name} ({member.display_name})"),
                     ("New Nick", new_nick),
                 ], emoji="✏️")
             else:
-                log.tree("AFK Nickname Skipped", [
+                logger.tree("AFK Nickname Skipped", [
                     ("User", f"{member.name} ({member.display_name})"),
                     ("Reason", "Already has [AFK] prefix"),
                 ], emoji="ℹ️")
         except discord.Forbidden:
-            log.tree("AFK Nickname Failed", [
+            logger.tree("AFK Nickname Failed", [
                 ("User", f"{member.name} ({member.display_name})"),
                 ("Reason", "Missing permissions"),
             ], emoji="⚠️")
         except discord.HTTPException as e:
-            log.tree("AFK Nickname Failed", [
+            logger.tree("AFK Nickname Failed", [
                 ("User", f"{member.name} ({member.display_name})"),
                 ("Error", str(e)[:50]),
             ], emoji="⚠️")
@@ -178,23 +178,23 @@ class AFKService:
                     if new_nick == message.author.name:
                         new_nick = None
                     await message.author.edit(nick=new_nick)
-                    log.tree("AFK Nickname Removed", [
+                    logger.tree("AFK Nickname Removed", [
                         ("User", f"{message.author.name} ({message.author.display_name})"),
                         ("Old Nick", current_nick),
                         ("New Nick", new_nick or "None"),
                     ], emoji="✏️")
                 else:
-                    log.tree("AFK Nickname Not Changed", [
+                    logger.tree("AFK Nickname Not Changed", [
                         ("User", f"{message.author.name} ({message.author.display_name})"),
                         ("Reason", "No [AFK] prefix in nickname"),
                     ], emoji="ℹ️")
             except discord.Forbidden:
-                log.tree("AFK Nickname Remove Failed", [
+                logger.tree("AFK Nickname Remove Failed", [
                     ("User", f"{message.author.name} ({message.author.display_name})"),
                     ("Reason", "Missing permissions"),
                 ], emoji="⚠️")
             except discord.HTTPException as e:
-                log.tree("AFK Nickname Remove Failed", [
+                logger.tree("AFK Nickname Remove Failed", [
                     ("User", f"{message.author.name} ({message.author.display_name})"),
                     ("Error", str(e)[:50]),
                 ], emoji="⚠️")
@@ -221,7 +221,7 @@ class AFKService:
                 mention_author=False,
                 delete_after=10 if mention_count > 0 else 5
             )
-            log.tree("AFK Auto-Removed", [
+            logger.tree("AFK Auto-Removed", [
                 ("User", f"{message.author.name} ({message.author.display_name})"),
                 ("ID", str(message.author.id)),
                 ("Guild", message.guild.name),
@@ -230,7 +230,7 @@ class AFKService:
                 ("Pingers", ", ".join(pinger_names) if pinger_names else "None"),
             ], emoji="👋")
         except discord.HTTPException as e:
-            log.tree("AFK Welcome Back Failed", [
+            logger.tree("AFK Welcome Back Failed", [
                 ("User", f"{message.author.name} ({message.author.display_name})"),
                 ("ID", str(message.author.id)),
                 ("Error", str(e)[:50]),
@@ -280,7 +280,7 @@ class AFKService:
 
             member = message.guild.get_member(user_id)
             if not member:
-                log.tree("AFK User Not In Guild", [
+                logger.tree("AFK User Not In Guild", [
                     ("ID", str(user_id)),
                     ("Guild", message.guild.name),
                     ("Reason", "Member left or not found"),
@@ -308,12 +308,12 @@ class AFKService:
                     mention_author=False,
                     delete_after=10
                 )
-                log.tree("AFK Mention Notification", [
+                logger.tree("AFK Mention Notification", [
                     ("Pinger", f"{message.author.name}"),
                     ("AFK Users", str(len(afk_messages))),
                     ("Guild", message.guild.name),
                 ], emoji="💤")
             except discord.HTTPException as e:
-                log.tree("AFK Notification Failed", [
+                logger.tree("AFK Notification Failed", [
                     ("Error", str(e)[:50]),
                 ], emoji="⚠️")

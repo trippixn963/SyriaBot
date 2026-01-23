@@ -12,7 +12,7 @@ import discord
 from discord import ui
 from typing import Optional
 
-from src.core.logger import log
+from src.core.logger import logger
 from src.core.colors import COLOR_SYRIA_GREEN, EMOJI_TICKET
 from src.utils.footer import set_footer
 from src.services.faq.service import FAQ_DATA, faq_analytics
@@ -97,7 +97,7 @@ class PersistentFAQView(ui.View):
         embed = _create_faq_embed(self.topic, new_lang)
         await interaction.response.edit_message(embed=embed, view=self)
 
-        log.tree("FAQ Language Switched", [
+        logger.tree("FAQ Language Switched", [
             ("User", f"{interaction.user.name}"),
             ("Topic", self.topic),
             ("Language", new_lang.upper()),
@@ -119,7 +119,7 @@ class PersistentFAQView(ui.View):
             ephemeral=True
         )
 
-        log.tree("FAQ Ticket Click", [
+        logger.tree("FAQ Ticket Click", [
             ("User", f"{interaction.user.name}"),
             ("Topic", topic),
         ], emoji="🎫")
@@ -158,7 +158,7 @@ class FAQPersistentHandler(ui.View):
 
         await interaction.response.edit_message(embed=embed, view=view)
 
-        log.tree("FAQ Language Switched (Persistent)", [
+        logger.tree("FAQ Language Switched (Persistent)", [
             ("User", f"{interaction.user.name}"),
             ("Topic", topic),
             ("Language", new_lang.upper()),
@@ -177,7 +177,7 @@ class FAQPersistentHandler(ui.View):
             ephemeral=True
         )
 
-        log.tree("FAQ Ticket Click (Persistent)", [
+        logger.tree("FAQ Ticket Click (Persistent)", [
             ("User", f"{interaction.user.name}"),
             ("Topic", topic),
         ], emoji="🎫")
@@ -190,6 +190,6 @@ FAQView = PersistentFAQView
 def setup_persistent_views(bot: discord.Client) -> None:
     """Register persistent FAQ views with the bot. Call this in setup_hook."""
     bot.add_view(FAQPersistentHandler())
-    log.tree("FAQ Persistent Views", [
+    logger.tree("FAQ Persistent Views", [
         ("Status", "Registered"),
     ], emoji="✅")

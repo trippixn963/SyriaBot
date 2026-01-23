@@ -16,7 +16,7 @@ from discord.ext import commands
 
 from src.core.config import config
 from src.core.colors import COLOR_GOLD, COLOR_ERROR, EMOJI_LEADERBOARD
-from src.core.logger import log
+from src.core.logger import logger
 from src.services.database import db
 from src.utils.footer import set_footer
 from src.utils.permissions import is_cooldown_exempt
@@ -86,7 +86,7 @@ class RankCog(commands.Cog):
             )
             set_footer(embed)
             await interaction.followup.send(embed=embed, ephemeral=True)
-            log.tree("Rank User Not Found", [
+            logger.tree("Rank User Not Found", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Target", f"{target.name} ({target.display_name})"),
@@ -153,7 +153,7 @@ class RankCog(commands.Cog):
             view = LeaderboardView(member.id)
             await interaction.followup.send(file=file, view=view)
 
-            log.tree("Rank Command", [
+            logger.tree("Rank Command", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Target", f"{member.name} ({member.display_name})"),
@@ -165,7 +165,7 @@ class RankCog(commands.Cog):
 
         except Exception as e:
             # Fallback to embed if image generation fails
-            log.tree("Rank Card Generation Failed", [
+            logger.tree("Rank Card Generation Failed", [
                 ("User", f"{member.name} ({member.display_name})"),
                 ("ID", str(member.id)),
                 ("Error", str(e)),
@@ -220,7 +220,7 @@ class RankCog(commands.Cog):
         view = LeaderboardView(member.id)
         await interaction.followup.send(embed=embed, view=view)
 
-        log.tree("Rank Command", [
+        logger.tree("Rank Command", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
             ("Target", f"{member.name} ({member.display_name})"),
@@ -252,19 +252,19 @@ class RankCog(commands.Cog):
                     ephemeral=True,
                 )
             except discord.HTTPException as e:
-                log.error_tree("Rank Cooldown Response Failed", e, [
+                logger.error_tree("Rank Cooldown Response Failed", e, [
                     ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                     ("ID", str(interaction.user.id)),
                 ])
 
-            log.tree("Rank Cooldown", [
+            logger.tree("Rank Cooldown", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Remaining", time_str),
             ], emoji="⏳")
             return
 
-        log.error_tree("Rank Command Error", error, [
+        logger.error_tree("Rank Command Error", error, [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
         ])
@@ -281,7 +281,7 @@ class RankCog(commands.Cog):
                     ephemeral=True,
                 )
         except discord.HTTPException as e:
-            log.error_tree("Rank Error Response Failed", e, [
+            logger.error_tree("Rank Error Response Failed", e, [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
             ])
@@ -290,4 +290,4 @@ class RankCog(commands.Cog):
 async def setup(bot: commands.Bot) -> None:
     """Load the cog."""
     await bot.add_cog(RankCog(bot))
-    log.tree("Command Loaded", [("Name", "rank")], emoji="✅")
+    logger.tree("Command Loaded", [("Name", "rank")], emoji="✅")

@@ -15,7 +15,7 @@ from contextlib import contextmanager
 from typing import Optional
 
 from src.core.config import config
-from src.core.logger import log
+from src.core.logger import logger
 
 
 class DatabaseUnavailableError(Exception):
@@ -85,7 +85,7 @@ class DatabaseCore:
             conn.close()
             return result[0] == "ok"
         except Exception as e:
-            log.error_tree("DB Integrity Check Failed", e)
+            logger.error_tree("DB Integrity Check Failed", e)
             return False
 
     def _backup_corrupted(self) -> None:
@@ -94,11 +94,11 @@ class DatabaseCore:
         backup_path = f"{self.db_path}.corrupted.{int(time.time())}"
         try:
             shutil.copy2(self.db_path, backup_path)
-            log.tree("Corrupted DB Backed Up", [
+            logger.tree("Corrupted DB Backed Up", [
                 ("Backup", backup_path),
             ], emoji="💾")
         except Exception as e:
-            log.error_tree("DB Backup Failed", e)
+            logger.error_tree("DB Backup Failed", e)
 
     @contextmanager
     def _get_conn(self):
@@ -108,7 +108,7 @@ class DatabaseCore:
             DatabaseUnavailableError: If the database is unhealthy.
         """
         if not self._healthy:
-            log.tree("Database Unhealthy", [
+            logger.tree("Database Unhealthy", [
                 ("Status", "Operation rejected"),
                 ("Reason", self._corruption_reason or "Unknown"),
             ], emoji="⚠️")
@@ -134,10 +134,10 @@ class DatabaseCore:
             if is_corruption:
                 self._healthy = False
                 self._corruption_reason = str(e)
-                log.error_tree("Database Corruption Detected", e)
+                logger.error_tree("Database Corruption Detected", e)
                 self._backup_corrupted()
             else:
-                log.tree("Database Error", [
+                logger.tree("Database Error", [
                     ("Type", type(e).__name__),
                     ("Message", str(e)[:100]),
                 ], emoji="⚠️")
@@ -150,7 +150,7 @@ class DatabaseCore:
 
     def _init_db(self) -> None:
         """Initialize database tables."""
-        log.tree("Database Init", [
+        logger.tree("Database Init", [
             ("Path", self.db_path),
             ("Status", "Starting"),
         ], emoji="🗄️")
@@ -158,14 +158,14 @@ class DatabaseCore:
         # Check integrity on startup
         if os.path.exists(self.db_path) and not self._check_integrity():
             self._corruption_reason = "PRAGMA integrity_check failed on startup"
-            log.tree("DATABASE CORRUPTION DETECTED", [
+            logger.tree("DATABASE CORRUPTION DETECTED", [
                 ("Path", self.db_path),
                 ("Status", "INTEGRITY CHECK FAILED"),
                 ("Action", "Creating backup - MANUAL INTERVENTION REQUIRED"),
             ], emoji="🚨")
             self._backup_corrupted()
             self._healthy = False
-            log.tree("MANUAL FIX REQUIRED", [
+            logger.tree("MANUAL FIX REQUIRED", [
                 ("Backup", f"{self.db_path}.corrupted.*"),
                 ("Action", "Restore from backup or delete syria.db to recreate"),
                 ("Warning", "Bot will not function until database is fixed"),
@@ -174,7 +174,7 @@ class DatabaseCore:
 
         with self._get_conn() as conn:
             if conn is None:
-                log.tree("Database Init Failed", [
+                logger.tree("Database Init Failed", [
                     ("Reason", "Could not establish connection"),
                 ], emoji="❌")
                 return
@@ -326,7 +326,7 @@ class DatabaseCore:
             for col_name, col_type in new_columns:
                 # Validate column name against whitelist to prevent injection
                 if col_name not in VALID_COLUMN_NAMES:
-                    log.tree("Invalid Column Name Skipped", [
+                    logger.tree("Invalid Column Name Skipped", [
                         ("Column", col_name),
                     ], emoji="⚠️")
                     continue
@@ -622,7 +622,7 @@ class DatabaseCore:
             # Run one-time migrations
             self._run_migrations(cur)
 
-            log.tree("Database Initialized", [
+            logger.tree("Database Initialized", [
                 ("Tables", "All created/verified"),
                 ("Status", "Ready"),
             ], emoji="✅")
@@ -662,7 +662,7 @@ class DatabaseCore:
             xp_at_5 = int(100 * (5 ** 1.5))  # 1118
             return xp_at_5 + int(100 * ((level - 5) ** 2))
 
-        log.tree("XP Formula Migration Starting", [
+        logger.tree("XP Formula Migration Starting", [
             ("Migration", "xp_formula_v2_adjustment"),
             ("Action", "Adjusting XP to match levels in new formula"),
         ], emoji="🔄")
@@ -672,7 +672,7 @@ class DatabaseCore:
         users = cur.fetchall()
 
         if not users:
-            log.tree("XP Formula Migration", [
+            logger.tree("XP Formula Migration", [
                 ("Status", "No users to migrate"),
             ], emoji="ℹ️")
             return
@@ -700,7 +700,7 @@ class DatabaseCore:
             )
             migrated += 1
 
-        log.tree("XP Formula Migration Complete", [
+        logger.tree("XP Formula Migration Complete", [
             ("Users Migrated", str(migrated)),
             ("Total XP Before", f"{total_xp_before:,}"),
             ("Total XP After", f"{total_xp_after:,}"),

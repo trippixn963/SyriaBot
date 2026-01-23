@@ -13,7 +13,7 @@ import shutil
 import uuid
 from pathlib import Path
 
-from src.core.logger import log
+from src.core.logger import logger
 from .config import (
     TEMP_DIR,
     COBALT_API_URL,
@@ -33,7 +33,7 @@ class DownloaderService:
     def __init__(self):
         TEMP_DIR.mkdir(parents=True, exist_ok=True)
         self._cleanup_orphaned_files()
-        log.tree("Downloader Service Initialized", [
+        logger.tree("Downloader Service Initialized", [
             ("Cobalt API", COBALT_API_URL),
             ("Temp Dir", str(TEMP_DIR)),
             ("Max Size", f"{MAX_FILE_SIZE_MB} MB"),
@@ -51,11 +51,11 @@ class DownloaderService:
                     item.unlink(missing_ok=True)
                     cleaned += 1
             if cleaned > 0:
-                log.tree("Download Temp Cleanup", [
+                logger.tree("Download Temp Cleanup", [
                     ("Files Cleaned", str(cleaned)),
                 ], emoji="🧹")
         except Exception as e:
-            log.tree("Download Temp Cleanup Failed", [
+            logger.tree("Download Temp Cleanup Failed", [
                 ("Error", str(e)[:50]),
             ], emoji="⚠️")
 
@@ -63,7 +63,7 @@ class DownloaderService:
         """Detect which platform a URL belongs to."""
         platform = get_platform(url)
         if not platform:
-            log.tree("URL Platform Not Detected", [
+            logger.tree("URL Platform Not Detected", [
                 ("URL", url[:60]),
                 ("Supported", "Instagram, Twitter, TikTok, Reddit, Facebook, Snapchat, Twitch"),
             ], emoji="⚠️")
@@ -80,7 +80,7 @@ class DownloaderService:
         """
         platform = self.get_platform(url)
         if not platform:
-            log.tree("Download Rejected", [
+            logger.tree("Download Rejected", [
                 ("Reason", "Unsupported URL"),
                 ("URL", url[:60]),
             ], emoji="❌")
@@ -96,7 +96,7 @@ class DownloaderService:
         download_dir = TEMP_DIR / download_id
         download_dir.mkdir(parents=True, exist_ok=True)
 
-        log.tree("Download Started", [
+        logger.tree("Download Started", [
             ("Platform", platform.title()),
             ("URL", url[:60] + "..." if len(url) > 60 else url),
             ("Download ID", download_id),
@@ -107,7 +107,7 @@ class DownloaderService:
         if cobalt_result.success:
             # Rename files with platform + server ad
             renamed_files = self._rename_files_for_branding(cobalt_result.files, platform)
-            log.tree("Download Success (Cobalt)", [
+            logger.tree("Download Success (Cobalt)", [
                 ("Platform", platform.title()),
                 ("Files", str(len(renamed_files))),
             ], emoji="✅")
@@ -117,7 +117,7 @@ class DownloaderService:
                 platform=platform
             )
 
-        log.tree("Cobalt Failed, Trying yt-dlp Fallback", [
+        logger.tree("Cobalt Failed, Trying yt-dlp Fallback", [
             ("Platform", platform.title()),
             ("Cobalt Error", cobalt_result.error[:50] if cobalt_result.error else "Unknown"),
         ], emoji="🔄")
@@ -127,7 +127,7 @@ class DownloaderService:
         if ytdlp_result.success:
             # Rename files with platform + server ad
             renamed_files = self._rename_files_for_branding(ytdlp_result.files, platform)
-            log.tree("Download Success (yt-dlp)", [
+            logger.tree("Download Success (yt-dlp)", [
                 ("Platform", platform.title()),
                 ("Files", str(len(renamed_files))),
             ], emoji="✅")
@@ -137,7 +137,7 @@ class DownloaderService:
                 platform=platform
             )
         else:
-            log.tree("Download Failed (Both Methods)", [
+            logger.tree("Download Failed (Both Methods)", [
                 ("Platform", platform.title()),
                 ("Error", ytdlp_result.error[:50] if ytdlp_result.error else "Unknown"),
             ], emoji="❌")
@@ -173,12 +173,12 @@ class DownloaderService:
             try:
                 file.rename(new_path)
                 renamed.append(new_path)
-                log.tree("File Renamed for Branding", [
+                logger.tree("File Renamed for Branding", [
                     ("Original", file.name[:30]),
                     ("New Name", new_name[:40]),
                 ], emoji="🏷️")
             except Exception as e:
-                log.tree("File Rename Failed", [
+                logger.tree("File Rename Failed", [
                     ("File", file.name[:30]),
                     ("Error", str(e)[:50]),
                 ], emoji="⚠️")
@@ -198,13 +198,13 @@ class DownloaderService:
                     path.unlink()
                     cleaned += 1
             except Exception as e:
-                log.tree("Cleanup Failed", [
+                logger.tree("Cleanup Failed", [
                     ("Path", str(path)[:50]),
                     ("Error", str(e)[:50]),
                 ], emoji="⚠️")
 
         if cleaned > 0:
-            log.tree("Cleanup Complete", [
+            logger.tree("Cleanup Complete", [
                 ("Paths Cleaned", str(cleaned)),
             ], emoji="🧹")
 

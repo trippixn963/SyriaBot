@@ -11,7 +11,7 @@ Server: discord.gg/syria
 import time
 from typing import List, Dict, Any
 
-from src.core.logger import log
+from src.core.logger import logger
 
 
 class DownloadsMixin:
@@ -39,7 +39,7 @@ class DownloadsMixin:
                     last_download_at = ?
             """, (user_id, platform.lower(), file_count, now, file_count, now))
 
-        log.tree("Download Stats Recorded", [
+        logger.tree("Download Stats Recorded", [
             ("ID", str(user_id)),
             ("Platform", platform.title()),
             ("Files", str(file_count)),

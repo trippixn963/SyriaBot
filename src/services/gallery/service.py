@@ -16,7 +16,7 @@ from typing import Optional
 import discord
 from discord.ext import commands, tasks
 
-from src.core.logger import log
+from src.core.logger import logger
 from src.core.config import config
 from src.core.colors import COLOR_GOLD, EMOJI_HEART, EMOJI_COMMENT
 from src.utils.footer import set_footer
@@ -36,7 +36,7 @@ class GalleryService:
 
     async def setup(self) -> None:
         """Initialize the gallery service."""
-        log.tree("Gallery Service Ready", [
+        logger.tree("Gallery Service Ready", [
             ("Gallery ID", str(config.GALLERY_CHANNEL_ID)),
             ("Memes ID", str(config.MEMES_CHANNEL_ID)),
             ("Thread Cleanup", "Disabled"),
@@ -46,7 +46,7 @@ class GalleryService:
         """Stop the cleanup task (if running)."""
         if self.cleanup_task.is_running():
             self.cleanup_task.cancel()
-        log.tree("Gallery Service Stopped", [], emoji="📸")
+        logger.tree("Gallery Service Stopped", [], emoji="📸")
 
     @tasks.loop(hours=1)
     async def cleanup_task(self):
@@ -63,7 +63,7 @@ class GalleryService:
             try:
                 channel = self.bot.get_channel(channel_id)
                 if not channel:
-                    log.tree(f"{channel_name} Cleanup Skipped", [
+                    logger.tree(f"{channel_name} Cleanup Skipped", [
                         ("Reason", "Channel not found"),
                     ], emoji="⚠️")
                     continue
@@ -82,23 +82,23 @@ class GalleryService:
                         try:
                             await thread.delete()
                             deleted_count += 1
-                            log.tree(f"{channel_name} Empty Thread Deleted", [
+                            logger.tree(f"{channel_name} Empty Thread Deleted", [
                                 ("Thread", thread.name),
                                 ("Age", f"{int(thread_age // 3600)}h"),
                             ], emoji="🗑️")
                         except discord.HTTPException as e:
-                            log.tree(f"{channel_name} Thread Delete Failed", [
+                            logger.tree(f"{channel_name} Thread Delete Failed", [
                                 ("Thread", thread.name),
                                 ("Error", str(e)[:50]),
                             ], emoji="⚠️")
 
                 if deleted_count > 0:
-                    log.tree(f"{channel_name} Cleanup Complete", [
+                    logger.tree(f"{channel_name} Cleanup Complete", [
                         ("Deleted", str(deleted_count)),
                     ], emoji="🧹")
 
             except Exception as e:
-                log.tree(f"{channel_name} Cleanup Error", [
+                logger.tree(f"{channel_name} Cleanup Error", [
                     ("Error", str(e)[:50]),
                 ], emoji="⚠️")
 
@@ -156,7 +156,7 @@ class GalleryService:
 
         # Valid media - add heart and create thread
         channel_name = "Gallery" if channel_type == self.GALLERY else "Memes"
-        log.tree(f"{channel_name} Valid Post Detected", [
+        logger.tree(f"{channel_name} Valid Post Detected", [
             ("User", f"{message.author.name} ({message.author.display_name})"),
             ("ID", str(message.author.id)),
             ("Attachments", str(len(message.attachments))),
@@ -170,14 +170,14 @@ class GalleryService:
         channel_name = "Gallery" if channel_type == self.GALLERY else "Memes"
         try:
             await message.delete()
-            log.tree(f"{channel_name} Message Deleted", [
+            logger.tree(f"{channel_name} Message Deleted", [
                 ("User", f"{message.author.name} ({message.author.display_name})"),
                 ("ID", str(message.author.id)),
                 ("Reason", "No valid image/video attachment"),
                 ("Content", message.content[:50] if message.content else "None"),
             ], emoji="🗑️")
         except discord.HTTPException as e:
-            log.tree(f"{channel_name} Delete Failed", [
+            logger.tree(f"{channel_name} Delete Failed", [
                 ("User", f"{message.author.name}"),
                 ("Error", str(e)[:50]),
             ], emoji="⚠️")
@@ -204,12 +204,12 @@ class GalleryService:
         # Add heart reaction
         try:
             await message.add_reaction(EMOJI_HEART)
-            log.tree(f"{channel_name} Heart Added", [
+            logger.tree(f"{channel_name} Heart Added", [
                 ("User", f"{message.author.name}"),
                 ("Message ID", str(message.id)),
             ], emoji="❤️")
         except discord.HTTPException as e:
-            log.tree(f"{channel_name} Heart Failed", [
+            logger.tree(f"{channel_name} Heart Failed", [
                 ("User", f"{message.author.name}"),
                 ("Error", str(e)[:50]),
             ], emoji="⚠️")
@@ -224,13 +224,13 @@ class GalleryService:
                 name=thread_name,
                 auto_archive_duration=10080,  # 7 days
             )
-            log.tree(f"{channel_name} Thread Created", [
+            logger.tree(f"{channel_name} Thread Created", [
                 ("User", f"{message.author.name}"),
                 ("Thread", thread_name),
                 ("Thread ID", str(thread.id)),
             ], emoji="💬")
         except discord.HTTPException as e:
-            log.tree(f"{channel_name} Thread Failed", [
+            logger.tree(f"{channel_name} Thread Failed", [
                 ("User", f"{message.author.name}"),
                 ("Error", str(e)[:50]),
             ], emoji="⚠️")
@@ -250,14 +250,14 @@ class GalleryService:
         channel_name = "Gallery" if channel_type == self.GALLERY else "Memes"
 
         if not config.GENERAL_CHANNEL_ID:
-            log.tree(f"{channel_name} Notification Skipped", [
+            logger.tree(f"{channel_name} Notification Skipped", [
                 ("Reason", "No general channel configured"),
             ], emoji="ℹ️")
             return
 
         general_channel = self.bot.get_channel(config.GENERAL_CHANNEL_ID)
         if not general_channel:
-            log.tree(f"{channel_name} Notification Skipped", [
+            logger.tree(f"{channel_name} Notification Skipped", [
                 ("Reason", "General channel not found"),
                 ("Channel ID", str(config.GENERAL_CHANNEL_ID)),
             ], emoji="⚠️")
@@ -289,7 +289,7 @@ class GalleryService:
                 view.add_item(comment_button)
 
             await general_channel.send(embed=embed, view=view)
-            log.tree(f"{channel_name} Notification Sent", [
+            logger.tree(f"{channel_name} Notification Sent", [
                 ("User", f"{message.author.name}"),
                 ("Channel", general_channel.name),
                 ("Post ID", str(message.id)),
@@ -297,12 +297,12 @@ class GalleryService:
                 ("Thread", thread.name if thread else "None"),
             ], emoji="📢")
         except discord.Forbidden:
-            log.tree(f"{channel_name} Notification Failed", [
+            logger.tree(f"{channel_name} Notification Failed", [
                 ("Reason", "Missing permissions"),
                 ("Channel", str(config.GENERAL_CHANNEL_ID)),
             ], emoji="⚠️")
         except discord.HTTPException as e:
-            log.tree(f"{channel_name} Notification Failed", [
+            logger.tree(f"{channel_name} Notification Failed", [
                 ("Error", str(e)[:50]),
             ], emoji="⚠️")
 
@@ -324,18 +324,18 @@ class GalleryService:
         if emoji_str != EMOJI_HEART:
             try:
                 await reaction.remove(user)
-                log.tree(f"{channel_name} Reaction Removed", [
+                logger.tree(f"{channel_name} Reaction Removed", [
                     ("User", f"{user.name}"),
                     ("Emoji", emoji_str[:20]),
                     ("Message ID", str(reaction.message.id)),
                 ], emoji="🚫")
             except discord.HTTPException as e:
-                log.tree(f"{channel_name} Reaction Remove Failed", [
+                logger.tree(f"{channel_name} Reaction Remove Failed", [
                     ("User", f"{user.name}"),
                     ("Error", str(e)[:50]),
                 ], emoji="⚠️")
         else:
-            log.tree(f"{channel_name} Heart Reaction", [
+            logger.tree(f"{channel_name} Heart Reaction", [
                 ("User", f"{user.name}"),
                 ("Message ID", str(reaction.message.id)),
             ], emoji="❤️")

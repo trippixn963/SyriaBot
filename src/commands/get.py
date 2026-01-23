@@ -15,7 +15,7 @@ from discord import app_commands, ui
 from discord.ext import commands
 
 from src.core.config import config
-from src.core.logger import log
+from src.core.logger import logger
 from src.core.colors import COLOR_ERROR, COLOR_WARNING, COLOR_GOLD, EMOJI_SAVE, EMOJI_TRANSFER
 from src.core.constants import VIEW_TIMEOUT_DEFAULT
 from src.utils.footer import set_footer
@@ -66,7 +66,7 @@ async def _download_and_save_image(
         async with http_session.session.get(url, timeout=timeout) as response:
             if response.status != 200:
                 await interaction.followup.send(f"Failed to download {label.lower()}.", ephemeral=True)
-                log.tree(f"{label} Save Failed", [
+                logger.tree(f"{label} Save Failed", [
                     ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                     ("ID", str(interaction.user.id)),
                     ("Status", str(response.status)),
@@ -77,7 +77,7 @@ async def _download_and_save_image(
             content_length = response.content_length
             if content_length and content_length > MAX_IMAGE_SIZE:
                 await interaction.followup.send(f"{label} is too large to save.", ephemeral=True)
-                log.tree(f"{label} Save Failed", [
+                logger.tree(f"{label} Save Failed", [
                     ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                     ("ID", str(interaction.user.id)),
                     ("Size", f"{content_length // 1024}KB"),
@@ -90,7 +90,7 @@ async def _download_and_save_image(
             # Double-check actual size after read
             if len(image_bytes) > MAX_IMAGE_SIZE:
                 await interaction.followup.send(f"{label} is too large to save.", ephemeral=True)
-                log.tree(f"{label} Save Failed", [
+                logger.tree(f"{label} Save Failed", [
                     ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                     ("ID", str(interaction.user.id)),
                     ("Size", f"{len(image_bytes) // 1024}KB"),
@@ -110,7 +110,7 @@ async def _download_and_save_image(
             try:
                 await message.delete()
             except discord.NotFound:
-                log.tree(f"{label} Delete Skipped", [
+                logger.tree(f"{label} Delete Skipped", [
                     ("User", f"{interaction.user.name}"),
                     ("Reason", "Message already deleted"),
                 ], emoji="⚠️")
@@ -125,10 +125,10 @@ async def _download_and_save_image(
             ("Size", f"{len(image_bytes) // 1024}KB"),
             ("Original", "Deleted"),
         ])
-        log.tree(f"{label} Saved", log_entries, emoji="✅")
+        logger.tree(f"{label} Saved", log_entries, emoji="✅")
 
     except Exception as e:
-        log.tree(f"{label} Save Failed", [
+        logger.tree(f"{label} Save Failed", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
             ("Error", str(e)[:50]),
@@ -162,7 +162,7 @@ class DownloadView(ui.View):
             try:
                 await self.message.edit(view=self)
             except discord.HTTPException as e:
-                log.tree("View Timeout Edit Failed", [
+                logger.tree("View Timeout Edit Failed", [
                     ("Type", self.label),
                     ("Error", str(e)[:50]),
                 ], emoji="⚠️")
@@ -175,7 +175,7 @@ class DownloadView(ui.View):
                 "Only the person who used this command can save it.",
                 ephemeral=True
             )
-            log.tree("Save Rejected", [
+            logger.tree("Save Rejected", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Owner ID", str(self.requester_id)),
@@ -184,7 +184,7 @@ class DownloadView(ui.View):
             return
 
         await interaction.response.defer()
-        log.tree("Save Started", [
+        logger.tree("Save Started", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
             ("Type", self.label),
@@ -237,7 +237,7 @@ class AvatarToggleView(ui.View):
             try:
                 await self.message.edit(view=self)
             except discord.HTTPException as e:
-                log.tree("Avatar View Timeout Edit Failed", [
+                logger.tree("Avatar View Timeout Edit Failed", [
                     ("Target", f"{self.target.name}"),
                     ("Error", str(e)[:50]),
                 ], emoji="⚠️")
@@ -250,7 +250,7 @@ class AvatarToggleView(ui.View):
                 "Only the person who used this command can save it.",
                 ephemeral=True
             )
-            log.tree("Avatar Save Rejected", [
+            logger.tree("Avatar Save Rejected", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Owner ID", str(self.requester_id)),
@@ -259,7 +259,7 @@ class AvatarToggleView(ui.View):
 
         await interaction.response.defer()
         avatar_type = "Server" if self.showing_server else "Global"
-        log.tree("Avatar Save Started", [
+        logger.tree("Avatar Save Started", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
             ("Target", f"{self.target.name}"),
@@ -293,7 +293,7 @@ class AvatarToggleView(ui.View):
 
         await interaction.response.edit_message(embed=embed, view=self)
 
-        log.tree("Avatar Toggled", [
+        logger.tree("Avatar Toggled", [
             ("Target", f"{self.target.name} ({self.target.display_name})"),
             ("Target ID", str(self.target.id)),
             ("Now Showing", avatar_type),
@@ -346,7 +346,7 @@ class BannerToggleView(ui.View):
             try:
                 await self.message.edit(view=self)
             except discord.HTTPException as e:
-                log.tree("Banner View Timeout Edit Failed", [
+                logger.tree("Banner View Timeout Edit Failed", [
                     ("Target", f"{self.target.name}"),
                     ("Error", str(e)[:50]),
                 ], emoji="⚠️")
@@ -359,7 +359,7 @@ class BannerToggleView(ui.View):
                 "Only the person who used this command can save it.",
                 ephemeral=True
             )
-            log.tree("Banner Save Rejected", [
+            logger.tree("Banner Save Rejected", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Owner ID", str(self.requester_id)),
@@ -368,7 +368,7 @@ class BannerToggleView(ui.View):
 
         await interaction.response.defer()
         banner_type = "Server" if self.showing_server else "Global"
-        log.tree("Banner Save Started", [
+        logger.tree("Banner Save Started", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
             ("Target", f"{self.target.name}"),
@@ -402,7 +402,7 @@ class BannerToggleView(ui.View):
 
         await interaction.response.edit_message(embed=embed, view=self)
 
-        log.tree("Banner Toggled", [
+        logger.tree("Banner Toggled", [
             ("Target", f"{self.target.name} ({self.target.display_name})"),
             ("Target ID", str(self.target.id)),
             ("Now Showing", banner_type),
@@ -443,7 +443,7 @@ class GetCog(commands.Cog):
         is_server_option = option.value in ("server_icon", "server_banner")
 
         if is_server_option:
-            log.tree("Get Command", [
+            logger.tree("Get Command", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Option", option.value),
@@ -452,7 +452,7 @@ class GetCog(commands.Cog):
         else:
             target = user or interaction.user
             target_member = interaction.guild.get_member(target.id) if interaction.guild else None
-            log.tree("Get Command", [
+            logger.tree("Get Command", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Option", option.value),
@@ -475,7 +475,7 @@ class GetCog(commands.Cog):
                 await self._handle_server_banner(interaction)
 
         except discord.HTTPException as e:
-            log.tree("Get Command Failed", [
+            logger.tree("Get Command Failed", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Option", option.value),
@@ -488,7 +488,7 @@ class GetCog(commands.Cog):
             set_footer(embed)
             await interaction.followup.send(embed=embed, ephemeral=True)
         except Exception as e:
-            log.tree("Get Command Error", [
+            logger.tree("Get Command Error", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Option", option.value),
@@ -559,7 +559,7 @@ class GetCog(commands.Cog):
         msg = await interaction.followup.send(embed=embed, view=view)
         view.message = msg
 
-        log.tree("Get Avatar Complete", [
+        logger.tree("Get Avatar Complete", [
             ("Target", f"{target.name} ({target.display_name})"),
             ("Target ID", str(target.id)),
             ("Type", avatar_type),
@@ -579,7 +579,7 @@ class GetCog(commands.Cog):
         try:
             fetched_user = await self.bot.fetch_user(target.id)
         except discord.NotFound:
-            log.tree("Get Banner Failed", [
+            logger.tree("Get Banner Failed", [
                 ("Target", f"{target.name} ({target.display_name})"),
                 ("Target ID", str(target.id)),
                 ("Reason", "User not found"),
@@ -598,7 +598,7 @@ class GetCog(commands.Cog):
 
         # If no banners at all
         if not has_server_banner and not has_global_banner:
-            log.tree("Get Banner No Banner", [
+            logger.tree("Get Banner No Banner", [
                 ("Target", f"{target.name} ({target.display_name})"),
                 ("Target ID", str(target.id)),
                 ("By", f"{interaction.user.name} ({interaction.user.display_name})"),
@@ -659,7 +659,7 @@ class GetCog(commands.Cog):
         msg = await interaction.followup.send(embed=embed, view=view)
         view.message = msg
 
-        log.tree("Get Banner Complete", [
+        logger.tree("Get Banner Complete", [
             ("Target", f"{target.name} ({target.display_name})"),
             ("Target ID", str(target.id)),
             ("Type", banner_type),
@@ -680,7 +680,7 @@ class GetCog(commands.Cog):
             return
 
         if not interaction.guild.icon:
-            log.tree("Get Server Icon No Icon", [
+            logger.tree("Get Server Icon No Icon", [
                 ("Guild", interaction.guild.name),
                 ("Guild ID", str(interaction.guild.id)),
                 ("By", f"{interaction.user.name} ({interaction.user.display_name})"),
@@ -722,7 +722,7 @@ class GetCog(commands.Cog):
         msg = await interaction.followup.send(embed=embed, view=view)
         view.message = msg
 
-        log.tree("Get Server Icon Complete", [
+        logger.tree("Get Server Icon Complete", [
             ("Guild", interaction.guild.name),
             ("Guild ID", str(interaction.guild.id)),
             ("By", f"{interaction.user.name} ({interaction.user.display_name})"),
@@ -741,7 +741,7 @@ class GetCog(commands.Cog):
             return
 
         if not interaction.guild.banner:
-            log.tree("Get Server Banner No Banner", [
+            logger.tree("Get Server Banner No Banner", [
                 ("Guild", interaction.guild.name),
                 ("Guild ID", str(interaction.guild.id)),
                 ("By", f"{interaction.user.name} ({interaction.user.display_name})"),
@@ -783,7 +783,7 @@ class GetCog(commands.Cog):
         msg = await interaction.followup.send(embed=embed, view=view)
         view.message = msg
 
-        log.tree("Get Server Banner Complete", [
+        logger.tree("Get Server Banner Complete", [
             ("Guild", interaction.guild.name),
             ("Guild ID", str(interaction.guild.id)),
             ("By", f"{interaction.user.name} ({interaction.user.display_name})"),
@@ -811,19 +811,19 @@ class GetCog(commands.Cog):
                     ephemeral=True,
                 )
             except discord.HTTPException as e:
-                log.tree("Get Cooldown Response Failed", [
+                logger.tree("Get Cooldown Response Failed", [
                     ("User", f"{interaction.user.name}"),
                     ("Error", str(e)[:50]),
                 ], emoji="⚠️")
 
-            log.tree("Get Cooldown", [
+            logger.tree("Get Cooldown", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Remaining", time_str),
             ], emoji="⏳")
             return
 
-        log.tree("Get Command Error", [
+        logger.tree("Get Command Error", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
             ("Error", str(error)[:100]),
@@ -841,7 +841,7 @@ class GetCog(commands.Cog):
                     ephemeral=True,
                 )
         except discord.HTTPException as e:
-            log.tree("Get Error Response Failed", [
+            logger.tree("Get Error Response Failed", [
                 ("User", f"{interaction.user.name}"),
                 ("Error", str(e)[:50]),
             ], emoji="⚠️")
@@ -850,4 +850,4 @@ class GetCog(commands.Cog):
 async def setup(bot: commands.Bot) -> None:
     """Load the get cog."""
     await bot.add_cog(GetCog(bot))
-    log.tree("Command Loaded", [("Name", "get")], emoji="✅")
+    logger.tree("Command Loaded", [("Name", "get")], emoji="✅")

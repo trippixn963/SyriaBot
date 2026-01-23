@@ -15,7 +15,7 @@ import discord
 from discord.ext import commands
 
 from src.core.config import config
-from src.core.logger import log
+from src.core.logger import logger
 from src.services.database import db
 
 
@@ -43,7 +43,7 @@ class VoiceHandler(commands.Cog):
             try:
                 await self.bot.tempvoice.on_voice_state_update(member, before, after)
             except Exception as e:
-                log.error_tree("TempVoice Voice Update Error", e, [
+                logger.error_tree("TempVoice Voice Update Error", e, [
                     ("User", f"{member.name} ({member.display_name})"),
                     ("ID", str(member.id)),
                     ("Before Channel", str(before.channel.id) if before.channel else "None"),
@@ -55,7 +55,7 @@ class VoiceHandler(commands.Cog):
             try:
                 await self.bot.xp_service.on_voice_update(member, before, after)
             except Exception as e:
-                log.error_tree("XP Voice Update Error", e, [
+                logger.error_tree("XP Voice Update Error", e, [
                     ("User", f"{member.name} ({member.display_name})"),
                     ("ID", str(member.id)),
                     ("Before Channel", str(before.channel.id) if before.channel else "None"),
@@ -80,7 +80,7 @@ class VoiceHandler(commands.Cog):
                     today = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
                     db.update_voice_peak(member.guild.id, today, total_voice_users)
             except Exception as e:
-                log.error_tree("Voice Stats Track Failed", e, [
+                logger.error_tree("Voice Stats Track Failed", e, [
                     ("User", f"{member.name} ({member.display_name})"),
                     ("ID", str(member.id)),
                 ])
@@ -89,6 +89,6 @@ class VoiceHandler(commands.Cog):
 async def setup(bot: commands.Bot) -> None:
     """Register the voice handler cog with the bot."""
     await bot.add_cog(VoiceHandler(bot))
-    log.tree("Handler Loaded", [
+    logger.tree("Handler Loaded", [
         ("Name", "VoiceHandler"),
     ], emoji="✅")

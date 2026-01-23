@@ -18,7 +18,7 @@ from typing import Optional
 
 import discord
 
-from src.core.logger import log
+from src.core.logger import logger
 from src.core.config import config
 from src.core.colors import COLOR_ERROR, COLOR_WARNING, COLOR_SYRIA_GREEN
 from src.core.constants import DELETE_DELAY_SHORT
@@ -100,7 +100,7 @@ class FunHandler:
         self._sticky_message_id = sticky_msg.id
         # Counter is reset by caller under lock
 
-        log.tree("Fun Sticky Sent", [
+        logger.tree("Fun Sticky Sent", [
             ("Channel", channel.name),
             ("Message ID", str(sticky_msg.id)),
         ], emoji="📌")
@@ -126,7 +126,7 @@ class FunHandler:
                 if matches:
                     # Auto-correct to the matched command
                     command = matches[0]
-                    log.tree("Fun Command Typo Corrected", [
+                    logger.tree("Fun Command Typo Corrected", [
                         ("User", f"{message.author.name}"),
                         ("Typed", parts[0]),
                         ("Corrected", command),
@@ -151,7 +151,7 @@ class FunHandler:
             set_footer(embed)
             msg = await message.reply(embed=embed, mention_author=False)
             await msg.delete(delay=DELETE_DELAY_SHORT)
-            log.tree("Fun Command Wrong Channel", [
+            logger.tree("Fun Command Wrong Channel", [
                 ("User", f"{message.author.name}"),
                 ("ID", str(user_id)),
                 ("Command", command),
@@ -177,7 +177,7 @@ class FunHandler:
                     cooldown_msg.delete(delay=DELETE_DELAY_SHORT),
                     return_exceptions=True
                 )
-                log.tree("Fun Cooldown", [
+                logger.tree("Fun Cooldown", [
                     ("User", f"{message.author.name}"),
                     ("ID", str(user_id)),
                     ("Command", command),
@@ -221,7 +221,7 @@ class FunHandler:
 
             return result
         except Exception as e:
-            log.error_tree("Fun Command Failed", e, [
+            logger.error_tree("Fun Command Failed", e, [
                 ("Command", command),
                 ("User", f"{message.author.name} ({message.author.display_name})"),
                 ("ID", str(message.author.id)),
@@ -243,7 +243,7 @@ class FunHandler:
                 user1 = message.author
                 user2 = message.mentions[0]
             else:
-                log.tree("Ship Usage Error", [
+                logger.tree("Ship Usage Error", [
                     ("User", f"{message.author.name}"),
                     ("ID", str(message.author.id)),
                     ("Reason", "No mentions provided"),
@@ -260,7 +260,7 @@ class FunHandler:
             user1 = message.mentions[0]
             user2 = message.mentions[1]
 
-        log.tree("Ship Command", [
+        logger.tree("Ship Command", [
             ("User", f"{message.author.name}"),
             ("ID", str(message.author.id)),
             ("User 1", f"{user1.name}"),
@@ -289,7 +289,7 @@ class FunHandler:
         file = discord.File(fp=io.BytesIO(card_bytes), filename="ship.png")
         await message.channel.send(file=file)
 
-        log.tree("Ship Sent", [
+        logger.tree("Ship Sent", [
             ("User 1", f"{user1.name}"),
             ("User 2", f"{user2.name}"),
             ("Result", f"{percentage}%"),
@@ -305,7 +305,7 @@ class FunHandler:
         else:
             target = message.author
 
-        log.tree("Simp Command", [
+        logger.tree("Simp Command", [
             ("User", f"{message.author.name}"),
             ("ID", str(message.author.id)),
             ("Target", f"{target.name}"),
@@ -330,7 +330,7 @@ class FunHandler:
         file = discord.File(fp=io.BytesIO(card_bytes), filename="simp.png")
         await message.channel.send(file=file)
 
-        log.tree("Simp Sent", [
+        logger.tree("Simp Sent", [
             ("Target", f"{target.name}"),
             ("Result", f"{percentage}%"),
         ], emoji="✅")
@@ -345,7 +345,7 @@ class FunHandler:
         else:
             target = message.author
 
-        log.tree("Howgay Command", [
+        logger.tree("Howgay Command", [
             ("User", f"{message.author.name}"),
             ("ID", str(message.author.id)),
             ("Target", f"{target.name}"),
@@ -370,7 +370,7 @@ class FunHandler:
         file = discord.File(fp=io.BytesIO(card_bytes), filename="howgay.png")
         await message.channel.send(file=file)
 
-        log.tree("Howgay Sent", [
+        logger.tree("Howgay Sent", [
             ("Target", f"{target.name}"),
             ("Result", f"{percentage}%"),
         ], emoji="✅")
@@ -385,7 +385,7 @@ class FunHandler:
         else:
             target = message.author
 
-        log.tree("Howsmart Command", [
+        logger.tree("Howsmart Command", [
             ("User", f"{message.author.name}"),
             ("ID", str(message.author.id)),
             ("Target", f"{target.name}"),
@@ -410,7 +410,7 @@ class FunHandler:
         file = discord.File(fp=io.BytesIO(card_bytes), filename="howsmart.png")
         await message.channel.send(file=file)
 
-        log.tree("Howsmart Sent", [
+        logger.tree("Howsmart Sent", [
             ("Target", f"{target.name}"),
             ("Result", f"{percentage}%"),
         ], emoji="✅")
@@ -425,7 +425,7 @@ class FunHandler:
         else:
             target = message.author
 
-        log.tree("Bodyfat Command", [
+        logger.tree("Bodyfat Command", [
             ("User", f"{message.author.name}"),
             ("ID", str(message.author.id)),
             ("Target", f"{target.name}"),
@@ -450,7 +450,7 @@ class FunHandler:
         file = discord.File(fp=io.BytesIO(card_bytes), filename="bodyfat.png")
         await message.channel.send(file=file)
 
-        log.tree("Bodyfat Sent", [
+        logger.tree("Bodyfat Sent", [
             ("Target", f"{target.name}"),
             ("Result", f"{percentage}%"),
         ], emoji="✅")

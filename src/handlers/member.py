@@ -16,7 +16,7 @@ from discord.ext import commands
 
 from src.core.config import config
 from src.core.colors import COLOR_BOOST, COLOR_SYRIA_GREEN
-from src.core.logger import log
+from src.core.logger import logger
 from src.services.database import db
 from src.utils.footer import set_footer
 
@@ -52,17 +52,17 @@ class MembersHandler(commands.Cog):
             invites = await asyncio.wait_for(guild.invites(), timeout=10.0)
             self._invite_cache = {inv.code: inv.uses for inv in invites}
             self._invites_cached = True
-            log.tree("Invite Cache Loaded", [
+            logger.tree("Invite Cache Loaded", [
                 ("Guild", guild.name),
                 ("Invites Cached", str(len(self._invite_cache))),
             ], emoji="🔗")
         except asyncio.TimeoutError:
-            log.tree("Invite Cache Timeout", [
+            logger.tree("Invite Cache Timeout", [
                 ("Guild", guild.name),
                 ("Timeout", "10s"),
             ], emoji="⚠️")
         except discord.HTTPException as e:
-            log.tree("Invite Cache Failed", [
+            logger.tree("Invite Cache Failed", [
                 ("Error", str(e)[:100]),
             ], emoji="⚠️")
 
@@ -89,12 +89,12 @@ class MembersHandler(commands.Cog):
             # Update cache with any new invites
             self._invite_cache = {inv.code: inv.uses for inv in new_invites}
         except asyncio.TimeoutError:
-            log.tree("Invite Fetch Timeout", [
+            logger.tree("Invite Fetch Timeout", [
                 ("Guild", guild.name),
                 ("Timeout", "10s"),
             ], emoji="⚠️")
         except discord.HTTPException as e:
-            log.tree("Invite Fetch Failed", [
+            logger.tree("Invite Fetch Failed", [
                 ("Guild", guild.name),
                 ("Error", str(e)[:50]),
             ], emoji="⚠️")
@@ -118,13 +118,13 @@ class MembersHandler(commands.Cog):
             inviter_id = invite.inviter.id
             try:
                 db.set_invited_by(member.id, member.guild.id, inviter_id)
-                log.tree("Invite Tracked", [
+                logger.tree("Invite Tracked", [
                     ("New Member", f"{member.name} ({member.id})"),
                     ("Invited By", f"{invite.inviter.name} ({inviter_id})"),
                     ("Invite Code", invite.code),
                 ], emoji="🔗")
             except Exception as e:
-                log.tree("Invite Track Failed", [
+                logger.tree("Invite Track Failed", [
                     ("New Member", f"{member.name} ({member.id})"),
                     ("Inviter ID", str(inviter_id)),
                     ("Error", str(e)[:50]),
@@ -137,7 +137,7 @@ class MembersHandler(commands.Cog):
             today = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
             db.increment_new_members(member.guild.id, today)
         except Exception as e:
-            log.tree("New Member Track Failed", [
+            logger.tree("New Member Track Failed", [
                 ("Member", f"{member.name} ({member.id})"),
                 ("Error", str(e)[:50]),
             ], emoji="⚠️")
@@ -148,7 +148,7 @@ class MembersHandler(commands.Cog):
 
         role = member.guild.get_role(config.AUTO_ROLE_ID)
         if not role:
-            log.tree("Auto-Role Not Found", [
+            logger.tree("Auto-Role Not Found", [
                 ("Role ID", str(config.AUTO_ROLE_ID)),
                 ("Guild", member.guild.name),
             ], emoji="⚠️")
@@ -156,14 +156,14 @@ class MembersHandler(commands.Cog):
 
         try:
             await member.add_roles(role, reason="Auto-role on join")
-            log.tree("Member Joined", [
+            logger.tree("Member Joined", [
                 ("User", f"{member.name} ({member.display_name})"),
                 ("ID", str(member.id)),
                 ("Role Given", role.name),
                 ("Invited By", str(inviter_id) if inviter_id else "Unknown"),
             ], emoji="👋")
         except discord.HTTPException as e:
-            log.tree("Auto-Role Failed", [
+            logger.tree("Auto-Role Failed", [
                 ("User", f"{member.name} ({member.id})"),
                 ("Role", role.name),
                 ("Error", str(e)[:50]),
@@ -174,7 +174,7 @@ class MembersHandler(commands.Cog):
             try:
                 await self.bot.xp_service.restore_member_roles(member)
             except Exception as e:
-                log.tree("XP Role Restore Error", [
+                logger.tree("XP Role Restore Error", [
                     ("User", f"{member.name} ({member.display_name})"),
                     ("ID", str(member.id)),
                     ("Error", str(e)[:50]),
@@ -184,7 +184,7 @@ class MembersHandler(commands.Cog):
         try:
             db.set_user_active(member.id, member.guild.id)
         except Exception as e:
-            log.tree("Set User Active Failed", [
+            logger.tree("Set User Active Failed", [
                 ("User", f"{member.name} ({member.display_name})"),
                 ("ID", str(member.id)),
                 ("Error", str(e)[:50]),
@@ -206,13 +206,13 @@ class MembersHandler(commands.Cog):
         # Mark user as inactive for leaderboard
         try:
             db.set_user_inactive(member.id, member.guild.id)
-            log.tree("Member Left", [
+            logger.tree("Member Left", [
                 ("User", f"{member.name} ({member.display_name})"),
                 ("ID", str(member.id)),
                 ("Action", "Marked inactive on leaderboard"),
             ], emoji="👋")
         except Exception as e:
-            log.tree("Set User Inactive Failed", [
+            logger.tree("Set User Inactive Failed", [
                 ("User", f"{member.name} ({member.display_name})"),
                 ("ID", str(member.id)),
                 ("Error", str(e)[:50]),
@@ -231,7 +231,7 @@ class MembersHandler(commands.Cog):
             try:
                 db.record_boost(after.id, after.guild.id, "boost")
             except Exception as e:
-                log.tree("Boost Record Failed", [
+                logger.tree("Boost Record Failed", [
                     ("User", f"{after.name} ({after.id})"),
                     ("Type", "boost"),
                     ("Error", str(e)[:50]),
@@ -244,12 +244,12 @@ class MembersHandler(commands.Cog):
         elif before.premium_since is not None and after.premium_since is None:
             try:
                 db.record_boost(after.id, after.guild.id, "unboost")
-                log.tree("Boost Ended", [
+                logger.tree("Boost Ended", [
                     ("User", f"{after.name} ({after.id})"),
                     ("Guild", after.guild.name),
                 ], emoji="💔")
             except Exception as e:
-                log.tree("Unboost Record Failed", [
+                logger.tree("Unboost Record Failed", [
                     ("User", f"{after.name} ({after.id})"),
                     ("Type", "unboost"),
                     ("Error", str(e)[:50]),
@@ -266,19 +266,19 @@ class MembersHandler(commands.Cog):
                 del stats_api._avatar_cache[user_id]
             # Clear response cache (leaderboard/stats contain booster info)
             stats_api._response_cache.clear()
-            log.tree("API Cache Invalidated", [
+            logger.tree("API Cache Invalidated", [
                 ("ID", str(user_id)),
                 ("Reason", "Boost status changed"),
             ], emoji="🔄")
         except Exception as e:
-            log.tree("API Cache Invalidate Failed", [
+            logger.tree("API Cache Invalidate Failed", [
                 ("ID", str(user_id)),
                 ("Error", str(e)[:50]),
             ], emoji="⚠️")
 
     async def _handle_new_boost(self, member: discord.Member) -> None:
         """Send thank you message when someone boosts."""
-        log.tree("New Boost", [
+        logger.tree("New Boost", [
             ("User", f"{member.name} ({member.display_name})"),
             ("ID", str(member.id)),
             ("Guild", member.guild.name),
@@ -286,7 +286,7 @@ class MembersHandler(commands.Cog):
 
         # Get general channel
         if not config.GENERAL_CHANNEL_ID:
-            log.tree("Boost Notification Skipped", [
+            logger.tree("Boost Notification Skipped", [
                 ("User", f"{member.name} ({member.display_name})"),
                 ("ID", str(member.id)),
                 ("Reason", "GENERAL_CHANNEL_ID not configured"),
@@ -295,7 +295,7 @@ class MembersHandler(commands.Cog):
 
         channel = member.guild.get_channel(config.GENERAL_CHANNEL_ID)
         if not channel:
-            log.tree("Boost Notification Failed", [
+            logger.tree("Boost Notification Failed", [
                 ("User", f"{member.name} ({member.display_name})"),
                 ("ID", str(member.id)),
                 ("Reason", "General channel not found"),
@@ -335,13 +335,13 @@ class MembersHandler(commands.Cog):
 
         try:
             await channel.send(content=member.mention, embed=embed)
-            log.tree("Boost Notification Sent", [
+            logger.tree("Boost Notification Sent", [
                 ("User", f"{member.name} ({member.display_name})"),
                 ("ID", str(member.id)),
                 ("Channel", channel.name),
             ], emoji="✅")
         except discord.HTTPException as e:
-            log.tree("Boost Notification Failed", [
+            logger.tree("Boost Notification Failed", [
                 ("User", f"{member.name} ({member.display_name})"),
                 ("ID", str(member.id)),
                 ("Error", str(e)[:100]),
@@ -387,18 +387,18 @@ class MembersHandler(commands.Cog):
 
         try:
             await member.send(embed=embed)
-            log.tree("Welcome DM Sent", [
+            logger.tree("Welcome DM Sent", [
                 ("User", f"{member.name} ({member.display_name})"),
                 ("ID", str(member.id)),
             ], emoji="📬")
         except discord.Forbidden:
-            log.tree("Welcome DM Failed", [
+            logger.tree("Welcome DM Failed", [
                 ("User", f"{member.name} ({member.display_name})"),
                 ("ID", str(member.id)),
                 ("Reason", "DMs disabled"),
             ], emoji="ℹ️")
         except discord.HTTPException as e:
-            log.tree("Welcome DM Failed", [
+            logger.tree("Welcome DM Failed", [
                 ("User", f"{member.name} ({member.display_name})"),
                 ("ID", str(member.id)),
                 ("Error", str(e)[:50]),
@@ -408,6 +408,6 @@ class MembersHandler(commands.Cog):
 async def setup(bot: commands.Bot) -> None:
     """Register the members handler cog with the bot."""
     await bot.add_cog(MembersHandler(bot))
-    log.tree("Handler Loaded", [
+    logger.tree("Handler Loaded", [
         ("Name", "MembersHandler"),
     ], emoji="✅")

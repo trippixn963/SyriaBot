@@ -12,7 +12,7 @@ import asyncio
 from pathlib import Path
 from typing import Optional
 
-from src.core.logger import log
+from src.core.logger import logger
 from .config import MAX_FILE_SIZE_MB, VIDEO_EXTENSIONS
 
 
@@ -37,17 +37,17 @@ async def check_video_format(file: Path) -> tuple[str, str]:
         parts = output.split(",")
         if len(parts) >= 2:
             return parts[0], parts[1]
-        log.tree("ffprobe Parse Error", [
+        logger.tree("ffprobe Parse Error", [
             ("Output", output[:50]),
         ], emoji="⚠️")
         return "unknown", "unknown"
     except asyncio.TimeoutError:
-        log.tree("ffprobe Timeout", [
+        logger.tree("ffprobe Timeout", [
             ("File", file.name),
         ], emoji="⏳")
         return "unknown", "unknown"
     except Exception as e:
-        log.tree("ffprobe Error", [
+        logger.tree("ffprobe Error", [
             ("File", file.name),
             ("Error", str(e)[:50]),
         ], emoji="⚠️")
@@ -71,12 +71,12 @@ async def get_video_duration(file: Path) -> float:
         )
         probe_stdout, _ = await probe_process.communicate()
         duration = float(probe_stdout.decode().strip())
-        log.tree("Video Duration Detected", [
+        logger.tree("Video Duration Detected", [
             ("Duration", f"{duration:.1f}s"),
         ], emoji="⏱️")
         return duration
     except Exception as e:
-        log.tree("Duration Probe Failed", [
+        logger.tree("Duration Probe Failed", [
             ("Error", str(e)[:50]),
             ("Using Default", "60s"),
         ], emoji="⚠️")
@@ -87,7 +87,7 @@ async def ensure_discord_compatible(file: Path) -> Optional[Path]:
     """Ensure video is Discord-compatible. Only re-encodes if necessary."""
     codec, pix_fmt = await check_video_format(file)
 
-    log.tree("Video Format Check", [
+    logger.tree("Video Format Check", [
         ("File", file.name),
         ("Codec", codec),
         ("Pixel Format", pix_fmt),
@@ -99,7 +99,7 @@ async def ensure_discord_compatible(file: Path) -> Optional[Path]:
     output_file = file.parent / f"discord_{file.stem}.mp4"
 
     if is_h264 and is_yuv420p:
-        log.tree("Video Compatible, Remuxing", [
+        logger.tree("Video Compatible, Remuxing", [
             ("File", file.name),
             ("Action", "Copy video + encode audio to AAC"),
         ], emoji="🔄")
@@ -114,7 +114,7 @@ async def ensure_discord_compatible(file: Path) -> Optional[Path]:
         ]
         timeout = 60
     else:
-        log.tree("Video Incompatible, Re-encoding", [
+        logger.tree("Video Incompatible, Re-encoding", [
             ("File", file.name),
             ("Codec", f"{codec} -> h264"),
             ("PixFmt", f"{pix_fmt} -> yuv420p"),
@@ -144,7 +144,7 @@ async def ensure_discord_compatible(file: Path) -> Optional[Path]:
 
         if process.returncode != 0 or not output_file.exists():
             stderr_text = stderr.decode(errors="ignore")
-            log.tree("ffmpeg Processing Failed", [
+            logger.tree("ffmpeg Processing Failed", [
                 ("File", file.name),
                 ("Exit Code", str(process.returncode)),
                 ("Error", stderr_text[:100] if stderr_text else "Unknown"),
@@ -154,14 +154,14 @@ async def ensure_discord_compatible(file: Path) -> Optional[Path]:
             return None
 
         new_size_mb = output_file.stat().st_size / (1024 * 1024)
-        log.tree("ffmpeg Processing Complete", [
+        logger.tree("ffmpeg Processing Complete", [
             ("Original", f"{file.stat().st_size / (1024*1024):.1f} MB"),
             ("Result", f"{new_size_mb:.1f} MB"),
             ("Method", "Remux" if (is_h264 and is_yuv420p) else "Re-encode"),
         ], emoji="✅")
 
         if new_size_mb > MAX_FILE_SIZE_MB:
-            log.tree("Processed File Too Large", [
+            logger.tree("Processed File Too Large", [
                 ("Size", f"{new_size_mb:.1f} MB"),
                 ("Max", f"{MAX_FILE_SIZE_MB} MB"),
             ], emoji="⚠️")
@@ -172,7 +172,7 @@ async def ensure_discord_compatible(file: Path) -> Optional[Path]:
         return output_file
 
     except asyncio.TimeoutError:
-        log.tree("ffmpeg Timeout", [
+        logger.tree("ffmpeg Timeout", [
             ("File", file.name),
             ("Timeout", f"{timeout}s"),
         ], emoji="⏳")
@@ -180,7 +180,7 @@ async def ensure_discord_compatible(file: Path) -> Optional[Path]:
             output_file.unlink()
         return None
     except Exception as e:
-        log.error_tree("ffmpeg Exception", e, [
+        logger.error_tree("ffmpeg Exception", e, [
             ("File", file.name),
         ])
         if output_file.exists():
@@ -190,7 +190,7 @@ async def ensure_discord_compatible(file: Path) -> Optional[Path]:
 
 async def compress_video(file: Path) -> Optional[Path]:
     """Compress a video to fit under the size limit."""
-    log.tree("Video Compression Started", [
+    logger.tree("Video Compression Started", [
         ("File", file.name),
         ("Current Size", f"{file.stat().st_size / (1024*1024):.1f} MB"),
         ("Target", f"< {MAX_FILE_SIZE_MB} MB"),
@@ -201,7 +201,7 @@ async def compress_video(file: Path) -> Optional[Path]:
 
     # Validate duration to prevent ZeroDivisionError
     if not duration or duration <= 0:
-        log.tree("Compression Failed", [
+        logger.tree("Compression Failed", [
             ("File", file.name),
             ("Reason", "Invalid or zero duration"),
             ("Duration", str(duration)),
@@ -214,7 +214,7 @@ async def compress_video(file: Path) -> Optional[Path]:
     video_bitrate = int((target_size_bits / duration) - audio_bitrate)
     video_bitrate = max(video_bitrate, 500000)
 
-    log.tree("Compression Bitrate Calculated", [
+    logger.tree("Compression Bitrate Calculated", [
         ("Video Bitrate", f"{video_bitrate // 1000} kbps"),
         ("Audio Bitrate", "128 kbps"),
     ], emoji="📊")
@@ -244,7 +244,7 @@ async def compress_video(file: Path) -> Optional[Path]:
         await asyncio.wait_for(process.communicate(), timeout=300)
 
         if process.returncode != 0 or not output_file.exists():
-            log.tree("Compression Failed", [
+            logger.tree("Compression Failed", [
                 ("File", file.name),
                 ("Exit Code", str(process.returncode)),
             ], emoji="❌")
@@ -254,14 +254,14 @@ async def compress_video(file: Path) -> Optional[Path]:
 
         compressed_size_mb = output_file.stat().st_size / (1024 * 1024)
 
-        log.tree("Compression Complete", [
+        logger.tree("Compression Complete", [
             ("Original", f"{file.stat().st_size / (1024*1024):.1f} MB"),
             ("Compressed", f"{compressed_size_mb:.1f} MB"),
             ("Reduction", f"{(1 - compressed_size_mb / (file.stat().st_size / (1024*1024))) * 100:.0f}%"),
         ], emoji="✅")
 
         if compressed_size_mb > 25:
-            log.tree("Compressed Still Too Large", [
+            logger.tree("Compressed Still Too Large", [
                 ("Size", f"{compressed_size_mb:.1f} MB"),
                 ("Max", "25 MB"),
             ], emoji="❌")
@@ -271,7 +271,7 @@ async def compress_video(file: Path) -> Optional[Path]:
         return output_file
 
     except asyncio.TimeoutError:
-        log.tree("Compression Timeout", [
+        logger.tree("Compression Timeout", [
             ("File", file.name),
             ("Timeout", "300s"),
         ], emoji="⏳")
@@ -279,7 +279,7 @@ async def compress_video(file: Path) -> Optional[Path]:
             output_file.unlink()
         return None
     except Exception as e:
-        log.error_tree("Compression Exception", e, [
+        logger.error_tree("Compression Exception", e, [
             ("File", file.name),
         ])
         if output_file.exists():
@@ -291,7 +291,7 @@ async def process_file(file: Path) -> Optional[Path]:
     """Process a downloaded file - re-encode videos for Discord compatibility."""
     file_size_mb = file.stat().st_size / (1024 * 1024)
 
-    log.tree("Processing File", [
+    logger.tree("Processing File", [
         ("File", file.name),
         ("Size", f"{file_size_mb:.1f} MB"),
         ("Type", file.suffix.lower()),
@@ -300,12 +300,12 @@ async def process_file(file: Path) -> Optional[Path]:
     # Non-video files: just check size
     if file.suffix.lower() not in VIDEO_EXTENSIONS:
         if file_size_mb <= MAX_FILE_SIZE_MB:
-            log.tree("File Ready (Non-Video)", [
+            logger.tree("File Ready (Non-Video)", [
                 ("File", file.name),
                 ("Size", f"{file_size_mb:.1f} MB"),
             ], emoji="✅")
             return file
-        log.tree("File Too Large (Non-Video)", [
+        logger.tree("File Too Large (Non-Video)", [
             ("File", file.name),
             ("Size", f"{file_size_mb:.1f} MB"),
             ("Max", f"{MAX_FILE_SIZE_MB} MB"),
@@ -316,7 +316,7 @@ async def process_file(file: Path) -> Optional[Path]:
     needs_compression = file_size_mb > MAX_FILE_SIZE_MB
 
     if needs_compression:
-        log.tree("Video Needs Compression", [
+        logger.tree("Video Needs Compression", [
             ("File", file.name),
             ("Size", f"{file_size_mb:.1f} MB"),
             ("Target", f"< {MAX_FILE_SIZE_MB} MB"),
@@ -327,7 +327,7 @@ async def process_file(file: Path) -> Optional[Path]:
 
     if result:
         result_size = result.stat().st_size / (1024 * 1024)
-        log.tree("Video Processing Success", [
+        logger.tree("Video Processing Success", [
             ("Original", file.name),
             ("Result", result.name),
             ("Original Size", f"{file_size_mb:.1f} MB"),
@@ -337,7 +337,7 @@ async def process_file(file: Path) -> Optional[Path]:
             file.unlink()
         return result
 
-    log.tree("Video Processing Failed", [
+    logger.tree("Video Processing Failed", [
         ("File", file.name),
         ("Size", f"{file_size_mb:.1f} MB"),
     ], emoji="❌")

@@ -30,7 +30,7 @@ try:
 except ImportError:
     WAND_AVAILABLE = False
 
-from src.core.logger import log
+from src.core.logger import logger
 from src.core.constants import (
     FONT_PATHS,
     MAX_IMAGE_SIZE,
@@ -113,7 +113,7 @@ class ConvertService:
             for size in [24, 32, 48, 56, 64, 72, 80, 96, 112, 128, 140]:
                 self._font_cache[size] = ImageFont.truetype(self._font_path, size)
 
-        log.tree("Convert Service Initialized", [
+        logger.tree("Convert Service Initialized", [
             ("Font", Path(self._font_path).name if self._font_path else "Default"),
             ("GIF Engine", "ImageMagick (Wand)" if WAND_AVAILABLE else "Pillow"),
         ], emoji="✅" if WAND_AVAILABLE else "⚠️")
@@ -127,11 +127,11 @@ class ConvertService:
                     item.unlink(missing_ok=True)
                     cleaned += 1
             if cleaned > 0:
-                log.tree("Convert Temp Cleanup", [
+                logger.tree("Convert Temp Cleanup", [
                     ("Files Cleaned", str(cleaned)),
                 ], emoji="🧹")
         except Exception as e:
-            log.tree("Convert Temp Cleanup Failed", [
+            logger.tree("Convert Temp Cleanup Failed", [
                 ("Error", str(e)[:50]),
             ], emoji="⚠️")
 
@@ -143,7 +143,7 @@ class ConvertService:
                 return font_path
             except (OSError, IOError):
                 continue
-        log.tree("Font Not Found", [
+        logger.tree("Font Not Found", [
             ("Searched", ", ".join([p.split("/")[-1] for p in FONT_PATHS])),
             ("Fallback", "Default bitmap font"),
         ], emoji="⚠️")
@@ -315,7 +315,7 @@ class ConvertService:
 
                 return await resp.read()
         except Exception as e:
-            log.tree("Fetch Image Failed", [
+            logger.tree("Fetch Image Failed", [
                 ("Error", str(e)),
             ], emoji="❌")
             return None
@@ -337,7 +337,7 @@ class ConvertService:
         Returns:
             ConvertResult with GIF bytes or error
         """
-        log.tree("Converting Image", [
+        logger.tree("Converting Image", [
             ("Text", text[:50] + "..." if len(text) > 50 else text),
             ("Position", position),
         ], emoji="🔄")
@@ -352,7 +352,7 @@ class ConvertService:
             )
             return result
         except Exception as e:
-            log.error_tree("Image Conversion Failed", e, [
+            logger.error_tree("Image Conversion Failed", e, [
                 ("Text", text[:30] if text else "None"),
                 ("Position", position),
             ])
@@ -463,7 +463,7 @@ class ConvertService:
             new_img.save(output, format="PNG", optimize=True)
             result_bytes = output.getvalue()
 
-            log.tree("Convert Complete", [
+            logger.tree("Convert Complete", [
                 ("Size", f"{len(result_bytes) / 1024:.1f} KB"),
                 ("Dimensions", f"{new_img.width}x{new_img.height}"),
                 ("Format", "GIF"),
@@ -495,7 +495,7 @@ class ConvertService:
             try:
                 return self._process_animated_gif_wand(img, text, position, bar_color, text_color)
             except Exception as e:
-                log.tree("Wand GIF Processing Failed", [
+                logger.tree("Wand GIF Processing Failed", [
                     ("Error", str(e)),
                     ("Fallback", "Using Pillow"),
                 ], emoji="⚠️")
@@ -546,7 +546,7 @@ class ConvertService:
                                 break
                         font_size -= 2
 
-                log.tree("GIF Text Layout", [
+                logger.tree("GIF Text Layout", [
                     ("Text", text[:30] + "..." if len(text) > 30 else text),
                     ("GIF Width", str(orig_width)),
                     ("Font Size", str(font_size)),
@@ -624,7 +624,7 @@ class ConvertService:
                 output_img.format = 'gif'
                 result_bytes = output_img.make_blob()
 
-        log.tree("Animated GIF Convert Complete (Wand)", [
+        logger.tree("Animated GIF Convert Complete (Wand)", [
             ("Frames", frame_count),
             ("Size", f"{len(result_bytes) / 1024:.1f} KB"),
             ("Dimensions", f"{orig_width}x{new_height}"),
@@ -745,7 +745,7 @@ class ConvertService:
             )
             result_bytes = output.getvalue()
 
-            log.tree("Animated GIF Convert Complete (Pillow)", [
+            logger.tree("Animated GIF Convert Complete (Pillow)", [
                 ("Frames", frame_count),
                 ("Size", f"{len(result_bytes) / 1024:.1f} KB"),
                 ("Dimensions", f"{orig_width}x{new_height}"),
@@ -805,7 +805,7 @@ class ConvertService:
                 fps=fps
             )
         except Exception as e:
-            log.tree("Get Video Info Failed", [
+            logger.tree("Get Video Info Failed", [
                 ("Error", str(e)),
             ], emoji="❌")
             return None
@@ -843,7 +843,7 @@ class ConvertService:
         Returns:
             ConvertResult with GIF bytes or error
         """
-        log.tree("Converting Video to GIF", [
+        logger.tree("Converting Video to GIF", [
             ("Text", text[:30] + "..." if len(text) > 30 else text if text else "(none)"),
             ("Position", position),
             ("Effect", effect),
@@ -861,7 +861,7 @@ class ConvertService:
             )
             return result
         except Exception as e:
-            log.error_tree("Video Conversion Failed", e, [
+            logger.error_tree("Video Conversion Failed", e, [
                 ("Text", text[:30] if text else "None"),
                 ("Position", position),
                 ("Effect", effect or "None"),
@@ -978,7 +978,7 @@ class ConvertService:
                         f":x=(w-text_w)/2:y=h-{bar_height}+{text_y}"
                     )
 
-                log.tree("Video Text Layout", [
+                logger.tree("Video Text Layout", [
                     ("Text", text[:30] + "..." if len(text) > 30 else text),
                     ("Video Width", str(scale_width)),
                     ("Font Size", str(font_size)),
@@ -1013,7 +1013,7 @@ class ConvertService:
 
             result = subprocess.run(palette_cmd, capture_output=True, timeout=120)
             if result.returncode != 0:
-                log.tree("Palette Generation Failed", [
+                logger.tree("Palette Generation Failed", [
                     ("Error", result.stderr.decode()[:100]),
                 ], emoji="⚠️")
                 # Fall back to no palette
@@ -1043,7 +1043,7 @@ class ConvertService:
             result = subprocess.run(gif_cmd, capture_output=True, timeout=180)
             if result.returncode != 0:
                 error_msg = result.stderr.decode()
-                log.tree("FFmpeg GIF Error", [
+                logger.tree("FFmpeg GIF Error", [
                     ("Return Code", str(result.returncode)),
                     ("Command", gif_cmd[0]),
                     ("Error", error_msg[:200] if error_msg else "Unknown"),
@@ -1056,7 +1056,7 @@ class ConvertService:
 
             gif_bytes = output_path.read_bytes()
 
-            log.tree("Video Convert Complete", [
+            logger.tree("Video Convert Complete", [
                 ("Size", f"{len(gif_bytes) / 1024:.1f} KB"),
                 ("Duration", f"{info.duration:.1f}s"),
                 ("FPS", GIF_FPS),
@@ -1074,7 +1074,7 @@ class ConvertService:
                 try:
                     path.unlink(missing_ok=True)
                 except Exception as e:
-                    log.tree("Temp File Cleanup Failed", [
+                    logger.tree("Temp File Cleanup Failed", [
                         ("Path", str(path.name)),
                         ("Error", str(e)[:50]),
                     ], emoji="⚠️")
@@ -1108,7 +1108,7 @@ class ConvertService:
             return None
 
         except Exception as e:
-            log.tree("Extract Thumbnail Failed", [
+            logger.tree("Extract Thumbnail Failed", [
                 ("Error", str(e)),
             ], emoji="❌")
             return None
@@ -1118,7 +1118,7 @@ class ConvertService:
                 try:
                     path.unlink(missing_ok=True)
                 except Exception as e:
-                    log.tree("Thumbnail Cleanup Failed", [
+                    logger.tree("Thumbnail Cleanup Failed", [
                         ("Path", str(path.name)),
                         ("Error", str(e)[:50]),
                     ], emoji="⚠️")
@@ -1190,7 +1190,7 @@ class ConvertService:
             output = io.BytesIO()
             strip.save(output, format="PNG", optimize=True)
 
-            log.tree("Video Preview Strip Generated", [
+            logger.tree("Video Preview Strip Generated", [
                 ("Frames", len(frames)),
                 ("Duration", f"{duration:.1f}s"),
                 ("Size", f"{total_width}x{max_height}"),
@@ -1207,7 +1207,7 @@ class ConvertService:
             return output.getvalue()
 
         except Exception as e:
-            log.tree("Extract Preview Strip Failed", [
+            logger.tree("Extract Preview Strip Failed", [
                 ("Error", str(e)),
             ], emoji="❌")
             return None
@@ -1228,7 +1228,7 @@ class ConvertService:
             try:
                 input_path.unlink(missing_ok=True)
             except Exception as e:
-                log.tree("Preview Input Cleanup Failed", [
+                logger.tree("Preview Input Cleanup Failed", [
                     ("Path", str(input_path.name)),
                     ("Error", str(e)[:50]),
                 ], emoji="⚠️")
@@ -1236,7 +1236,7 @@ class ConvertService:
                 try:
                     path.unlink(missing_ok=True)
                 except Exception as e:
-                    log.tree("Preview Frame Cleanup Failed", [
+                    logger.tree("Preview Frame Cleanup Failed", [
                         ("Path", str(path.name)),
                         ("Error", str(e)[:50]),
                     ], emoji="⚠️")
@@ -1251,7 +1251,7 @@ class ConvertService:
             info = self._get_video_info(str(input_path))
             return info.duration if info else None
         except Exception as e:
-            log.tree("Get Video Duration Failed", [
+            logger.tree("Get Video Duration Failed", [
                 ("Error", str(e)),
             ], emoji="❌")
             return None
@@ -1259,7 +1259,7 @@ class ConvertService:
             try:
                 input_path.unlink(missing_ok=True)
             except Exception as e:
-                log.tree("Duration Input Cleanup Failed", [
+                logger.tree("Duration Input Cleanup Failed", [
                     ("Path", str(input_path.name)),
                     ("Error", str(e)[:50]),
                 ], emoji="⚠️")
@@ -1344,7 +1344,7 @@ class ConvertService:
                     strip.save(output, format="PNG", optimize=True)
                     preview_bytes = output.getvalue()
 
-                    log.tree("Video Preview Data Generated", [
+                    logger.tree("Video Preview Data Generated", [
                         ("Duration", f"{duration:.1f}s"),
                         ("Type", "Strip" if len(frames) >= 2 else "Thumbnail"),
                         ("Frames", str(len(frames))),
@@ -1371,7 +1371,7 @@ class ConvertService:
                 result = subprocess.run(cmd, capture_output=True, timeout=30)
                 if result.returncode == 0 and output_path.exists():
                     preview_bytes = output_path.read_bytes()
-                    log.tree("Video Preview Fallback", [
+                    logger.tree("Video Preview Fallback", [
                         ("Duration", f"{duration:.1f}s"),
                         ("Type", "Single Thumbnail"),
                     ], emoji="👁️")
@@ -1379,7 +1379,7 @@ class ConvertService:
             return duration, preview_bytes
 
         except Exception as e:
-            log.tree("Get Video Preview Data Failed", [
+            logger.tree("Get Video Preview Data Failed", [
                 ("Error", str(e)[:50]),
             ], emoji="❌")
             return None, None
@@ -1401,7 +1401,7 @@ class ConvertService:
                 try:
                     path.unlink(missing_ok=True)
                 except Exception as e:
-                    log.tree("Preview Data Cleanup Failed", [
+                    logger.tree("Preview Data Cleanup Failed", [
                         ("Path", str(path.name)),
                         ("Error", str(e)[:50]),
                     ], emoji="⚠️")
@@ -1431,7 +1431,7 @@ class ConvertService:
 
                 return await resp.read()
         except Exception as e:
-            log.tree("Fetch Media Failed", [
+            logger.tree("Fetch Media Failed", [
                 ("URL", url[:50]),
                 ("Error", str(e)),
             ], emoji="❌")

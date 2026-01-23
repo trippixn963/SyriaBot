@@ -11,7 +11,7 @@ Server: discord.gg/syria
 import time
 from typing import Optional, List, Dict, Any
 
-from src.core.logger import log
+from src.core.logger import logger
 
 
 class BirthdaysMixin:
@@ -45,7 +45,7 @@ class BirthdaysMixin:
         try:
             with self._get_conn() as conn:
                 if conn is None:
-                    log.tree("DB: Birthday Set Failed", [
+                    logger.tree("DB: Birthday Set Failed", [
                         ("ID", str(user_id)),
                         ("Reason", "No database connection"),
                     ], emoji="⚠️")
@@ -62,21 +62,21 @@ class BirthdaysMixin:
                 """, (user_id, guild_id, month, day, year, int(time.time())))
 
                 if cur.rowcount == 0:
-                    log.tree("DB: Birthday Set Failed", [
+                    logger.tree("DB: Birthday Set Failed", [
                         ("ID", str(user_id)),
                         ("Birthday", f"{month}/{day}/{year}"),
                         ("Reason", "No rows affected"),
                     ], emoji="⚠️")
                     return False
 
-                log.tree("DB: Birthday Set", [
+                logger.tree("DB: Birthday Set", [
                     ("ID", str(user_id)),
                     ("Birthday", f"{month}/{day}/{year}"),
                 ], emoji="🎂")
                 return True
 
         except Exception as e:
-            log.error_tree("DB: Set Birthday Error", e, [
+            logger.error_tree("DB: Set Birthday Error", e, [
                 ("ID", str(user_id)),
                 ("Birthday", f"{month}/{day}/{year}"),
             ])
@@ -96,7 +96,7 @@ class BirthdaysMixin:
         try:
             with self._get_conn() as conn:
                 if conn is None:
-                    log.tree("DB: Birthday Remove Failed", [
+                    logger.tree("DB: Birthday Remove Failed", [
                         ("ID", str(user_id)),
                         ("Reason", "No database connection"),
                     ], emoji="⚠️")
@@ -108,20 +108,20 @@ class BirthdaysMixin:
                 """, (user_id, guild_id))
 
                 if cur.rowcount > 0:
-                    log.tree("DB: Birthday Removed", [
+                    logger.tree("DB: Birthday Removed", [
                         ("ID", str(user_id)),
                         ("Rows", str(cur.rowcount)),
                     ], emoji="🗑️")
                     return True
 
-                log.tree("DB: Birthday Not Found", [
+                logger.tree("DB: Birthday Not Found", [
                     ("ID", str(user_id)),
                     ("Guild ID", str(guild_id)),
                 ], emoji="ℹ️")
                 return False
 
         except Exception as e:
-            log.error_tree("DB: Remove Birthday Error", e, [
+            logger.error_tree("DB: Remove Birthday Error", e, [
                 ("ID", str(user_id)),
                 ("Guild ID", str(guild_id)),
             ])
@@ -141,7 +141,7 @@ class BirthdaysMixin:
         try:
             with self._get_conn() as conn:
                 if conn is None:
-                    log.tree("DB: Get Birthday Failed", [
+                    logger.tree("DB: Get Birthday Failed", [
                         ("ID", str(user_id)),
                         ("Reason", "No database connection"),
                     ], emoji="⚠️")
@@ -157,7 +157,7 @@ class BirthdaysMixin:
                 return dict(row) if row else None
 
         except Exception as e:
-            log.error_tree("DB: Get Birthday Error", e, [
+            logger.error_tree("DB: Get Birthday Error", e, [
                 ("ID", str(user_id)),
                 ("Guild ID", str(guild_id)),
             ])
@@ -178,7 +178,7 @@ class BirthdaysMixin:
         try:
             with self._get_conn() as conn:
                 if conn is None:
-                    log.tree("DB: Get Today's Birthdays Failed", [
+                    logger.tree("DB: Get Today's Birthdays Failed", [
                         ("Guild ID", str(guild_id)),
                         ("Reason", "No database connection"),
                     ], emoji="⚠️")
@@ -192,7 +192,7 @@ class BirthdaysMixin:
                 user_ids = [row["user_id"] for row in cur.fetchall()]
 
                 if user_ids:
-                    log.tree("DB: Today's Birthdays Found", [
+                    logger.tree("DB: Today's Birthdays Found", [
                         ("Date", f"{month}/{day}"),
                         ("Count", str(len(user_ids))),
                     ], emoji="🎂")
@@ -200,7 +200,7 @@ class BirthdaysMixin:
                 return user_ids
 
         except Exception as e:
-            log.error_tree("DB: Get Today's Birthdays Error", e, [
+            logger.error_tree("DB: Get Today's Birthdays Error", e, [
                 ("Guild ID", str(guild_id)),
                 ("Date", f"{month}/{day}"),
             ])
@@ -228,7 +228,7 @@ class BirthdaysMixin:
         try:
             with self._get_conn() as conn:
                 if conn is None:
-                    log.tree("DB: Get Upcoming Birthdays Failed", [
+                    logger.tree("DB: Get Upcoming Birthdays Failed", [
                         ("Guild ID", str(guild_id)),
                         ("Reason", "No database connection"),
                     ], emoji="⚠️")
@@ -252,7 +252,7 @@ class BirthdaysMixin:
                 return [dict(row) for row in cur.fetchall()]
 
         except Exception as e:
-            log.error_tree("DB: Get Upcoming Birthdays Error", e, [
+            logger.error_tree("DB: Get Upcoming Birthdays Error", e, [
                 ("Guild ID", str(guild_id)),
                 ("Limit", str(limit)),
             ])
@@ -271,7 +271,7 @@ class BirthdaysMixin:
         try:
             with self._get_conn() as conn:
                 if conn is None:
-                    log.tree("DB: Get Birthday Count Failed", [
+                    logger.tree("DB: Get Birthday Count Failed", [
                         ("Guild ID", str(guild_id)),
                         ("Reason", "No database connection"),
                     ], emoji="⚠️")
@@ -285,7 +285,7 @@ class BirthdaysMixin:
                 return row["count"] if row else 0
 
         except Exception as e:
-            log.error_tree("DB: Get Birthday Count Error", e, [
+            logger.error_tree("DB: Get Birthday Count Error", e, [
                 ("Guild ID", str(guild_id)),
             ])
             return 0
@@ -314,7 +314,7 @@ class BirthdaysMixin:
         try:
             with self._get_conn() as conn:
                 if conn is None:
-                    log.tree("DB: Set Role Granted Failed", [
+                    logger.tree("DB: Set Role Granted Failed", [
                         ("ID", str(user_id)),
                         ("Reason", "No database connection"),
                     ], emoji="⚠️")
@@ -327,20 +327,20 @@ class BirthdaysMixin:
                 """, (granted_at, user_id, guild_id))
 
                 if cur.rowcount == 0:
-                    log.tree("DB: Set Role Granted Failed", [
+                    logger.tree("DB: Set Role Granted Failed", [
                         ("ID", str(user_id)),
                         ("Reason", "User not found in birthdays"),
                     ], emoji="⚠️")
                     return False
 
-                log.tree("DB: Role Granted Timestamp Set", [
+                logger.tree("DB: Role Granted Timestamp Set", [
                     ("ID", str(user_id)),
                     ("Granted At", str(granted_at)),
                 ], emoji="🎂")
                 return True
 
         except Exception as e:
-            log.error_tree("DB: Set Role Granted Error", e, [
+            logger.error_tree("DB: Set Role Granted Error", e, [
                 ("ID", str(user_id)),
                 ("Guild ID", str(guild_id)),
             ])
@@ -360,7 +360,7 @@ class BirthdaysMixin:
         try:
             with self._get_conn() as conn:
                 if conn is None:
-                    log.tree("DB: Clear Role Granted Failed", [
+                    logger.tree("DB: Clear Role Granted Failed", [
                         ("ID", str(user_id)),
                         ("Reason", "No database connection"),
                     ], emoji="⚠️")
@@ -373,19 +373,19 @@ class BirthdaysMixin:
                 """, (user_id, guild_id))
 
                 if cur.rowcount == 0:
-                    log.tree("DB: Clear Role Granted Skipped", [
+                    logger.tree("DB: Clear Role Granted Skipped", [
                         ("ID", str(user_id)),
                         ("Reason", "User not found"),
                     ], emoji="ℹ️")
                     return False
 
-                log.tree("DB: Role Granted Cleared", [
+                logger.tree("DB: Role Granted Cleared", [
                     ("ID", str(user_id)),
                 ], emoji="🗑️")
                 return True
 
         except Exception as e:
-            log.error_tree("DB: Clear Role Granted Error", e, [
+            logger.error_tree("DB: Clear Role Granted Error", e, [
                 ("ID", str(user_id)),
                 ("Guild ID", str(guild_id)),
             ])
@@ -414,7 +414,7 @@ class BirthdaysMixin:
                 return [row["user_id"] for row in cur.fetchall()]
 
         except Exception as e:
-            log.error_tree("DB: Get Active Birthday Roles Error", e, [
+            logger.error_tree("DB: Get Active Birthday Roles Error", e, [
                 ("Guild ID", str(guild_id)),
             ])
             return []
@@ -433,7 +433,7 @@ class BirthdaysMixin:
         try:
             with self._get_conn() as conn:
                 if conn is None:
-                    log.tree("DB: Get Expired Roles Failed", [
+                    logger.tree("DB: Get Expired Roles Failed", [
                         ("Guild ID", str(guild_id)),
                         ("Reason", "No database connection"),
                     ], emoji="⚠️")
@@ -447,7 +447,7 @@ class BirthdaysMixin:
                 user_ids = [row["user_id"] for row in cur.fetchall()]
 
                 if user_ids:
-                    log.tree("DB: Expired Birthday Roles Found", [
+                    logger.tree("DB: Expired Birthday Roles Found", [
                         ("Count", str(len(user_ids))),
                         ("Cutoff", str(cutoff_time)),
                     ], emoji="⏰")
@@ -455,7 +455,7 @@ class BirthdaysMixin:
                 return user_ids
 
         except Exception as e:
-            log.error_tree("DB: Get Expired Roles Error", e, [
+            logger.error_tree("DB: Get Expired Roles Error", e, [
                 ("Guild ID", str(guild_id)),
                 ("Cutoff", str(cutoff_time)),
             ])

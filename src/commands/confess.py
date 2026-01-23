@@ -14,7 +14,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from src.core.config import config
-from src.core.logger import log
+from src.core.logger import logger
 from src.core.colors import COLOR_SUCCESS, COLOR_ERROR, COLOR_WARNING
 from src.utils.footer import set_footer
 
@@ -62,7 +62,7 @@ class ConfessModal(discord.ui.Modal, title="Submit Confession"):
         """Handle confession submission."""
         content = self.confession_text.value.strip()
 
-        log.tree("Confession Modal Submitted", [
+        logger.tree("Confession Modal Submitted", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
             ("Raw Length", f"{len(content)} chars"),
@@ -74,7 +74,7 @@ class ConfessModal(discord.ui.Modal, title="Submit Confession"):
         stripped_count = original_length - len(content)
 
         if stripped_count > 0:
-            log.tree("Confession Content Cleaned", [
+            logger.tree("Confession Content Cleaned", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Before", f"{original_length} chars"),
@@ -84,7 +84,7 @@ class ConfessModal(discord.ui.Modal, title="Submit Confession"):
 
         # Validate after stripping
         if len(content) < 10:
-            log.tree("Confession Validation Failed", [
+            logger.tree("Confession Validation Failed", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Length", f"{len(content)} chars"),
@@ -108,7 +108,7 @@ class ConfessModal(discord.ui.Modal, title="Submit Confession"):
             )
             set_footer(embed)
 
-            log.tree("Confession Modal Success", [
+            logger.tree("Confession Modal Success", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Length", f"{len(content)} chars"),
@@ -120,7 +120,7 @@ class ConfessModal(discord.ui.Modal, title="Submit Confession"):
             )
             set_footer(embed)
 
-            log.tree("Confession Modal Failed", [
+            logger.tree("Confession Modal Failed", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Reason", "Service returned False"),
@@ -130,7 +130,7 @@ class ConfessModal(discord.ui.Modal, title="Submit Confession"):
 
     async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
         """Handle modal errors."""
-        log.error_tree("Confession Modal Error", error, [
+        logger.error_tree("Confession Modal Error", error, [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
         ])
@@ -169,7 +169,7 @@ class ReplyModal(discord.ui.Modal, title="Anonymous Reply"):
         """Handle reply submission."""
         content = self.reply_text.value.strip()
 
-        log.tree("Reply Modal Submitted", [
+        logger.tree("Reply Modal Submitted", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
             ("Confession", f"#{self.confession_number}"),
@@ -182,7 +182,7 @@ class ReplyModal(discord.ui.Modal, title="Anonymous Reply"):
         stripped_count = original_length - len(content)
 
         if stripped_count > 0:
-            log.tree("Reply Content Cleaned", [
+            logger.tree("Reply Content Cleaned", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Before", f"{original_length} chars"),
@@ -191,7 +191,7 @@ class ReplyModal(discord.ui.Modal, title="Anonymous Reply"):
 
         # Validate after stripping
         if len(content) < 5:
-            log.tree("Reply Validation Failed", [
+            logger.tree("Reply Validation Failed", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Length", f"{len(content)} chars"),
@@ -220,7 +220,7 @@ class ReplyModal(discord.ui.Modal, title="Anonymous Reply"):
             )
             set_footer(embed)
 
-            log.tree("Reply Modal Success", [
+            logger.tree("Reply Modal Success", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Confession", f"#{self.confession_number}"),
@@ -233,7 +233,7 @@ class ReplyModal(discord.ui.Modal, title="Anonymous Reply"):
             )
             set_footer(embed)
 
-            log.tree("Reply Modal Failed", [
+            logger.tree("Reply Modal Failed", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Confession", f"#{self.confession_number}"),
@@ -244,7 +244,7 @@ class ReplyModal(discord.ui.Modal, title="Anonymous Reply"):
 
     async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
         """Handle modal errors."""
-        log.error_tree("Reply Modal Error", error, [
+        logger.error_tree("Reply Modal Error", error, [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
             ("Confession", f"#{self.confession_number}"),
@@ -271,14 +271,14 @@ class ConfessCog(commands.Cog):
     @app_commands.command(name="confess", description="Submit an anonymous confession")
     async def confess(self, interaction: discord.Interaction) -> None:
         """Open the confession submission modal."""
-        log.tree("Confess Command", [
+        logger.tree("Confess Command", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
             ("Channel", interaction.channel.name if hasattr(interaction.channel, 'name') else "Unknown"),
         ], emoji="📝")
 
         if not hasattr(self.bot, 'confession_service') or not self.bot.confession_service:
-            log.tree("Confess Command Failed", [
+            logger.tree("Confess Command Failed", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Reason", "Service not available"),
@@ -300,7 +300,7 @@ class ConfessCog(commands.Cog):
             seconds = remaining % 60
             time_str = f"{minutes}m {seconds}s" if minutes > 0 else f"{seconds}s"
 
-            log.tree("Confess Rate Limited", [
+            logger.tree("Confess Rate Limited", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Remaining", time_str),
@@ -314,7 +314,7 @@ class ConfessCog(commands.Cog):
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
-        log.tree("Confess Modal Opening", [
+        logger.tree("Confess Modal Opening", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
         ], emoji="📋")
@@ -325,14 +325,14 @@ class ConfessCog(commands.Cog):
     @app_commands.command(name="reply", description="Reply anonymously to a confession")
     async def reply(self, interaction: discord.Interaction) -> None:
         """Open the anonymous reply modal - must be used in a confession thread."""
-        log.tree("Reply Command", [
+        logger.tree("Reply Command", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
             ("Channel", interaction.channel.name if hasattr(interaction.channel, 'name') else "Unknown"),
         ], emoji="💬")
 
         if not hasattr(self.bot, 'confession_service') or not self.bot.confession_service:
-            log.tree("Reply Command Failed", [
+            logger.tree("Reply Command Failed", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Reason", "Service not available"),
@@ -349,7 +349,7 @@ class ConfessCog(commands.Cog):
 
         # Check if in a confession thread
         if not isinstance(interaction.channel, discord.Thread):
-            log.tree("Reply Wrong Channel", [
+            logger.tree("Reply Wrong Channel", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Channel Type", type(interaction.channel).__name__),
@@ -365,7 +365,7 @@ class ConfessCog(commands.Cog):
 
         thread = interaction.channel
         if not thread.name.startswith("Confession #"):
-            log.tree("Reply Wrong Thread", [
+            logger.tree("Reply Wrong Thread", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Thread", thread.name),
@@ -383,7 +383,7 @@ class ConfessCog(commands.Cog):
         try:
             confession_number = int(thread.name.replace("Confession #", ""))
         except ValueError:
-            log.tree("Reply Parse Failed", [
+            logger.tree("Reply Parse Failed", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Thread", thread.name),
@@ -397,7 +397,7 @@ class ConfessCog(commands.Cog):
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
-        log.tree("Reply Modal Opening", [
+        logger.tree("Reply Modal Opening", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
             ("Confession", f"#{confession_number}"),
@@ -410,6 +410,6 @@ class ConfessCog(commands.Cog):
 async def setup(bot: commands.Bot) -> None:
     """Register the confess cog."""
     await bot.add_cog(ConfessCog(bot))
-    log.tree("Command Loaded", [
+    logger.tree("Command Loaded", [
         ("Commands", "/confess, /reply"),
     ], emoji="✅")

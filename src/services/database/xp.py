@@ -13,7 +13,7 @@ import time
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 
-from src.core.logger import log
+from src.core.logger import logger
 
 
 class XPMixin:
@@ -59,7 +59,7 @@ class XPMixin:
             """, (user_id, guild_id, now))
 
             if cur.rowcount == 0:
-                log.tree("XP User Create Failed", [
+                logger.tree("XP User Create Failed", [
                     ("ID", str(user_id)),
                     ("Guild ID", str(guild_id)),
                 ], emoji="⚠️")
@@ -155,7 +155,7 @@ class XPMixin:
                     UPDATE user_xp SET level = ? WHERE user_id = ? AND guild_id = ?
                 """, (level, user_id, guild_id))
         except Exception as e:
-            log.tree("DB: Set Level Error", [
+            logger.tree("DB: Set Level Error", [
                 ("ID", str(user_id)),
                 ("Level", str(level)),
                 ("Error", str(e)[:50]),
@@ -177,13 +177,13 @@ class XPMixin:
                     UPDATE user_xp SET xp = ?, level = ? WHERE user_id = ? AND guild_id = ?
                 """, (xp, level, user_id, guild_id))
 
-            log.tree("DB: XP Set", [
+            logger.tree("DB: XP Set", [
                 ("ID", str(user_id)),
                 ("XP", str(xp)),
                 ("Level", str(level)),
             ], emoji="✏️")
         except Exception as e:
-            log.error_tree("DB: Set XP Error", e, [
+            logger.error_tree("DB: Set XP Error", e, [
                 ("ID", str(user_id)),
                 ("XP", str(xp)),
             ])
@@ -292,12 +292,12 @@ class XPMixin:
                     WHERE user_id = ? AND guild_id = ?
                 """, (user_id, guild_id))
                 conn.commit()
-            log.tree("DB: User Active", [
+            logger.tree("DB: User Active", [
                 ("ID", str(user_id)),
                 ("Status", "Active"),
             ], emoji="✅")
         except Exception as e:
-            log.tree("DB: Set Active Error", [
+            logger.tree("DB: Set Active Error", [
                 ("ID", str(user_id)),
                 ("Error", str(e)[:50]),
             ], emoji="❌")
@@ -312,12 +312,12 @@ class XPMixin:
                     WHERE user_id = ? AND guild_id = ?
                 """, (user_id, guild_id))
                 conn.commit()
-            log.tree("DB: User Inactive", [
+            logger.tree("DB: User Inactive", [
                 ("ID", str(user_id)),
                 ("Status", "Inactive"),
             ], emoji="👋")
         except Exception as e:
-            log.tree("DB: Set Inactive Error", [
+            logger.tree("DB: Set Inactive Error", [
                 ("ID", str(user_id)),
                 ("Error", str(e)[:50]),
             ], emoji="❌")

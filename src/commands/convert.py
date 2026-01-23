@@ -19,7 +19,7 @@ from discord.ext import commands
 
 from src.core.config import config
 from src.core.colors import COLOR_ERROR, COLOR_WARNING
-from src.core.logger import log
+from src.core.logger import logger
 from src.services.convert import convert_service
 from src.services.rate_limiter import check_rate_limit
 from src.services.convert.views import start_convert_editor
@@ -116,7 +116,7 @@ class ConvertCog(commands.Cog):
             embed = discord.Embed(description="⚠️ Please provide an image/video attachment or URL", color=COLOR_WARNING)
             set_footer(embed)
             await interaction.followup.send(embed=embed, ephemeral=True)
-            log.tree("Convert Rejected", [
+            logger.tree("Convert Rejected", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Reason", "No attachment or URL provided"),
@@ -144,7 +144,7 @@ class ConvertCog(commands.Cog):
                     embed = discord.Embed(description="⚠️ Attachment must be an image (PNG, JPG, GIF, WebP) or video (MP4, MOV, WebM)", color=COLOR_WARNING)
                     set_footer(embed)
                     await interaction.followup.send(embed=embed, ephemeral=True)
-                    log.tree("Convert Rejected", [
+                    logger.tree("Convert Rejected", [
                         ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                         ("ID", str(interaction.user.id)),
                         ("File", media.filename),
@@ -158,7 +158,7 @@ class ConvertCog(commands.Cog):
                 embed = discord.Embed(description=f"⚠️ File too large. Maximum size is {25 if is_video else 8}MB", color=COLOR_WARNING)
                 set_footer(embed)
                 await interaction.followup.send(embed=embed, ephemeral=True)
-                log.tree("Convert Rejected", [
+                logger.tree("Convert Rejected", [
                     ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                     ("ID", str(interaction.user.id)),
                     ("File", media.filename),
@@ -171,7 +171,7 @@ class ConvertCog(commands.Cog):
                 media_data = await media.read()
                 source_name = media.filename
             except Exception as e:
-                log.tree("Convert Attachment Read Failed", [
+                logger.tree("Convert Attachment Read Failed", [
                     ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                     ("ID", str(interaction.user.id)),
                     ("File", media.filename),
@@ -202,7 +202,7 @@ class ConvertCog(commands.Cog):
                 )
                 set_footer(embed)
                 await interaction.followup.send(embed=embed, ephemeral=True)
-                log.tree("Convert Rejected", [
+                logger.tree("Convert Rejected", [
                     ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                     ("ID", str(interaction.user.id)),
                     ("URL", url[:50]),
@@ -218,7 +218,7 @@ class ConvertCog(commands.Cog):
                 embed = discord.Embed(description="❌ Failed to fetch media from URL. Make sure it's valid and accessible", color=COLOR_ERROR)
                 set_footer(embed)
                 await interaction.followup.send(embed=embed, ephemeral=True)
-                log.tree("Convert Fetch Failed", [
+                logger.tree("Convert Fetch Failed", [
                     ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                     ("ID", str(interaction.user.id)),
                     ("URL", url[:50]),
@@ -236,7 +236,7 @@ class ConvertCog(commands.Cog):
             else:
                 source_name = url.split("/")[-1].split("?")[0]
 
-        log.tree("Convert Command", [
+        logger.tree("Convert Command", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
             ("Source", source_name[:50]),
@@ -264,17 +264,17 @@ class ConvertCog(commands.Cog):
             try:
                 await interaction.response.send_message(embed=embed, ephemeral=True)
             except discord.HTTPException as e:
-                log.tree("Convert Cooldown Response Failed", [
+                logger.tree("Convert Cooldown Response Failed", [
                     ("User", f"{interaction.user.name}"),
                     ("Error", str(e)[:50]),
                 ], emoji="⚠️")
-            log.tree("Convert Cooldown", [
+            logger.tree("Convert Cooldown", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Retry After", f"{error.retry_after:.1f}s"),
             ], emoji="⏳")
         else:
-            log.tree("Convert Command Error", [
+            logger.tree("Convert Command Error", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Error", f"{type(error).__name__}: {str(error)[:50]}"),
@@ -285,7 +285,7 @@ class ConvertCog(commands.Cog):
                     set_footer(embed)
                     await interaction.response.send_message(embed=embed, ephemeral=True)
             except discord.HTTPException as e:
-                log.tree("Convert Error Response Failed", [
+                logger.tree("Convert Error Response Failed", [
                     ("User", f"{interaction.user.name}"),
                     ("Error", str(e)[:50]),
                 ], emoji="⚠️")
@@ -298,4 +298,4 @@ class ConvertCog(commands.Cog):
 async def setup(bot: commands.Bot) -> None:
     """Load the Convert cog."""
     await bot.add_cog(ConvertCog(bot))
-    log.tree("Command Loaded", [("Name", "convert")], emoji="✅")
+    logger.tree("Command Loaded", [("Name", "convert")], emoji="✅")

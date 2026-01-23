@@ -17,7 +17,7 @@ from discord.ext import commands
 from typing import Optional, Tuple
 
 from src.core.config import config
-from src.core.logger import log
+from src.core.logger import logger
 from src.core.colors import COLOR_SYRIA_GREEN, COLOR_SYRIA_GOLD, EMOJI_SAVE, EMOJI_DELETE
 from src.services.image.service import ImageResult
 from src.utils.footer import set_footer
@@ -27,7 +27,7 @@ from src.utils.http import http_session
 async def upload_to_storage(bot: commands.Bot, file_bytes: bytes, filename: str) -> Optional[str]:
     """Upload file to asset storage channel for permanent URL."""
     if not config.ASSET_STORAGE_CHANNEL_ID:
-        log.tree("Image Asset Storage Skipped", [
+        logger.tree("Image Asset Storage Skipped", [
             ("Reason", "SYRIA_ASSET_CH not configured"),
             ("Filename", filename),
         ], emoji="ℹ️")
@@ -36,7 +36,7 @@ async def upload_to_storage(bot: commands.Bot, file_bytes: bytes, filename: str)
     try:
         channel = bot.get_channel(config.ASSET_STORAGE_CHANNEL_ID)
         if not channel:
-            log.tree("Image Asset Storage Channel Not Found", [
+            logger.tree("Image Asset Storage Channel Not Found", [
                 ("Channel ID", str(config.ASSET_STORAGE_CHANNEL_ID)),
                 ("Filename", filename),
             ], emoji="⚠️")
@@ -47,7 +47,7 @@ async def upload_to_storage(bot: commands.Bot, file_bytes: bytes, filename: str)
 
         if msg.attachments:
             url = msg.attachments[0].url
-            log.tree("Image Asset Stored", [
+            logger.tree("Image Asset Stored", [
                 ("Filename", filename),
                 ("Size", f"{len(file_bytes) / 1024:.1f} KB"),
                 ("Message ID", str(msg.id)),
@@ -55,7 +55,7 @@ async def upload_to_storage(bot: commands.Bot, file_bytes: bytes, filename: str)
             ], emoji="💾")
             return url
         else:
-            log.tree("Image Asset Storage No Attachment", [
+            logger.tree("Image Asset Storage No Attachment", [
                 ("Filename", filename),
                 ("Message ID", str(msg.id)),
                 ("Reason", "Message sent but no attachment returned"),
@@ -63,7 +63,7 @@ async def upload_to_storage(bot: commands.Bot, file_bytes: bytes, filename: str)
             return None
 
     except Exception as e:
-        log.error_tree("Image Asset Storage Failed", e, [
+        logger.error_tree("Image Asset Storage Failed", e, [
             ("Filename", filename),
             ("Size", f"{len(file_bytes) / 1024:.1f} KB"),
             ("Channel ID", str(config.ASSET_STORAGE_CHANNEL_ID)),
@@ -101,7 +101,7 @@ class ImageView(ui.View):
         # Update button states
         self._update_buttons()
 
-        log.tree("Image View Created", [
+        logger.tree("Image View Created", [
             ("Query", query[:50]),
             ("Images", str(len(images))),
             ("Requester ID", str(requester_id)),
@@ -150,7 +150,7 @@ class ImageView(ui.View):
             timeout = aiohttp.ClientTimeout(total=10)
             async with http_session.session.get(url, headers=headers, timeout=timeout) as response:
                 if response.status != 200:
-                    log.tree("Image Fetch HTTP Error", [
+                    logger.tree("Image Fetch HTTP Error", [
                         ("URL", url[:60] + "..." if len(url) > 60 else url),
                         ("Status", str(response.status)),
                     ], emoji="⚠️")
@@ -160,7 +160,7 @@ class ImageView(ui.View):
 
                 # Verify it's actually an image
                 if content_type and not content_type.startswith("image/"):
-                    log.tree("Image Fetch Invalid Content-Type", [
+                    logger.tree("Image Fetch Invalid Content-Type", [
                         ("URL", url[:60] + "..." if len(url) > 60 else url),
                         ("Content-Type", content_type),
                     ], emoji="⚠️")
@@ -170,7 +170,7 @@ class ImageView(ui.View):
 
                 # Check minimum size (avoid placeholder images)
                 if len(image_bytes) < 1000:
-                    log.tree("Image Fetch Too Small", [
+                    logger.tree("Image Fetch Too Small", [
                         ("URL", url[:60] + "..." if len(url) > 60 else url),
                         ("Size", f"{len(image_bytes)} bytes"),
                         ("Min Required", "1000 bytes"),
@@ -180,19 +180,19 @@ class ImageView(ui.View):
                 return image_bytes, content_type
 
         except aiohttp.ClientError as e:
-            log.tree("Image Fetch Client Error", [
+            logger.tree("Image Fetch Client Error", [
                 ("URL", url[:60] + "..." if len(url) > 60 else url),
                 ("Error", str(e)[:50]),
             ], emoji="⚠️")
             return None, ""
         except TimeoutError:
-            log.tree("Image Fetch Timeout", [
+            logger.tree("Image Fetch Timeout", [
                 ("URL", url[:60] + "..." if len(url) > 60 else url),
                 ("Timeout", "10s"),
             ], emoji="⏳")
             return None, ""
         except Exception as e:
-            log.error_tree("Image Fetch Unexpected Error", e, [
+            logger.error_tree("Image Fetch Unexpected Error", e, [
                 ("URL", url[:60] + "..." if len(url) > 60 else url),
             ])
             return None, ""
@@ -209,7 +209,7 @@ class ImageView(ui.View):
         # Return cached image if same index
         if self._cached_index == self.current_index and self._cached_image:
             ext = self._get_file_extension(self.images[self.current_index].url)
-            log.tree("Image From Cache", [
+            logger.tree("Image From Cache", [
                 ("Size", f"{len(self._cached_image) // 1024}KB"),
                 ("Index", str(self.current_index)),
             ], emoji="💾")
@@ -225,7 +225,7 @@ class ImageView(ui.View):
             self._cached_image = image_bytes
             self._cached_index = self.current_index
 
-            log.tree("Image Fetched", [
+            logger.tree("Image Fetched", [
                 ("Size", f"{len(image_bytes) // 1024}KB"),
                 ("Type", ext),
                 ("Source", "Main URL"),
@@ -234,7 +234,7 @@ class ImageView(ui.View):
 
         # Fallback to Google's thumbnail (always works)
         if image.thumbnail_url:
-            log.tree("Image Main URL Failed, Trying Thumbnail", [
+            logger.tree("Image Main URL Failed, Trying Thumbnail", [
                 ("Main URL", image.url[:50]),
                 ("Thumbnail", image.thumbnail_url[:50]),
             ], emoji="🔄")
@@ -246,14 +246,14 @@ class ImageView(ui.View):
                 self._cached_image = image_bytes
                 self._cached_index = self.current_index
 
-                log.tree("Image Fetched From Thumbnail", [
+                logger.tree("Image Fetched From Thumbnail", [
                     ("Size", f"{len(image_bytes) // 1024}KB"),
                     ("Type", ext),
                     ("Source", "Google Thumbnail"),
                 ], emoji="📥")
                 return image_bytes, ext
 
-        log.tree("Image Fetch Failed", [
+        logger.tree("Image Fetch Failed", [
             ("URL", image.url[:60]),
             ("Thumbnail", "Also failed" if image.thumbnail_url else "None"),
         ], emoji="❌")
@@ -327,7 +327,7 @@ class ImageView(ui.View):
                 filename=f"image.{ext}"
             )
             embed = self.create_embed(use_attachment=True, extension=ext)
-            log.tree("Embed Created With Attachment", [
+            logger.tree("Embed Created With Attachment", [
                 ("Position", f"{self.current_index + 1}/{len(self.images)}"),
                 ("Size", f"{len(image_bytes) // 1024}KB"),
                 ("Type", ext.upper()),
@@ -347,7 +347,7 @@ class ImageView(ui.View):
 
             tried_indices.add(self.current_index)
 
-            log.tree("Image Failed, Trying Next", [
+            logger.tree("Image Failed, Trying Next", [
                 ("Failed Index", str(original_index + 1)),
                 ("Trying Index", str(self.current_index + 1)),
                 ("Total Images", str(len(self.images))),
@@ -367,7 +367,7 @@ class ImageView(ui.View):
                 embed = self.create_embed(use_attachment=True, extension=ext)
                 self._update_buttons()
 
-                log.tree("Embed Created After Skip", [
+                logger.tree("Embed Created After Skip", [
                     ("Original Index", str(original_index + 1)),
                     ("Working Index", str(self.current_index + 1)),
                     ("Skipped", str(len(tried_indices) - 1)),
@@ -376,7 +376,7 @@ class ImageView(ui.View):
                 return embed, file
 
         # ALL images failed
-        log.tree("All Images Failed", [
+        logger.tree("All Images Failed", [
             ("Total Tried", str(len(tried_indices))),
             ("Query", self.query[:30]),
         ], emoji="❌")
@@ -398,7 +398,7 @@ class ImageView(ui.View):
                 "Only the person who searched can use these buttons.",
                 ephemeral=True
             )
-            log.tree("Image View Unauthorized", [
+            logger.tree("Image View Unauthorized", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Requester ID", str(self.requester_id)),
@@ -415,23 +415,23 @@ class ImageView(ui.View):
         if self.message:
             try:
                 await self.message.edit(view=self)
-                log.tree("Image View Timeout", [
+                logger.tree("Image View Timeout", [
                     ("Query", self.query[:50]),
                     ("Position", f"{self.current_index + 1}/{len(self.images)}"),
                     ("Buttons", "Disabled"),
                 ], emoji="⏳")
             except discord.NotFound:
-                log.tree("Image View Timeout", [
+                logger.tree("Image View Timeout", [
                     ("Query", self.query[:50]),
                     ("Reason", "Message already deleted"),
                 ], emoji="⏳")
             except discord.HTTPException as e:
-                log.tree("Image View Timeout Failed", [
+                logger.tree("Image View Timeout Failed", [
                     ("Query", self.query[:50]),
                     ("Error", str(e)[:50]),
                 ], emoji="⚠️")
         else:
-            log.tree("Image View Timeout", [
+            logger.tree("Image View Timeout", [
                 ("Query", self.query[:50]),
                 ("Reason", "No message reference"),
             ], emoji="⏳")
@@ -446,7 +446,7 @@ class ImageView(ui.View):
         try:
             if file:
                 await interaction.message.edit(embed=embed, attachments=[file], view=self)
-                log.tree("Image Navigation", [
+                logger.tree("Image Navigation", [
                     ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                     ("ID", str(interaction.user.id)),
                     ("Action", nav_action),
@@ -455,12 +455,12 @@ class ImageView(ui.View):
             else:
                 # All images failed - show error
                 await interaction.message.edit(embed=embed, attachments=[], view=self)
-                log.tree("Image Navigation All Failed", [
+                logger.tree("Image Navigation All Failed", [
                     ("User", f"{interaction.user.name}"),
                     ("Action", nav_action),
                 ], emoji="❌")
         except discord.HTTPException as e:
-            log.tree("Image Navigation Failed", [
+            logger.tree("Image Navigation Failed", [
                 ("User", f"{interaction.user.name}"),
                 ("Action", nav_action),
                 ("Error", str(e)[:50]),
@@ -469,7 +469,7 @@ class ImageView(ui.View):
     @ui.button(label="Previous", style=discord.ButtonStyle.secondary, custom_id="prev")
     async def prev_button(self, interaction: discord.Interaction, button: ui.Button) -> None:
         """Go to previous image."""
-        log.tree("Image Nav Previous", [
+        logger.tree("Image Nav Previous", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
             ("From", str(self.current_index + 1)),
@@ -484,7 +484,7 @@ class ImageView(ui.View):
         """Save image using cached data, send as public .gif, delete original."""
         await interaction.response.defer()
 
-        log.tree("Image Save Started", [
+        logger.tree("Image Save Started", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
             ("Query", self.query[:30]),
@@ -496,7 +496,7 @@ class ImageView(ui.View):
 
         if not image_bytes:
             await interaction.followup.send("Failed to download image.", ephemeral=True)
-            log.tree("Image Save Failed", [
+            logger.tree("Image Save Failed", [
                 ("User", f"{interaction.user.name}"),
                 ("ID", str(interaction.user.id)),
                 ("Reason", "Fetch failed"),
@@ -526,11 +526,11 @@ class ImageView(ui.View):
                 try:
                     await self.message.delete()
                 except discord.NotFound:
-                    log.tree("Image Original Delete", [
+                    logger.tree("Image Original Delete", [
                         ("Reason", "Message already deleted"),
                     ], emoji="ℹ️")
 
-            log.tree("Image Saved", [
+            logger.tree("Image Saved", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Size", f"{len(image_bytes) // 1024}KB"),
@@ -539,7 +539,7 @@ class ImageView(ui.View):
             ], emoji="✅")
 
         except Exception as e:
-            log.tree("Image Save Failed", [
+            logger.tree("Image Save Failed", [
                 ("User", f"{interaction.user.name}"),
                 ("ID", str(interaction.user.id)),
                 ("Error", str(e)[:50]),
@@ -552,20 +552,20 @@ class ImageView(ui.View):
         await interaction.response.defer()
         try:
             await interaction.message.delete()
-            log.tree("Image View Deleted", [
+            logger.tree("Image View Deleted", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Query", self.query[:30]),
                 ("Position", f"{self.current_index + 1}/{len(self.images)}"),
             ], emoji="🗑️")
         except discord.NotFound:
-            log.tree("Image Delete Skipped", [
+            logger.tree("Image Delete Skipped", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Reason", "Message already deleted"),
             ], emoji="⚠️")
         except discord.HTTPException as e:
-            log.tree("Image Delete Failed", [
+            logger.tree("Image Delete Failed", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Error", str(e)[:50]),
@@ -574,7 +574,7 @@ class ImageView(ui.View):
     @ui.button(label="Next", style=discord.ButtonStyle.secondary, custom_id="next")
     async def next_button(self, interaction: discord.Interaction, button: ui.Button) -> None:
         """Go to next image."""
-        log.tree("Image Nav Next", [
+        logger.tree("Image Nav Next", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
             ("From", str(self.current_index + 1)),

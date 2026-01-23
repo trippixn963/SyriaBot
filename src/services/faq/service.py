@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Optional
 from collections import defaultdict
 
-from src.core.logger import log
+from src.core.logger import logger
 
 
 # =============================================================================
@@ -490,7 +490,7 @@ class FAQAnalytics:
                     self._stats["ticket_clicks"] = data.get("ticket_clicks", 0)
                     self._stats["language_switches"] = defaultdict(int, data.get("language_switches", {}))
         except Exception as e:
-            log.tree("FAQ Analytics Load Failed", [
+            logger.tree("FAQ Analytics Load Failed", [
                 ("Error", str(e)[:50]),
             ], emoji="⚠️")
 
@@ -507,7 +507,7 @@ class FAQAnalytics:
                     "language_switches": dict(self._stats["language_switches"]),
                 }, f, indent=2)
         except Exception as e:
-            log.tree("FAQ Analytics Save Failed", [
+            logger.tree("FAQ Analytics Save Failed", [
                 ("Error", str(e)[:50]),
             ], emoji="⚠️")
 

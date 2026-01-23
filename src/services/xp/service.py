@@ -20,7 +20,7 @@ from discord.ext import tasks
 from src.core.config import config
 from src.core.colors import COLOR_GOLD
 from src.core.constants import XP_COOLDOWN_CACHE_THRESHOLD, XP_COOLDOWN_CACHE_MAX_SIZE
-from src.core.logger import log
+from src.core.logger import logger
 from src.services.database import db
 from src.services.birthday_service import has_birthday_bonus, BIRTHDAY_XP_MULTIPLIER
 from src.utils.footer import set_footer
@@ -99,7 +99,7 @@ class XPService:
         # Start midnight sync task
         self.midnight_role_sync.start()
 
-        log.tree("XP Service Started", [
+        logger.tree("XP Service Started", [
             ("Message XP", f"{config.XP_MESSAGE_MIN}-{config.XP_MESSAGE_MAX}"),
             ("Voice XP", f"{config.XP_VOICE_PER_MIN}/min"),
             ("Cooldown", f"{config.XP_MESSAGE_COOLDOWN}s"),
@@ -143,7 +143,7 @@ class XPService:
         self._dau_cache.clear()
         self._voice_sessions.clear()
 
-        log.tree("XP Service Stopped", [
+        logger.tree("XP Service Stopped", [
             ("Status", "All caches cleared"),
         ], emoji="🛑")
 
@@ -213,7 +213,7 @@ class XPService:
                 }
                 # Atomic swap to keep both caches in sync
                 self._message_cooldowns, self._last_messages = new_cooldowns, new_messages
-                log.tree("XP Cache Cleanup", [
+                logger.tree("XP Cache Cleanup", [
                     ("Before", str(old_count)),
                     ("After", str(len(self._message_cooldowns))),
                     ("Removed", str(old_count - len(self._message_cooldowns))),
@@ -234,7 +234,7 @@ class XPService:
                 }
                 # Atomic swap to keep both caches in sync
                 self._message_cooldowns, self._last_messages = new_cooldowns, new_messages
-                log.tree("XP Cache Hard Limit Enforced", [
+                logger.tree("XP Cache Hard Limit Enforced", [
                     ("Max Size", str(XP_COOLDOWN_CACHE_MAX_SIZE)),
                 ], emoji="⚠️")
 
@@ -287,12 +287,12 @@ class XPService:
                     if len(self._dau_cache) > 1000:
                         old_size = len(self._dau_cache)
                         self._dau_cache = {k for k in self._dau_cache if k[2] == today_date}
-                        log.tree("DAU Cache Cleanup", [
+                        logger.tree("DAU Cache Cleanup", [
                             ("Before", str(old_size)),
                             ("After", str(len(self._dau_cache))),
                         ], emoji="🧹")
         except Exception as e:
-            log.tree("Metrics Track Failed", [
+            logger.tree("Metrics Track Failed", [
                 ("User", f"{member.name} ({member.display_name})"),
                 ("ID", str(member.id)),
                 ("Error", str(e)[:50]),
@@ -335,7 +335,7 @@ class XPService:
             # If user joined already muted, start mute tracking
             if after.self_mute or after.mute:
                 self._mute_timestamps[user_id] = time.time()
-                log.tree("Voice Mute Tracking Started", [
+                logger.tree("Voice Mute Tracking Started", [
                     ("User", f"{member.name} ({member.display_name})"),
                     ("ID", str(member.id)),
                     ("Channel", after.channel.name),
@@ -346,7 +346,7 @@ class XPService:
             # Track total voice sessions
             db.increment_voice_sessions(user_id, guild_id)
 
-            log.tree("Voice XP Session Started", [
+            logger.tree("Voice XP Session Started", [
                 ("User", f"{member.name} ({member.display_name})"),
                 ("ID", str(member.id)),
                 ("Channel", after.channel.name),
@@ -376,7 +376,7 @@ class XPService:
                 estimated_xp = base_xp
                 xp_display = f"~{estimated_xp}"
 
-            log.tree("Voice XP Session Ended", [
+            logger.tree("Voice XP Session Ended", [
                 ("User", f"{member.name} ({member.display_name})"),
                 ("ID", str(member.id)),
                 ("Channel", before.channel.name if before.channel else "Unknown"),
@@ -392,7 +392,7 @@ class XPService:
             if is_muted and not was_muted:
                 # User just became muted - start tracking
                 self._mute_timestamps[user_id] = time.time()
-                log.tree("Voice Mute Tracking Started", [
+                logger.tree("Voice Mute Tracking Started", [
                     ("User", f"{member.name} ({member.display_name})"),
                     ("ID", str(member.id)),
                     ("Channel", after.channel.name),
@@ -404,7 +404,7 @@ class XPService:
                 if user_id in self._mute_timestamps:
                     mute_duration = int((time.time() - self._mute_timestamps[user_id]) / 60)
                 self._mute_timestamps.pop(user_id, None)
-                log.tree("Voice Mute Tracking Cleared", [
+                logger.tree("Voice Mute Tracking Cleared", [
                     ("User", f"{member.name} ({member.display_name})"),
                     ("ID", str(member.id)),
                     ("Channel", after.channel.name),
@@ -417,10 +417,10 @@ class XPService:
             try:
                 await coro_func()
             except asyncio.CancelledError:
-                log.tree(f"{name} Cancelled", [], emoji="⏹️")
+                logger.tree(f"{name} Cancelled", [], emoji="⏹️")
                 break
             except Exception as e:
-                log.error_tree(f"{name} Crashed - Restarting", e)
+                logger.error_tree(f"{name} Crashed - Restarting", e)
                 await asyncio.sleep(5)  # Brief pause before restart
 
     async def _voice_xp_loop(self) -> None:
@@ -483,7 +483,7 @@ class XPService:
                             if mute_start:
                                 mute_duration = now - mute_start
                                 if mute_duration > 3600:  # 1 hour
-                                    log.tree("Voice XP Blocked (AFK Mute)", [
+                                    logger.tree("Voice XP Blocked (AFK Mute)", [
                                         ("User", f"{member.name} ({member.display_name})"),
                                         ("ID", str(member.id)),
                                         ("Channel", channel.name),
@@ -498,7 +498,7 @@ class XPService:
                     if stale_users:
                         for user_id, user_name in stale_users:
                             sessions.pop(user_id, None)
-                        log.tree("Stale Voice Sessions Cleaned", [
+                        logger.tree("Stale Voice Sessions Cleaned", [
                             ("Count", str(len(stale_users))),
                             ("Users", ", ".join(name for _, name in stale_users[:5]) + ("..." if len(stale_users) > 5 else "")),
                             ("Guild", guild.name),
@@ -519,7 +519,7 @@ class XPService:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                log.error_tree("Voice XP Loop Error", e)
+                logger.error_tree("Voice XP Loop Error", e)
                 await asyncio.sleep(60)  # Wait before retrying
 
     async def _cache_cleanup_loop(self) -> None:
@@ -573,7 +573,7 @@ class XPService:
 
                 # Only log if we cleaned something
                 if any(v > 0 for v in cleaned.values()):
-                    log.tree("XP Cache Cleanup (Hourly)", [
+                    logger.tree("XP Cache Cleanup (Hourly)", [
                         ("Mute Timestamps", str(cleaned["mute"])),
                         ("Cooldowns", str(cleaned["cooldowns"])),
                         ("Last Messages", str(cleaned["messages"])),
@@ -584,7 +584,7 @@ class XPService:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                log.error_tree("Cache Cleanup Loop Error", e)
+                logger.error_tree("Cache Cleanup Loop Error", e)
                 await asyncio.sleep(3600)
 
     # =========================================================================
@@ -629,7 +629,7 @@ class XPService:
                 # Update level in database
                 db.set_user_level(member.id, member.guild.id, new_level)
 
-                log.tree("Level Up!", [
+                logger.tree("Level Up!", [
                     ("User", f"{member.name} ({member.display_name})"),
                     ("ID", str(member.id)),
                     ("Level", f"{old_level} -> {new_level}"),
@@ -652,7 +652,7 @@ class XPService:
                         target="bank"
                     )
                     if success:
-                        log.tree("Level Up Currency Reward", [
+                        logger.tree("Level Up Currency Reward", [
                             ("User", f"{member.name} ({member.display_name})"),
                             ("ID", str(member.id)),
                             ("Level", str(new_level)),
@@ -660,7 +660,7 @@ class XPService:
                         ], emoji="🏦")
 
         except Exception as e:
-            log.error_tree("XP Grant Error", e, [
+            logger.error_tree("XP Grant Error", e, [
                 ("User", f"{member.name} ({member.display_name})"),
                 ("ID", str(member.id)),
                 ("Amount", str(amount)),
@@ -683,7 +683,7 @@ class XPService:
 
         # Skip giving roles to owner (they still get XP, just no roles)
         if member.id == config.OWNER_ID:
-            log.tree("Role Reward Skipped (Owner)", [
+            logger.tree("Role Reward Skipped (Owner)", [
                 ("User", f"{member.name} ({member.display_name})"),
                 ("ID", str(member.id)),
                 ("Level", str(new_level)),
@@ -703,7 +703,7 @@ class XPService:
             if old_level < level <= new_level:
                 role = member.guild.get_role(role_id)
                 if not role:
-                    log.tree("Role Reward Not Found", [
+                    logger.tree("Role Reward Not Found", [
                         ("User", f"{member.name} ({member.display_name})"),
                         ("ID", str(member.id)),
                         ("Level", str(level)),
@@ -742,7 +742,7 @@ class XPService:
                 if roles_to_remove:
                     await member.remove_roles(*roles_to_remove, reason=f"XP Level {new_level} - removing old roles")
                     for role in roles_to_remove:
-                        log.tree("Old Role Removed", [
+                        logger.tree("Old Role Removed", [
                             ("User", f"{member.name} ({member.display_name})"),
                             ("ID", str(member.id)),
                             ("Role", role.name),
@@ -756,7 +756,7 @@ class XPService:
 
                     for level, role in earned:
                         perk = LEVEL_PERKS.get(level, "")
-                        log.tree("Role Reward Granted", [
+                        logger.tree("Role Reward Granted", [
                             ("User", f"{member.name} ({member.display_name})"),
                             ("ID", str(member.id)),
                             ("Level", str(level)),
@@ -768,7 +768,7 @@ class XPService:
                 return earned
 
             except discord.HTTPException as e:
-                log.error_tree("Role Reward Failed", e, [
+                logger.error_tree("Role Reward Failed", e, [
                     ("User", f"{member.name} ({member.display_name})"),
                     ("ID", str(member.id)),
                     ("Roles to Add", ", ".join(r.name for r in roles_to_add)),
@@ -817,7 +817,7 @@ class XPService:
                     next_reward_role = member.guild.get_role(role_id)
                     next_perk = LEVEL_PERKS.get(level)
                     if not next_reward_role:
-                        log.tree("Next Reward Role Not Found", [
+                        logger.tree("Next Reward Role Not Found", [
                             ("User", f"{member.name} ({member.display_name})"),
                             ("Level", str(level)),
                             ("Role ID", str(role_id)),
@@ -860,7 +860,7 @@ class XPService:
 
             await member.send(embed=embed)
 
-            log.tree("Reward DM Sent", [
+            logger.tree("Reward DM Sent", [
                 ("User", f"{member.name} ({member.display_name})"),
                 ("ID", str(member.id)),
                 ("Level", str(new_level)),
@@ -870,7 +870,7 @@ class XPService:
 
         except discord.Forbidden:
             # User has DMs disabled - log as info (not warning/error)
-            log.tree("Reward DM Skipped", [
+            logger.tree("Reward DM Skipped", [
                 ("User", f"{member.name} ({member.display_name})"),
                 ("ID", str(member.id)),
                 ("Level", str(new_level)),
@@ -878,7 +878,7 @@ class XPService:
             ], emoji="📭")
 
         except Exception as e:
-            log.error_tree("Reward DM Error", e, [
+            logger.error_tree("Reward DM Error", e, [
                 ("User", f"{member.name} ({member.display_name})"),
                 ("ID", str(member.id)),
                 ("Level", str(new_level)),
@@ -891,7 +891,7 @@ class XPService:
     @tasks.loop(time=dt_time(hour=5, minute=0))  # 5:00 UTC = Midnight EST
     async def midnight_role_sync(self) -> None:
         """Run maintenance tasks at midnight EST."""
-        log.tree("Midnight Maintenance Started", [], emoji="🕛")
+        logger.tree("Midnight Maintenance Started", [], emoji="🕛")
 
         # 1. Clear DAU cache (new day = new tracking)
         async with self._dau_cache_lock:
@@ -907,7 +907,7 @@ class XPService:
         self._message_cooldowns.clear()
 
         if old_dau_size > 0 or stale_mutes > 0 or stale_cooldowns > 0:
-            log.tree("Midnight Cache Cleanup", [
+            logger.tree("Midnight Cache Cleanup", [
                 ("DAU Entries", str(old_dau_size)),
                 ("Mute Timestamps", str(stale_mutes)),
                 ("Message Cooldowns", str(stale_cooldowns)),
@@ -925,11 +925,11 @@ class XPService:
             rate_limiter = get_rate_limiter()
             deleted = rate_limiter.cleanup_old_records(weeks_to_keep=4)
             if deleted > 0:
-                log.tree("Rate Limit Records Cleaned", [
+                logger.tree("Rate Limit Records Cleaned", [
                     ("Deleted", str(deleted)),
                 ], emoji="🧹")
         except Exception as e:
-            log.tree("Rate Limit Cleanup Failed", [
+            logger.tree("Rate Limit Cleanup Failed", [
                 ("Error", str(e)[:50]),
             ], emoji="⚠️")
 
@@ -937,11 +937,11 @@ class XPService:
         try:
             await self.bot._leave_unauthorized_guilds()
         except Exception as e:
-            log.tree("Guild Protection Check Failed", [
+            logger.tree("Guild Protection Check Failed", [
                 ("Error", str(e)[:50]),
             ], emoji="⚠️")
 
-        log.tree("Midnight Maintenance Complete", [], emoji="✅")
+        logger.tree("Midnight Maintenance Complete", [], emoji="✅")
 
     @midnight_role_sync.before_loop
     async def before_midnight_sync(self) -> None:
@@ -952,7 +952,7 @@ class XPService:
         """Sync is_active status by comparing DB users with actual guild members."""
         guild = self.bot.get_guild(config.GUILD_ID)
         if not guild:
-            log.tree("Active Status Sync Skipped", [
+            logger.tree("Active Status Sync Skipped", [
                 ("Reason", "Main guild not found"),
             ], emoji="⚠️")
             return
@@ -960,7 +960,7 @@ class XPService:
         # Get all user IDs from database
         all_db_users = db.get_all_users_with_levels(config.GUILD_ID)
         if not all_db_users:
-            log.tree("Active Status Sync Skipped", [
+            logger.tree("Active Status Sync Skipped", [
                 ("Reason", "No users in database"),
             ], emoji="ℹ️")
             return
@@ -982,7 +982,7 @@ class XPService:
         for user_id in active_users:
             db.set_user_active(user_id, config.GUILD_ID)
 
-        log.tree("Active Status Sync Complete", [
+        logger.tree("Active Status Sync Complete", [
             ("Total DB Users", str(len(db_user_ids))),
             ("Active", str(len(active_users))),
             ("Inactive", str(len(left_users))),
@@ -991,26 +991,26 @@ class XPService:
     async def _sync_roles(self) -> None:
         """Sync XP roles - shared by startup and midnight sync."""
         if not config.XP_ROLE_REWARDS:
-            log.tree("Role Sync Skipped", [
+            logger.tree("Role Sync Skipped", [
                 ("Reason", "No role rewards configured"),
             ], emoji="ℹ️")
             return
 
         guild = self.bot.get_guild(config.GUILD_ID)
         if not guild:
-            log.tree("Role Sync Skipped", [
+            logger.tree("Role Sync Skipped", [
                 ("Reason", "Main guild not found"),
             ], emoji="⚠️")
             return
 
-        log.tree("Role Sync Started", [
+        logger.tree("Role Sync Started", [
             ("Guild", guild.name),
         ], emoji="🔄")
 
         # Get all users with level >= 1 from database
         users_data = db.get_all_users_with_levels(config.GUILD_ID)
         if not users_data:
-            log.tree("Role Sync Complete", [
+            logger.tree("Role Sync Complete", [
                 ("Users Checked", "0"),
                 ("Roles Fixed", "0"),
             ], emoji="✅")
@@ -1054,7 +1054,7 @@ class XPService:
 
             correct_role = guild.get_role(correct_role_id)
             if not correct_role:
-                log.tree("Role Sync Skipped - Role Missing", [
+                logger.tree("Role Sync Skipped - Role Missing", [
                     ("User", f"{member.name} ({member.display_name})"),
                     ("Level", str(level)),
                     ("Missing Role ID", str(correct_role_id)),
@@ -1084,7 +1084,7 @@ class XPService:
                         await member.add_roles(*roles_to_add, reason="XP Role Sync - adding missing role")
 
                     fixed_count += 1
-                    log.tree("Role Sync Fixed", [
+                    logger.tree("Role Sync Fixed", [
                         ("User", f"{member.name} ({member.display_name})"),
                         ("ID", str(member.id)),
                         ("Level", str(level)),
@@ -1096,13 +1096,13 @@ class XPService:
                     await asyncio.sleep(0.5)
 
                 except discord.HTTPException as e:
-                    log.tree("Role Sync Failed", [
+                    logger.tree("Role Sync Failed", [
                         ("User", f"{member.name}"),
                         ("ID", str(member.id)),
                         ("Error", str(e)[:50]),
                     ], emoji="⚠️")
 
-        log.tree("Role Sync Complete", [
+        logger.tree("Role Sync Complete", [
             ("Users Checked", str(checked_count)),
             ("Roles Fixed", str(fixed_count)),
         ], emoji="✅")
@@ -1135,7 +1135,7 @@ class XPService:
 
         correct_role = member.guild.get_role(correct_role_id)
         if not correct_role:
-            log.tree("Role Restore Failed", [
+            logger.tree("Role Restore Failed", [
                 ("User", f"{member.name} ({member.display_name})"),
                 ("ID", str(member.id)),
                 ("Level", str(level)),
@@ -1149,7 +1149,7 @@ class XPService:
 
         try:
             await member.add_roles(correct_role, reason=f"XP Role Restore - Level {level}")
-            log.tree("XP Role Restored", [
+            logger.tree("XP Role Restored", [
                 ("User", f"{member.name} ({member.display_name})"),
                 ("ID", str(member.id)),
                 ("Level", str(level)),
@@ -1157,7 +1157,7 @@ class XPService:
                 ("Role", correct_role.name),
             ], emoji="🔄")
         except discord.HTTPException as e:
-            log.tree("Role Restore Failed", [
+            logger.tree("Role Restore Failed", [
                 ("User", f"{member.name} ({member.display_name})"),
                 ("ID", str(member.id)),
                 ("Level", str(level)),

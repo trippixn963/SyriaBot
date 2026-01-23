@@ -12,7 +12,7 @@ import discord
 from discord import ui
 from typing import Optional
 
-from src.core.logger import log
+from src.core.logger import logger
 from src.core.config import config
 from src.core.colors import COLOR_GOLD, COLOR_SUCCESS, EMOJI_AI
 from src.services.translate.service import translate_service, LANGUAGES
@@ -73,7 +73,7 @@ class LanguageSelect(ui.Select):
         selected = self.values[0]
 
         if selected == "none":
-            log.tree("Language Select", [
+            logger.tree("Language Select", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Selected", "none"),
@@ -85,7 +85,7 @@ class LanguageSelect(ui.Select):
         # Get language name for logging
         lang_name = LANGUAGES.get(selected, (selected, ""))[0]
 
-        log.tree("Language Select", [
+        logger.tree("Language Select", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
             ("Selected", f"{lang_name} ({selected})"),
@@ -162,7 +162,7 @@ class TranslateView(ui.View):
     def _make_button_callback(self, target_lang: str, lang_name: str):
         """Create a callback for a language button."""
         async def callback(interaction: discord.Interaction):
-            log.tree("Language Button Pressed", [
+            logger.tree("Language Button Pressed", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Language", f"{lang_name} ({target_lang})"),
@@ -173,7 +173,7 @@ class TranslateView(ui.View):
 
     async def _ai_button_callback(self, interaction: discord.Interaction):
         """Handle AI translate button - boosters only."""
-        log.tree("AI Button Pressed", [
+        logger.tree("AI Button Pressed", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
             ("Current Lang", self.current_lang),
@@ -207,7 +207,7 @@ class TranslateView(ui.View):
 
             await interaction.response.send_message(embed=embed)  # Public to encourage boosting
 
-            log.tree("AI Button Rejected", [
+            logger.tree("AI Button Rejected", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Reason", "Not a booster"),
@@ -215,7 +215,7 @@ class TranslateView(ui.View):
             ], emoji="🚫")
             return
 
-        log.tree("AI Translation Started", [
+        logger.tree("AI Translation Started", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
             ("Target Lang", self.current_lang),
@@ -235,7 +235,7 @@ class TranslateView(ui.View):
                 error_msg = result.error
             await interaction.followup.send(f"❌ {error_msg}", ephemeral=True)
 
-            log.tree("AI Translation Failed", [
+            logger.tree("AI Translation Failed", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Target", self.current_lang),
@@ -249,7 +249,7 @@ class TranslateView(ui.View):
         else:
             await interaction.edit_original_response(embed=embed, view=self)
 
-        log.tree("AI Translation Complete", [
+        logger.tree("AI Translation Complete", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
             ("From", f"{result.source_name} ({result.source_lang})"),
@@ -264,7 +264,7 @@ class TranslateView(ui.View):
                 "Only the person who requested this translation can use these buttons.",
                 ephemeral=True
             )
-            log.tree("Translate Interaction Rejected", [
+            logger.tree("Translate Interaction Rejected", [
                 ("Attempted By", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("Attempted By ID", str(interaction.user.id)),
                 ("Owner ID", str(self.requester_id)),
@@ -281,18 +281,18 @@ class TranslateView(ui.View):
         if hasattr(self, 'message') and self.message:
             try:
                 await self.message.edit(view=self)
-                log.tree("Translate View Timeout", [
+                logger.tree("Translate View Timeout", [
                     ("Requester ID", str(self.requester_id)),
                     ("Current Lang", self.current_lang),
                     ("Action", "Disabled all buttons"),
                 ], emoji="⏳")
             except discord.NotFound:
-                log.tree("Translate View Timeout", [
+                logger.tree("Translate View Timeout", [
                     ("Requester ID", str(self.requester_id)),
                     ("Reason", "Message deleted"),
                 ], emoji="⏳")
             except Exception as e:
-                log.tree("Translate View Timeout Error", [
+                logger.tree("Translate View Timeout Error", [
                     ("Requester ID", str(self.requester_id)),
                     ("Error", str(e)[:50]),
                 ], emoji="⚠️")
@@ -300,7 +300,7 @@ class TranslateView(ui.View):
     async def translate_to(self, interaction: discord.Interaction, target_lang: str):
         """Translate to a new language and update the embed."""
         if target_lang == self.current_lang:
-            log.tree("Translation Skipped", [
+            logger.tree("Translation Skipped", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Reason", f"Already in {target_lang}"),
@@ -308,7 +308,7 @@ class TranslateView(ui.View):
             await interaction.response.defer()
             return
 
-        log.tree("Re-translation Started", [
+        logger.tree("Re-translation Started", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
             ("From Lang", self.current_lang),
@@ -330,7 +330,7 @@ class TranslateView(ui.View):
                 error_msg = result.error
             await interaction.followup.send(f"❌ {error_msg}", ephemeral=True)
 
-            log.tree("Re-translation Failed", [
+            logger.tree("Re-translation Failed", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Target", target_lang),
@@ -345,7 +345,7 @@ class TranslateView(ui.View):
                 ephemeral=True
             )
 
-            log.tree("Re-translation Skipped", [
+            logger.tree("Re-translation Skipped", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Reason", f"Text already in {target_name}"),
@@ -362,7 +362,7 @@ class TranslateView(ui.View):
         else:
             await interaction.edit_original_response(embed=embed, view=self)
 
-        log.tree("Re-translation Complete", [
+        logger.tree("Re-translation Complete", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
             ("From", f"{result.source_name} ({result.source_lang})"),

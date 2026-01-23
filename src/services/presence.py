@@ -12,7 +12,7 @@ from typing import Optional, List
 
 from discord.ext import commands
 
-from src.core.logger import log
+from src.core.logger import logger
 from src.core.constants import (
     PRESENCE_UPDATE_INTERVAL,
     PROMO_DURATION_MINUTES,
@@ -72,7 +72,7 @@ class PresenceHandler(BasePresenceHandler):
                 messages.append(f"🎙️ {self._format_number(voice_hours)}h in voice")
 
         except Exception as e:
-            log.error_tree("Presence Stats Error", e)
+            logger.error_tree("Presence Stats Error", e)
 
         # Fallback if no stats available
         if not messages:
@@ -93,40 +93,40 @@ class PresenceHandler(BasePresenceHandler):
     # =========================================================================
 
     def on_rotation_start(self) -> None:
-        log.tree("Presence Rotation Started", [
+        logger.tree("Presence Rotation Started", [
             ("Interval", f"{self.update_interval}s"),
         ], emoji="🔄")
 
     def on_promo_start(self) -> None:
-        log.tree("Promo Loop Started", [
+        logger.tree("Promo Loop Started", [
             ("Duration", f"{self.promo_duration_minutes} min/hour"),
             ("Text", PROMO_TEXT),
         ], emoji="📢")
 
     def on_promo_activated(self) -> None:
-        log.tree("Promo Active", [
+        logger.tree("Promo Active", [
             ("Text", PROMO_TEXT),
             ("Duration", f"{self.promo_duration_minutes} min"),
         ], emoji="📢")
 
     def on_promo_ended(self) -> None:
-        log.tree("Promo Ended", [
+        logger.tree("Promo Ended", [
             ("Resuming", "Normal rotation"),
         ], emoji="🔄")
 
     def on_handler_ready(self) -> None:
-        log.tree("Presence Handler Ready", [
+        logger.tree("Presence Handler Ready", [
             ("Rotation", f"Every {self.update_interval}s"),
             ("Promo", f"{self.promo_duration_minutes} min/hour"),
         ], emoji="✅")
 
     def on_handler_stopped(self) -> None:
-        log.tree("Presence Handler Stopped", [
+        logger.tree("Presence Handler Stopped", [
             ("Status", "Tasks cancelled"),
         ], emoji="🛑")
 
     def on_error(self, context: str, error: Exception) -> None:
-        log.error_tree(f"{context} Error", error)
+        logger.error_tree(f"{context} Error", error)
 
     # =========================================================================
     # Helpers

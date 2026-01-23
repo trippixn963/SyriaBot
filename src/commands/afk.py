@@ -17,7 +17,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from src.core.config import config
-from src.core.logger import log
+from src.core.logger import logger
 from src.core.colors import COLOR_SYRIA_GREEN
 from src.utils.footer import set_footer
 from src.services.database import db
@@ -41,7 +41,7 @@ class AFKCog(commands.Cog):
                 "This command can only be used in a server.",
                 ephemeral=True
             )
-            log.tree("AFK Command Rejected", [
+            logger.tree("AFK Command Rejected", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Reason", "Used in DMs"),
@@ -54,7 +54,7 @@ class AFKCog(commands.Cog):
                 "AFK service is not available.",
                 ephemeral=True
             )
-            log.tree("AFK Command Rejected", [
+            logger.tree("AFK Command Rejected", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Reason", "Service not initialized"),
@@ -68,7 +68,7 @@ class AFKCog(commands.Cog):
                 f"You're already AFK since <t:{existing_afk['timestamp']}:R>",
                 ephemeral=True
             )
-            log.tree("AFK Command Rejected", [
+            logger.tree("AFK Command Rejected", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Reason", "Already AFK"),
@@ -81,7 +81,7 @@ class AFKCog(commands.Cog):
                 "Unable to set AFK status.",
                 ephemeral=True
             )
-            log.tree("AFK Command Rejected", [
+            logger.tree("AFK Command Rejected", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Reason", "User is not a Member"),
@@ -106,14 +106,14 @@ class AFKCog(commands.Cog):
 
         try:
             await interaction.response.send_message(embed=embed)
-            log.tree("AFK Command", [
+            logger.tree("AFK Command", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Guild", interaction.guild.name),
                 ("Reason", converted_reason[:50] if converted_reason else "None"),
             ], emoji="💤")
         except discord.HTTPException as e:
-            log.tree("AFK Response Failed", [
+            logger.tree("AFK Response Failed", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Error", str(e)[:50]),
@@ -123,6 +123,6 @@ class AFKCog(commands.Cog):
 async def setup(bot: commands.Bot) -> None:
     """Add the cog to the bot."""
     await bot.add_cog(AFKCog(bot))
-    log.tree("Command Loaded", [
+    logger.tree("Command Loaded", [
         ("Name", "afk"),
     ], emoji="✅")

@@ -10,7 +10,7 @@ from discord import ui
 from src.core.colors import COLOR_SUCCESS, COLOR_ERROR, COLOR_WARNING, COLOR_NEUTRAL, COLOR_BOOST, EMOJI_ALLOW
 from src.core.config import config
 from src.core.constants import SELECT_TIMEOUT_DEFAULT
-from src.core.logger import log
+from src.core.logger import logger
 from src.services.database import db
 from src.utils.footer import set_footer
 from .utils import (
@@ -45,11 +45,11 @@ class ConfirmView(ui.View):
                 set_footer(embed)
                 await self.message.edit(embed=embed, view=None)
             except discord.HTTPException as e:
-                log.tree("Confirm View Timeout Edit Failed", [
+                logger.tree("Confirm View Timeout Edit Failed", [
                     ("Action", self.action),
                     ("Error", str(e)[:50]),
                 ], emoji="⚠️")
-        log.tree("Confirm View Expired", [
+        logger.tree("Confirm View Expired", [
             ("Action", self.action),
             ("Channel", self.channel.name if self.channel else "Unknown"),
         ], emoji="⏳")
@@ -66,7 +66,7 @@ class ConfirmView(ui.View):
                 embed = discord.Embed(description="❌ Channel no longer exists", color=COLOR_ERROR)
                 set_footer(embed)
                 await interaction.response.edit_message(embed=embed, view=None)
-                log.tree("Confirm Failed", [
+                logger.tree("Confirm Failed", [
                     ("Action", self.action),
                     ("Channel ID", str(self.channel.id)),
                     ("Reason", "Channel deleted"),
@@ -81,7 +81,7 @@ class ConfirmView(ui.View):
                 embed = discord.Embed(description="🗑️ Channel deleted", color=COLOR_NEUTRAL)
                 set_footer(embed)
                 await interaction.response.edit_message(embed=embed, view=None)
-                log.tree("Channel Deleted", [
+                logger.tree("Channel Deleted", [
                     ("Channel", channel_name),
                     ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                     ("ID", str(interaction.user.id)),
@@ -98,7 +98,7 @@ class ConfirmView(ui.View):
                     embed = discord.Embed(description="❌ User no longer in server", color=COLOR_ERROR)
                     set_footer(embed)
                     await interaction.response.edit_message(embed=embed, view=None)
-                    log.tree("Transfer Failed", [
+                    logger.tree("Transfer Failed", [
                         ("Channel", channel.name),
                         ("Target", f"{self.target.name} ({self.target.display_name})"),
                         ("Target ID", str(self.target.id)),
@@ -111,7 +111,7 @@ class ConfirmView(ui.View):
                     embed = discord.Embed(description="❌ Channel data not found", color=COLOR_ERROR)
                     set_footer(embed)
                     await interaction.response.edit_message(embed=embed, view=None)
-                    log.tree("Transfer Failed", [
+                    logger.tree("Transfer Failed", [
                         ("Channel", channel.name),
                         ("Reason", "No DB record"),
                     ], emoji="❌")
@@ -136,7 +136,7 @@ class ConfirmView(ui.View):
                 embed.set_thumbnail(url=target.display_avatar.url)
                 set_footer(embed)
                 await interaction.response.edit_message(embed=embed, view=None)
-                log.tree("Channel Transferred", [
+                logger.tree("Channel Transferred", [
                     ("Channel", channel_name),
                     ("From", f"{interaction.user.name} ({interaction.user.display_name})"),
                     ("From ID", str(interaction.user.id)),
@@ -145,7 +145,7 @@ class ConfirmView(ui.View):
                 ], emoji="🔄")
 
         except discord.HTTPException as e:
-            log.tree("Confirm Action Failed", [
+            logger.tree("Confirm Action Failed", [
                 ("Action", self.action),
                 ("Channel", self.channel.name if self.channel else "Unknown"),
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
@@ -157,7 +157,7 @@ class ConfirmView(ui.View):
                 set_footer(embed)
                 await interaction.response.edit_message(embed=embed, view=None)
         except Exception as e:
-            log.tree("Confirm Action Error", [
+            logger.tree("Confirm Action Error", [
                 ("Action", self.action),
                 ("Channel", self.channel.name if self.channel else "Unknown"),
                 ("Error", str(e)),
@@ -173,7 +173,7 @@ class ConfirmView(ui.View):
         embed = discord.Embed(description="↩️ Cancelled", color=COLOR_NEUTRAL)
         set_footer(embed)
         await interaction.response.edit_message(embed=embed, view=None)
-        log.tree("Action Cancelled", [
+        logger.tree("Action Cancelled", [
             ("Action", self.action),
             ("Channel", self.channel.name if self.channel else "Unknown"),
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
@@ -202,11 +202,11 @@ class UserSelectView(ui.View):
                 set_footer(embed)
                 await self.message.edit(embed=embed, view=None)
             except discord.HTTPException as e:
-                log.tree("User Select Timeout Edit Failed", [
+                logger.tree("User Select Timeout Edit Failed", [
                     ("Action", self.action),
                     ("Error", str(e)[:50]),
                 ], emoji="⚠️")
-        log.tree("User Select Expired", [
+        logger.tree("User Select Expired", [
             ("Action", self.action),
             ("Channel", self.channel.name if self.channel else "Unknown"),
         ], emoji="⏳")
@@ -237,7 +237,7 @@ class UserSelect(ui.UserSelect):
                 embed = discord.Embed(description="❌ Channel no longer exists", color=COLOR_ERROR)
                 set_footer(embed)
                 await interaction.response.send_message(embed=embed, ephemeral=True)
-                log.tree("User Select Failed", [
+                logger.tree("User Select Failed", [
                     ("Action", self.action),
                     ("Channel ID", str(self.channel.id)),
                     ("Reason", "Channel deleted"),
@@ -249,7 +249,7 @@ class UserSelect(ui.UserSelect):
                 embed = discord.Embed(description="❌ Channel not found", color=COLOR_ERROR)
                 set_footer(embed)
                 await interaction.response.send_message(embed=embed, ephemeral=True)
-                log.tree("User Select Failed", [
+                logger.tree("User Select Failed", [
                     ("Action", self.action),
                     ("Channel", channel.name),
                     ("Reason", "No DB record"),
@@ -268,7 +268,7 @@ class UserSelect(ui.UserSelect):
                 await self._handle_transfer(interaction, channel, user, owner_id)
 
         except discord.HTTPException as e:
-            log.tree("User Select Failed", [
+            logger.tree("User Select Failed", [
                 ("Action", self.action),
                 ("User", f"{user.name} ({user.display_name})"),
                 ("ID", str(user.id)),
@@ -279,7 +279,7 @@ class UserSelect(ui.UserSelect):
                 set_footer(embed)
                 await interaction.response.send_message(embed=embed, ephemeral=True)
         except Exception as e:
-            log.tree("User Select Error", [
+            logger.tree("User Select Error", [
                 ("Action", self.action),
                 ("User", f"{user.name} ({user.display_name})"),
                 ("ID", str(user.id)),
@@ -296,7 +296,7 @@ class UserSelect(ui.UserSelect):
             embed = discord.Embed(description="⚠️ Can't permit yourself", color=COLOR_WARNING)
             set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
-            log.tree("Permit Rejected", [
+            logger.tree("Permit Rejected", [
                 ("Channel", channel.name),
                 ("User", f"{user.name} ({user.display_name})"),
                 ("ID", str(user.id)),
@@ -307,7 +307,7 @@ class UserSelect(ui.UserSelect):
             embed = discord.Embed(description="⚠️ Can't permit bots", color=COLOR_WARNING)
             set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
-            log.tree("Permit Rejected", [
+            logger.tree("Permit Rejected", [
                 ("Channel", channel.name),
                 ("User", f"{user.name} ({user.display_name})"),
                 ("ID", str(user.id)),
@@ -360,7 +360,7 @@ class UserSelect(ui.UserSelect):
                 )
                 set_footer(embed)
                 await interaction.response.send_message(embed=embed, ephemeral=True)
-                log.tree("Permit Blocked", [
+                logger.tree("Permit Blocked", [
                     ("Channel", channel.name),
                     ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                     ("ID", str(interaction.user.id)),
@@ -386,7 +386,7 @@ class UserSelect(ui.UserSelect):
             embed.set_thumbnail(url=user.display_avatar.url)
             set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
-            log.tree("User Permitted", [
+            logger.tree("User Permitted", [
                 ("Channel", channel.name),
                 ("Target", f"{user.name} ({user.display_name})"),
                 ("Target ID", str(user.id)),
@@ -415,7 +415,7 @@ class UserSelect(ui.UserSelect):
             embed.set_thumbnail(url=user.display_avatar.url)
             set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
-            log.tree("User Unpermitted", [
+            logger.tree("User Unpermitted", [
                 ("Channel", channel.name),
                 ("Target", f"{user.name} ({user.display_name})"),
                 ("Target ID", str(user.id)),
@@ -430,7 +430,7 @@ class UserSelect(ui.UserSelect):
             try:
                 await self.service._update_panel(channel)
             except Exception as e:
-                log.tree("Panel Update Failed", [
+                logger.tree("Panel Update Failed", [
                     ("Channel", channel.name),
                     ("Context", "After permit"),
                     ("Error", str(e)),
@@ -442,7 +442,7 @@ class UserSelect(ui.UserSelect):
             embed = discord.Embed(description="⚠️ Can't block yourself", color=COLOR_WARNING)
             set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
-            log.tree("Block Rejected", [
+            logger.tree("Block Rejected", [
                 ("Channel", channel.name),
                 ("User", f"{user.name} ({user.display_name})"),
                 ("ID", str(user.id)),
@@ -453,7 +453,7 @@ class UserSelect(ui.UserSelect):
             embed = discord.Embed(description="⚠️ Can't block bots", color=COLOR_WARNING)
             set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
-            log.tree("Block Rejected", [
+            logger.tree("Block Rejected", [
                 ("Channel", channel.name),
                 ("User", f"{user.name} ({user.display_name})"),
                 ("ID", str(user.id)),
@@ -467,7 +467,7 @@ class UserSelect(ui.UserSelect):
             embed = discord.Embed(description="⚠️ Can't block moderators", color=COLOR_WARNING)
             set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
-            log.tree("Block Rejected", [
+            logger.tree("Block Rejected", [
                 ("Channel", channel.name),
                 ("Target", f"{user.name} ({user.display_name})"),
                 ("Target ID", str(user.id)),
@@ -490,7 +490,7 @@ class UserSelect(ui.UserSelect):
                     await user.move_to(None)
                     was_kicked = True
                 except discord.HTTPException as e:
-                    log.tree("Blocked User Kick Failed", [
+                    logger.tree("Blocked User Kick Failed", [
                         ("Channel", channel.name),
                         ("User", f"{user.name} ({user.display_name})"),
                         ("ID", str(user.id)),
@@ -511,7 +511,7 @@ class UserSelect(ui.UserSelect):
             embed.set_thumbnail(url=user.display_avatar.url)
             set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
-            log.tree("User Blocked", [
+            logger.tree("User Blocked", [
                 ("Channel", channel.name),
                 ("Target", f"{user.name} ({user.display_name})"),
                 ("Target ID", str(user.id)),
@@ -531,7 +531,7 @@ class UserSelect(ui.UserSelect):
             embed.set_thumbnail(url=user.display_avatar.url)
             set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
-            log.tree("User Unblocked", [
+            logger.tree("User Unblocked", [
                 ("Channel", channel.name),
                 ("Target", f"{user.name} ({user.display_name})"),
                 ("Target ID", str(user.id)),
@@ -544,7 +544,7 @@ class UserSelect(ui.UserSelect):
             try:
                 await self.service._update_panel(channel)
             except Exception as e:
-                log.tree("Panel Update Failed", [
+                logger.tree("Panel Update Failed", [
                     ("Channel", channel.name),
                     ("Context", "After block"),
                     ("Error", str(e)),
@@ -556,7 +556,7 @@ class UserSelect(ui.UserSelect):
             embed = discord.Embed(description="⚠️ Can't kick yourself", color=COLOR_WARNING)
             set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
-            log.tree("Kick Rejected", [
+            logger.tree("Kick Rejected", [
                 ("Channel", channel.name),
                 ("User", f"{user.name} ({user.display_name})"),
                 ("ID", str(user.id)),
@@ -569,7 +569,7 @@ class UserSelect(ui.UserSelect):
             embed = discord.Embed(description="⚠️ Can't kick moderators", color=COLOR_WARNING)
             set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
-            log.tree("Kick Rejected", [
+            logger.tree("Kick Rejected", [
                 ("Channel", channel.name),
                 ("User", f"{user.name} ({user.display_name})"),
                 ("ID", str(user.id)),
@@ -586,7 +586,7 @@ class UserSelect(ui.UserSelect):
             embed.set_thumbnail(url=user.display_avatar.url)
             set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
-            log.tree("User Kicked", [
+            logger.tree("User Kicked", [
                 ("Channel", channel.name),
                 ("Target", f"{user.name} ({user.display_name})"),
                 ("Target ID", str(user.id)),
@@ -601,7 +601,7 @@ class UserSelect(ui.UserSelect):
             embed.set_thumbnail(url=user.display_avatar.url)
             set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
-            log.tree("Kick Rejected", [
+            logger.tree("Kick Rejected", [
                 ("Channel", channel.name),
                 ("Target", f"{user.name} ({user.display_name})"),
                 ("Target ID", str(user.id)),
@@ -616,7 +616,7 @@ class UserSelect(ui.UserSelect):
             embed = discord.Embed(description="⚠️ Already the owner", color=COLOR_WARNING)
             set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
-            log.tree("Transfer Rejected", [
+            logger.tree("Transfer Rejected", [
                 ("Channel", channel.name),
                 ("User", f"{user.name} ({user.display_name})"),
                 ("ID", str(user.id)),
@@ -627,7 +627,7 @@ class UserSelect(ui.UserSelect):
             embed = discord.Embed(description="⚠️ Can't transfer to bots", color=COLOR_WARNING)
             set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
-            log.tree("Transfer Rejected", [
+            logger.tree("Transfer Rejected", [
                 ("Channel", channel.name),
                 ("User", f"{user.name} ({user.display_name})"),
                 ("ID", str(user.id)),
@@ -643,7 +643,7 @@ class UserSelect(ui.UserSelect):
         embed.set_thumbnail(url=user.display_avatar.url)
         set_footer(embed)
         await interaction.response.send_message(embed=embed, view=ConfirmView("transfer", channel, user), ephemeral=True)
-        log.tree("Transfer Confirmation Shown", [
+        logger.tree("Transfer Confirmation Shown", [
             ("Channel", channel.name),
             ("Target", f"{user.name} ({user.display_name})"),
             ("Target ID", str(user.id)),

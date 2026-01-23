@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Dict, List, Tuple, Optional
 import discord
 from discord import ui
 
-from src.core.logger import log
+from src.core.logger import logger
 from src.core.config import config
 from src.core.colors import COLOR_SYRIA_GREEN, COLOR_GOLD
 from src.core.constants import (
@@ -79,7 +79,7 @@ class RulesTopicSelect(ui.Select["RulesSelectView"]):
             ))
 
         if not options:
-            log.tree("Rules Select Init", [
+            logger.tree("Rules Select Init", [
                 ("Status", "No categories available"),
                 ("Fallback", "Adding placeholder option"),
             ], emoji="⚠️")
@@ -96,7 +96,7 @@ class RulesTopicSelect(ui.Select["RulesSelectView"]):
             custom_id="guide:rules:select",
         )
 
-        log.tree("Rules Select Initialized", [
+        logger.tree("Rules Select Initialized", [
             ("Options", str(len(options))),
         ], emoji="📜")
 
@@ -107,12 +107,12 @@ class RulesTopicSelect(ui.Select["RulesSelectView"]):
         mod_role: str = f"<@&{config.MOD_ROLE_ID}>" if config.MOD_ROLE_ID else "staff"
 
         if not config.INBOX_CHANNEL_ID:
-            log.tree("Config Fallback", [
+            logger.tree("Config Fallback", [
                 ("Field", "INBOX_CHANNEL_ID"),
                 ("Using", "the inbox channel (text)"),
             ], emoji="ℹ️")
         if not config.MOD_ROLE_ID:
-            log.tree("Config Fallback", [
+            logger.tree("Config Fallback", [
                 ("Field", "MOD_ROLE_ID"),
                 ("Using", "staff (text)"),
             ], emoji="ℹ️")
@@ -149,7 +149,7 @@ class RulesTopicSelect(ui.Select["RulesSelectView"]):
                 ("Report Properly", f"Use {inbox_ch} for reports. Include evidence when possible."),
             ]
 
-        log.tree("Unknown Rules Category", [
+        logger.tree("Unknown Rules Category", [
             ("Category", category),
         ], emoji="⚠️")
         return []
@@ -158,7 +158,7 @@ class RulesTopicSelect(ui.Select["RulesSelectView"]):
         """Handle category selection."""
         category: str = self.values[0]
 
-        log.tree("Rules Select Callback", [
+        logger.tree("Rules Select Callback", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
             ("Category", category),
@@ -171,7 +171,7 @@ class RulesTopicSelect(ui.Select["RulesSelectView"]):
                     ephemeral=True
                 )
             except discord.HTTPException as e:
-                log.error_tree("Rules Select Response Failed", e, [
+                logger.error_tree("Rules Select Response Failed", e, [
                     ("User", str(interaction.user.id)),
                     ("Category", category),
                 ])
@@ -180,7 +180,7 @@ class RulesTopicSelect(ui.Select["RulesSelectView"]):
         data: Optional[Dict[str, str]] = RULES_CATEGORIES.get(category)
 
         if not data:
-            log.tree("Rules Category Not Found", [
+            logger.tree("Rules Category Not Found", [
                 ("User", str(interaction.user.id)),
                 ("Category", category),
                 ("Available", ", ".join(RULES_CATEGORIES.keys())),
@@ -191,7 +191,7 @@ class RulesTopicSelect(ui.Select["RulesSelectView"]):
                     ephemeral=True
                 )
             except discord.HTTPException as e:
-                log.error_tree("Rules Error Response Failed", e, [
+                logger.error_tree("Rules Error Response Failed", e, [
                     ("User", str(interaction.user.id)),
                 ])
             return
@@ -209,13 +209,13 @@ class RulesTopicSelect(ui.Select["RulesSelectView"]):
             if rules:
                 for title, content in rules:
                     embed.add_field(name=title, value=content, inline=False)
-                log.tree("Rules Embed Built", [
+                logger.tree("Rules Embed Built", [
                     ("Category", label),
                     ("Rules", str(len(rules))),
                 ], emoji="✅")
             else:
                 embed.description = "No rules defined for this category."
-                log.tree("Rules Category Empty", [
+                logger.tree("Rules Category Empty", [
                     ("Category", label),
                 ], emoji="⚠️")
 
@@ -223,7 +223,7 @@ class RulesTopicSelect(ui.Select["RulesSelectView"]):
 
             await interaction.response.send_message(embed=embed, ephemeral=True)
 
-            log.tree("Guide Rules Selected", [
+            logger.tree("Guide Rules Selected", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Category", label),
@@ -231,13 +231,13 @@ class RulesTopicSelect(ui.Select["RulesSelectView"]):
             ], emoji="📜")
 
         except discord.HTTPException as e:
-            log.error_tree("Rules Response Failed", e, [
+            logger.error_tree("Rules Response Failed", e, [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Category", category),
             ])
         except Exception as e:
-            log.error_tree("Rules Callback Error", e, [
+            logger.error_tree("Rules Callback Error", e, [
                 ("User", str(interaction.user.id)),
                 ("Category", category),
             ])
@@ -300,7 +300,7 @@ class RolesTopicSelect(ui.Select["RolesSelectView"]):
             ))
 
         if not options:
-            log.tree("Roles Select Init", [
+            logger.tree("Roles Select Init", [
                 ("Status", "No categories available"),
             ], emoji="⚠️")
             options.append(discord.SelectOption(
@@ -316,7 +316,7 @@ class RolesTopicSelect(ui.Select["RolesSelectView"]):
             custom_id="guide:roles:select",
         )
 
-        log.tree("Roles Select Initialized", [
+        logger.tree("Roles Select Initialized", [
             ("Options", str(len(options))),
         ], emoji="🎭")
 
@@ -325,7 +325,7 @@ class RolesTopicSelect(ui.Select["RolesSelectView"]):
         if category == "auto":
             citizen: str = f"<@&{config.AUTO_ROLE_ID}>" if config.AUTO_ROLE_ID else "Citizens"
             if not config.AUTO_ROLE_ID:
-                log.tree("Config Fallback", [
+                logger.tree("Config Fallback", [
                     ("Field", "AUTO_ROLE_ID"),
                     ("Using", "Citizens (text)"),
                 ], emoji="ℹ️")
@@ -354,7 +354,7 @@ class RolesTopicSelect(ui.Select["RolesSelectView"]):
         elif category == "purchasable":
             roles_ch: str = f"<#{config.ROLES_CHANNEL_ID}>" if config.ROLES_CHANNEL_ID else "the roles channel"
             if not config.ROLES_CHANNEL_ID:
-                log.tree("Config Fallback", [
+                logger.tree("Config Fallback", [
                     ("Field", "ROLES_CHANNEL_ID"),
                     ("Using", "the roles channel (text)"),
                 ], emoji="ℹ️")
@@ -372,12 +372,12 @@ class RolesTopicSelect(ui.Select["RolesSelectView"]):
             booster: str = f"<@&{config.BOOSTER_ROLE_ID}>" if config.BOOSTER_ROLE_ID else "Booster"
             mod: str = f"<@&{config.MOD_ROLE_ID}>" if config.MOD_ROLE_ID else "Staff"
             if not config.BOOSTER_ROLE_ID:
-                log.tree("Config Fallback", [
+                logger.tree("Config Fallback", [
                     ("Field", "BOOSTER_ROLE_ID"),
                     ("Using", "Booster (text)"),
                 ], emoji="ℹ️")
             if not config.MOD_ROLE_ID:
-                log.tree("Config Fallback", [
+                logger.tree("Config Fallback", [
                     ("Field", "MOD_ROLE_ID"),
                     ("Using", "Staff (text)"),
                 ], emoji="ℹ️")
@@ -409,7 +409,7 @@ class RolesTopicSelect(ui.Select["RolesSelectView"]):
                 "• Change your nickname"
             )
 
-        log.tree("Unknown Role Category", [
+        logger.tree("Unknown Role Category", [
             ("Category", category),
         ], emoji="⚠️")
         return "Information not available for this category."
@@ -418,7 +418,7 @@ class RolesTopicSelect(ui.Select["RolesSelectView"]):
         """Handle category selection."""
         category: str = self.values[0]
 
-        log.tree("Roles Select Callback", [
+        logger.tree("Roles Select Callback", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
             ("Category", category),
@@ -431,7 +431,7 @@ class RolesTopicSelect(ui.Select["RolesSelectView"]):
                     ephemeral=True
                 )
             except discord.HTTPException as e:
-                log.error_tree("Roles Select Response Failed", e, [
+                logger.error_tree("Roles Select Response Failed", e, [
                     ("User", str(interaction.user.id)),
                 ])
             return
@@ -439,7 +439,7 @@ class RolesTopicSelect(ui.Select["RolesSelectView"]):
         data: Optional[Dict[str, str]] = ROLES_CATEGORIES.get(category)
 
         if not data:
-            log.tree("Roles Category Not Found", [
+            logger.tree("Roles Category Not Found", [
                 ("User", str(interaction.user.id)),
                 ("Category", category),
                 ("Available", ", ".join(ROLES_CATEGORIES.keys())),
@@ -450,7 +450,7 @@ class RolesTopicSelect(ui.Select["RolesSelectView"]):
                     ephemeral=True
                 )
             except discord.HTTPException as e:
-                log.error_tree("Roles Error Response Failed", e, [
+                logger.error_tree("Roles Error Response Failed", e, [
                     ("User", str(interaction.user.id)),
                 ])
             return
@@ -469,20 +469,20 @@ class RolesTopicSelect(ui.Select["RolesSelectView"]):
 
             await interaction.response.send_message(embed=embed, ephemeral=True)
 
-            log.tree("Guide Roles Selected", [
+            logger.tree("Guide Roles Selected", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Category", label),
             ], emoji="🎭")
 
         except discord.HTTPException as e:
-            log.error_tree("Roles Response Failed", e, [
+            logger.error_tree("Roles Response Failed", e, [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Category", category),
             ])
         except Exception as e:
-            log.error_tree("Roles Callback Error", e, [
+            logger.error_tree("Roles Callback Error", e, [
                 ("User", str(interaction.user.id)),
                 ("Category", category),
             ])
@@ -541,7 +541,7 @@ class CommandsTopicSelect(ui.Select["CommandsSelectView"]):
             ))
 
         if not options:
-            log.tree("Commands Select Init", [
+            logger.tree("Commands Select Init", [
                 ("Status", "No categories available"),
             ], emoji="⚠️")
             options.append(discord.SelectOption(
@@ -557,7 +557,7 @@ class CommandsTopicSelect(ui.Select["CommandsSelectView"]):
             custom_id="guide:commands:select",
         )
 
-        log.tree("Commands Select Initialized", [
+        logger.tree("Commands Select Initialized", [
             ("Options", str(len(options))),
         ], emoji="🤖")
 
@@ -566,7 +566,7 @@ class CommandsTopicSelect(ui.Select["CommandsSelectView"]):
         fun_ch: str = f"<#{config.FUN_COMMANDS_CHANNEL_ID}>" if config.FUN_COMMANDS_CHANNEL_ID else "the fun channel"
 
         if not config.FUN_COMMANDS_CHANNEL_ID and category == "fun":
-            log.tree("Config Fallback", [
+            logger.tree("Config Fallback", [
                 ("Field", "FUN_COMMANDS_CHANNEL_ID"),
                 ("Using", "the fun channel (text)"),
             ], emoji="ℹ️")
@@ -632,7 +632,7 @@ class CommandsTopicSelect(ui.Select["CommandsSelectView"]):
                 "Get announced and a special role on your day!"
             )
 
-        log.tree("Unknown Command Category", [
+        logger.tree("Unknown Command Category", [
             ("Category", category),
         ], emoji="⚠️")
         return "Information not available for this category."
@@ -641,7 +641,7 @@ class CommandsTopicSelect(ui.Select["CommandsSelectView"]):
         """Handle category selection."""
         category: str = self.values[0]
 
-        log.tree("Commands Select Callback", [
+        logger.tree("Commands Select Callback", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
             ("Category", category),
@@ -654,7 +654,7 @@ class CommandsTopicSelect(ui.Select["CommandsSelectView"]):
                     ephemeral=True
                 )
             except discord.HTTPException as e:
-                log.error_tree("Commands Select Response Failed", e, [
+                logger.error_tree("Commands Select Response Failed", e, [
                     ("User", str(interaction.user.id)),
                 ])
             return
@@ -662,7 +662,7 @@ class CommandsTopicSelect(ui.Select["CommandsSelectView"]):
         data: Optional[Dict[str, str]] = COMMANDS_CATEGORIES.get(category)
 
         if not data:
-            log.tree("Commands Category Not Found", [
+            logger.tree("Commands Category Not Found", [
                 ("User", str(interaction.user.id)),
                 ("Category", category),
                 ("Available", ", ".join(COMMANDS_CATEGORIES.keys())),
@@ -673,7 +673,7 @@ class CommandsTopicSelect(ui.Select["CommandsSelectView"]):
                     ephemeral=True
                 )
             except discord.HTTPException as e:
-                log.error_tree("Commands Error Response Failed", e, [
+                logger.error_tree("Commands Error Response Failed", e, [
                     ("User", str(interaction.user.id)),
                 ])
             return
@@ -692,20 +692,20 @@ class CommandsTopicSelect(ui.Select["CommandsSelectView"]):
 
             await interaction.response.send_message(embed=embed, ephemeral=True)
 
-            log.tree("Guide Commands Selected", [
+            logger.tree("Guide Commands Selected", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Category", label),
             ], emoji="🤖")
 
         except discord.HTTPException as e:
-            log.error_tree("Commands Response Failed", e, [
+            logger.error_tree("Commands Response Failed", e, [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Category", category),
             ])
         except Exception as e:
-            log.error_tree("Commands Callback Error", e, [
+            logger.error_tree("Commands Callback Error", e, [
                 ("User", str(interaction.user.id)),
                 ("Category", category),
             ])
@@ -765,7 +765,7 @@ class FAQTopicSelect(ui.Select["FAQSelectView"]):
                 available_topics.append(key)
 
         if not options:
-            log.tree("FAQ Select Init", [
+            logger.tree("FAQ Select Init", [
                 ("Status", "No topics available"),
                 ("FAQ_DATA Keys", ", ".join(FAQ_DATA.keys()) if FAQ_DATA else "Empty"),
             ], emoji="⚠️")
@@ -782,7 +782,7 @@ class FAQTopicSelect(ui.Select["FAQSelectView"]):
             custom_id="guide:faq:select",
         )
 
-        log.tree("FAQ Select Initialized", [
+        logger.tree("FAQ Select Initialized", [
             ("Options", str(len(options))),
             ("Topics", ", ".join(available_topics) if available_topics else "None"),
         ], emoji="❓")
@@ -791,7 +791,7 @@ class FAQTopicSelect(ui.Select["FAQSelectView"]):
         """Handle topic selection."""
         topic: str = self.values[0]
 
-        log.tree("FAQ Select Callback", [
+        logger.tree("FAQ Select Callback", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
             ("Topic", topic),
@@ -804,7 +804,7 @@ class FAQTopicSelect(ui.Select["FAQSelectView"]):
                     ephemeral=True
                 )
             except discord.HTTPException as e:
-                log.error_tree("FAQ Select Response Failed", e, [
+                logger.error_tree("FAQ Select Response Failed", e, [
                     ("User", str(interaction.user.id)),
                 ])
             return
@@ -812,7 +812,7 @@ class FAQTopicSelect(ui.Select["FAQSelectView"]):
         faq: Optional[Dict] = FAQ_DATA.get(topic)
 
         if not faq:
-            log.tree("FAQ Topic Not Found", [
+            logger.tree("FAQ Topic Not Found", [
                 ("User", str(interaction.user.id)),
                 ("Topic", topic),
                 ("Available", ", ".join(FAQ_DATA.keys())),
@@ -823,7 +823,7 @@ class FAQTopicSelect(ui.Select["FAQSelectView"]):
                     ephemeral=True
                 )
             except discord.HTTPException as e:
-                log.error_tree("FAQ Error Response Failed", e, [
+                logger.error_tree("FAQ Error Response Failed", e, [
                     ("User", str(interaction.user.id)),
                 ])
             return
@@ -845,7 +845,7 @@ class FAQTopicSelect(ui.Select["FAQSelectView"]):
             view = FAQResponseView(topic)
             await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
-            log.tree("Guide FAQ Selected", [
+            logger.tree("Guide FAQ Selected", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Topic", topic),
@@ -853,13 +853,13 @@ class FAQTopicSelect(ui.Select["FAQSelectView"]):
             ], emoji="❓")
 
         except discord.HTTPException as e:
-            log.error_tree("FAQ Response Failed", e, [
+            logger.error_tree("FAQ Response Failed", e, [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Topic", topic),
             ])
         except Exception as e:
-            log.error_tree("FAQ Callback Error", e, [
+            logger.error_tree("FAQ Callback Error", e, [
                 ("User", str(interaction.user.id)),
                 ("Topic", topic),
             ])
@@ -880,7 +880,7 @@ class FAQResponseView(ui.View):
         self.topic: str = topic
         self.lang: str = lang
 
-        log.tree("FAQ Response View Created", [
+        logger.tree("FAQ Response View Created", [
             ("Topic", topic),
             ("Language", lang),
         ], emoji="🌐")
@@ -894,7 +894,7 @@ class FAQResponseView(ui.View):
         self.lang = "ar" if self.lang == "en" else "en"
         button.label = "English" if self.lang == "ar" else "العربية"
 
-        log.tree("FAQ Language Toggle", [
+        logger.tree("FAQ Language Toggle", [
             ("User", f"{interaction.user.name}"),
             ("ID", str(interaction.user.id)),
             ("Topic", self.topic),
@@ -905,7 +905,7 @@ class FAQResponseView(ui.View):
         faq: Optional[Dict] = FAQ_DATA.get(self.topic)
 
         if not faq:
-            log.tree("FAQ Data Missing on Toggle", [
+            logger.tree("FAQ Data Missing on Toggle", [
                 ("Topic", self.topic),
             ], emoji="❌")
             try:
@@ -933,20 +933,20 @@ class FAQResponseView(ui.View):
 
             await interaction.response.edit_message(embed=embed, view=self)
 
-            log.tree("FAQ Language Toggled", [
+            logger.tree("FAQ Language Toggled", [
                 ("User", f"{interaction.user.name}"),
                 ("Topic", self.topic),
                 ("Language", self.lang.upper()),
             ], emoji="✅")
 
         except discord.HTTPException as e:
-            log.error_tree("FAQ Toggle Response Failed", e, [
+            logger.error_tree("FAQ Toggle Response Failed", e, [
                 ("User", str(interaction.user.id)),
                 ("Topic", self.topic),
                 ("Language", self.lang),
             ])
         except Exception as e:
-            log.error_tree("FAQ Toggle Error", e, [
+            logger.error_tree("FAQ Toggle Error", e, [
                 ("User", str(interaction.user.id)),
                 ("Topic", self.topic),
             ])
@@ -1032,7 +1032,7 @@ class GuideView(ui.View):
         self, interaction: discord.Interaction, button: ui.Button
     ) -> None:
         """Show server rules."""
-        log.tree("Guide Rules Button", [
+        logger.tree("Guide Rules Button", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
             ("Guild", interaction.guild.name if interaction.guild else "DM"),
@@ -1048,18 +1048,18 @@ class GuideView(ui.View):
 
             await interaction.response.send_message(embed=embed, ephemeral=True)
 
-            log.tree("Guide Button Response Sent", [
+            logger.tree("Guide Button Response Sent", [
                 ("Section", "Rules"),
                 ("User", str(interaction.user.id)),
             ], emoji="✅")
 
         except discord.HTTPException as e:
-            log.error_tree("Guide Rules Button Failed", e, [
+            logger.error_tree("Guide Rules Button Failed", e, [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
             ])
         except Exception as e:
-            log.error_tree("Guide Rules Button Error", e, [
+            logger.error_tree("Guide Rules Button Error", e, [
                 ("User", str(interaction.user.id)),
             ])
             try:
@@ -1109,7 +1109,7 @@ class GuideView(ui.View):
         self, interaction: discord.Interaction, button: ui.Button
     ) -> None:
         """Show server roles info."""
-        log.tree("Guide Roles Button", [
+        logger.tree("Guide Roles Button", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
             ("Guild", interaction.guild.name if interaction.guild else "DM"),
@@ -1125,18 +1125,18 @@ class GuideView(ui.View):
 
             await interaction.response.send_message(embed=embed, ephemeral=True)
 
-            log.tree("Guide Button Response Sent", [
+            logger.tree("Guide Button Response Sent", [
                 ("Section", "Roles"),
                 ("User", str(interaction.user.id)),
             ], emoji="✅")
 
         except discord.HTTPException as e:
-            log.error_tree("Guide Roles Button Failed", e, [
+            logger.error_tree("Guide Roles Button Failed", e, [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
             ])
         except Exception as e:
-            log.error_tree("Guide Roles Button Error", e, [
+            logger.error_tree("Guide Roles Button Error", e, [
                 ("User", str(interaction.user.id)),
             ])
             try:
@@ -1158,7 +1158,7 @@ class GuideView(ui.View):
         self, interaction: discord.Interaction, button: ui.Button
     ) -> None:
         """Show FAQ dropdown."""
-        log.tree("Guide FAQ Button", [
+        logger.tree("Guide FAQ Button", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
             ("Guild", interaction.guild.name if interaction.guild else "DM"),
@@ -1184,18 +1184,18 @@ class GuideView(ui.View):
             view = FAQSelectView()
             await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
-            log.tree("Guide Button Response Sent", [
+            logger.tree("Guide Button Response Sent", [
                 ("Section", "FAQ"),
                 ("User", str(interaction.user.id)),
             ], emoji="✅")
 
         except discord.HTTPException as e:
-            log.error_tree("Guide FAQ Button Failed", e, [
+            logger.error_tree("Guide FAQ Button Failed", e, [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
             ])
         except Exception as e:
-            log.error_tree("Guide FAQ Button Error", e, [
+            logger.error_tree("Guide FAQ Button Error", e, [
                 ("User", str(interaction.user.id)),
             ])
             try:
@@ -1217,7 +1217,7 @@ class GuideView(ui.View):
         self, interaction: discord.Interaction, button: ui.Button
     ) -> None:
         """Show commands category dropdown."""
-        log.tree("Guide Commands Button", [
+        logger.tree("Guide Commands Button", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
             ("Guild", interaction.guild.name if interaction.guild else "DM"),
@@ -1241,18 +1241,18 @@ class GuideView(ui.View):
             view = CommandsSelectView()
             await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
-            log.tree("Guide Button Response Sent", [
+            logger.tree("Guide Button Response Sent", [
                 ("Section", "Commands"),
                 ("User", str(interaction.user.id)),
             ], emoji="✅")
 
         except discord.HTTPException as e:
-            log.error_tree("Guide Commands Button Failed", e, [
+            logger.error_tree("Guide Commands Button Failed", e, [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
             ])
         except Exception as e:
-            log.error_tree("Guide Commands Button Error", e, [
+            logger.error_tree("Guide Commands Button Error", e, [
                 ("User", str(interaction.user.id)),
             ])
             try:
@@ -1278,14 +1278,14 @@ def setup_guide_views(bot: Client) -> None:
     """
     try:
         bot.add_view(GuideView())
-        log.tree("Guide Views Registered", [
+        logger.tree("Guide Views Registered", [
             ("View", "GuideView"),
             ("Buttons", "4 (Rules, Roles, FAQ, Commands)"),
             ("Nested", "FAQ and Commands have dropdowns"),
             ("Persistent", "Yes (timeout=None)"),
         ], emoji="✅")
     except Exception as e:
-        log.error_tree("Guide Views Registration Failed", e, [
+        logger.error_tree("Guide Views Registration Failed", e, [
             ("View", "GuideView"),
         ])
         raise

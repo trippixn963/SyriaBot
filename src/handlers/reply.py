@@ -18,7 +18,7 @@ from typing import Optional, TYPE_CHECKING
 
 import discord
 
-from src.core.logger import log
+from src.core.logger import logger
 from src.core.constants import MAX_IMAGE_SIZE, MAX_VIDEO_SIZE, DELETE_DELAY_SHORT
 from src.core.colors import COLOR_ERROR, COLOR_WARNING
 from src.utils.permissions import is_cooldown_exempt
@@ -169,7 +169,7 @@ class ReplyHandler:
 
     async def _handle_convert(self, message: discord.Message) -> None:
         """Handle replying 'convert' to an image/video - opens interactive editor."""
-        log.tree("Convert Reply Started", [
+        logger.tree("Convert Reply Started", [
             ("User", f"{message.author.name} ({message.author.display_name})"),
             ("ID", str(message.author.id)),
             ("Channel", message.channel.name if hasattr(message.channel, 'name') else "DM"),
@@ -181,7 +181,7 @@ class ReplyHandler:
 
         ref = message.reference
         if not ref or not ref.message_id:
-            log.tree("Convert Reply Skipped", [
+            logger.tree("Convert Reply Skipped", [
                 ("User", f"{message.author.name} ({message.author.display_name})"),
                 ("ID", str(message.author.id)),
                 ("Reason", "No message reference"),
@@ -193,7 +193,7 @@ class ReplyHandler:
             try:
                 original = await message.channel.fetch_message(ref.message_id)
             except discord.HTTPException as e:
-                log.tree("Convert Fetch Failed", [
+                logger.tree("Convert Fetch Failed", [
                     ("User", f"{message.author.name} ({message.author.display_name})"),
                     ("ID", str(message.author.id)),
                     ("Message ID", str(ref.message_id)),
@@ -211,7 +211,7 @@ class ReplyHandler:
 
             if content_type.startswith("image/"):
                 if attachment.size > MAX_IMAGE_SIZE:
-                    log.tree("Convert Image Too Large", [
+                    logger.tree("Convert Image Too Large", [
                         ("User", f"{message.author.name}"),
                         ("ID", str(message.author.id)),
                         ("Size", f"{attachment.size // 1024}KB"),
@@ -225,7 +225,7 @@ class ReplyHandler:
                     is_video = False
                     break
                 except Exception as e:
-                    log.tree("Attachment Read Failed", [
+                    logger.tree("Attachment Read Failed", [
                         ("File", attachment.filename),
                         ("Error", str(e)[:50]),
                     ], emoji="⚠️")
@@ -233,7 +233,7 @@ class ReplyHandler:
 
             elif content_type.startswith("video/"):
                 if attachment.size > MAX_VIDEO_SIZE:
-                    log.tree("Convert Video Too Large", [
+                    logger.tree("Convert Video Too Large", [
                         ("User", f"{message.author.name}"),
                         ("ID", str(message.author.id)),
                         ("Size", f"{attachment.size // (1024*1024)}MB"),
@@ -247,7 +247,7 @@ class ReplyHandler:
                     is_video = True
                     break
                 except Exception as e:
-                    log.tree("Attachment Read Failed", [
+                    logger.tree("Attachment Read Failed", [
                         ("File", attachment.filename),
                         ("Error", str(e)[:50]),
                     ], emoji="⚠️")
@@ -255,7 +255,7 @@ class ReplyHandler:
 
             elif convert_service.is_image(attachment.filename):
                 if attachment.size > MAX_IMAGE_SIZE:
-                    log.tree("Convert Image Too Large", [
+                    logger.tree("Convert Image Too Large", [
                         ("User", f"{message.author.name}"),
                         ("ID", str(message.author.id)),
                         ("File", attachment.filename),
@@ -270,7 +270,7 @@ class ReplyHandler:
                     is_video = False
                     break
                 except Exception as e:
-                    log.tree("Attachment Read Failed", [
+                    logger.tree("Attachment Read Failed", [
                         ("File", attachment.filename),
                         ("Error", str(e)[:50]),
                     ], emoji="⚠️")
@@ -278,7 +278,7 @@ class ReplyHandler:
 
             elif convert_service.is_video(attachment.filename):
                 if attachment.size > MAX_VIDEO_SIZE:
-                    log.tree("Convert Video Too Large", [
+                    logger.tree("Convert Video Too Large", [
                         ("User", f"{message.author.name}"),
                         ("ID", str(message.author.id)),
                         ("File", attachment.filename),
@@ -293,7 +293,7 @@ class ReplyHandler:
                     is_video = True
                     break
                 except Exception as e:
-                    log.tree("Attachment Read Failed", [
+                    logger.tree("Attachment Read Failed", [
                         ("File", attachment.filename),
                         ("Error", str(e)[:50]),
                     ], emoji="⚠️")
@@ -319,7 +319,7 @@ class ReplyHandler:
                         break
 
         if not media_data:
-            log.tree("Convert No Media Found", [
+            logger.tree("Convert No Media Found", [
                 ("User", f"{message.author.name}"),
                 ("ID", str(message.author.id)),
                 ("Original Message", str(ref.message_id)),
@@ -327,7 +327,7 @@ class ReplyHandler:
             await message.reply("No image or video found.", mention_author=False)
             return
 
-        log.tree("Convert", [
+        logger.tree("Convert", [
             ("User", f"{message.author.name} ({message.author.display_name})"),
             ("ID", str(message.author.id)),
             ("Type", "Video" if is_video else "Image"),
@@ -344,7 +344,7 @@ class ReplyHandler:
 
     async def _handle_quote(self, message: discord.Message) -> None:
         """Handle replying 'quote' to a message - generates quote image."""
-        log.tree("Quote Reply Started", [
+        logger.tree("Quote Reply Started", [
             ("User", f"{message.author.name} ({message.author.display_name})"),
             ("ID", str(message.author.id)),
         ], emoji="💬")
@@ -355,7 +355,7 @@ class ReplyHandler:
 
         ref = message.reference
         if not ref or not ref.message_id:
-            log.tree("Quote Reply Skipped", [
+            logger.tree("Quote Reply Skipped", [
                 ("User", f"{message.author.name} ({message.author.display_name})"),
                 ("ID", str(message.author.id)),
                 ("Reason", "No message reference"),
@@ -367,7 +367,7 @@ class ReplyHandler:
             try:
                 original = await message.channel.fetch_message(ref.message_id)
             except discord.HTTPException as e:
-                log.tree("Quote Fetch Failed", [
+                logger.tree("Quote Fetch Failed", [
                     ("User", f"{message.author.name} ({message.author.display_name})"),
                     ("ID", str(message.author.id)),
                     ("Message ID", str(ref.message_id)),
@@ -377,7 +377,7 @@ class ReplyHandler:
                 return
 
         if not original.content or not original.content.strip():
-            log.tree("Quote No Content", [
+            logger.tree("Quote No Content", [
                 ("User", f"{message.author.name} ({message.author.display_name})"),
                 ("ID", str(message.author.id)),
                 ("Target Message", str(ref.message_id)),
@@ -425,7 +425,7 @@ class ReplyHandler:
             if message.guild.banner:
                 banner_url = str(message.guild.banner.url)
 
-        log.tree("Quote", [
+        logger.tree("Quote", [
             ("User", f"{message.author.name} ({message.author.display_name})"),
             ("ID", str(message.author.id)),
             ("Author", f"{author.name} ({author.display_name})"),
@@ -447,7 +447,7 @@ class ReplyHandler:
         )
 
         if not result.success:
-            log.tree("Quote Generation Failed", [
+            logger.tree("Quote Generation Failed", [
                 ("User", f"{message.author.name}"),
                 ("ID", str(message.author.id)),
                 ("Error", result.error[:50] if result.error else "Unknown"),
@@ -463,7 +463,7 @@ class ReplyHandler:
         msg = await message.reply(file=file, view=view, mention_author=False)
         view.message = msg
 
-        log.tree("Quote Sent", [
+        logger.tree("Quote Sent", [
             ("User", f"{message.author.name} ({message.author.display_name})"),
             ("ID", str(message.author.id)),
             ("Author", f"{author.name}"),
@@ -472,7 +472,7 @@ class ReplyHandler:
 
     async def _handle_translate(self, message: discord.Message, target_lang: str) -> None:
         """Handle replying 'translate to X' to a message."""
-        log.tree("Translate Reply Started", [
+        logger.tree("Translate Reply Started", [
             ("User", f"{message.author.name} ({message.author.display_name})"),
             ("ID", str(message.author.id)),
             ("Target Lang", target_lang),
@@ -480,7 +480,7 @@ class ReplyHandler:
 
         ref = message.reference
         if not ref or not ref.message_id:
-            log.tree("Translate Reply Skipped", [
+            logger.tree("Translate Reply Skipped", [
                 ("User", f"{message.author.name} ({message.author.display_name})"),
                 ("ID", str(message.author.id)),
                 ("Reason", "No message reference"),
@@ -492,7 +492,7 @@ class ReplyHandler:
             try:
                 original = await message.channel.fetch_message(ref.message_id)
             except discord.HTTPException as e:
-                log.tree("Translate Fetch Failed", [
+                logger.tree("Translate Fetch Failed", [
                     ("User", f"{message.author.name} ({message.author.display_name})"),
                     ("ID", str(message.author.id)),
                     ("Message ID", str(ref.message_id)),
@@ -502,7 +502,7 @@ class ReplyHandler:
                 return
 
         if not original.content or not original.content.strip():
-            log.tree("Translate No Content", [
+            logger.tree("Translate No Content", [
                 ("User", f"{message.author.name} ({message.author.display_name})"),
                 ("ID", str(message.author.id)),
                 ("Target Message", str(ref.message_id)),
@@ -512,7 +512,7 @@ class ReplyHandler:
 
         text = original.content.strip()
 
-        log.tree("Translate Reply", [
+        logger.tree("Translate Reply", [
             ("User", f"{message.author.name} ({message.author.display_name})"),
             ("ID", str(message.author.id)),
             ("Text", text[:50] + "..." if len(text) > 50 else text),
@@ -542,7 +542,7 @@ class ReplyHandler:
             set_footer(embed)
             await message.reply(embed=embed, mention_author=False)
 
-            log.tree("Translation Failed", [
+            logger.tree("Translation Failed", [
                 ("User", f"{message.author.name}"),
                 ("ID", str(message.author.id)),
                 ("Target", target_lang),
@@ -558,7 +558,7 @@ class ReplyHandler:
             )
             set_footer(embed)
             await message.reply(embed=embed, mention_author=False)
-            log.tree("Translation Skipped", [
+            logger.tree("Translation Skipped", [
                 ("User", f"{message.author.name}"),
                 ("ID", str(message.author.id)),
                 ("Reason", f"Already in {result.target_name}"),
@@ -578,7 +578,7 @@ class ReplyHandler:
             msg = await message.reply(embed=embed, view=view, mention_author=False)
         view.message = msg
 
-        log.tree("Translation Sent", [
+        logger.tree("Translation Sent", [
             ("User", f"{message.author.name} ({message.author.display_name})"),
             ("ID", str(message.author.id)),
             ("From", f"{result.source_name} ({result.source_lang})"),
@@ -587,7 +587,7 @@ class ReplyHandler:
 
     async def _handle_download(self, message: discord.Message) -> None:
         """Handle replying 'download' or 'dw' to a message with a link."""
-        log.tree("Download Reply Started", [
+        logger.tree("Download Reply Started", [
             ("User", f"{message.author.name} ({message.author.display_name})"),
             ("ID", str(message.author.id)),
         ], emoji="📥")
@@ -613,11 +613,11 @@ class ReplyHandler:
                 try:
                     await message.delete()
                 except discord.HTTPException as e:
-                    log.tree("Download Cooldown Delete Failed", [
+                    logger.tree("Download Cooldown Delete Failed", [
                         ("User", f"{message.author.name}"),
                         ("Error", str(e)[:50]),
                     ], emoji="⚠️")
-                log.tree("Download Reply Cooldown", [
+                logger.tree("Download Reply Cooldown", [
                     ("User", f"{message.author.name} ({message.author.display_name})"),
                     ("ID", str(user_id)),
                     ("Remaining", f"{remaining:.0f}s"),
@@ -626,7 +626,7 @@ class ReplyHandler:
 
         ref = message.reference
         if not ref or not ref.message_id:
-            log.tree("Download Reply No Reference", [
+            logger.tree("Download Reply No Reference", [
                 ("User", f"{message.author.name}"),
                 ("ID", str(message.author.id)),
                 ("Reason", "No message reference found"),
@@ -638,7 +638,7 @@ class ReplyHandler:
             try:
                 original = await message.channel.fetch_message(ref.message_id)
             except discord.HTTPException as e:
-                log.tree("Download Fetch Failed", [
+                logger.tree("Download Fetch Failed", [
                     ("User", f"{message.author.name} ({message.author.display_name})"),
                     ("ID", str(message.author.id)),
                     ("Message ID", str(ref.message_id)),
@@ -659,11 +659,11 @@ class ReplyHandler:
             try:
                 await message.delete()
             except discord.HTTPException as e:
-                log.tree("Download No URL Delete Failed", [
+                logger.tree("Download No URL Delete Failed", [
                     ("User", f"{message.author.name}"),
                     ("Error", str(e)[:50]),
                 ], emoji="⚠️")
-            log.tree("Download No URL Found", [
+            logger.tree("Download No URL Found", [
                 ("User", f"{message.author.name}"),
                 ("ID", str(message.author.id)),
                 ("Original Message", str(original.id)),
@@ -677,7 +677,7 @@ class ReplyHandler:
             self._download_cooldowns[user_id] = time.time()
             await self._cleanup_download_cooldowns()
 
-        log.tree("Reply Download", [
+        logger.tree("Reply Download", [
             ("User", f"{message.author.name} ({message.author.display_name})"),
             ("ID", str(message.author.id)),
             ("URL", url[:60] + "..." if len(url) > 60 else url),

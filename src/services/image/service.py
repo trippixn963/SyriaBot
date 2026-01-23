@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 import aiohttp
 
-from src.core.logger import log
+from src.core.logger import logger
 from src.core.config import config
 from src.utils.http import http_session
 
@@ -60,12 +60,12 @@ class ImageService:
         self._available: bool = bool(config.GOOGLE_API_KEY and config.GOOGLE_CX)
 
         if self._available:
-            log.tree("Image Service Initialized", [
+            logger.tree("Image Service Initialized", [
                 ("API", "Google Custom Search"),
                 ("Status", "Ready"),
             ], emoji="✅")
         else:
-            log.tree("Image Service Unavailable", [
+            logger.tree("Image Service Unavailable", [
                 ("Reason", "Missing GOOGLE_API_KEY or GOOGLE_CX"),
             ], emoji="⚠️")
 
@@ -91,7 +91,7 @@ class ImageService:
             ImageSearchResult with list of images
         """
         if not self._available:
-            log.tree("Image Search Unavailable", [
+            logger.tree("Image Search Unavailable", [
                 ("Query", query[:50]),
                 ("Reason", "API not configured"),
             ], emoji="❌")
@@ -105,13 +105,13 @@ class ImageService:
 
         # Validate and truncate query length
         if len(query) > MAX_QUERY_LENGTH:
-            log.tree("Image Search Query Truncated", [
+            logger.tree("Image Search Query Truncated", [
                 ("Original Length", str(len(query))),
                 ("Truncated To", str(MAX_QUERY_LENGTH)),
             ], emoji="⚠️")
             query = query[:MAX_QUERY_LENGTH]
 
-        log.tree("Image Search API Call", [
+        logger.tree("Image Search API Call", [
             ("Query", query[:50] + "..." if len(query) > 50 else query),
             ("Results Requested", str(num_results)),
             ("SafeSearch", safe_search),
@@ -143,7 +143,7 @@ class ImageService:
             ) as resp:
                 if resp.status != 200:
                     error_data = await resp.text()
-                    log.tree("Image Search API Error", [
+                    logger.tree("Image Search API Error", [
                         ("Query", query[:50]),
                         ("Status", str(resp.status)),
                         ("Error", error_data[:100]),
@@ -159,7 +159,7 @@ class ImageService:
                 data = await resp.json()
 
         except asyncio.TimeoutError:
-            log.tree("Image Search Timeout", [
+            logger.tree("Image Search Timeout", [
                 ("Query", query[:50]),
                 ("Timeout", "10s"),
             ], emoji="⏳")
@@ -171,7 +171,7 @@ class ImageService:
                 error="Search timed out. Please try again."
             )
         except Exception as e:
-            log.error_tree("Image Search Error", e, [
+            logger.error_tree("Image Search Error", e, [
                 ("Query", query[:50]),
             ])
             return ImageSearchResult(
@@ -198,7 +198,7 @@ class ImageService:
             ))
 
         if not images:
-            log.tree("Image Search No Results", [
+            logger.tree("Image Search No Results", [
                 ("Query", query[:50]),
             ], emoji="⚠️")
             return ImageSearchResult(
@@ -209,7 +209,7 @@ class ImageService:
                 error="No images found"
             )
 
-        log.tree("Image Search API Success", [
+        logger.tree("Image Search API Success", [
             ("Query", query[:50] + "..." if len(query) > 50 else query),
             ("Results", str(len(images))),
         ], emoji="✅")

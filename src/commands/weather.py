@@ -14,7 +14,7 @@ from discord.ext import commands
 from difflib import SequenceMatcher
 
 from src.core.config import config
-from src.core.logger import log
+from src.core.logger import logger
 from src.core.colors import COLOR_GOLD, COLOR_ERROR, EMOJI_TRANSFER
 from src.core.constants import VIEW_TIMEOUT_DEFAULT
 from src.utils.footer import set_footer
@@ -215,7 +215,7 @@ class WeatherView(discord.ui.View):
         """Disable button on timeout."""
         for item in self.children:
             item.disabled = True
-        log.tree("Weather View Expired", [
+        logger.tree("Weather View Expired", [
             ("City", self.city),
             ("ID", str(self.user_id)),
         ], emoji="⏳")
@@ -278,7 +278,7 @@ class WeatherView(discord.ui.View):
         # Only allow the original user to toggle
         if interaction.user.id != self.user_id:
             await interaction.response.send_message("Only the person who used the command can toggle units.", ephemeral=True)
-            log.tree("Weather Toggle Rejected", [
+            logger.tree("Weather Toggle Rejected", [
                 ("City", self.city),
                 ("Attempted By", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("Attempted By ID", str(interaction.user.id)),
@@ -291,7 +291,7 @@ class WeatherView(discord.ui.View):
         embed = self.build_embed()
         await interaction.response.edit_message(embed=embed, view=self)
 
-        log.tree("Weather Unit Toggled", [
+        logger.tree("Weather Unit Toggled", [
             ("City", self.city),
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
@@ -344,20 +344,20 @@ class WeatherCog(commands.Cog):
                     if resp.status == 200:
                         return await resp.json()
                     elif resp.status == 401:
-                        log.tree("Weather API Error", [
+                        logger.tree("Weather API Error", [
                             ("City", city),
                             ("Status", str(resp.status)),
                             ("Reason", "Invalid API key"),
                         ], emoji="❌")
                         return None
 
-            log.tree("Weather City Not Found", [
+            logger.tree("Weather City Not Found", [
                 ("Query", city),
             ], emoji="⚠️")
             return None
 
         except Exception as e:
-            log.tree("Weather Fetch Error", [
+            logger.tree("Weather Fetch Error", [
                 ("City", city),
                 ("Error", str(e)[:100]),
             ], emoji="❌")
@@ -374,7 +374,7 @@ class WeatherCog(commands.Cog):
                 "City name is too long. Please enter a shorter name.",
                 ephemeral=True
             )
-            log.tree("Weather Query Too Long", [
+            logger.tree("Weather Query Too Long", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Length", str(len(city))),
@@ -390,14 +390,14 @@ class WeatherCog(commands.Cog):
             )
             set_footer(embed)
             await interaction.followup.send(embed=embed, ephemeral=True)
-            log.tree("Weather Command Failed", [
+            logger.tree("Weather Command Failed", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Reason", "API key not configured"),
             ], emoji="❌")
             return
 
-        log.tree("Weather Command", [
+        logger.tree("Weather Command", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
             ("City", city),
@@ -431,7 +431,7 @@ class WeatherCog(commands.Cog):
 
         await interaction.followup.send(embed=embed, view=view)
 
-        log.tree("Weather Complete", [
+        logger.tree("Weather Complete", [
             ("City", actual_city),
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
@@ -477,19 +477,19 @@ class WeatherCog(commands.Cog):
                     ephemeral=True,
                 )
             except discord.HTTPException as e:
-                log.tree("Weather Cooldown Response Failed", [
+                logger.tree("Weather Cooldown Response Failed", [
                     ("User", f"{interaction.user.name}"),
                     ("Error", str(e)[:50]),
                 ], emoji="⚠️")
 
-            log.tree("Weather Cooldown", [
+            logger.tree("Weather Cooldown", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Remaining", time_str),
             ], emoji="⏳")
             return
 
-        log.tree("Weather Command Error", [
+        logger.tree("Weather Command Error", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
             ("Error", str(error)[:100]),
@@ -507,7 +507,7 @@ class WeatherCog(commands.Cog):
                     ephemeral=True,
                 )
         except discord.HTTPException as e:
-            log.tree("Weather Error Response Failed", [
+            logger.tree("Weather Error Response Failed", [
                 ("User", f"{interaction.user.name}"),
                 ("Error", str(e)[:50]),
             ], emoji="⚠️")
@@ -516,4 +516,4 @@ class WeatherCog(commands.Cog):
 async def setup(bot: commands.Bot) -> None:
     """Load the weather cog."""
     await bot.add_cog(WeatherCog(bot))
-    log.tree("Command Loaded", [("Name", "weather")], emoji="✅")
+    logger.tree("Command Loaded", [("Name", "weather")], emoji="✅")

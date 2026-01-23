@@ -16,7 +16,7 @@ import discord
 from discord.ext import commands
 from pathlib import Path
 
-from src.core.logger import log
+from src.core.logger import logger
 from src.core.config import config
 from src.services.database import db
 
@@ -80,7 +80,7 @@ class GiveawayReactionHandler(commands.Cog):
 
         if user_level >= REQUIRED_LEVEL:
             # User meets requirement
-            log.tree("Giveaway Entry", [
+            logger.tree("Giveaway Entry", [
                 ("User", payload.member.name),
                 ("ID", str(user_id)),
                 ("Level", str(user_level)),
@@ -115,16 +115,16 @@ class GiveawayReactionHandler(commands.Cog):
                 await asyncio.sleep(5)
                 await warning.delete()
 
-                log.tree("Giveaway Entry Denied", [
+                logger.tree("Giveaway Entry Denied", [
                     ("User", payload.member.name),
                     ("ID", str(user_id)),
                     ("Level", f"{user_level} (need {REQUIRED_LEVEL})"),
                 ], emoji="🚫")
 
         except discord.HTTPException as e:
-            log.error_tree("Giveaway Reaction Remove Failed", e)
+            logger.error_tree("Giveaway Reaction Remove Failed", e)
         except Exception as e:
-            log.error_tree("Giveaway Handler Error", e)
+            logger.error_tree("Giveaway Handler Error", e)
 
 
 async def setup(bot: commands.Bot) -> None:

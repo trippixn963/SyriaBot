@@ -27,7 +27,7 @@ from src.core.constants import (
     RATE_LIMIT_ACTION_NAMES,
     RATE_LIMIT_ACTION_EMOJIS,
 )
-from src.core.logger import log
+from src.core.logger import logger
 from src.core.config import config
 from src.services.database import db
 from src.utils.footer import set_footer
@@ -75,7 +75,7 @@ class RateLimiter:
         if config.MOD_ROLE_ID:
             self._exempt_role_ids.add(config.MOD_ROLE_ID)
 
-        log.tree("Rate Limiter Config", [
+        logger.tree("Rate Limiter Config", [
             ("Booster Role", str(config.BOOSTER_ROLE_ID) if config.BOOSTER_ROLE_ID else "Not set"),
             ("Mod Role", str(config.MOD_ROLE_ID) if config.MOD_ROLE_ID else "Not set"),
             ("Developer", str(config.OWNER_ID) if config.OWNER_ID else "Not set"),
@@ -106,12 +106,12 @@ class RateLimiter:
                 """)
 
             self._initialized = True
-            log.tree("Rate Limiter DB Initialized", [
+            logger.tree("Rate Limiter DB Initialized", [
                 ("Table", "rate_limits"),
             ], emoji="✅")
 
         except Exception as e:
-            log.tree("Rate Limiter DB Init Failed", [
+            logger.tree("Rate Limiter DB Init Failed", [
                 ("Error", str(e)),
             ], emoji="❌")
             self._initialized = False
@@ -204,7 +204,7 @@ class RateLimiter:
                     return row[0] if row else 0
 
         except Exception as e:
-            log.tree("Rate Limit Get Usage Failed", [
+            logger.tree("Rate Limit Get Usage Failed", [
                 ("ID", str(user_id)),
                 ("Action", action_type),
                 ("Error", str(e)),
@@ -269,7 +269,7 @@ class RateLimiter:
             return True
 
         except Exception as e:
-            log.tree("Rate Limit Consume Failed", [
+            logger.tree("Rate Limit Consume Failed", [
                 ("ID", str(user_id)),
                 ("Action", action_type),
                 ("Error", str(e)),
@@ -353,7 +353,7 @@ class RateLimiter:
                 else:
                     await interaction.response.send_message(embed=embed, ephemeral=True)
             except discord.HTTPException as e:
-                log.tree("Rate Limit Response Failed", [
+                logger.tree("Rate Limit Response Failed", [
                     ("User", f"{member.name} ({member.display_name})"),
                     ("ID", str(member.id)),
                     ("Error", str(e)),
@@ -366,7 +366,7 @@ class RateLimiter:
                 try:
                     await message.delete()
                 except discord.HTTPException as e:
-                    log.tree("Rate Limit Delete Failed", [
+                    logger.tree("Rate Limit Delete Failed", [
                         ("User", f"{member.name} ({member.display_name})"),
                         ("Reason", "No permission or already deleted"),
                         ("Error", str(e)[:50]),
@@ -395,13 +395,13 @@ class RateLimiter:
                 self._background_tasks.add(task)
 
             except discord.HTTPException as e:
-                log.tree("Rate Limit Reply Failed", [
+                logger.tree("Rate Limit Reply Failed", [
                     ("User", f"{member.name} ({member.display_name})"),
                     ("ID", str(member.id)),
                     ("Error", str(e)),
                 ], emoji="❌")
 
-        log.tree("Rate Limit Reached", [
+        logger.tree("Rate Limit Reached", [
             ("User", f"{member.name} ({member.display_name})"),
             ("ID", str(member.id)),
             ("Action", action_name),
@@ -433,7 +433,7 @@ class RateLimiter:
                     deleted = cursor.rowcount
 
             if deleted > 0:
-                log.tree("Rate Limit Cleanup", [
+                logger.tree("Rate Limit Cleanup", [
                     ("Deleted", str(deleted)),
                     ("Weeks Kept", str(weeks_to_keep)),
                 ], emoji="🧹")
@@ -441,7 +441,7 @@ class RateLimiter:
             return deleted
 
         except Exception as e:
-            log.tree("Rate Limit Cleanup Failed", [
+            logger.tree("Rate Limit Cleanup Failed", [
                 ("Error", str(e)),
             ], emoji="❌")
             return 0

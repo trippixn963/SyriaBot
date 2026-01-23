@@ -14,7 +14,7 @@ from discord.ext import commands
 from typing import Optional
 
 from src.core.config import config
-from src.core.logger import log
+from src.core.logger import logger
 from src.core.colors import COLOR_SYRIA_GREEN
 from src.utils.footer import set_footer
 from src.services.faq import FAQ_DATA, faq_analytics, FAQView
@@ -100,7 +100,7 @@ class FAQCog(commands.Cog):
         # Record analytics
         faq_analytics.record_trigger(topic)
 
-        log.tree("FAQ Sent", [
+        logger.tree("FAQ Sent", [
             ("Moderator", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("Topic", topic),
             ("Target User", user.name if user else "None"),
@@ -115,7 +115,7 @@ class FAQCog(commands.Cog):
 async def setup(bot: commands.Bot) -> None:
     """Add the cog to the bot."""
     await bot.add_cog(FAQCog(bot))
-    log.tree("Command Loaded", [
+    logger.tree("Command Loaded", [
         ("Name", "faq"),
         ("Topics", str(len(FAQ_DATA))),
     ], emoji="✅")

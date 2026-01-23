@@ -14,7 +14,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from src.core.logger import log
+from src.core.logger import logger
 from src.core.colors import COLOR_SYRIA_GREEN, COLOR_ERROR
 from src.utils.footer import set_footer
 from src.services.birthday_service import get_birthday_service, MONTH_NAMES
@@ -82,7 +82,7 @@ class BirthdayCog(commands.Cog):
                 "Birthday feature is not available.",
                 ephemeral=True
             )
-            log.tree("Birthday Set Rejected", [
+            logger.tree("Birthday Set Rejected", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Reason", "Service not enabled"),
@@ -114,7 +114,7 @@ class BirthdayCog(commands.Cog):
 
             await interaction.response.send_message(embed=embed)
 
-            log.tree("Birthday Set", [
+            logger.tree("Birthday Set", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Birthday", f"{MONTH_NAMES[month]} {day}, {year}"),
@@ -127,7 +127,7 @@ class BirthdayCog(commands.Cog):
             set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
 
-            log.tree("Birthday Set Failed", [
+            logger.tree("Birthday Set Failed", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Reason", message),
@@ -172,7 +172,7 @@ class BirthdayCog(commands.Cog):
 
             await interaction.response.send_message(embed=embed, ephemeral=True)
 
-            log.tree("Birthday Removed (Admin)", [
+            logger.tree("Birthday Removed (Admin)", [
                 ("Admin", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("Target", f"{user.name} ({user.display_name})"),
                 ("Target ID", str(user.id)),
@@ -185,7 +185,7 @@ class BirthdayCog(commands.Cog):
             set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
 
-            log.tree("Birthday Remove Failed", [
+            logger.tree("Birthday Remove Failed", [
                 ("Admin", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("Target", f"{user.name} ({user.display_name})"),
                 ("Reason", message),
@@ -307,7 +307,7 @@ class BirthdayCog(commands.Cog):
 
         await interaction.response.send_message(embed=embed)
 
-        log.tree("Birthday List Viewed", [
+        logger.tree("Birthday List Viewed", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
             ("Count", str(len(lines))),
@@ -317,6 +317,6 @@ class BirthdayCog(commands.Cog):
 async def setup(bot: commands.Bot) -> None:
     """Add the cog to the bot."""
     await bot.add_cog(BirthdayCog(bot))
-    log.tree("Command Loaded", [
+    logger.tree("Command Loaded", [
         ("Name", "birthday (set, remove, list)"),
     ], emoji="✅")

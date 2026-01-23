@@ -14,7 +14,7 @@ import aiohttp
 import random
 from typing import Optional, Dict, List
 
-from src.core.logger import log
+from src.core.logger import logger
 
 
 # API endpoints
@@ -381,7 +381,7 @@ class ActionService:
 
     def __init__(self):
         self._session: Optional[aiohttp.ClientSession] = None
-        log.tree("Action Service Initialized", [
+        logger.tree("Action Service Initialized", [
             ("Actions", str(len(ACTIONS))),
             ("Self-Actions", str(len(SELF_ACTIONS))),
             ("Primary API", "nekos.best"),
@@ -398,7 +398,7 @@ class ActionService:
         """Close the aiohttp session."""
         if self._session and not self._session.closed:
             await self._session.close()
-            log.tree("Action Service Closed", [
+            logger.tree("Action Service Closed", [
                 ("Status", "Session closed"),
             ], emoji="🛑")
 
@@ -415,12 +415,12 @@ class ActionService:
                     if results and results[0].get("url"):
                         return results[0]["url"]
         except asyncio.TimeoutError:
-            log.tree("Nekos.best API Timeout", [
+            logger.tree("Nekos.best API Timeout", [
                 ("Endpoint", endpoint),
                 ("URL", url),
             ], emoji="⏳")
         except Exception as e:
-            log.error_tree("Nekos.best API Error", e, [
+            logger.error_tree("Nekos.best API Error", e, [
                 ("Endpoint", endpoint),
             ])
         return None
@@ -436,12 +436,12 @@ class ActionService:
                     # waifu.pics returns {"url": "..."}
                     return data.get("url")
         except asyncio.TimeoutError:
-            log.tree("Waifu.pics API Timeout", [
+            logger.tree("Waifu.pics API Timeout", [
                 ("Endpoint", endpoint),
                 ("URL", url),
             ], emoji="⏳")
         except Exception as e:
-            log.error_tree("Waifu.pics API Error", e, [
+            logger.error_tree("Waifu.pics API Error", e, [
                 ("Endpoint", endpoint),
             ])
         return None
@@ -460,7 +460,7 @@ class ActionService:
         # Get endpoint for action
         action_data = ACTIONS.get(action) or SELF_ACTIONS.get(action)
         if not action_data:
-            log.tree("Action Unknown", [
+            logger.tree("Action Unknown", [
                 ("Action", action),
                 ("Reason", "Not in ACTIONS or SELF_ACTIONS"),
             ], emoji="⚠️")
@@ -483,14 +483,14 @@ class ActionService:
                 source = "waifu.pics"
 
         if gif_url:
-            log.tree("Action GIF Fetched", [
+            logger.tree("Action GIF Fetched", [
                 ("Action", action),
                 ("Endpoint", endpoint),
                 ("Source", source),
             ], emoji="🎬")
             return gif_url
 
-        log.tree("Action GIF Failed", [
+        logger.tree("Action GIF Failed", [
             ("Action", action),
             ("Endpoint", endpoint),
             ("Reason", "Both APIs failed"),

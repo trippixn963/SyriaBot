@@ -14,7 +14,7 @@ import asyncio
 import discord
 from discord.ext import commands
 
-from src.core.logger import log
+from src.core.logger import logger
 from src.core.config import config
 from src.services.bump_service import bump_service
 from src.services.database import db
@@ -59,7 +59,7 @@ class MessageHandler(commands.Cog):
                 # Check if this is a correct guess
                 await self.bot.city_game_service.check_guess(message)
             except Exception as e:
-                log.error_tree("City Game Handler Error", e, [
+                logger.error_tree("City Game Handler Error", e, [
                     ("User", f"{message.author.name} ({message.author.display_name})"),
                     ("ID", str(message.author.id)),
                     ("Channel", str(message.channel.id)),
@@ -71,7 +71,7 @@ class MessageHandler(commands.Cog):
                 if await self.bot.confession_service.handle_message(message):
                     return  # Message was deleted
             except Exception as e:
-                log.error_tree("Confession Handler Error", e, [
+                logger.error_tree("Confession Handler Error", e, [
                     ("User", f"{message.author.name} ({message.author.display_name})"),
                     ("ID", str(message.author.id)),
                 ])
@@ -82,7 +82,7 @@ class MessageHandler(commands.Cog):
                 if await self.bot.suggestion_service.handle_message(message):
                     return  # Message was deleted
             except Exception as e:
-                log.error_tree("Suggestion Handler Error", e, [
+                logger.error_tree("Suggestion Handler Error", e, [
                     ("User", f"{message.author.name} ({message.author.display_name})"),
                     ("ID", str(message.author.id)),
                 ])
@@ -93,7 +93,7 @@ class MessageHandler(commands.Cog):
                 if await self.bot.gallery_service.on_message(message):
                     return  # Gallery handled it
             except Exception as e:
-                log.error_tree("Gallery Handler Error", e, [
+                logger.error_tree("Gallery Handler Error", e, [
                     ("User", f"{message.author.name} ({message.author.display_name})"),
                     ("ID", str(message.author.id)),
                     ("Channel", str(message.channel.id)),
@@ -104,7 +104,7 @@ class MessageHandler(commands.Cog):
             try:
                 await self.bot.tempvoice.on_message(message)
             except Exception as e:
-                log.error_tree("TempVoice Handler Error", e, [
+                logger.error_tree("TempVoice Handler Error", e, [
                     ("User", f"{message.author.name} ({message.author.display_name})"),
                     ("ID", str(message.author.id)),
                 ])
@@ -114,7 +114,7 @@ class MessageHandler(commands.Cog):
             try:
                 await self.bot.xp_service.on_message(message)
             except Exception as e:
-                log.error_tree("XP Handler Error", e, [
+                logger.error_tree("XP Handler Error", e, [
                     ("User", f"{message.author.name} ({message.author.display_name})"),
                     ("ID", str(message.author.id)),
                 ])
@@ -124,7 +124,7 @@ class MessageHandler(commands.Cog):
             try:
                 await asyncio.to_thread(db.increment_images_shared, message.author.id, message.guild.id)
             except Exception as e:
-                log.error_tree("Image Track Failed", e, [
+                logger.error_tree("Image Track Failed", e, [
                     ("User", f"{message.author.name} ({message.author.display_name})"),
                     ("ID", str(message.author.id)),
                 ])
@@ -134,7 +134,7 @@ class MessageHandler(commands.Cog):
             try:
                 await self.bot.afk_service.on_message(message)
             except Exception as e:
-                log.error_tree("AFK Handler Error", e, [
+                logger.error_tree("AFK Handler Error", e, [
                     ("User", f"{message.author.name} ({message.author.display_name})"),
                     ("ID", str(message.author.id)),
                 ])
@@ -145,7 +145,7 @@ class MessageHandler(commands.Cog):
                 if await faq.handle(message):
                     return  # FAQ was sent
             except Exception as e:
-                log.error_tree("FAQ Handler Error", e, [
+                logger.error_tree("FAQ Handler Error", e, [
                     ("User", f"{message.author.name} ({message.author.display_name})"),
                     ("ID", str(message.author.id)),
                 ])
@@ -156,7 +156,7 @@ class MessageHandler(commands.Cog):
                 if await action.handle(message):
                     return  # Action was handled
             except Exception as e:
-                log.error_tree("Action Handler Error", e, [
+                logger.error_tree("Action Handler Error", e, [
                     ("User", f"{message.author.name} ({message.author.display_name})"),
                     ("ID", str(message.author.id)),
                 ])
@@ -167,7 +167,7 @@ class MessageHandler(commands.Cog):
                 if await fun.handle(message):
                     return  # Fun command was handled
             except Exception as e:
-                log.error_tree("Fun Handler Error", e, [
+                logger.error_tree("Fun Handler Error", e, [
                     ("User", f"{message.author.name} ({message.author.display_name})"),
                     ("ID", str(message.author.id)),
                 ])
@@ -177,7 +177,7 @@ class MessageHandler(commands.Cog):
             if await self.reply.handle(message):
                 return  # Reply command was handled
         except Exception as e:
-            log.error_tree("Reply Handler Error", e, [
+            logger.error_tree("Reply Handler Error", e, [
                 ("User", f"{message.author.name} ({message.author.display_name})"),
                 ("ID", str(message.author.id)),
             ])
@@ -197,7 +197,7 @@ class MessageHandler(commands.Cog):
                 if await self.bot.gallery_service.on_reaction_add(reaction, user):
                     return  # Gallery handled it
             except Exception as e:
-                log.error_tree("Gallery Reaction Handler Error", e, [
+                logger.error_tree("Gallery Reaction Handler Error", e, [
                     ("User", f"{user.name} ({user.display_name})"),
                     ("ID", str(user.id)),
                 ])
@@ -209,7 +209,7 @@ class MessageHandler(commands.Cog):
         try:
             await asyncio.to_thread(db.increment_reactions_given, user.id, reaction.message.guild.id)
         except Exception as e:
-            log.error_tree("Reaction Track Failed", e, [
+            logger.error_tree("Reaction Track Failed", e, [
                 ("User", f"{user.name} ({user.display_name})"),
                 ("ID", str(user.id)),
             ])
@@ -218,7 +218,7 @@ class MessageHandler(commands.Cog):
 async def setup(bot: commands.Bot) -> None:
     """Register the message handler cog with the bot."""
     await bot.add_cog(MessageHandler(bot))
-    log.tree("Handler Loaded", [
+    logger.tree("Handler Loaded", [
         ("Name", "MessageHandler"),
         ("Delegates", "Fun, Action, Reply"),
     ], emoji="✅")

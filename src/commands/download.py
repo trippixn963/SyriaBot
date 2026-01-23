@@ -17,7 +17,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from src.core.logger import log
+from src.core.logger import logger
 from src.core.config import config
 from src.core.colors import COLOR_ERROR, COLOR_WARNING, EMOJI_SAVE
 from src.core.constants import DELETE_DELAY_MEDIUM
@@ -91,7 +91,7 @@ async def handle_download(
                 await interaction_or_message.response.send_message(error_msg, ephemeral=True)
             else:
                 await interaction_or_message.reply(error_msg, delete_after=10)
-            log.tree("Download URL Rejected", [
+            logger.tree("Download URL Rejected", [
                 ("Reason", "Invalid scheme"),
                 ("Scheme", parsed.scheme or "empty"),
                 ("URL", url[:50] + "..." if len(url) > 50 else url),
@@ -103,7 +103,7 @@ async def handle_download(
             await interaction_or_message.response.send_message(error_msg, ephemeral=True)
         else:
             await interaction_or_message.reply(error_msg, delete_after=10)
-        log.tree("Download URL Parse Failed", [
+        logger.tree("Download URL Parse Failed", [
             ("Error", str(e)[:100]),
             ("URL", url[:50] + "..." if len(url) > 50 else url),
         ], emoji="⚠️")
@@ -148,12 +148,12 @@ async def handle_download(
             try:
                 await interaction_or_message.delete()
             except discord.HTTPException as e:
-                log.tree("Delete Failed (Limit)", [
+                logger.tree("Delete Failed (Limit)", [
                     ("User", f"{user.name}"),
                     ("Error", str(e)[:50]),
                 ], emoji="⚠️")
 
-        log.tree("Download Limit Reached", [
+        logger.tree("Download Limit Reached", [
             ("User", f"{user.name} ({user.display_name})"),
             ("ID", str(user.id)),
             ("Remaining", "0"),
@@ -179,19 +179,19 @@ async def handle_download(
             try:
                 await interaction_or_message.delete()
             except discord.HTTPException as e:
-                log.tree("Delete Failed (Unsupported)", [
+                logger.tree("Delete Failed (Unsupported)", [
                     ("User", f"{user.name}"),
                     ("Error", str(e)[:50]),
                 ], emoji="⚠️")
 
-        log.tree("Download Unsupported URL", [
+        logger.tree("Download Unsupported URL", [
             ("User", f"{user.name} ({user.display_name})"),
             ("ID", str(user.id)),
             ("URL", url[:60]),
         ], emoji="⚠️")
         return
 
-    log.tree("Download Starting", [
+    logger.tree("Download Starting", [
         ("User", f"{user.name} ({user.display_name})"),
         ("ID", str(user.id)),
         ("Platform", platform.title()),
@@ -215,12 +215,12 @@ async def handle_download(
             progress_msg = await channel.send(
                 f"{EMOJI_SAVE} Downloading from **{platform.title()}**..."
             )
-        log.tree("Download Progress Sent", [
+        logger.tree("Download Progress Sent", [
             ("User", f"{user.name}"),
             ("Platform", platform.title()),
         ], emoji="💬")
     except discord.HTTPException as e:
-        log.tree("Download Progress Send Failed", [
+        logger.tree("Download Progress Send Failed", [
             ("User", f"{user.name}"),
             ("Error", str(e)[:50]),
         ], emoji="⚠️")
@@ -234,12 +234,12 @@ async def handle_download(
             await progress_msg.edit(
                 content=f"{EMOJI_SAVE} Processing **{len(result.files)}** file(s)..."
             )
-            log.tree("Download Progress Updated", [
+            logger.tree("Download Progress Updated", [
                 ("User", f"{user.name}"),
                 ("Files", str(len(result.files))),
             ], emoji="💬")
         except discord.HTTPException as e:
-            log.tree("Download Progress Update Failed", [
+            logger.tree("Download Progress Update Failed", [
                 ("User", f"{user.name}"),
                 ("Error", str(e)[:50]),
             ], emoji="⚠️")
@@ -249,11 +249,11 @@ async def handle_download(
         if progress_msg:
             try:
                 await progress_msg.delete()
-                log.tree("Download Progress Deleted", [
+                logger.tree("Download Progress Deleted", [
                     ("Reason", "Download failed"),
                 ], emoji="🗑️")
             except discord.HTTPException as e:
-                log.tree("Progress Delete Failed", [
+                logger.tree("Progress Delete Failed", [
                     ("User", f"{user.name}"),
                     ("Error", str(e)[:50]),
                 ], emoji="⚠️")
@@ -272,7 +272,7 @@ async def handle_download(
             msg = await channel.send(embed=embed)
             await msg.delete(delay=DELETE_DELAY_MEDIUM)
 
-        log.tree("Download Failed", [
+        logger.tree("Download Failed", [
             ("User", f"{user.name} ({user.display_name})"),
             ("ID", str(user.id)),
             ("Platform", platform.title()),
@@ -283,7 +283,7 @@ async def handle_download(
     # Record usage (only for non-boosters)
     if remaining != -1:
         new_remaining = db.record_download_usage(user.id, config.DOWNLOAD_WEEKLY_LIMIT)
-        log.tree("Download Usage Recorded", [
+        logger.tree("Download Usage Recorded", [
             ("User", f"{user.name} ({user.display_name})"),
             ("ID", str(user.id)),
             ("Remaining", str(new_remaining)),
@@ -308,11 +308,11 @@ async def handle_download(
         if progress_msg:
             try:
                 await progress_msg.delete()
-                log.tree("Download Progress Deleted", [
+                logger.tree("Download Progress Deleted", [
                     ("Reason", "Sending files"),
                 ], emoji="🗑️")
             except discord.HTTPException as e:
-                log.tree("Progress Delete Failed", [
+                logger.tree("Progress Delete Failed", [
                     ("User", f"{user.name}"),
                     ("Error", str(e)[:50]),
                 ], emoji="⚠️")
@@ -324,17 +324,17 @@ async def handle_download(
         if reply_to_delete:
             try:
                 await reply_to_delete.delete()
-                log.tree("Download Reply Deleted", [
+                logger.tree("Download Reply Deleted", [
                     ("User", f"{user.name}"),
                     ("Channel", str(channel.id)),
                 ], emoji="🗑️")
             except discord.HTTPException as e:
-                log.tree("Download Reply Delete Failed", [
+                logger.tree("Download Reply Delete Failed", [
                     ("User", f"{user.name}"),
                     ("Error", str(e)[:50]),
                 ], emoji="⚠️")
 
-        log.tree("Download Complete", [
+        logger.tree("Download Complete", [
             ("User", f"{user.name} ({user.display_name})"),
             ("ID", str(user.id)),
             ("Platform", platform.title()),
@@ -348,11 +348,11 @@ async def handle_download(
         if progress_msg:
             try:
                 await progress_msg.delete()
-                log.tree("Download Progress Deleted", [
+                logger.tree("Download Progress Deleted", [
                     ("Reason", "Upload failed"),
                 ], emoji="🗑️")
             except discord.HTTPException as del_e:
-                log.tree("Progress Delete Failed", [
+                logger.tree("Progress Delete Failed", [
                     ("User", f"{user.name}"),
                     ("Error", str(del_e)[:50]),
                 ], emoji="⚠️")
@@ -370,7 +370,7 @@ async def handle_download(
             msg = await channel.send(embed=embed)
             await msg.delete(delay=DELETE_DELAY_MEDIUM)
 
-        log.tree("Download Upload Failed", [
+        logger.tree("Download Upload Failed", [
             ("User", f"{user.name} ({user.display_name})"),
             ("ID", str(user.id)),
             ("Error", str(e)[:50]),
@@ -420,19 +420,19 @@ class DownloadCog(commands.Cog):
                 else:
                     await interaction.followup.send(embed=embed, ephemeral=True)
             except discord.HTTPException as e:
-                log.tree("Cooldown Response Failed", [
+                logger.tree("Cooldown Response Failed", [
                     ("User", f"{interaction.user.name}"),
                     ("Error", str(e)[:50]),
                 ], emoji="⚠️")
 
-            log.tree("Download Command Cooldown", [
+            logger.tree("Download Command Cooldown", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Retry After", f"{error.retry_after:.1f}s"),
             ], emoji="⏳")
             return
 
-        log.error_tree("Download Command Error", error, [
+        logger.error_tree("Download Command Error", error, [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
         ])
@@ -449,7 +449,7 @@ class DownloadCog(commands.Cog):
             else:
                 await interaction.followup.send(embed=embed, ephemeral=True)
         except discord.HTTPException as e:
-            log.tree("Error Response Failed", [
+            logger.tree("Error Response Failed", [
                 ("User", f"{interaction.user.name}"),
                 ("Error", str(e)[:50]),
             ], emoji="⚠️")
@@ -458,7 +458,7 @@ class DownloadCog(commands.Cog):
 async def setup(bot: commands.Bot) -> None:
     """Add the cog to the bot."""
     await bot.add_cog(DownloadCog(bot))
-    log.tree("Command Loaded", [
+    logger.tree("Command Loaded", [
         ("Name", "download"),
         ("Weekly Limit", str(config.DOWNLOAD_WEEKLY_LIMIT)),
     ], emoji="✅")

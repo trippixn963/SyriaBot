@@ -14,7 +14,7 @@ from zoneinfo import ZoneInfo
 
 import discord
 
-from src.core.logger import log
+from src.core.logger import logger
 
 
 TIMEZONE = ZoneInfo("America/New_York")
@@ -38,7 +38,7 @@ class ProfileSyncService:
 
         # Start scheduler
         self._task = asyncio.create_task(self._scheduler())
-        log.tree("Profile Sync Initialized", [
+        logger.tree("Profile Sync Initialized", [
             ("Guild ID", str(guild_id)),
             ("Schedule", "Daily at midnight EST"),
         ], emoji="✅")
@@ -66,7 +66,7 @@ class ProfileSyncService:
                 next_run = datetime.combine(tomorrow, SYNC_TIME, TIMEZONE)
                 wait_seconds = (next_run - now).total_seconds()
 
-                log.tree("Profile Sync Scheduled", [
+                logger.tree("Profile Sync Scheduled", [
                     ("Next Run", next_run.strftime("%Y-%m-%d %H:%M EST")),
                     ("Wait Time", f"{wait_seconds / 3600:.1f} hours"),
                 ], emoji="⏰")
@@ -76,20 +76,20 @@ class ProfileSyncService:
                 try:
                     await self._sync_profile()
                 except Exception as e:
-                    log.error_tree("Scheduled Profile Sync Failed", e)
+                    logger.error_tree("Scheduled Profile Sync Failed", e)
                     # Continue loop - will retry next day
 
             except asyncio.CancelledError:
                 raise  # Re-raise to allow clean shutdown
             except Exception as e:
-                log.error_tree("Profile Scheduler Error", e)
+                logger.error_tree("Profile Scheduler Error", e)
                 await asyncio.sleep(3600)  # Wait 1 hour before retrying
 
     async def _sync_profile(self) -> None:
         """Sync bot avatar and banner with server."""
         guild = self.bot.get_guild(self.guild_id)
         if not guild:
-            log.tree("Profile Sync Skipped", [
+            logger.tree("Profile Sync Skipped", [
                 ("Guild ID", str(self.guild_id)),
                 ("Reason", "Guild not found or unavailable"),
             ], emoji="⚠️")
@@ -107,21 +107,21 @@ class ProfileSyncService:
                 changes.append(("Avatar", "Synced from server icon"))
             except discord.HTTPException as e:
                 if "rate" in str(e).lower():
-                    log.tree("Avatar Update Rate Limited", [
+                    logger.tree("Avatar Update Rate Limited", [
                         ("Action", "Will retry next sync"),
                     ], emoji="⏳")
                 else:
-                    log.tree("Avatar Sync Failed", [
+                    logger.tree("Avatar Sync Failed", [
                         ("Error", str(e)[:100]),
                     ], emoji="❌")
             except Exception as e:
-                log.tree("Avatar Sync Failed", [
+                logger.tree("Avatar Sync Failed", [
                     ("Error", str(e)[:100]),
                 ], emoji="❌")
 
         if changes:
-            log.tree("Bot Profile Synced", changes, emoji="🔄")
+            logger.tree("Bot Profile Synced", changes, emoji="🔄")
         else:
-            log.tree("Profile Sync", [
+            logger.tree("Profile Sync", [
                 ("Status", "No changes needed"),
             ], emoji="ℹ️")

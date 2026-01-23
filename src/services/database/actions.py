@@ -11,7 +11,7 @@ Server: discord.gg/syria
 import time
 from typing import List, Dict, Any, Optional
 
-from src.core.logger import log
+from src.core.logger import logger
 
 
 class ActionsMixin:
@@ -39,7 +39,7 @@ class ActionsMixin:
 
         with self._get_conn() as conn:
             if conn is None:
-                log.tree("Action Record Skipped", [
+                logger.tree("Action Record Skipped", [
                     ("Reason", "Database unavailable"),
                 ], emoji="⚠️")
                 return
@@ -53,7 +53,7 @@ class ActionsMixin:
                     last_used_at = ?
             """, (user_id, target_key, guild_id, action.lower(), now, now))
 
-        log.tree("Action Recorded", [
+        logger.tree("Action Recorded", [
             ("ID", str(user_id)),
             ("Target ID", str(target_id) if target_id else "Self"),
             ("Action", action),

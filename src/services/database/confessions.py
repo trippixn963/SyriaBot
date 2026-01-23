@@ -11,7 +11,7 @@ Server: discord.gg/syria
 import time
 from typing import Optional, List, Dict, Any
 
-from src.core.logger import log
+from src.core.logger import logger
 
 
 class ConfessionsMixin:
@@ -40,7 +40,7 @@ class ConfessionsMixin:
                 """, (content, submitter_id, image_url, int(time.time())))
                 confession_id = cur.lastrowid
 
-            log.tree("Confession Created", [
+            logger.tree("Confession Created", [
                 ("ID", str(confession_id)),
                 ("Length", f"{len(content)} chars"),
                 ("Image", "Yes" if image_url else "No"),
@@ -50,7 +50,7 @@ class ConfessionsMixin:
             return confession_id
 
         except Exception as e:
-            log.error_tree("Confession Create Failed", e, [
+            logger.error_tree("Confession Create Failed", e, [
                 ("Length", f"{len(content)} chars"),
             ])
             return None
@@ -68,7 +68,7 @@ class ConfessionsMixin:
                 row = cur.fetchone()
                 return dict(row) if row else None
         except Exception as e:
-            log.error_tree("Confession Get Failed", e, [
+            logger.error_tree("Confession Get Failed", e, [
                 ("ID", str(confession_id)),
             ])
             return None
@@ -87,7 +87,7 @@ class ConfessionsMixin:
                 """)
                 return [dict(row) for row in cur.fetchall()]
         except Exception as e:
-            log.error_tree("Pending Confessions Get Failed", e)
+            logger.error_tree("Pending Confessions Get Failed", e)
             return []
 
     def get_next_confession_number(self) -> int:
@@ -105,7 +105,7 @@ class ConfessionsMixin:
                 row = cur.fetchone()
                 return row["next_num"] if row else 1
         except Exception as e:
-            log.error_tree("Next Confession Number Failed", e)
+            logger.error_tree("Next Confession Number Failed", e)
             return 1
 
     def approve_confession(self, confession_id: int, mod_id: int) -> Optional[int]:
@@ -140,13 +140,13 @@ class ConfessionsMixin:
                 """, (confession_number, int(time.time()), mod_id, confession_id))
 
                 if cur.rowcount == 0:
-                    log.tree("Confession Approve Failed", [
+                    logger.tree("Confession Approve Failed", [
                         ("ID", str(confession_id)),
                         ("Reason", "Not found or not pending"),
                     ], emoji="⚠️")
                     return None
 
-            log.tree("Confession Approved", [
+            logger.tree("Confession Approved", [
                 ("ID", str(confession_id)),
                 ("Number", f"#{confession_number}"),
                 ("Mod ID", str(mod_id)),
@@ -155,7 +155,7 @@ class ConfessionsMixin:
             return confession_number
 
         except Exception as e:
-            log.error_tree("Confession Approve Failed", e, [
+            logger.error_tree("Confession Approve Failed", e, [
                 ("ID", str(confession_id)),
                 ("Mod ID", str(mod_id)),
             ])
@@ -186,13 +186,13 @@ class ConfessionsMixin:
                 """, (int(time.time()), mod_id, confession_id))
 
                 if cur.rowcount == 0:
-                    log.tree("Confession Reject Failed", [
+                    logger.tree("Confession Reject Failed", [
                         ("ID", str(confession_id)),
                         ("Reason", "Not found or not pending"),
                     ], emoji="⚠️")
                     return False
 
-            log.tree("Confession Rejected", [
+            logger.tree("Confession Rejected", [
                 ("ID", str(confession_id)),
                 ("Mod ID", str(mod_id)),
             ], emoji="🚫")
@@ -200,7 +200,7 @@ class ConfessionsMixin:
             return True
 
         except Exception as e:
-            log.error_tree("Confession Reject Failed", e, [
+            logger.error_tree("Confession Reject Failed", e, [
                 ("ID", str(confession_id)),
                 ("Mod ID", str(mod_id)),
             ])
@@ -222,7 +222,7 @@ class ConfessionsMixin:
                 row = cur.fetchone()
                 return row["submitted_at"] if row else None
         except Exception as e:
-            log.error_tree("Get User Last Confession Failed", e, [
+            logger.error_tree("Get User Last Confession Failed", e, [
                 ("Submitter ID", str(submitter_id)),
             ])
             return None
@@ -249,7 +249,7 @@ class ConfessionsMixin:
                 row = cur.fetchone()
                 return row["submitter_id"] if row else None
         except Exception as e:
-            log.error_tree("Get Confession Submitter Failed", e, [
+            logger.error_tree("Get Confession Submitter Failed", e, [
                 ("Confession Number", f"#{confession_number}"),
             ])
             return None
@@ -277,5 +277,5 @@ class ConfessionsMixin:
                     "rejected": row["rejected"] or 0,
                 }
         except Exception as e:
-            log.error_tree("Confession Stats Failed", e)
+            logger.error_tree("Confession Stats Failed", e)
             return {"total": 0, "pending": 0, "approved": 0, "rejected": 0}

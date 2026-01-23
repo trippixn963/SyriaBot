@@ -12,7 +12,7 @@ import discord
 from discord.ext import commands
 
 from src.core.config import config
-from src.core.logger import log
+from src.core.logger import logger
 from src.utils.footer import init_footer
 
 
@@ -41,13 +41,13 @@ class ReadyHandler(commands.Cog):
         features.append(("Image Search", "✅" if config.GOOGLE_API_KEY else "❌"))
         features.append(("AI Chat", "✅" if config.OPENAI_API_KEY else "❌"))
 
-        log.tree("Feature Status", features, emoji="📋")
+        logger.tree("Feature Status", features, emoji="📋")
 
     @commands.Cog.listener()
     async def on_ready(self) -> None:
         """Called when the bot is ready."""
         # Use startup_banner for bot ready
-        log.startup_banner(
+        logger.startup_banner(
             bot_name=str(self.bot.user),
             bot_id=self.bot.user.id,
             guilds=len(self.bot.guilds),
@@ -62,7 +62,7 @@ class ReadyHandler(commands.Cog):
         try:
             await init_footer(self.bot)
         except Exception as e:
-            log.error_tree("Footer Init Failed", e)
+            logger.error_tree("Footer Init Failed", e)
 
         # Sync slash commands to Syria guild only (not globally)
         try:
@@ -70,25 +70,25 @@ class ReadyHandler(commands.Cog):
             self.bot.tree.copy_global_to(guild=guild_obj)
             synced = await self.bot.tree.sync(guild=guild_obj)
 
-            log.tree("Commands Synced", [
+            logger.tree("Commands Synced", [
                 ("Guild", str(config.GUILD_ID)),
                 ("Commands", str(len(synced))),
             ], emoji="🔄")
         except Exception as e:
-            log.error_tree("Command Sync Failed", e)
+            logger.error_tree("Command Sync Failed", e)
 
         # Initialize services (includes PresenceHandler which manages rotating presence)
         try:
             await self.bot._init_services()
         except Exception as e:
-            log.error_tree("Service Init Failed", e)
+            logger.error_tree("Service Init Failed", e)
 
         # Check DeepL usage at startup
         try:
             from src.services.translate import translate_service
             await translate_service.check_deepl_usage()
         except Exception as e:
-            log.tree("DeepL Usage Check Skipped", [
+            logger.tree("DeepL Usage Check Skipped", [
                 ("Error", str(e)[:50]),
             ], emoji="⚠️")
 
@@ -96,6 +96,6 @@ class ReadyHandler(commands.Cog):
 async def setup(bot: commands.Bot) -> None:
     """Register the ready handler cog with the bot."""
     await bot.add_cog(ReadyHandler(bot))
-    log.tree("Handler Loaded", [
+    logger.tree("Handler Loaded", [
         ("Name", "ReadyHandler"),
     ], emoji="✅")

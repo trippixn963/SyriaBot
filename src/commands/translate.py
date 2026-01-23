@@ -13,7 +13,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from src.core.config import config
-from src.core.logger import log
+from src.core.logger import logger
 from src.core.colors import COLOR_ERROR, COLOR_WARNING
 from src.services.translate import translate_service, find_similar_language
 from src.services.translate.views import TranslateView, create_translate_embed
@@ -43,7 +43,7 @@ class TranslateCog(commands.Cog):
         """Translate text to a target language."""
         await interaction.response.defer()
 
-        log.tree("Translate Command", [
+        logger.tree("Translate Command", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
             ("Text", text[:50] + "..." if len(text) > 50 else text),
@@ -76,7 +76,7 @@ class TranslateCog(commands.Cog):
             set_footer(embed)
             await interaction.followup.send(embed=embed, ephemeral=True)
 
-            log.tree("Translation Failed", [
+            logger.tree("Translation Failed", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Target", to),
@@ -92,7 +92,7 @@ class TranslateCog(commands.Cog):
             )
             set_footer(embed)
             await interaction.followup.send(embed=embed, ephemeral=True)
-            log.tree("Translation Skipped", [
+            logger.tree("Translation Skipped", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Reason", f"Already in {result.target_name}"),
@@ -114,7 +114,7 @@ class TranslateCog(commands.Cog):
             msg = await interaction.followup.send(embed=embed, view=view, wait=True)
         view.message = msg
 
-        log.tree("Translation Sent", [
+        logger.tree("Translation Sent", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
             ("From", f"{result.source_name} ({result.source_lang})"),
@@ -128,7 +128,7 @@ class TranslateCog(commands.Cog):
         error: app_commands.AppCommandError
     ) -> None:
         """Handle translate command errors."""
-        log.tree("Translate Command Error", [
+        logger.tree("Translate Command Error", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
             ("Error", str(error)[:100]),
@@ -146,7 +146,7 @@ class TranslateCog(commands.Cog):
             else:
                 await interaction.followup.send(embed=embed, ephemeral=True)
         except discord.HTTPException as e:
-            log.tree("Translate Error Response Failed", [
+            logger.tree("Translate Error Response Failed", [
                 ("User", f"{interaction.user.name}"),
                 ("Error", str(e)[:50]),
             ], emoji="⚠️")
@@ -155,4 +155,4 @@ class TranslateCog(commands.Cog):
 async def setup(bot: commands.Bot) -> None:
     """Add the cog to the bot."""
     await bot.add_cog(TranslateCog(bot))
-    log.tree("Command Loaded", [("Name", "translate")], emoji="✅")
+    logger.tree("Command Loaded", [("Name", "translate")], emoji="✅")

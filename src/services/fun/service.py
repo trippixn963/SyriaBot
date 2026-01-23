@@ -11,7 +11,7 @@ Server: discord.gg/syria
 import hashlib
 from typing import Tuple, List
 
-from src.core.logger import log
+from src.core.logger import logger
 from src.core.config import config
 
 
@@ -209,7 +209,7 @@ class FunService:
     """Service for fun commands with deterministic results."""
 
     def __init__(self):
-        log.tree("Fun Service Initialized", [
+        logger.tree("Fun Service Initialized", [
             ("Commands", "ship, simp, howgay"),
         ], emoji="🎮")
 
@@ -238,7 +238,7 @@ class FunService:
         percentage = self._hash_to_percentage(user1_id, user2_id, "ship")
         message = _get_message(SHIP_MESSAGES, percentage)
 
-        log.tree("Ship Calculated", [
+        logger.tree("Ship Calculated", [
             ("User 1", str(user1_id)),
             ("User 2", str(user2_id)),
             ("Result", f"{percentage}%"),
@@ -260,7 +260,7 @@ class FunService:
         percentage = self._hash_to_percentage(user_id, guild_id, "simp")
         message = _get_message(SIMP_MESSAGES, percentage)
 
-        log.tree("Simp Calculated", [
+        logger.tree("Simp Calculated", [
             ("User", str(user_id)),
             ("Result", f"{percentage}%"),
         ], emoji="🥺")
@@ -280,7 +280,7 @@ class FunService:
         """
         # Developer override
         if user_id == config.OWNER_ID:
-            log.tree("Gay Calculated", [
+            logger.tree("Gay Calculated", [
                 ("User", str(user_id)),
                 ("Result", "0% (owner override)"),
             ], emoji="🌈")
@@ -289,7 +289,7 @@ class FunService:
         percentage = self._hash_to_percentage(user_id, guild_id, "gay")
         message = _get_message(GAY_MESSAGES, percentage)
 
-        log.tree("Gay Calculated", [
+        logger.tree("Gay Calculated", [
             ("User", str(user_id)),
             ("Result", f"{percentage}%"),
         ], emoji="🌈")
@@ -309,7 +309,7 @@ class FunService:
         """
         # Developer override - always genius
         if user_id == config.OWNER_ID:
-            log.tree("Smart Calculated", [
+            logger.tree("Smart Calculated", [
                 ("User", str(user_id)),
                 ("Result", "100% (owner override)"),
             ], emoji="🧠")
@@ -318,7 +318,7 @@ class FunService:
         percentage = self._hash_to_percentage(user_id, guild_id, "smart")
         message = _get_message(SMART_MESSAGES, percentage)
 
-        log.tree("Smart Calculated", [
+        logger.tree("Smart Calculated", [
             ("User", str(user_id)),
             ("Result", f"{percentage}%"),
         ], emoji="🧠")
@@ -338,7 +338,7 @@ class FunService:
         """
         # Developer override - shredded
         if user_id == config.OWNER_ID:
-            log.tree("Bodyfat Calculated", [
+            logger.tree("Bodyfat Calculated", [
                 ("User", str(user_id)),
                 ("Result", "8% (owner override)"),
             ], emoji="💪")
@@ -347,7 +347,7 @@ class FunService:
         percentage = self._hash_to_percentage(user_id, guild_id, "bodyfat")
         message = _get_message(BODYFAT_MESSAGES, percentage)
 
-        log.tree("Bodyfat Calculated", [
+        logger.tree("Bodyfat Calculated", [
             ("User", str(user_id)),
             ("Result", f"{percentage}%"),
         ], emoji="💪")

@@ -27,7 +27,7 @@ from discord.ext import commands, tasks
 
 from src.core.config import config
 from src.core.colors import COLOR_SYRIA_GREEN
-from src.core.logger import log
+from src.core.logger import logger
 from src.utils.footer import set_footer
 
 if TYPE_CHECKING:
@@ -166,7 +166,7 @@ class CityGameService:
         # Start the inactivity checker
         self.inactivity_check.start()
 
-        log.tree("City Game Service Ready", [
+        logger.tree("City Game Service Ready", [
             ("Channel", str(config.GENERAL_CHANNEL_ID)),
             ("Role", str(DEAD_CHAT_ROLE_ID)),
             ("Inactivity", f"{INACTIVITY_THRESHOLD // 60} min"),
@@ -182,7 +182,7 @@ class CityGameService:
         # Cancel any running timeout task
         if self._timeout_task and not self._timeout_task.done():
             self._timeout_task.cancel()
-        log.tree("City Game Service Stopped", [], emoji="🛑")
+        logger.tree("City Game Service Stopped", [], emoji="🛑")
 
     async def close(self) -> None:
         """Clean up resources."""
@@ -257,7 +257,7 @@ class CityGameService:
         """Start a new city guessing game. Returns True if game started."""
         channel = self.bot.get_channel(config.GENERAL_CHANNEL_ID)
         if not channel or not isinstance(channel, discord.TextChannel):
-            log.tree("City Game Channel Not Found", [
+            logger.tree("City Game Channel Not Found", [
                 ("Channel ID", str(config.GENERAL_CHANNEL_ID)),
             ], emoji="⚠️")
             return False
@@ -268,7 +268,7 @@ class CityGameService:
         # Get random image from city folder
         image_path = self._get_random_image_from_folder(city["folder"])
         if not image_path:
-            log.tree("City Game Skipped", [
+            logger.tree("City Game Skipped", [
                 ("City", city["english"]),
                 ("Folder", city["folder"]),
                 ("Reason", "No images in folder"),
@@ -306,7 +306,7 @@ class CityGameService:
             )
 
             trigger = "Manual" if manual else "Inactivity"
-            log.tree("City Game Started", [
+            logger.tree("City Game Started", [
                 ("City", city["english"]),
                 ("Arabic", city["arabic"]),
                 ("Channel", channel.name),
@@ -320,7 +320,7 @@ class CityGameService:
         except Exception as e:
             self._game_active = False
             self._current_city = None
-            log.error_tree("City Game Start Failed", e)
+            logger.error_tree("City Game Start Failed", e)
             return False
 
     async def _game_timeout(self) -> None:
@@ -394,7 +394,7 @@ class CityGameService:
             if channel:
                 await channel.send(embed=embed)
 
-            log.tree("City Game Timeout", [
+            logger.tree("City Game Timeout", [
                 ("City", city["english"]),
                 ("Duration", f"{GUESS_TIME_LIMIT // 60} min"),
             ], emoji="⏰")
@@ -407,7 +407,7 @@ class CityGameService:
                     await self.bot.xp_service._grant_xp(winner, XP_REWARD, "city_game")
                     xp_granted = True
                 except Exception as e:
-                    log.tree("City Game XP Grant Failed", [
+                    logger.tree("City Game XP Grant Failed", [
                         ("Winner", winner.name),
                         ("Error", str(e)[:50]),
                     ], emoji="⚠️")
@@ -433,7 +433,7 @@ class CityGameService:
             if channel:
                 await channel.send(embed=embed)
 
-            log.tree("City Game Won", [
+            logger.tree("City Game Won", [
                 ("Winner", f"{winner.name} ({winner.display_name})"),
                 ("Winner ID", str(winner.id)),
                 ("City", city["english"]),
@@ -500,6 +500,6 @@ def get_city_game_service(bot: "SyriaBot" = None) -> Optional[CityGameService]:
 async def setup_city_game_cog(bot: "SyriaBot") -> None:
     """Add the city game admin command cog."""
     await bot.add_cog(CityGameCog(bot))
-    log.tree("City Game Cog Loaded", [
+    logger.tree("City Game Cog Loaded", [
         ("Command", "/deadchat"),
     ], emoji="🏙️")

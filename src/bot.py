@@ -34,7 +34,7 @@ def _get_authorized_guilds() -> set:
 
 AUTHORIZED_GUILD_IDS = _get_authorized_guilds()
 
-from src.core.logger import log
+from src.core.logger import logger
 from src.services.tempvoice import TempVoiceService
 from src.services.sync_profile import ProfileSyncService
 from src.services.xp import XPService
@@ -100,7 +100,7 @@ class SyriaBot(commands.Bot):
 
     async def setup_hook(self) -> None:
         """Called when the bot is starting up."""
-        log.tree("Setup Hook", [
+        logger.tree("Setup Hook", [
             ("Status", "Starting"),
         ], emoji="🔧")
 
@@ -118,7 +118,7 @@ class SyriaBot(commands.Bot):
                 await self.load_extension(handler)
                 loaded_handlers.append(handler.split('.')[-1])
             except Exception as e:
-                log.error_tree("Handler Load Failed", e, [
+                logger.error_tree("Handler Load Failed", e, [
                     ("Handler", handler),
                 ])
 
@@ -144,7 +144,7 @@ class SyriaBot(commands.Bot):
                 await self.load_extension(cmd)
                 loaded_commands.append(cmd.split('.')[-1])
             except Exception as e:
-                log.error_tree("Command Load Failed", e, [
+                logger.error_tree("Command Load Failed", e, [
                     ("Command", cmd),
                 ])
 
@@ -153,7 +153,7 @@ class SyriaBot(commands.Bot):
         setup_confession_views(self)
         setup_guide_views(self)
 
-        log.tree("Setup Hook Complete", [
+        logger.tree("Setup Hook Complete", [
             ("Handlers", ", ".join(loaded_handlers)),
             ("Commands", ", ".join(loaded_commands)),
         ], emoji="✅")
@@ -182,7 +182,7 @@ class SyriaBot(commands.Bot):
                 interaction.guild.id
             )
         except Exception as e:
-            log.tree("Command Usage Track Failed", [
+            logger.tree("Command Usage Track Failed", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Command", command.name if command else "Unknown"),
@@ -195,7 +195,7 @@ class SyriaBot(commands.Bot):
         error: discord.app_commands.AppCommandError
     ) -> None:
         """Handle app command errors."""
-        log.error_tree("App Command Error", error, [
+        logger.error_tree("App Command Error", error, [
             ("Command", interaction.command.name if interaction.command else "Unknown"),
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
@@ -211,14 +211,14 @@ class SyriaBot(commands.Bot):
         if not AUTHORIZED_GUILD_IDS:
             return
         if guild.id not in AUTHORIZED_GUILD_IDS:
-            log.warning("Added To Unauthorized Guild - Leaving", [
+            logger.warning("Added To Unauthorized Guild - Leaving", [
                 ("Guild", guild.name),
                 ("ID", str(guild.id)),
             ])
             try:
                 await guild.leave()
             except Exception as e:
-                log.error("Failed To Leave Unauthorized Guild", [
+                logger.error("Failed To Leave Unauthorized Guild", [
                     ("Guild", guild.name),
                     ("Error", str(e)),
                 ])
@@ -227,7 +227,7 @@ class SyriaBot(commands.Bot):
         """Leave any guilds not in AUTHORIZED_GUILD_IDS."""
         # Safety: Don't leave any guilds if authorized set is empty (misconfigured env)
         if not AUTHORIZED_GUILD_IDS:
-            log.warning("Guild Protection Skipped", [
+            logger.warning("Guild Protection Skipped", [
                 ("Reason", "AUTHORIZED_GUILD_IDS is empty"),
                 ("Action", "Check GUILD_ID and MODS_GUILD_ID in .env"),
             ])
@@ -236,32 +236,32 @@ class SyriaBot(commands.Bot):
         if not unauthorized:
             return
 
-        log.tree("Leaving Unauthorized Guilds", [
+        logger.tree("Leaving Unauthorized Guilds", [
             ("Count", str(len(unauthorized))),
         ], emoji="⚠️")
 
         for guild in unauthorized:
             try:
-                log.warning("Leaving Unauthorized Guild", [
+                logger.warning("Leaving Unauthorized Guild", [
                     ("Guild", guild.name),
                     ("ID", str(guild.id)),
                 ])
                 await guild.leave()
             except Exception as e:
-                log.error("Failed To Leave Guild", [
+                logger.error("Failed To Leave Guild", [
                     ("Guild", guild.name),
                     ("Error", str(e)),
                 ])
 
     async def _init_services(self) -> None:
         """Initialize bot services."""
-        log.tree("Services Init", [
+        logger.tree("Services Init", [
             ("Status", "Starting"),
         ], emoji="🔧")
 
         # Validate configuration first
         if not validate_config():
-            log.tree("CRITICAL: Config Invalid", [
+            logger.tree("CRITICAL: Config Invalid", [
                 ("Impact", "Bot may not function correctly"),
                 ("Action", "Check environment variables"),
             ], emoji="🚨")
@@ -271,7 +271,7 @@ class SyriaBot(commands.Bot):
 
         # Check database health first - critical for most services
         if not db.is_healthy:
-            log.tree("CRITICAL: Database Unhealthy", [
+            logger.tree("CRITICAL: Database Unhealthy", [
                 ("Reason", db.corruption_reason or "Unknown"),
                 ("Impact", "Most services will not function"),
                 ("Action", "Fix database and restart bot"),
@@ -286,7 +286,7 @@ class SyriaBot(commands.Bot):
             await self.tempvoice.setup()
             initialized.append("TempVoice")
         except Exception as e:
-            log.error_tree("TempVoice Init Failed", e)
+            logger.error_tree("TempVoice Init Failed", e)
 
         # Profile Sync - use first guild or configured guild
         guild_id = config.GUILD_ID or (self.guilds[0].id if self.guilds else None)
@@ -296,7 +296,7 @@ class SyriaBot(commands.Bot):
                 await self.profile_sync.setup(guild_id)
                 initialized.append("ProfileSync")
             except Exception as e:
-                log.error_tree("Profile Sync Init Failed", e)
+                logger.error_tree("Profile Sync Init Failed", e)
 
         # XP System
         try:
@@ -304,7 +304,7 @@ class SyriaBot(commands.Bot):
             await self.xp_service.setup()
             initialized.append("XP")
         except Exception as e:
-            log.error_tree("XP Service Init Failed", e)
+            logger.error_tree("XP Service Init Failed", e)
 
         # Health Check Server (unified)
         try:
@@ -345,7 +345,7 @@ class SyriaBot(commands.Bot):
             await self.health_server.start()
             initialized.append("HealthServer")
         except Exception as e:
-            log.error_tree("Health Server Init Failed", e)
+            logger.error_tree("Health Server Init Failed", e)
 
         # Stats API
         try:
@@ -353,7 +353,7 @@ class SyriaBot(commands.Bot):
             await self.stats_api.setup()
             initialized.append("StatsAPI")
         except Exception as e:
-            log.error_tree("Stats API Init Failed", e)
+            logger.error_tree("Stats API Init Failed", e)
 
         # Status Webhook
         if config.STATUS_WEBHOOK_URL:
@@ -364,7 +364,7 @@ class SyriaBot(commands.Bot):
                 await self.status_webhook.start_hourly_alerts()
                 initialized.append("StatusWebhook")
             except Exception as e:
-                log.error_tree("Status Webhook Init Failed", e)
+                logger.error_tree("Status Webhook Init Failed", e)
 
         # Backup Scheduler
         try:
@@ -372,7 +372,7 @@ class SyriaBot(commands.Bot):
             await self.backup_scheduler.start()
             initialized.append("Backup")
         except Exception as e:
-            log.error_tree("Backup Scheduler Init Failed", e)
+            logger.error_tree("Backup Scheduler Init Failed", e)
 
         # AFK Service
         try:
@@ -380,7 +380,7 @@ class SyriaBot(commands.Bot):
             await self.afk_service.setup()
             initialized.append("AFK")
         except Exception as e:
-            log.error_tree("AFK Service Init Failed", e)
+            logger.error_tree("AFK Service Init Failed", e)
 
         # Gallery Service
         try:
@@ -388,7 +388,7 @@ class SyriaBot(commands.Bot):
             await self.gallery_service.setup()
             initialized.append("Gallery")
         except Exception as e:
-            log.error_tree("Gallery Service Init Failed", e)
+            logger.error_tree("Gallery Service Init Failed", e)
 
         # Presence Handler
         try:
@@ -396,7 +396,7 @@ class SyriaBot(commands.Bot):
             await self.presence_handler.setup()
             initialized.append("Presence")
         except Exception as e:
-            log.error_tree("Presence Handler Init Failed", e)
+            logger.error_tree("Presence Handler Init Failed", e)
 
         # Bump Reminder (Disboard)
         if config.BUMP_CHANNEL_ID and config.MOD_ROLE_ID:
@@ -405,7 +405,7 @@ class SyriaBot(commands.Bot):
                 bump_service.start()
                 initialized.append("BumpReminder")
             except Exception as e:
-                log.error_tree("Bump Reminder Init Failed", e)
+                logger.error_tree("Bump Reminder Init Failed", e)
 
         # Confessions
         try:
@@ -413,7 +413,7 @@ class SyriaBot(commands.Bot):
             await self.confession_service.setup()
             initialized.append("Confessions")
         except Exception as e:
-            log.error_tree("Confessions Init Failed", e)
+            logger.error_tree("Confessions Init Failed", e)
 
         # Suggestions
         try:
@@ -421,7 +421,7 @@ class SyriaBot(commands.Bot):
             await self.suggestion_service.setup()
             initialized.append("Suggestions")
         except Exception as e:
-            log.error_tree("Suggestions Init Failed", e)
+            logger.error_tree("Suggestions Init Failed", e)
 
         # Currency (JawdatBot integration)
         try:
@@ -429,7 +429,7 @@ class SyriaBot(commands.Bot):
             await self.currency_service.setup()
             initialized.append("Currency")
         except Exception as e:
-            log.error_tree("Currency Service Init Failed", e)
+            logger.error_tree("Currency Service Init Failed", e)
 
         # Birthdays
         try:
@@ -437,7 +437,7 @@ class SyriaBot(commands.Bot):
             await self.birthday_service.setup()
             initialized.append("Birthdays")
         except Exception as e:
-            log.error_tree("Birthday Service Init Failed", e)
+            logger.error_tree("Birthday Service Init Failed", e)
 
         # Guide (hourly auto-update)
         try:
@@ -445,7 +445,7 @@ class SyriaBot(commands.Bot):
             await self.guide_service.setup()
             initialized.append("Guide")
         except Exception as e:
-            log.error_tree("Guide Service Init Failed", e)
+            logger.error_tree("Guide Service Init Failed", e)
 
         # Social Media Monitor
         if config.SOCIAL_MONITOR_CH:
@@ -454,7 +454,7 @@ class SyriaBot(commands.Bot):
                 await self.social_monitor.setup()
                 initialized.append("SocialMonitor")
             except Exception as e:
-                log.error_tree("Social Monitor Init Failed", e)
+                logger.error_tree("Social Monitor Init Failed", e)
 
         # City Game (dead chat reviver) - DISABLED until images are added manually
         # try:
@@ -463,16 +463,16 @@ class SyriaBot(commands.Bot):
         #     await setup_city_game_cog(self)
         #     initialized.append("CityGame")
         # except Exception as e:
-        #     log.error_tree("City Game Service Init Failed", e)
+        #     logger.error_tree("City Game Service Init Failed", e)
 
-        log.tree("Services Init Complete", [
+        logger.tree("Services Init Complete", [
             ("Services", ", ".join(initialized)),
             ("Count", f"{len(initialized)}/16"),
         ], emoji="✅")
 
     async def close(self) -> None:
         """Clean up when bot is shutting down."""
-        log.tree("Bot Shutdown", [
+        logger.tree("Bot Shutdown", [
             ("Status", "Starting cleanup"),
         ], emoji="🛑")
 
@@ -485,56 +485,56 @@ class SyriaBot(commands.Bot):
                 self.status_webhook.stop_hourly_alerts()
                 stopped.append("StatusWebhook")
             except Exception as e:
-                log.error_tree("Status Webhook Stop Error", e)
+                logger.error_tree("Status Webhook Stop Error", e)
 
         if self.backup_scheduler:
             try:
                 await self.backup_scheduler.stop()
                 stopped.append("Backup")
             except Exception as e:
-                log.error_tree("Backup Scheduler Stop Error", e)
+                logger.error_tree("Backup Scheduler Stop Error", e)
 
         if self.stats_api:
             try:
                 await self.stats_api.stop()
                 stopped.append("StatsAPI")
             except Exception as e:
-                log.error_tree("Stats API Stop Error", e)
+                logger.error_tree("Stats API Stop Error", e)
 
         if self.tempvoice:
             try:
                 await self.tempvoice.stop()
                 stopped.append("TempVoice")
             except Exception as e:
-                log.error_tree("TempVoice Stop Error", e)
+                logger.error_tree("TempVoice Stop Error", e)
 
         if self.profile_sync:
             try:
                 await self.profile_sync.stop()
                 stopped.append("ProfileSync")
             except Exception as e:
-                log.error_tree("Profile Sync Stop Error", e)
+                logger.error_tree("Profile Sync Stop Error", e)
 
         if self.xp_service:
             try:
                 await self.xp_service.stop()
                 stopped.append("XP")
             except Exception as e:
-                log.error_tree("XP Service Stop Error", e)
+                logger.error_tree("XP Service Stop Error", e)
 
         if self.gallery_service:
             try:
                 self.gallery_service.stop()
                 stopped.append("Gallery")
             except Exception as e:
-                log.error_tree("Gallery Service Stop Error", e)
+                logger.error_tree("Gallery Service Stop Error", e)
 
         if self.presence_handler:
             try:
                 await self.presence_handler.stop()
                 stopped.append("Presence")
             except Exception as e:
-                log.error_tree("Presence Handler Stop Error", e)
+                logger.error_tree("Presence Handler Stop Error", e)
 
         # Bump Reminder
         if bump_service._running:
@@ -542,7 +542,7 @@ class SyriaBot(commands.Bot):
                 bump_service.stop()
                 stopped.append("BumpReminder")
             except Exception as e:
-                log.error_tree("Bump Reminder Stop Error", e)
+                logger.error_tree("Bump Reminder Stop Error", e)
 
         # Confessions
         if self.confession_service:
@@ -550,7 +550,7 @@ class SyriaBot(commands.Bot):
                 self.confession_service.stop()
                 stopped.append("Confessions")
             except Exception as e:
-                log.error_tree("Confessions Stop Error", e)
+                logger.error_tree("Confessions Stop Error", e)
 
         # Suggestions
         if self.suggestion_service:
@@ -558,7 +558,7 @@ class SyriaBot(commands.Bot):
                 self.suggestion_service.stop()
                 stopped.append("Suggestions")
             except Exception as e:
-                log.error_tree("Suggestions Stop Error", e)
+                logger.error_tree("Suggestions Stop Error", e)
 
         # Currency
         if self.currency_service:
@@ -566,7 +566,7 @@ class SyriaBot(commands.Bot):
                 await self.currency_service.stop()
                 stopped.append("Currency")
             except Exception as e:
-                log.error_tree("Currency Service Stop Error", e)
+                logger.error_tree("Currency Service Stop Error", e)
 
         # Birthdays
         if self.birthday_service:
@@ -574,7 +574,7 @@ class SyriaBot(commands.Bot):
                 self.birthday_service.stop()
                 stopped.append("Birthdays")
             except Exception as e:
-                log.error_tree("Birthday Service Stop Error", e)
+                logger.error_tree("Birthday Service Stop Error", e)
 
         # Guide
         if self.guide_service:
@@ -582,7 +582,7 @@ class SyriaBot(commands.Bot):
                 self.guide_service.stop()
                 stopped.append("Guide")
             except Exception as e:
-                log.error_tree("Guide Service Stop Error", e)
+                logger.error_tree("Guide Service Stop Error", e)
 
         # Social Media Monitor
         if self.social_monitor:
@@ -590,7 +590,7 @@ class SyriaBot(commands.Bot):
                 self.social_monitor.stop()
                 stopped.append("SocialMonitor")
             except Exception as e:
-                log.error_tree("Social Monitor Stop Error", e)
+                logger.error_tree("Social Monitor Stop Error", e)
 
         # City Game
         if self.city_game_service:
@@ -598,37 +598,37 @@ class SyriaBot(commands.Bot):
                 await self.city_game_service.close()
                 stopped.append("CityGame")
             except Exception as e:
-                log.error_tree("City Game Service Stop Error", e)
+                logger.error_tree("City Game Service Stop Error", e)
 
         # Quote Service (close aiohttp session)
         try:
             await quote_service.close()
             stopped.append("QuoteService")
         except Exception as e:
-            log.error_tree("Quote Service Close Error", e)
+            logger.error_tree("Quote Service Close Error", e)
 
         # Close HTTP session
         try:
             await http_session.close()
             stopped.append("HTTP")
         except Exception as e:
-            log.error_tree("HTTP Session Close Error", e)
+            logger.error_tree("HTTP Session Close Error", e)
 
         # Clean up rank card browser
         try:
             await rank_card.cleanup()
             stopped.append("RankCard")
         except Exception as e:
-            log.error_tree("Rank Card Cleanup Error", e)
+            logger.error_tree("Rank Card Cleanup Error", e)
 
         # Close action service session
         try:
             await action_service.close()
             stopped.append("ActionService")
         except Exception as e:
-            log.error_tree("Action Service Close Error", e)
+            logger.error_tree("Action Service Close Error", e)
 
         await super().close()
-        log.tree("Bot Shutdown Complete", [
+        logger.tree("Bot Shutdown Complete", [
             ("Services Stopped", ", ".join(stopped)),
         ], emoji="✅")

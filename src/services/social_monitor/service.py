@@ -21,7 +21,7 @@ import discord
 from discord import ui
 
 from src.core.config import config
-from src.core.logger import log
+from src.core.logger import logger
 
 if TYPE_CHECKING:
     from src.bot import SyriaBot
@@ -134,7 +134,7 @@ class SocialMonitorService:
     def _load_data(self) -> None:
         """Load posted video IDs from persistent storage."""
         if not self.DATA_FILE.exists():
-            log.tree("Social Monitor", [
+            logger.tree("Social Monitor", [
                 ("Data File", "Not found, starting fresh"),
             ], emoji="folder")
             return
@@ -144,7 +144,7 @@ class SocialMonitorService:
                 data: StoredData = json.load(f)
 
             if not isinstance(data, dict):
-                log.tree("Social Monitor", [
+                logger.tree("Social Monitor", [
                     ("Data File", "Invalid format, starting fresh"),
                 ], emoji="warn")
                 return
@@ -158,7 +158,7 @@ class SocialMonitorService:
             if self._posted_instagram:
                 self._first_run_instagram = False
 
-            log.tree("Social Monitor Data Loaded", [
+            logger.tree("Social Monitor Data Loaded", [
                 ("TikTok IDs", str(len(self._posted_tiktok))),
                 ("Instagram IDs", str(len(self._posted_instagram))),
                 ("First Run TikTok", str(self._first_run_tiktok)),
@@ -166,17 +166,17 @@ class SocialMonitorService:
             ], emoji="folder")
 
         except json.JSONDecodeError as e:
-            log.error_tree("Social Monitor Data Load Failed", e, [
+            logger.error_tree("Social Monitor Data Load Failed", e, [
                 ("Reason", "Invalid JSON"),
                 ("File", str(self.DATA_FILE)),
             ])
         except PermissionError as e:
-            log.error_tree("Social Monitor Data Load Failed", e, [
+            logger.error_tree("Social Monitor Data Load Failed", e, [
                 ("Reason", "Permission denied"),
                 ("File", str(self.DATA_FILE)),
             ])
         except Exception as e:
-            log.error_tree("Social Monitor Data Load Failed", e, [
+            logger.error_tree("Social Monitor Data Load Failed", e, [
                 ("File", str(self.DATA_FILE)),
             ])
 
@@ -198,12 +198,12 @@ class SocialMonitorService:
                 json.dump(data, f, indent=2)
 
         except PermissionError as e:
-            log.error_tree("Social Monitor Data Save Failed", e, [
+            logger.error_tree("Social Monitor Data Save Failed", e, [
                 ("Reason", "Permission denied"),
                 ("File", str(self.DATA_FILE)),
             ])
         except Exception as e:
-            log.error_tree("Social Monitor Data Save Failed", e, [
+            logger.error_tree("Social Monitor Data Save Failed", e, [
                 ("File", str(self.DATA_FILE)),
             ])
 
@@ -214,14 +214,14 @@ class SocialMonitorService:
     async def setup(self) -> None:
         """Initialize and start the monitoring service."""
         if not config.SOCIAL_MONITOR_CH:
-            log.tree("Social Monitor", [
+            logger.tree("Social Monitor", [
                 ("Status", "Disabled"),
                 ("Reason", "SYRIA_SOCIAL_CH not set"),
             ], emoji="info")
             return
 
         if not config.TIKTOK_USERNAME and not config.INSTAGRAM_USERNAME:
-            log.tree("Social Monitor", [
+            logger.tree("Social Monitor", [
                 ("Status", "Disabled"),
                 ("Reason", "No accounts configured"),
             ], emoji="info")
@@ -236,7 +236,7 @@ class SocialMonitorService:
         if config.INSTAGRAM_USERNAME:
             accounts.append(f"IG: @{config.INSTAGRAM_USERNAME}")
 
-        log.tree("Social Monitor", [
+        logger.tree("Social Monitor", [
             ("Status", "Started"),
             ("Channel", str(config.SOCIAL_MONITOR_CH)),
             ("Accounts", ", ".join(accounts)),
@@ -249,7 +249,7 @@ class SocialMonitorService:
         if self._task is not None:
             self._task.cancel()
             self._task = None
-        log.tree("Social Monitor", [
+        logger.tree("Social Monitor", [
             ("Status", "Stopped"),
         ], emoji="stop")
 
@@ -269,7 +269,7 @@ class SocialMonitorService:
                 if config.INSTAGRAM_USERNAME:
                     await self._check_instagram()
 
-                log.tree("Social Monitor", [
+                logger.tree("Social Monitor", [
                     ("Status", "Check complete"),
                     ("Next", f"{self.CHECK_INTERVAL}s"),
                 ], emoji="clock")
@@ -277,12 +277,12 @@ class SocialMonitorService:
                 await asyncio.sleep(self.CHECK_INTERVAL)
 
             except asyncio.CancelledError:
-                log.tree("Social Monitor", [
+                logger.tree("Social Monitor", [
                     ("Status", "Loop cancelled"),
                 ], emoji="info")
                 break
             except Exception as e:
-                log.error_tree("Social Monitor Loop Error", e, [
+                logger.error_tree("Social Monitor Loop Error", e, [
                     ("Recovery", f"Retrying in {self.ERROR_RETRY_DELAY}s"),
                 ])
                 await asyncio.sleep(self.ERROR_RETRY_DELAY)
@@ -312,7 +312,7 @@ class SocialMonitorService:
             url
         ]
 
-        log.tree("Social Monitor", [
+        logger.tree("Social Monitor", [
             ("Action", "Fetching video list"),
             ("Platform", platform.title()),
             ("URL", url),
@@ -331,7 +331,7 @@ class SocialMonitorService:
 
             if proc.returncode != 0:
                 error_msg = stderr.decode().strip()[:150] if stderr else "Unknown error"
-                log.tree("Social Monitor", [
+                logger.tree("Social Monitor", [
                     ("Status", "Fetch failed"),
                     ("Platform", platform.title()),
                     ("Exit Code", str(proc.returncode)),
@@ -351,7 +351,7 @@ class SocialMonitorService:
                 except json.JSONDecodeError:
                     continue
 
-            log.tree("Social Monitor", [
+            logger.tree("Social Monitor", [
                 ("Status", "Video list fetched"),
                 ("Platform", platform.title()),
                 ("Videos", str(len(video_ids))),
@@ -360,20 +360,20 @@ class SocialMonitorService:
             return video_ids
 
         except asyncio.TimeoutError:
-            log.tree("Social Monitor", [
+            logger.tree("Social Monitor", [
                 ("Status", "Fetch timeout"),
                 ("Platform", platform.title()),
                 ("Timeout", f"{self.FETCH_TIMEOUT}s"),
             ], emoji="warn")
             return []
         except FileNotFoundError:
-            log.error_tree("Social Monitor Error", Exception("yt-dlp not found"), [
+            logger.error_tree("Social Monitor Error", Exception("yt-dlp not found"), [
                 ("Platform", platform.title()),
                 ("Hint", "Install yt-dlp: pip install yt-dlp"),
             ])
             return []
         except Exception as e:
-            log.error_tree("Social Monitor Fetch Error", e, [
+            logger.error_tree("Social Monitor Fetch Error", e, [
                 ("Platform", platform.title()),
                 ("URL", url),
             ])
@@ -412,7 +412,7 @@ class SocialMonitorService:
 
             if proc.returncode != 0:
                 error_msg = stderr.decode().strip()[:100] if stderr else "Unknown"
-                log.tree("Social Monitor", [
+                logger.tree("Social Monitor", [
                     ("Status", "Video info fetch failed"),
                     ("Platform", platform.title()),
                     ("Error", error_msg),
@@ -437,18 +437,18 @@ class SocialMonitorService:
             )
 
         except asyncio.TimeoutError:
-            log.tree("Social Monitor", [
+            logger.tree("Social Monitor", [
                 ("Status", "Video info timeout"),
                 ("Platform", platform.title()),
             ], emoji="warn")
             return None
         except json.JSONDecodeError as e:
-            log.error_tree("Social Monitor JSON Error", e, [
+            logger.error_tree("Social Monitor JSON Error", e, [
                 ("Platform", platform.title()),
             ])
             return None
         except Exception as e:
-            log.error_tree("Social Monitor Video Info Error", e, [
+            logger.error_tree("Social Monitor Video Info Error", e, [
                 ("Platform", platform.title()),
             ])
             return None
@@ -477,7 +477,7 @@ class SocialMonitorService:
             if not self._first_run_tiktok:
                 video_url = f"https://www.tiktok.com/@{username}/video/{video_id}"
 
-                log.tree("Social Monitor", [
+                logger.tree("Social Monitor", [
                     ("Action", "Fetching new video info"),
                     ("Platform", "TikTok"),
                     ("Video ID", video_id),
@@ -500,7 +500,7 @@ class SocialMonitorService:
                     new_count += 1
 
         if self._first_run_tiktok:
-            log.tree("Social Monitor", [
+            logger.tree("Social Monitor", [
                 ("Platform", "TikTok"),
                 ("Status", "Initialized"),
                 ("Cached", f"{len(video_ids)} videos"),
@@ -508,7 +508,7 @@ class SocialMonitorService:
             self._first_run_tiktok = False
 
         if new_count > 0:
-            log.tree("Social Monitor", [
+            logger.tree("Social Monitor", [
                 ("Platform", "TikTok"),
                 ("New Posts", str(new_count)),
             ], emoji="bell")
@@ -534,7 +534,7 @@ class SocialMonitorService:
             if not self._first_run_instagram:
                 post_url = f"https://www.instagram.com/p/{video_id}/"
 
-                log.tree("Social Monitor", [
+                logger.tree("Social Monitor", [
                     ("Action", "Fetching new post info"),
                     ("Platform", "Instagram"),
                     ("Post ID", video_id),
@@ -556,7 +556,7 @@ class SocialMonitorService:
                     new_count += 1
 
         if self._first_run_instagram:
-            log.tree("Social Monitor", [
+            logger.tree("Social Monitor", [
                 ("Platform", "Instagram"),
                 ("Status", "Initialized"),
                 ("Cached", f"{len(video_ids)} posts"),
@@ -564,7 +564,7 @@ class SocialMonitorService:
             self._first_run_instagram = False
 
         if new_count > 0:
-            log.tree("Social Monitor", [
+            logger.tree("Social Monitor", [
                 ("Platform", "Instagram"),
                 ("New Posts", str(new_count)),
             ], emoji="bell")
@@ -591,14 +591,14 @@ class SocialMonitorService:
         """
         channel = self.bot.get_channel(config.SOCIAL_MONITOR_CH)
         if channel is None:
-            log.tree("Social Monitor", [
+            logger.tree("Social Monitor", [
                 ("Status", "Channel not found"),
                 ("Channel ID", str(config.SOCIAL_MONITOR_CH)),
             ], emoji="warn")
             return
 
         if not isinstance(channel, discord.TextChannel):
-            log.tree("Social Monitor", [
+            logger.tree("Social Monitor", [
                 ("Status", "Invalid channel type"),
                 ("Channel ID", str(config.SOCIAL_MONITOR_CH)),
                 ("Type", type(channel).__name__),
@@ -647,7 +647,7 @@ class SocialMonitorService:
             # Send the notification
             await channel.send(embed=embed, view=view)
 
-            log.tree("Social Monitor", [
+            logger.tree("Social Monitor", [
                 ("Status", "Notification posted"),
                 ("Platform", platform_name),
                 ("Account", f"@{username}"),
@@ -660,17 +660,17 @@ class SocialMonitorService:
             await self._notify_general_chat(platform_name, platform_emoji, platform, video_url, channel.id)
 
         except discord.Forbidden as e:
-            log.error_tree("Social Monitor Post Error", e, [
+            logger.error_tree("Social Monitor Post Error", e, [
                 ("Reason", "Missing permissions"),
                 ("Channel", str(config.SOCIAL_MONITOR_CH)),
             ])
         except discord.HTTPException as e:
-            log.error_tree("Social Monitor Post Error", e, [
+            logger.error_tree("Social Monitor Post Error", e, [
                 ("Reason", "Discord API error"),
                 ("Status", str(e.status)),
             ])
         except Exception as e:
-            log.error_tree("Social Monitor Post Error", e, [
+            logger.error_tree("Social Monitor Post Error", e, [
                 ("Platform", platform),
                 ("Video ID", post.get("id", "unknown")),
             ])
@@ -705,15 +705,15 @@ class SocialMonitorService:
             view = SocialLinkView(url=video_url, platform=platform)
             await general_channel.send(message, view=view)
 
-            log.tree("Social Monitor", [
+            logger.tree("Social Monitor", [
                 ("Status", "General chat notified"),
                 ("Channel", f"#{general_channel.name}"),
             ], emoji="bell")
 
         except discord.Forbidden:
-            log.tree("Social Monitor", [
+            logger.tree("Social Monitor", [
                 ("Status", "Cannot send to general"),
                 ("Reason", "Missing permissions"),
             ], emoji="warn")
         except Exception as e:
-            log.error_tree("Social Monitor General Notify Error", e)
+            logger.error_tree("Social Monitor General Notify Error", e)

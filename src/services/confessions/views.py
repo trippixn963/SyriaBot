@@ -12,7 +12,7 @@ import re
 import discord
 from discord import ui
 
-from src.core.logger import log
+from src.core.logger import logger
 from src.core.colors import COLOR_SUCCESS, COLOR_ERROR, EMOJI_COMMENT
 
 
@@ -62,7 +62,7 @@ class ReplyModal(ui.Modal, title="Anonymous Reply"):
 
         content = self.reply_text.value.strip()
 
-        log.tree("Reply Button Modal Submitted", [
+        logger.tree("Reply Button Modal Submitted", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
             ("Confession", f"#{self.confession_number}"),
@@ -140,7 +140,7 @@ class ConfessionReplyView(ui.View):
             )
             return
 
-        log.tree("Reply Button Clicked", [
+        logger.tree("Reply Button Clicked", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
             ("Confession", f"#{self.confession_number}"),
@@ -192,7 +192,7 @@ class ConfessionReplyHandler(ui.View):
             )
             return
 
-        log.tree("Reply Button Clicked (Persistent)", [
+        logger.tree("Reply Button Clicked (Persistent)", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
             ("Confession", f"#{confession_number}"),
@@ -205,6 +205,6 @@ class ConfessionReplyHandler(ui.View):
 def setup_confession_views(bot: discord.Client) -> None:
     """Register persistent confession views with the bot."""
     bot.add_view(ConfessionReplyHandler())
-    log.tree("Confession Persistent Views", [
+    logger.tree("Confession Persistent Views", [
         ("Status", "Registered"),
     ], emoji="✅")

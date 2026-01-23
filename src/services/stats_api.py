@@ -18,7 +18,7 @@ from datetime import datetime, timedelta
 from aiohttp import web
 from typing import TYPE_CHECKING, Optional
 
-from src.core.logger import log
+from src.core.logger import logger
 from src.core.config import config
 from src.core.constants import (
     STATS_API_PORT,
@@ -97,7 +97,7 @@ class RateLimiter:
                         self._requests.popitem(last=False)  # Remove oldest (front)
                         removed += 1
                 if removed > 0:
-                    log.tree("Rate Limiter IP Eviction", [
+                    logger.tree("Rate Limiter IP Eviction", [
                         ("Removed", str(removed)),
                         ("Remaining", str(len(self._requests))),
                     ], emoji="🧹")
@@ -139,7 +139,7 @@ def get_client_ip(request: web.Request) -> str:
         return peername[0]
 
     # Log when we can't determine IP (rate limiting may not work properly)
-    log.tree("API IP Detection Failed", [
+    logger.tree("API IP Detection Failed", [
         ("Path", request.path),
         ("Fallback", "unknown"),
     ], emoji="⚠️")
@@ -156,7 +156,7 @@ async def rate_limit_middleware(request: web.Request, handler) -> web.Response:
     allowed, retry_after = await rate_limiter.is_allowed(client_ip)
 
     if not allowed:
-        log.tree("Rate Limit Exceeded", [
+        logger.tree("Rate Limit Exceeded", [
             ("IP", client_ip),
             ("Path", request.path),
             ("Retry-After", f"{retry_after}s"),
@@ -376,7 +376,7 @@ class SyriaAPI:
             pass
         except Exception as e:
             # Log unexpected errors (rate limits, API errors, etc.)
-            log.tree("User Fetch Error", [
+            logger.tree("User Fetch Error", [
                 ("ID", str(uid)),
                 ("Error", str(e)[:50]),
             ], emoji="⚠️")
@@ -443,7 +443,7 @@ class SyriaAPI:
                 cached_data, cached_time = _response_cache[cache_key]
                 if now - cached_time < _LEADERBOARD_CACHE_TTL:
                     elapsed_ms = round((time.time() - start_time) * 1000)
-                    log.tree("Leaderboard API (Cached)", [
+                    logger.tree("Leaderboard API (Cached)", [
                         ("Client IP", client_ip),
                         ("Response Time", f"{elapsed_ms}ms"),
                     ], emoji="⚡")
@@ -478,7 +478,7 @@ class SyriaAPI:
                 del _response_cache[oldest_key]
 
             elapsed_ms = round((time.time() - start_time) * 1000)
-            log.tree("Leaderboard API Request", [
+            logger.tree("Leaderboard API Request", [
                 ("Client IP", client_ip),
                 ("Limit", str(limit)),
                 ("Offset", str(offset)),
@@ -492,7 +492,7 @@ class SyriaAPI:
             })
 
         except Exception as e:
-            log.error_tree("Leaderboard API Error", e, [
+            logger.error_tree("Leaderboard API Error", e, [
                 ("Client IP", client_ip),
                 ("Limit", str(request.query.get("limit", "50"))),
                 ("Offset", str(request.query.get("offset", "0"))),
@@ -537,7 +537,7 @@ class SyriaAPI:
             xp_per_day = round(xp_data["xp"] / days_in_server, 1) if days_in_server > 0 else 0
             messages_per_day = round(xp_data["total_messages"] / days_in_server, 1) if days_in_server > 0 else 0
 
-            log.tree("User API Request", [
+            logger.tree("User API Request", [
                 ("Client IP", client_ip),
                 ("ID", str(user_id)),
                 ("Booster", "Yes" if is_booster else "No"),
@@ -575,7 +575,7 @@ class SyriaAPI:
                 headers={"Access-Control-Allow-Origin": "*"}
             )
         except Exception as e:
-            log.error_tree("User API Error", e, [
+            logger.error_tree("User API Error", e, [
                 ("Client IP", client_ip),
                 ("ID", request.match_info.get("user_id", "unknown")),
             ])
@@ -599,7 +599,7 @@ class SyriaAPI:
                 cached_data, cached_time = _response_cache[cache_key]
                 if now - cached_time < _STATS_CACHE_TTL:
                     elapsed_ms = round((time.time() - start_time) * 1000)
-                    log.tree("Stats API (Cached)", [
+                    logger.tree("Stats API (Cached)", [
                         ("Client IP", client_ip),
                         ("Response Time", f"{elapsed_ms}ms"),
                     ], emoji="⚡")
@@ -658,7 +658,7 @@ class SyriaAPI:
                 del _response_cache[oldest_key]
 
             elapsed_ms = round((time.time() - start_time) * 1000)
-            log.tree("Stats API Request", [
+            logger.tree("Stats API Request", [
                 ("Client IP", client_ip),
                 ("Response Time", f"{elapsed_ms}ms"),
             ], emoji="📈")
@@ -670,7 +670,7 @@ class SyriaAPI:
             })
 
         except Exception as e:
-            log.error_tree("Stats API Error", e, [
+            logger.error_tree("Stats API Error", e, [
                 ("Client IP", client_ip),
             ])
             return web.json_response(
@@ -734,7 +734,7 @@ class SyriaAPI:
 
         # Verify API key
         if not self._verify_api_key(request):
-            log.tree("XP Grant Unauthorized", [
+            logger.tree("XP Grant Unauthorized", [
                 ("Client IP", client_ip),
                 ("Reason", "Invalid or missing API key"),
             ], emoji="🔒")
@@ -747,7 +747,7 @@ class SyriaAPI:
         try:
             data = await request.json()
         except Exception:
-            log.tree("XP Grant Bad Request", [
+            logger.tree("XP Grant Bad Request", [
                 ("Client IP", client_ip),
                 ("Error", "Invalid JSON body"),
             ], emoji="⚠️")
@@ -763,7 +763,7 @@ class SyriaAPI:
 
         # Validate required fields
         if not user_id or not isinstance(user_id, int):
-            log.tree("XP Grant Bad Request", [
+            logger.tree("XP Grant Bad Request", [
                 ("Client IP", client_ip),
                 ("Error", "user_id (int) is required"),
                 ("Received", str(user_id)[:50]),
@@ -775,7 +775,7 @@ class SyriaAPI:
             )
 
         if amount is None or not isinstance(amount, int):
-            log.tree("XP Grant Bad Request", [
+            logger.tree("XP Grant Bad Request", [
                 ("Client IP", client_ip),
                 ("ID", str(user_id)),
                 ("Error", "amount (int) is required"),
@@ -788,7 +788,7 @@ class SyriaAPI:
             )
 
         if amount <= 0 or amount > 100000:
-            log.tree("XP Grant Bad Request", [
+            logger.tree("XP Grant Bad Request", [
                 ("Client IP", client_ip),
                 ("ID", str(user_id)),
                 ("Error", "amount out of range"),
@@ -817,7 +817,7 @@ class SyriaAPI:
             # Update XP in database (non-blocking)
             await asyncio.to_thread(db.add_xp, user_id, guild_id, amount)
 
-            log.tree("XP Granted via API", [
+            logger.tree("XP Granted via API", [
                 ("ID", str(user_id)),
                 ("Amount", f"+{amount}"),
                 ("New XP", str(new_xp)),
@@ -841,7 +841,7 @@ class SyriaAPI:
             }, headers={"Access-Control-Allow-Origin": "*"})
 
         except Exception as e:
-            log.error_tree("XP Grant API Error", e, [
+            logger.error_tree("XP Grant API Error", e, [
                 ("ID", str(user_id)),
                 ("Amount", str(amount)),
                 ("Client IP", client_ip),
@@ -871,7 +871,7 @@ class SyriaAPI:
 
         # Verify API key
         if not self._verify_api_key(request):
-            log.tree("XP Set Unauthorized", [
+            logger.tree("XP Set Unauthorized", [
                 ("Client IP", client_ip),
                 ("Reason", "Invalid or missing API key"),
             ], emoji="🔒")
@@ -884,7 +884,7 @@ class SyriaAPI:
         try:
             data = await request.json()
         except Exception:
-            log.tree("XP Set Bad Request", [
+            logger.tree("XP Set Bad Request", [
                 ("Client IP", client_ip),
                 ("Error", "Invalid JSON body"),
             ], emoji="⚠️")
@@ -900,7 +900,7 @@ class SyriaAPI:
 
         # Validate required fields
         if not user_id or not isinstance(user_id, int):
-            log.tree("XP Set Bad Request", [
+            logger.tree("XP Set Bad Request", [
                 ("Client IP", client_ip),
                 ("Error", "user_id (int) is required"),
                 ("Received", str(user_id)[:50]),
@@ -912,7 +912,7 @@ class SyriaAPI:
             )
 
         if new_xp is None or not isinstance(new_xp, int):
-            log.tree("XP Set Bad Request", [
+            logger.tree("XP Set Bad Request", [
                 ("Client IP", client_ip),
                 ("ID", str(user_id)),
                 ("Error", "xp (int) is required"),
@@ -925,7 +925,7 @@ class SyriaAPI:
             )
 
         if new_xp < 0 or new_xp > 10000000:
-            log.tree("XP Set Bad Request", [
+            logger.tree("XP Set Bad Request", [
                 ("Client IP", client_ip),
                 ("ID", str(user_id)),
                 ("Error", "xp out of range"),
@@ -952,7 +952,7 @@ class SyriaAPI:
             # Set XP in database (non-blocking)
             await asyncio.to_thread(db.set_xp, user_id, guild_id, new_xp, new_level)
 
-            log.tree("XP Set via API", [
+            logger.tree("XP Set via API", [
                 ("ID", str(user_id)),
                 ("XP", f"{old_xp} → {new_xp}"),
                 ("Level", f"{old_level} → {new_level}"),
@@ -974,7 +974,7 @@ class SyriaAPI:
             }, headers={"Access-Control-Allow-Origin": "*"})
 
         except Exception as e:
-            log.error_tree("XP Set API Error", e, [
+            logger.error_tree("XP Set API Error", e, [
                 ("ID", str(user_id)),
                 ("XP", str(new_xp)),
                 ("Client IP", client_ip),
@@ -1015,7 +1015,7 @@ class SyriaAPI:
                     tomorrow += timedelta(days=1)
                 seconds_until_midnight = (tomorrow - now_est).total_seconds()
 
-                log.tree("Midnight Booster Refresh Scheduled", [
+                logger.tree("Midnight Booster Refresh Scheduled", [
                     ("Next Run", tomorrow.strftime("%Y-%m-%d %H:%M:%S EST")),
                     ("Wait Time", f"{int(seconds_until_midnight // 3600)}h {int((seconds_until_midnight % 3600) // 60)}m"),
                 ], emoji="⏰")
@@ -1026,12 +1026,12 @@ class SyriaAPI:
                 await self._refresh_all_booster_status()
 
             except asyncio.CancelledError:
-                log.tree("Midnight Booster Refresh", [
+                logger.tree("Midnight Booster Refresh", [
                     ("Status", "Task cancelled"),
                 ], emoji="⏹️")
                 break
             except Exception as e:
-                log.error_tree("Midnight Refresh Scheduler Error", e)
+                logger.error_tree("Midnight Refresh Scheduler Error", e)
                 # Wait an hour before retrying on error
                 await asyncio.sleep(3600)
 
@@ -1040,7 +1040,7 @@ class SyriaAPI:
         global _avatar_cache, _response_cache
 
         if not self._bot or not self._bot.is_ready():
-            log.tree("Booster Refresh Skipped", [
+            logger.tree("Booster Refresh Skipped", [
                 ("Reason", "Bot not ready"),
             ], emoji="⚠️")
             return
@@ -1048,7 +1048,7 @@ class SyriaAPI:
         from src.core.config import config
         guild = self._bot.get_guild(config.GUILD_ID)
         if not guild:
-            log.tree("Booster Refresh Skipped", [
+            logger.tree("Booster Refresh Skipped", [
                 ("Reason", "Guild not found"),
             ], emoji="⚠️")
             return
@@ -1061,12 +1061,12 @@ class SyriaAPI:
         total_users = len(cached_user_ids)
 
         if total_users == 0:
-            log.tree("Booster Refresh Skipped", [
+            logger.tree("Booster Refresh Skipped", [
                 ("Reason", "No users in cache"),
             ], emoji="ℹ️")
             return
 
-        log.tree("Midnight Booster Refresh Started", [
+        logger.tree("Midnight Booster Refresh Started", [
             ("Users to Check", str(total_users)),
             ("Guild", guild.name),
         ], emoji="🔄")
@@ -1108,7 +1108,7 @@ class SyriaAPI:
                             _avatar_cache[user_id] = (avatar_url, display_name, username, joined_at, current_is_booster)
                             updated += 1
 
-                            log.tree("Booster Status Updated", [
+                            logger.tree("Booster Status Updated", [
                                 ("User", f"{member.name} ({user_id})"),
                                 ("Old Status", "Booster" if cached_is_booster else "Non-booster"),
                                 ("New Status", "Booster" if current_is_booster else "Non-booster"),
@@ -1125,7 +1125,7 @@ class SyriaAPI:
             except Exception as e:
                 errors += 1
                 if errors <= 3:  # Only log first 3 errors
-                    log.tree("Booster Check Error", [
+                    logger.tree("Booster Check Error", [
                         ("ID", str(user_id)),
                         ("Error", str(e)[:50]),
                     ], emoji="⚠️")
@@ -1136,7 +1136,7 @@ class SyriaAPI:
 
         elapsed = round(time.time() - start_time, 2)
 
-        log.tree("Midnight Booster Refresh Complete", [
+        logger.tree("Midnight Booster Refresh Complete", [
             ("Total Checked", str(total_users)),
             ("Updated", str(updated)),
             ("Unchanged", str(unchanged)),
@@ -1157,7 +1157,7 @@ class SyriaAPI:
         self._cleanup_task = asyncio.create_task(self._periodic_cleanup())
         self._midnight_task = asyncio.create_task(self._midnight_booster_refresh())
 
-        log.tree("Syria API Ready", [
+        logger.tree("Syria API Ready", [
             ("Host", STATS_API_HOST),
             ("Port", str(STATS_API_PORT)),
             ("Endpoints", "/api/syria/leaderboard, /api/syria/user/{id}, /api/syria/stats"),
@@ -1183,7 +1183,7 @@ class SyriaAPI:
 
         if self.runner:
             await self.runner.cleanup()
-            log.tree("Syria API Stopped", [
+            logger.tree("Syria API Stopped", [
                 ("Status", "Shutdown complete"),
             ], emoji="🛑")
 

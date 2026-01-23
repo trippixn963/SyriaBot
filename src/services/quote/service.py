@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 from pilmoji import Pilmoji
 
-from src.core.logger import log
+from src.core.logger import logger
 from src.core.constants import (
     TIMEZONE_EST,
     FONT_ITALIC_PATHS,
@@ -103,7 +103,7 @@ class QuoteService:
             except (OSError, IOError):
                 continue
 
-        log.tree("Quote Service Initialized", [
+        logger.tree("Quote Service Initialized", [
             ("Style", "Make it a Quote"),
             ("Theme", "Syria Green & Gold"),
             ("Font", self._font_path.split("/")[-1] if self._font_path else "Default"),
@@ -140,7 +140,7 @@ class QuoteService:
                     data = await resp.read()
                     return Image.open(io.BytesIO(data))
         except Exception as e:
-            log.tree("Image Fetch Failed", [
+            logger.tree("Image Fetch Failed", [
                 ("Error", str(e)[:50]),
             ], emoji="❌")
         return None
@@ -364,7 +364,7 @@ class QuoteService:
         lines = wrap_text(text, font, max_width)
         if len(lines) > 6:
             lines = lines[:5] + [lines[5][:40] + "..."]
-            log.tree("Quote Text Truncated", [
+            logger.tree("Quote Text Truncated", [
                 ("Original Lines", str(len(wrap_text(text, font, max_width)))),
                 ("Truncated To", "6 lines"),
             ], emoji="⚠️")
@@ -486,7 +486,7 @@ class QuoteService:
                 img.save(output, format="PNG")
             output.seek(0)
 
-            log.tree("Quote Generated", [
+            logger.tree("Quote Generated", [
                 ("Author", author_name),
                 ("Length", f"{len(text)} chars"),
                 ("Font", f"{font_size}px"),
@@ -496,7 +496,7 @@ class QuoteService:
             return QuoteResult(success=True, image_bytes=output.getvalue())
 
         except Exception as e:
-            log.tree("Quote Generation Failed", [
+            logger.tree("Quote Generation Failed", [
                 ("Error", str(e)),
             ], emoji="❌")
             return QuoteResult(success=False, error=str(e))

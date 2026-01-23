@@ -7,7 +7,7 @@ from discord import ui
 
 from src.core.config import config
 from src.core.colors import COLOR_SUCCESS, COLOR_ERROR, COLOR_WARNING
-from src.core.logger import log
+from src.core.logger import logger
 from src.services.database import db
 from src.utils.footer import set_footer
 from .utils import extract_base_name, build_full_name
@@ -56,7 +56,7 @@ class NameModal(ui.Modal, title="Rename Channel"):
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         """Handle channel rename submission."""
-        log.tree("Rename Modal Submitted", [
+        logger.tree("Rename Modal Submitted", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
             ("Channel", self.channel.name),
@@ -80,7 +80,7 @@ class NameModal(ui.Modal, title="Rename Channel"):
                 )
                 set_footer(embed)
                 await interaction.response.send_message(embed=embed, ephemeral=True)
-                log.tree("Channel Renamed", [
+                logger.tree("Channel Renamed", [
                     ("From", old_name),
                     ("To", full_name),
                     ("Base Name", new_base_name),
@@ -103,7 +103,7 @@ class NameModal(ui.Modal, title="Rename Channel"):
                 )
                 set_footer(embed)
                 await interaction.response.send_message(embed=embed, ephemeral=True)
-                log.tree("Channel Name Reset", [
+                logger.tree("Channel Name Reset", [
                     ("From", old_name),
                     ("To", auto_name),
                     ("Base Name", display_name),
@@ -111,7 +111,7 @@ class NameModal(ui.Modal, title="Rename Channel"):
                     ("ID", str(interaction.user.id)),
                 ], emoji="🔄")
         except discord.HTTPException as e:
-            log.tree("Channel Rename Failed", [
+            logger.tree("Channel Rename Failed", [
                 ("Channel", self.channel.name),
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
@@ -140,7 +140,7 @@ class LimitModal(ui.Modal, title="Set User Limit"):
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         """Handle user limit submission."""
-        log.tree("Limit Modal Submitted", [
+        logger.tree("Limit Modal Submitted", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
             ("Channel", self.channel.name),
@@ -163,14 +163,14 @@ class LimitModal(ui.Modal, title="Set User Limit"):
             )
             set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
-            log.tree("Limit Changed", [
+            logger.tree("Limit Changed", [
                 ("Channel", self.channel.name),
                 ("Limit", limit_text),
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
             ], emoji="👥")
         except ValueError:
-            log.tree("Limit Change Rejected", [
+            logger.tree("Limit Change Rejected", [
                 ("Channel", self.channel.name),
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
@@ -181,7 +181,7 @@ class LimitModal(ui.Modal, title="Set User Limit"):
             set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
         except discord.HTTPException as e:
-            log.tree("Limit Change Failed", [
+            logger.tree("Limit Change Failed", [
                 ("Channel", self.channel.name),
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),

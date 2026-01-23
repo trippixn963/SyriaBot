@@ -12,7 +12,7 @@ import time
 from typing import Optional
 from playwright.async_api import async_playwright
 
-from src.core.logger import log
+from src.core.logger import logger
 
 
 # Status colors
@@ -82,7 +82,7 @@ async def _check_idle_timeout():
     if _browser is not None and _last_activity > 0:
         idle_time = time.time() - _last_activity
         if idle_time > _IDLE_TIMEOUT:
-            log.tree("Rank Card Browser Idle", [
+            logger.tree("Rank Card Browser Idle", [
                 ("Idle Time", f"{int(idle_time)}s"),
                 ("Action", "Closing browser"),
             ], emoji="💤")
@@ -93,7 +93,7 @@ async def _check_render_restart():
     """Check if browser should be restarted due to render count (memory cleanup)."""
     global _render_count
     if _browser is not None and _render_count >= _RESTART_AFTER_RENDERS:
-        log.tree("Rank Card Browser Restart", [
+        logger.tree("Rank Card Browser Restart", [
             ("Render Count", str(_render_count)),
             ("Action", "Restarting for memory cleanup"),
         ], emoji="🔄")
@@ -109,7 +109,7 @@ async def _get_context():
     # to prevent race conditions with the page pool
 
     if _context is None:
-        log.tree("Rank Card Browser Starting", [
+        logger.tree("Rank Card Browser Starting", [
             ("Action", "Launching Chromium"),
         ], emoji="🚀")
 
@@ -145,7 +145,7 @@ async def _get_context():
             device_scale_factor=1,
         )
 
-        log.tree("Rank Card Browser Ready", [
+        logger.tree("Rank Card Browser Ready", [
             ("Status", "Chromium launched"),
         ], emoji="✅")
 
@@ -659,7 +659,7 @@ async def generate_rank_card(
     if cache_key in _card_cache:
         cached_bytes, cached_time = _card_cache[cache_key]
         if now - cached_time < _CACHE_TTL:
-            log.tree("Rank Card Cache Hit", [
+            logger.tree("Rank Card Cache Hit", [
                 ("User", display_name),
             ], emoji="⚡")
             return cached_bytes
@@ -738,7 +738,7 @@ async def generate_rank_card(
             # Cache the result
             _card_cache[cache_key] = (screenshot, now)
 
-            log.tree("Rank Card Generated", [
+            logger.tree("Rank Card Generated", [
                 ("User", display_name),
                 ("Level", str(level)),
                 ("Renders", str(_render_count)),
@@ -747,7 +747,7 @@ async def generate_rank_card(
             return screenshot
 
         except Exception as e:
-            log.tree("Rank Card Failed", [
+            logger.tree("Rank Card Failed", [
                 ("User", display_name),
                 ("Error", str(e)[:100]),
             ], emoji="❌")
@@ -803,4 +803,4 @@ async def cleanup():
     # Force kill any remaining chrome processes as safety net
     _sync_cleanup()
 
-    log.tree("Rank Card Cleanup", [("Status", "Browser closed")], emoji="🧹")
+    logger.tree("Rank Card Cleanup", [("Status", "Browser closed")], emoji="🧹")

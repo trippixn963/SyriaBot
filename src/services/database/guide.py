@@ -13,7 +13,7 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING, Optional, Dict, Any
 
-from src.core.logger import log
+from src.core.logger import logger
 
 if TYPE_CHECKING:
     pass
@@ -52,7 +52,7 @@ class GuideMixin:
                         "message_id": row["message_id"],
                         "updated_at": row["updated_at"],
                     }
-                    log.tree("Guide Panel Fetched", [
+                    logger.tree("Guide Panel Fetched", [
                         ("Guild", str(guild_id)),
                         ("Channel", str(result["channel_id"])),
                         ("Message", str(result["message_id"])),
@@ -60,7 +60,7 @@ class GuideMixin:
                     return result
                 return None
         except Exception as e:
-            log.error_tree("Guide Panel Fetch Failed", e, [
+            logger.error_tree("Guide Panel Fetch Failed", e, [
                 ("Guild", str(guild_id)),
             ])
             return None
@@ -98,14 +98,14 @@ class GuideMixin:
                     """,
                     (guild_id, channel_id, message_id, int(time.time()))
                 )
-                log.tree("Guide Panel Saved", [
+                logger.tree("Guide Panel Saved", [
                     ("Guild", str(guild_id)),
                     ("Channel", str(channel_id)),
                     ("Message", str(message_id)),
                 ], emoji="💾")
                 return True
         except Exception as e:
-            log.error_tree("Guide Panel Save Failed", e, [
+            logger.error_tree("Guide Panel Save Failed", e, [
                 ("Guild", str(guild_id)),
                 ("Channel", str(channel_id)),
                 ("Message", str(message_id)),
@@ -136,13 +136,13 @@ class GuideMixin:
                     (int(time.time()), guild_id)
                 )
                 if cur.rowcount > 0:
-                    log.tree("Guide Panel Timestamp Updated", [
+                    logger.tree("Guide Panel Timestamp Updated", [
                         ("Guild", str(guild_id)),
                     ], emoji="🕐")
                     return True
                 return False
         except Exception as e:
-            log.error_tree("Guide Panel Timestamp Update Failed", e, [
+            logger.error_tree("Guide Panel Timestamp Update Failed", e, [
                 ("Guild", str(guild_id)),
             ])
             return False
@@ -167,13 +167,13 @@ class GuideMixin:
                     (guild_id,)
                 )
                 if cur.rowcount > 0:
-                    log.tree("Guide Panel Deleted", [
+                    logger.tree("Guide Panel Deleted", [
                         ("Guild", str(guild_id)),
                     ], emoji="🗑️")
                     return True
                 return False
         except Exception as e:
-            log.error_tree("Guide Panel Delete Failed", e, [
+            logger.error_tree("Guide Panel Delete Failed", e, [
                 ("Guild", str(guild_id)),
             ])
             return False

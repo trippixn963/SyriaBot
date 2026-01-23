@@ -15,14 +15,14 @@ from discord import ui
 from typing import Optional
 
 from src.core.config import config
-from src.core.logger import log
+from src.core.logger import logger
 from src.core.colors import EMOJI_SAVE
 
 
 async def upload_to_storage(bot, file_bytes: bytes, filename: str) -> Optional[str]:
     """Upload file to asset storage channel for permanent URL."""
     if not config.ASSET_STORAGE_CHANNEL_ID:
-        log.tree("Quote Asset Storage Skipped", [
+        logger.tree("Quote Asset Storage Skipped", [
             ("Reason", "SYRIA_ASSET_CH not configured"),
             ("Filename", filename),
         ], emoji="ℹ️")
@@ -31,7 +31,7 @@ async def upload_to_storage(bot, file_bytes: bytes, filename: str) -> Optional[s
     try:
         channel = bot.get_channel(config.ASSET_STORAGE_CHANNEL_ID)
         if not channel:
-            log.tree("Quote Asset Storage Channel Not Found", [
+            logger.tree("Quote Asset Storage Channel Not Found", [
                 ("Channel ID", str(config.ASSET_STORAGE_CHANNEL_ID)),
                 ("Filename", filename),
             ], emoji="⚠️")
@@ -42,7 +42,7 @@ async def upload_to_storage(bot, file_bytes: bytes, filename: str) -> Optional[s
 
         if msg.attachments:
             url = msg.attachments[0].url
-            log.tree("Quote Asset Stored", [
+            logger.tree("Quote Asset Stored", [
                 ("Filename", filename),
                 ("Size", f"{len(file_bytes) / 1024:.1f} KB"),
                 ("Message ID", str(msg.id)),
@@ -50,7 +50,7 @@ async def upload_to_storage(bot, file_bytes: bytes, filename: str) -> Optional[s
             ], emoji="💾")
             return url
         else:
-            log.tree("Quote Asset Storage No Attachment", [
+            logger.tree("Quote Asset Storage No Attachment", [
                 ("Filename", filename),
                 ("Message ID", str(msg.id)),
                 ("Reason", "Message sent but no attachment returned"),
@@ -58,7 +58,7 @@ async def upload_to_storage(bot, file_bytes: bytes, filename: str) -> Optional[s
             return None
 
     except Exception as e:
-        log.error_tree("Quote Asset Storage Failed", e, [
+        logger.error_tree("Quote Asset Storage Failed", e, [
             ("Filename", filename),
             ("Size", f"{len(file_bytes) / 1024:.1f} KB"),
             ("Channel ID", str(config.ASSET_STORAGE_CHANNEL_ID)),
@@ -90,7 +90,7 @@ class QuoteView(ui.View):
     )
     async def save_button(self, interaction: discord.Interaction, button: ui.Button) -> None:
         """Send as public .gif and delete original to avoid spam."""
-        log.tree("Quote Save Button", [
+        logger.tree("Quote Save Button", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
         ], emoji="💾")
@@ -101,7 +101,7 @@ class QuoteView(ui.View):
                 "Only the person who made this quote can save it.",
                 ephemeral=True
             )
-            log.tree("Quote Save Rejected", [
+            logger.tree("Quote Save Rejected", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Owner ID", str(self.requester_id)),
@@ -111,7 +111,7 @@ class QuoteView(ui.View):
 
         guild_name = interaction.guild.name if interaction.guild else "DM"
 
-        log.tree("Quote Save Pressed", [
+        logger.tree("Quote Save Pressed", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
             ("Guild", guild_name),
@@ -143,11 +143,11 @@ class QuoteView(ui.View):
                 try:
                     await self.message.delete()
                 except discord.NotFound:
-                    log.tree("Quote Original Delete", [
+                    logger.tree("Quote Original Delete", [
                         ("Reason", "Message already deleted"),
                     ], emoji="ℹ️")
 
-            log.tree("Quote Saved", [
+            logger.tree("Quote Saved", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Format", "PNG as .gif"),
@@ -156,7 +156,7 @@ class QuoteView(ui.View):
             ], emoji="✅")
 
         except Exception as e:
-            log.tree("Quote Save Failed", [
+            logger.tree("Quote Save Failed", [
                 ("User", f"{interaction.user.name}"),
                 ("ID", str(interaction.user.id)),
                 ("Error", str(e)[:100]),
@@ -171,15 +171,15 @@ class QuoteView(ui.View):
         if self.message:
             try:
                 await self.message.edit(view=self)
-                log.tree("Quote View Timeout", [
+                logger.tree("Quote View Timeout", [
                     ("Message ID", str(self.message.id)),
                     ("Action", "Disabled save button"),
                 ], emoji="⏳")
             except discord.NotFound:
-                log.tree("Quote View Timeout", [
+                logger.tree("Quote View Timeout", [
                     ("Reason", "Message deleted"),
                 ], emoji="⏳")
             except Exception as e:
-                log.tree("Quote View Timeout Error", [
+                logger.tree("Quote View Timeout Error", [
                     ("Error", str(e)[:50]),
                 ], emoji="⚠️")

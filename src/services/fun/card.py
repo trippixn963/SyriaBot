@@ -9,7 +9,7 @@ Shares browser instance and semaphore with rank card for efficiency.
 import time
 from typing import Optional
 
-from src.core.logger import log
+from src.core.logger import logger
 
 # Import shared browser infrastructure from rank card
 from src.services.xp.card import (
@@ -37,7 +37,7 @@ def _evict_cache() -> None:
     for key, _ in sorted_entries[:entries_to_remove]:
         del _fun_cache[key]
 
-    log.tree("Fun Cache Eviction", [
+    logger.tree("Fun Cache Eviction", [
         ("Removed", str(entries_to_remove)),
         ("Remaining", str(len(_fun_cache))),
     ], emoji="🧹")
@@ -523,7 +523,7 @@ async def generate_ship_card(
     if cache_key in _fun_cache:
         cached_bytes, cached_time = _fun_cache[cache_key]
         if now - cached_time < _FUN_CACHE_TTL:
-            log.tree("Ship Card Cache Hit", [
+            logger.tree("Ship Card Cache Hit", [
                 ("Users", f"{user1_name} + {user2_name}"),
             ], emoji="⚡")
             return cached_bytes
@@ -568,7 +568,7 @@ async def generate_ship_card(
             _fun_cache[cache_key] = (screenshot, now)
             _evict_cache()
 
-            log.tree("Ship Card Generated", [
+            logger.tree("Ship Card Generated", [
                 ("Users", f"{user1_name} + {user2_name}"),
                 ("Result", f"{percentage}%"),
             ], emoji="💕")
@@ -576,7 +576,7 @@ async def generate_ship_card(
             return screenshot
 
         except Exception as e:
-            log.tree("Ship Card Failed", [
+            logger.tree("Ship Card Failed", [
                 ("Error", str(e)[:100]),
             ], emoji="❌")
             if page:
@@ -607,7 +607,7 @@ async def generate_meter_card(
     if cache_key in _fun_cache:
         cached_bytes, cached_time = _fun_cache[cache_key]
         if now - cached_time < _FUN_CACHE_TTL:
-            log.tree(f"{meter_type.title()} Card Cache Hit", [
+            logger.tree(f"{meter_type.title()} Card Cache Hit", [
                 ("User", user_name),
             ], emoji="⚡")
             return cached_bytes
@@ -650,7 +650,7 @@ async def generate_meter_card(
             _fun_cache[cache_key] = (screenshot, now)
             _evict_cache()
 
-            log.tree(f"{meter_type.title()} Card Generated", [
+            logger.tree(f"{meter_type.title()} Card Generated", [
                 ("User", user_name),
                 ("Result", f"{percentage}%"),
             ], emoji="🎨")
@@ -658,7 +658,7 @@ async def generate_meter_card(
             return screenshot
 
         except Exception as e:
-            log.tree(f"{meter_type.title()} Card Failed", [
+            logger.tree(f"{meter_type.title()} Card Failed", [
                 ("Error", str(e)[:100]),
             ], emoji="❌")
             if page:
@@ -673,4 +673,4 @@ async def cleanup():
     """Clean up fun card cache."""
     global _fun_cache
     _fun_cache.clear()
-    log.tree("Fun Card Cache Cleared", [], emoji="🧹")
+    logger.tree("Fun Card Cache Cleared", [], emoji="🧹")

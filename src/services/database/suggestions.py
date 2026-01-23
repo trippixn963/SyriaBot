@@ -11,7 +11,7 @@ Server: discord.gg/syria
 import time
 from typing import Optional, List, Dict, Any
 
-from src.core.logger import log
+from src.core.logger import logger
 
 
 class SuggestionsMixin:
@@ -45,7 +45,7 @@ class SuggestionsMixin:
                 """, (content, submitter_id, message_id, int(time.time())))
                 suggestion_id = cur.lastrowid
 
-            log.tree("Suggestion Created", [
+            logger.tree("Suggestion Created", [
                 ("ID", str(suggestion_id)),
                 ("Submitter ID", str(submitter_id)),
                 ("Message ID", str(message_id)),
@@ -55,7 +55,7 @@ class SuggestionsMixin:
             return suggestion_id
 
         except Exception as e:
-            log.error_tree("Suggestion Create Failed", e, [
+            logger.error_tree("Suggestion Create Failed", e, [
                 ("Length", f"{len(content)} chars"),
             ])
             return None
@@ -71,7 +71,7 @@ class SuggestionsMixin:
                 row = cur.fetchone()
                 return dict(row) if row else None
         except Exception as e:
-            log.error_tree("Suggestion Get Failed", e, [
+            logger.error_tree("Suggestion Get Failed", e, [
                 ("ID", str(suggestion_id)),
             ])
             return None
@@ -87,7 +87,7 @@ class SuggestionsMixin:
                 row = cur.fetchone()
                 return dict(row) if row else None
         except Exception as e:
-            log.error_tree("Suggestion Get By Message Failed", e, [
+            logger.error_tree("Suggestion Get By Message Failed", e, [
                 ("Message ID", str(message_id)),
             ])
             return None
@@ -121,14 +121,14 @@ class SuggestionsMixin:
                 """, (status, int(time.time()), mod_id, suggestion_id))
 
                 if cur.rowcount == 0:
-                    log.tree("Suggestion Update Failed", [
+                    logger.tree("Suggestion Update Failed", [
                         ("ID", str(suggestion_id)),
                         ("Status", status),
                         ("Reason", "Not found"),
                     ], emoji="⚠️")
                     return False
 
-            log.tree("Suggestion Status Updated", [
+            logger.tree("Suggestion Status Updated", [
                 ("ID", str(suggestion_id)),
                 ("Status", status),
                 ("Mod ID", str(mod_id)),
@@ -137,7 +137,7 @@ class SuggestionsMixin:
             return True
 
         except Exception as e:
-            log.error_tree("Suggestion Update Failed", e, [
+            logger.error_tree("Suggestion Update Failed", e, [
                 ("ID", str(suggestion_id)),
                 ("Status", status),
             ])
@@ -168,7 +168,7 @@ class SuggestionsMixin:
                     "implemented": row["implemented"] or 0,
                 }
         except Exception as e:
-            log.error_tree("Suggestion Stats Failed", e)
+            logger.error_tree("Suggestion Stats Failed", e)
             return {"total": 0, "pending": 0, "approved": 0, "rejected": 0, "implemented": 0}
 
     def get_user_suggestion_count_today(self, submitter_id: int) -> int:
@@ -188,7 +188,7 @@ class SuggestionsMixin:
                 row = cur.fetchone()
                 return row["count"] if row else 0
         except Exception as e:
-            log.error_tree("User Suggestion Count Failed", e, [
+            logger.error_tree("User Suggestion Count Failed", e, [
                 ("Submitter ID", str(submitter_id)),
             ])
             return 0
