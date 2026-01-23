@@ -245,7 +245,7 @@ class XPService:
         # Birthday bonus (3x) takes priority
         if has_birthday_bonus(member.id):
             xp_amount = int(base_xp * BIRTHDAY_XP_MULTIPLIER)
-        elif member.premium_since is not None:
+        elif isinstance(member, discord.Member) and member.premium_since is not None:
             xp_amount = int(base_xp * config.XP_BOOSTER_MULTIPLIER)
 
         # Add XP
