@@ -244,6 +244,15 @@ class FunService:
             ], emoji="💕")
             return 100, "PERFECT MATCH! 💞"
 
+        # Owner override - anyone shipped with owner = 0%
+        if config.OWNER_ID in (user1_id, user2_id):
+            logger.tree("Ship Calculated", [
+                ("User 1", str(user1_id)),
+                ("User 2", str(user2_id)),
+                ("Result", "0% (owner override)"),
+            ], emoji="💕")
+            return 0, "Not meant to be... 💔"
+
         # Sort IDs so order doesn't matter (A+B = B+A)
         percentage = self._hash_to_percentage(user1_id, user2_id, "ship")
         message = _get_message(SHIP_MESSAGES, percentage)
