@@ -2,7 +2,7 @@
 SyriaBot - Card Generator
 =========================
 
-HTML/CSS based cards rendered with Playwright for ship, simp, howgay commands.
+HTML/CSS based cards rendered with Playwright for ship, howsimp, howgay commands.
 Shares browser instance and semaphore with rank card for efficiency.
 """
 
@@ -295,13 +295,13 @@ def _generate_meter_html(
     user_avatar: str,
     percentage: int,
     message: str,
-    meter_type: str,  # "simp" or "gay"
+    meter_type: str,  # "howsimp" or "gay"
     banner_url: Optional[str],
 ) -> str:
-    """Generate HTML for simp/gay meter card."""
+    """Generate HTML for howsimp/gay meter card."""
     bg_style = f'url({banner_url})' if banner_url else 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)'
 
-    if meter_type == "simp":
+    if meter_type == "howsimp":
         gradient = "linear-gradient(135deg, #ff6b9d, #c850c0, #ff6b9d)"
         bar_gradient = "linear-gradient(90deg, #ff6b9d, #c850c0, #ff8ec4)"
         title = "SIMP METER"
@@ -319,7 +319,7 @@ def _generate_meter_html(
         title = "SMART METER"
         emoji = "🎓" if percentage >= METER_EMOJI_THRESHOLD else "🧠"
         glow_color = "79, 172, 254"
-    else:  # bodyfat
+    else:  # howfat
         gradient = "linear-gradient(135deg, #f093fb, #f5576c, #f093fb)"
         bar_gradient = "linear-gradient(90deg, #43e97b, #f9d423, #f5576c)"
         title = "BODY FAT"
@@ -597,7 +597,7 @@ async def generate_meter_card(
     meter_type: str,
     banner_url: Optional[str] = None,
 ) -> bytes:
-    """Generate simp/gay meter card image."""
+    """Generate howsimp/gay meter card image."""
     global _fun_cache
 
     # Cache key uses user_id + guild_id + type for stable identification

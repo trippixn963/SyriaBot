@@ -215,7 +215,7 @@ COMMANDS_DATA = {
         "description": "Use in <#1459144517449158719>",
         "commands": [
             "`ship @user @user` - Compatibility percentage",
-            "`howgay` `simp` `howsmart` `bodyfat` - Meter cards",
+            "`howgay` `howsimp` `howsmart` `howfat` - Meter cards",
         ],
     },
     "actions": {

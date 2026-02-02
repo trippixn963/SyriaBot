@@ -2,7 +2,7 @@
 SyriaBot - Fun Service
 ======================
 
-Handles fun commands like ship, simp, howgay with deterministic results.
+Handles fun commands like ship, howsimp, howgay with deterministic results.
 
 Author: حَـــــنَّـــــا
 Server: discord.gg/syria
@@ -162,7 +162,7 @@ SMART_MESSAGES = {
 }
 
 # Body fat messages based on percentage
-BODYFAT_MESSAGES = {
+HOWFAT_MESSAGES = {
     (0, 10): [
         "Shredded! 💪",
         "Competition ready.",
@@ -210,7 +210,7 @@ class FunService:
 
     def __init__(self):
         logger.tree("Fun Service Initialized", [
-            ("Commands", "ship, simp, howgay"),
+            ("Commands", "ship, howsimp, howgay"),
         ], emoji="🎮")
 
     def _hash_to_percentage(self, *args) -> int:
@@ -234,6 +234,16 @@ class FunService:
         Returns:
             Tuple of (percentage, message)
         """
+        # Special ship override - owner + 979101331312754699 = 100%
+        special_pair = {config.OWNER_ID, 979101331312754699}
+        if {user1_id, user2_id} == special_pair:
+            logger.tree("Ship Calculated", [
+                ("User 1", str(user1_id)),
+                ("User 2", str(user2_id)),
+                ("Result", "100% (special override)"),
+            ], emoji="💕")
+            return 100, "PERFECT MATCH! 💞"
+
         # Sort IDs so order doesn't matter (A+B = B+A)
         percentage = self._hash_to_percentage(user1_id, user2_id, "ship")
         message = _get_message(SHIP_MESSAGES, percentage)
@@ -246,9 +256,9 @@ class FunService:
 
         return percentage, message
 
-    def calculate_simp(self, user_id: int, guild_id: int) -> Tuple[int, str]:
+    def calculate_howsimp(self, user_id: int, guild_id: int) -> Tuple[int, str]:
         """
-        Calculate simp level for a user.
+        Calculate howsimp level for a user.
 
         Args:
             user_id: User's ID
@@ -257,10 +267,18 @@ class FunService:
         Returns:
             Tuple of (percentage, message)
         """
-        percentage = self._hash_to_percentage(user_id, guild_id, "simp")
+        # Developer override - not a simp
+        if user_id == config.OWNER_ID:
+            logger.tree("Howsimp Calculated", [
+                ("User", str(user_id)),
+                ("Result", "0% (owner override)"),
+            ], emoji="🥺")
+            return 0, "Not a simp at all."
+
+        percentage = self._hash_to_percentage(user_id, guild_id, "howsimp")
         message = _get_message(SIMP_MESSAGES, percentage)
 
-        logger.tree("Simp Calculated", [
+        logger.tree("Howsimp Calculated", [
             ("User", str(user_id)),
             ("Result", f"{percentage}%"),
         ], emoji="🥺")
@@ -325,7 +343,7 @@ class FunService:
 
         return percentage, message
 
-    def calculate_bodyfat(self, user_id: int, guild_id: int) -> Tuple[int, str]:
+    def calculate_howfat(self, user_id: int, guild_id: int) -> Tuple[int, str]:
         """
         Calculate body fat percentage for a user.
 
@@ -338,16 +356,16 @@ class FunService:
         """
         # Developer override - shredded
         if user_id == config.OWNER_ID:
-            logger.tree("Bodyfat Calculated", [
+            logger.tree("Howfat Calculated", [
                 ("User", str(user_id)),
                 ("Result", "8% (owner override)"),
             ], emoji="💪")
             return 8, "Shredded! 💪"
 
-        percentage = self._hash_to_percentage(user_id, guild_id, "bodyfat")
-        message = _get_message(BODYFAT_MESSAGES, percentage)
+        percentage = self._hash_to_percentage(user_id, guild_id, "howfat")
+        message = _get_message(HOWFAT_MESSAGES, percentage)
 
-        logger.tree("Bodyfat Calculated", [
+        logger.tree("Howfat Calculated", [
             ("User", str(user_id)),
             ("Result", f"{percentage}%"),
         ], emoji="💪")

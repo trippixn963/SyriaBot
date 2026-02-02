@@ -578,9 +578,9 @@ class CommandsTopicSelect(ui.Select["CommandsSelectView"]):
                 "`ship @user @user` - Check love compatibility\n\n"
                 "**Meter Cards**\n"
                 "`howgay` - Rainbow meter\n"
-                "`simp` - Simp-o-meter\n"
+                "`howsimp` - Simp-o-meter\n"
                 "`howsmart` - IQ meter\n"
-                "`bodyfat` - Body fat percentage\n\n"
+                "`howfat` - Body fat percentage\n\n"
                 "*All meters are random and just for fun!*"
             )
 

@@ -2,7 +2,7 @@
 SyriaBot - Fun Commands Handler
 ===============================
 
-Handles fun commands: ship, simp, howgay, howsmart, bodyfat.
+Handles fun commands: ship, howsimp, howgay, howsmart, howfat.
 Visual card generation with typo detection and sticky messages.
 
 Author: حَـــــنَّـــــا
@@ -41,7 +41,7 @@ class FunHandler:
     FUN_STICKY_INTERVAL = 30
 
     # Valid fun commands for typo detection
-    FUN_COMMANDS = ("ship", "simp", "howgay", "howsmart", "bodyfat")
+    FUN_COMMANDS = ("ship", "howsimp", "howgay", "howsmart", "howfat")
 
     def __init__(self) -> None:
         """Initialize the fun handler."""
@@ -89,7 +89,7 @@ class FunHandler:
             description=(
                 "**⚠️ This channel does not earn XP.**\n\n"
                 "`ship @user @user` — Compatibility %\n"
-                "`howgay` `simp` `howsmart` `bodyfat` — Meters\n"
+                "`howgay` `howsimp` `howsmart` `howfat` — Meters\n"
                 "`hug` `kiss` `slap` `kick` etc — Actions"
             ),
             color=COLOR_SYRIA_GREEN
@@ -107,7 +107,7 @@ class FunHandler:
 
     async def handle(self, message: discord.Message) -> bool:
         """
-        Handle fun commands: ship, simp, howgay, howsmart, bodyfat.
+        Handle fun commands: ship, howsimp, howgay, howsmart, howfat.
         Returns True if a command was processed, False otherwise.
         """
         content = message.content.strip().lower()
@@ -199,14 +199,14 @@ class FunHandler:
             result = False
             if command == "ship":
                 result = await self._handle_ship(message, banner_url)
-            elif command == "simp":
-                result = await self._handle_simp(message, banner_url)
+            elif command == "howsimp":
+                result = await self._handle_howsimp(message, banner_url)
             elif command == "howgay":
                 result = await self._handle_howgay(message, banner_url)
             elif command == "howsmart":
                 result = await self._handle_howsmart(message, banner_url)
-            elif command == "bodyfat":
-                result = await self._handle_bodyfat(message, banner_url)
+            elif command == "howfat":
+                result = await self._handle_howfat(message, banner_url)
 
             # Track message count and send sticky every N messages (atomic)
             if result:
@@ -297,22 +297,22 @@ class FunHandler:
 
         return True
 
-    async def _handle_simp(self, message: discord.Message, banner_url: str) -> bool:
-        """Handle the simp command."""
+    async def _handle_howsimp(self, message: discord.Message, banner_url: str) -> bool:
+        """Handle the howsimp command."""
         # Target is mentioned user or author
         if message.mentions:
             target = message.mentions[0]
         else:
             target = message.author
 
-        logger.tree("Simp Command", [
+        logger.tree("Howsimp Command", [
             ("User", f"{message.author.name}"),
             ("ID", str(message.author.id)),
             ("Target", f"{target.name}"),
         ], emoji="🥺")
 
-        # Calculate simp level
-        percentage, simp_message = fun_service.calculate_simp(target.id, message.guild.id)
+        # Calculate howsimp level
+        percentage, howsimp_message = fun_service.calculate_howsimp(target.id, message.guild.id)
 
         # Generate card
         async with message.channel.typing():
@@ -322,15 +322,15 @@ class FunHandler:
                 user_name=target.display_name,
                 user_avatar=str(target.display_avatar.url),
                 percentage=percentage,
-                message=simp_message,
-                meter_type="simp",
+                message=howsimp_message,
+                meter_type="howsimp",
                 banner_url=banner_url,
             )
 
-        file = discord.File(fp=io.BytesIO(card_bytes), filename="simp.png")
+        file = discord.File(fp=io.BytesIO(card_bytes), filename="howsimp.png")
         await message.channel.send(file=file)
 
-        logger.tree("Simp Sent", [
+        logger.tree("Howsimp Sent", [
             ("Target", f"{target.name}"),
             ("Result", f"{percentage}%"),
         ], emoji="✅")
@@ -417,22 +417,22 @@ class FunHandler:
 
         return True
 
-    async def _handle_bodyfat(self, message: discord.Message, banner_url: str) -> bool:
-        """Handle the bodyfat command."""
+    async def _handle_howfat(self, message: discord.Message, banner_url: str) -> bool:
+        """Handle the howfat command."""
         # Target is mentioned user or author
         if message.mentions:
             target = message.mentions[0]
         else:
             target = message.author
 
-        logger.tree("Bodyfat Command", [
+        logger.tree("Howfat Command", [
             ("User", f"{message.author.name}"),
             ("ID", str(message.author.id)),
             ("Target", f"{target.name}"),
         ], emoji="💪")
 
         # Calculate body fat
-        percentage, bodyfat_message = fun_service.calculate_bodyfat(target.id, message.guild.id)
+        percentage, howfat_message = fun_service.calculate_howfat(target.id, message.guild.id)
 
         # Generate card
         async with message.channel.typing():
@@ -442,15 +442,15 @@ class FunHandler:
                 user_name=target.display_name,
                 user_avatar=str(target.display_avatar.url),
                 percentage=percentage,
-                message=bodyfat_message,
-                meter_type="bodyfat",
+                message=howfat_message,
+                meter_type="howfat",
                 banner_url=banner_url,
             )
 
-        file = discord.File(fp=io.BytesIO(card_bytes), filename="bodyfat.png")
+        file = discord.File(fp=io.BytesIO(card_bytes), filename="howfat.png")
         await message.channel.send(file=file)
 
-        logger.tree("Bodyfat Sent", [
+        logger.tree("Howfat Sent", [
             ("Target", f"{target.name}"),
             ("Result", f"{percentage}%"),
         ], emoji="✅")

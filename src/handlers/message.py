@@ -161,7 +161,7 @@ class MessageHandler(commands.Cog):
                     ("ID", str(message.author.id)),
                 ])
 
-        # Fun commands (ship, simp, howgay, howsmart, bodyfat)
+        # Fun commands (ship, howsimp, howgay, howsmart, howfat)
         if message.guild:
             try:
                 if await fun.handle(message):
