@@ -13,6 +13,9 @@ Server: discord.gg/syria
 # =============================================================================
 
 RULES_DATA = [
+    # -------------------------------------------------------------------------
+    # Zero Tolerance - Instant Ban
+    # -------------------------------------------------------------------------
     {
         "title": "1. Terrorism & Extremism",
         "content": (
@@ -22,23 +25,7 @@ RULES_DATA = [
         ),
     },
     {
-        "title": "2. Hate Speech",
-        "content": (
-            "No racial, religious, or ethnic slurs. "
-            "No dehumanizing language toward any group. "
-            "All backgrounds are respected here."
-        ),
-    },
-    {
-        "title": "3. Respect & Conduct",
-        "content": (
-            "No harassment, bullying, threats, or personal attacks. "
-            "No insults based on religion, ethnicity, region, or family. "
-            "Stay civil even when disagreeing."
-        ),
-    },
-    {
-        "title": "4. NSFW Content",
+        "title": "2. NSFW Content",
         "content": (
             "No pornography, sexual media, or explicit content. "
             "No sexual jokes or comments toward minors. "
@@ -46,7 +33,7 @@ RULES_DATA = [
         ),
     },
     {
-        "title": "5. Privacy & Security",
+        "title": "3. Privacy & Doxxing",
         "content": (
             "No doxxing or leaking personal information. "
             "No sharing DMs or screenshots without consent. "
@@ -54,15 +41,53 @@ RULES_DATA = [
         ),
     },
     {
-        "title": "6. Advertising & Self-Promotion",
+        "title": "4. AI-Generated Media",
         "content": (
-            "No promoting servers, communities, or content through DMs. "
-            "No self-promotion (YouTube, TikTok, social media, etc.). "
-            "Contact inbox for partnerships. Private recruiting = ban."
+            "No AI-generated content of server members. "
+            "No deepfakes or manipulated identity content. "
+            "Violation results in **instant ban.**"
+        ),
+    },
+    # -------------------------------------------------------------------------
+    # Content & Speech Rules
+    # -------------------------------------------------------------------------
+    {
+        "title": "5. Hate Speech",
+        "content": (
+            "No racial, religious, or ethnic slurs. "
+            "No dehumanizing language toward any group. "
+            "All backgrounds are respected here."
         ),
     },
     {
-        "title": "7. Impersonation",
+        "title": "6. Religious Discussions",
+        "content": (
+            "All religious talks are forbidden in this server. "
+            "No debates, preaching, or discussions about religion. "
+            "This applies to all channels without exception."
+        ),
+    },
+    {
+        "title": "7. Politics & Sensitive Topics",
+        "content": (
+            "Political discussions only in <#1391070464406978701>. "
+            "No targeted harassment or agenda-pushing. "
+            "Staff may end discussions that escalate."
+        ),
+    },
+    # -------------------------------------------------------------------------
+    # Behavior & Conduct
+    # -------------------------------------------------------------------------
+    {
+        "title": "8. Respect & Conduct",
+        "content": (
+            "No harassment, bullying, threats, or personal attacks. "
+            "No insults based on ethnicity, region, or family. "
+            "Stay civil even when disagreeing."
+        ),
+    },
+    {
+        "title": "9. Impersonation",
         "content": (
             "No impersonating staff, members, or public figures. "
             "No alt accounts to evade bans or restrictions. "
@@ -70,31 +95,29 @@ RULES_DATA = [
         ),
     },
     {
-        "title": "8. Politics & Sensitive Topics",
+        "title": "10. Advertising & Self-Promotion",
         "content": (
-            "Political discussions only in <#1391070464406978701>. "
-            "No targeted harassment or agenda-pushing. "
-            "Staff may end discussions that escalate."
+            "No promoting servers, communities, or content through DMs. "
+            "No self-promotion (YouTube, TikTok, social media, etc.). "
+            "Contact inbox for partnerships. Private recruiting = ban."
         ),
     },
+    # -------------------------------------------------------------------------
+    # Profiles & Identity
+    # -------------------------------------------------------------------------
     {
-        "title": "9. Profiles & Nicknames",
+        "title": "11. Profiles & Nicknames",
         "content": (
             "No offensive usernames or avatars. "
             "No terror symbols, hate symbols, or sexual content. "
             "Staff may change names that break rules."
         ),
     },
+    # -------------------------------------------------------------------------
+    # Channel & Server Usage
+    # -------------------------------------------------------------------------
     {
-        "title": "10. AI-Generated Media",
-        "content": (
-            "No AI-generated content of server members. "
-            "No deepfakes or manipulated identity content. "
-            "Violation results in **instant ban.**"
-        ),
-    },
-    {
-        "title": "11. Spam & Channels",
+        "title": "12. Spam & Channels",
         "content": (
             "No spam, text walls, or repetitive pinging. "
             "Use the correct channel for each topic. "
@@ -102,7 +125,7 @@ RULES_DATA = [
         ),
     },
     {
-        "title": "12. Voice Channels",
+        "title": "13. Voice Channels",
         "content": (
             "No ear rape, soundboards, excessive noise, or offensive language. "
             "No NSFW or offensive streams/screen shares. "
@@ -110,19 +133,11 @@ RULES_DATA = [
         ),
     },
     {
-        "title": "13. Bot Usage",
+        "title": "14. Bot Usage",
         "content": (
             "No spamming bot commands. "
             "No exploiting bugs or glitches. "
             "Report exploits to staff instead of abusing them."
-        ),
-    },
-    {
-        "title": "14. Mini-Modding",
-        "content": (
-            "Don't act as staff if you're not staff. "
-            "Report issues privately in <#1406750411779604561>. "
-            "Let moderators handle enforcement."
         ),
     },
     {
@@ -131,6 +146,14 @@ RULES_DATA = [
             "Arabic and English are both welcome. "
             "Keep conversations readable for others. "
             "No spamming in other languages to exclude people."
+        ),
+    },
+    {
+        "title": "16. Mini-Modding",
+        "content": (
+            "Don't act as staff if you're not staff. "
+            "Report issues privately in <#1406750411779604561>. "
+            "Let moderators handle enforcement."
         ),
     },
 ]
