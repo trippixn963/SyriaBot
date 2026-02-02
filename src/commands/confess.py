@@ -293,21 +293,28 @@ class ConfessCog(commands.Cog):
 
         service = self.bot.confession_service
 
-        # Check rate limit
+        # Check rate limit (1 confession per day, resets at midnight EST)
         can_submit, remaining = await service.check_rate_limit(interaction.user.id)
         if not can_submit:
-            minutes = remaining // 60
-            seconds = remaining % 60
-            time_str = f"{minutes}m {seconds}s" if minutes > 0 else f"{seconds}s"
+            hours = remaining // 3600
+            minutes = (remaining % 3600) // 60
+            if hours > 0:
+                time_str = f"{hours}h {minutes}m"
+            else:
+                time_str = f"{minutes}m"
 
-            logger.tree("Confess Rate Limited", [
+            logger.tree("Confess Daily Limit Reached", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
-                ("Remaining", time_str),
+                ("Reset In", time_str),
             ], emoji="⏳")
 
             embed = discord.Embed(
-                description=f"⏳ You can submit another confession in **{time_str}**",
+                description=(
+                    f"⏳ You've already submitted a confession today.\n\n"
+                    f"The daily limit resets at **midnight Eastern Time**.\n"
+                    f"You can submit again in **{time_str}**."
+                ),
                 color=COLOR_WARNING
             )
             set_footer(embed)

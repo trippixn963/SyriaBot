@@ -328,6 +328,15 @@ class TranslateService:
         lang_input = lang_input.strip()
         lang_lower = lang_input.lower()
 
+        # Reject if too long to be a language (max ~25 chars for "chinese traditional")
+        # This prevents users accidentally passing text as the language
+        if len(lang_input) > 30:
+            logger.tree("Language Rejected", [
+                ("Input", lang_input[:50] + "..." if len(lang_input) > 50 else lang_input),
+                ("Reason", "Too long to be a language name"),
+            ], emoji="⚠️")
+            return None
+
         # Exact match on language codes
         if lang_input in LANGUAGES:
             logger.tree("Language Resolved", [

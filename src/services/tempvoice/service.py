@@ -456,10 +456,8 @@ class TempVoiceService:
         """Inner panel update logic (called with lock held)."""
         channel_info = db.get_temp_channel(channel.id)
         if not channel_info:
-            logger.tree("Panel Update Skipped", [
-                ("Channel ID", str(channel.id)),
-                ("Reason", "No DB record"),
-            ], emoji="⚠️")
+            # Channel exists in Discord but not in DB - will be cleaned up when empty
+            logger.debug(f"Panel update skipped for channel {channel.id} - no DB record")
             return
 
         owner = channel.guild.get_member(channel_info["owner_id"])

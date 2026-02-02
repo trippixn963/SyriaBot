@@ -11,6 +11,8 @@ Server: discord.gg/syria
 
 import asyncio
 import time
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 import discord
 from typing import TYPE_CHECKING, Optional, Tuple, Set, Dict
 from collections import OrderedDict
@@ -22,8 +24,8 @@ from src.core.constants import DELETE_DELAY_MEDIUM
 from src.services.database import db
 from src.utils.footer import set_footer
 
-# Rate limit: 1 confession per hour
-CONFESSION_COOLDOWN_SECONDS = 3600
+# Timezone for daily reset
+EST_TIMEZONE = ZoneInfo("America/New_York")
 
 if TYPE_CHECKING:
     from src.bot import SyriaBot
@@ -380,21 +382,33 @@ class ConfessionService:
         """
         Check if user can submit a confession.
 
+        Users can only submit one confession per day.
+        The daily limit resets at 00:00 EST (Eastern Time).
+
         Args:
             user_id: Discord user ID to check
 
         Returns:
-            Tuple of (can_submit, seconds_remaining)
+            Tuple of (can_submit, seconds_remaining_until_reset)
         """
         last_time = await asyncio.to_thread(db.get_user_last_confession_time, user_id)
         if last_time is None:
             return True, None
 
-        elapsed = int(time.time()) - last_time
-        if elapsed >= CONFESSION_COOLDOWN_SECONDS:
+        # Get current time in Eastern timezone
+        now_eastern = datetime.now(EST_TIMEZONE)
+
+        # Convert last confession timestamp to Eastern datetime
+        last_confession_eastern = datetime.fromtimestamp(last_time, tz=EST_TIMEZONE)
+
+        # Check if both are on the same calendar day in Eastern time
+        if now_eastern.date() != last_confession_eastern.date():
+            # Different day = can submit
             return True, None
 
-        remaining = CONFESSION_COOLDOWN_SECONDS - elapsed
+        # Same day = can't submit, calculate time until midnight Eastern
+        midnight_eastern = now_eastern.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+        remaining = int((midnight_eastern - now_eastern).total_seconds())
         return False, remaining
 
     async def setup(self) -> None:
