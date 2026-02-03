@@ -6,8 +6,8 @@ Manages scheduled announcements for server information.
 Posts evergreen informational messages at configured intervals.
 
 Features:
-    - Configurable posting interval
-    - Auto-delete previous announcement
+    - Configurable posting interval via config
+    - Auto-delete previous announcement (persists across restarts)
     - Comprehensive logging
     - Graceful error handling
 
@@ -15,24 +15,49 @@ Author: حَـــــنَّـــــا
 Server: discord.gg/syria
 """
 
+import asyncio
+import json
 from typing import Optional
 
 import discord
-from discord.ext import commands, tasks
+from discord.ext import commands
 
-from src.core.config import config
-from src.core.colors import COLOR_FEMALE, COLOR_MALE, COLOR_GOLD
+from src.core.config import config, DATA_DIR
+from src.core.colors import COLOR_GOLD
 from src.core.emojis import EMOJI_TICKET
 from src.core.logger import logger
 from src.utils.footer import set_footer
 
 
 # =============================================================================
-# Constants
+# Persistence
 # =============================================================================
 
-# Posting interval in hours
-ANNOUNCEMENT_INTERVAL_HOURS = 12
+STATE_FILE = DATA_DIR / "announcement_state.json"
+
+
+def _load_state() -> dict:
+    """Load persisted state from file."""
+    if STATE_FILE.exists():
+        try:
+            with open(STATE_FILE, "r") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError) as e:
+            logger.tree("Announcement State Load Failed", [
+                ("Error", str(e)[:50]),
+            ], emoji="⚠️")
+    return {}
+
+
+def _save_state(state: dict) -> None:
+    """Save state to file."""
+    try:
+        with open(STATE_FILE, "w") as f:
+            json.dump(state, f)
+    except IOError as e:
+        logger.tree("Announcement State Save Failed", [
+            ("Error", str(e)[:50]),
+        ], emoji="⚠️")
 
 
 # =============================================================================
@@ -72,19 +97,34 @@ class AnnouncementService:
         self._enabled = False
         self._last_message_id: Optional[int] = None
         self._channel: Optional[discord.TextChannel] = None
+        self._task: Optional[asyncio.Task] = None
+
+        # Load persisted message ID
+        state = _load_state()
+        self._last_message_id = state.get("last_message_id")
 
     async def setup(self) -> None:
         """Initialize the announcement service."""
-        # Validate configuration
-        if not config.GENERAL_CHANNEL_ID:
-            logger.tree("Announcement Service Disabled", [
-                ("Reason", "GENERAL_CHANNEL_ID not configured"),
-            ], emoji="⚠️")
-            return
+        # Validate required configuration
+        missing_config = []
 
+        if not config.GENERAL_CHANNEL_ID:
+            missing_config.append("GENERAL_CHANNEL_ID")
         if not config.TICKET_CHANNEL_ID:
+            missing_config.append("TICKET_CHANNEL_ID")
+        if not config.FEMALE_CHAT_CHANNEL_ID:
+            missing_config.append("FEMALE_CHAT_CHANNEL_ID")
+        if not config.MALE_CHAT_CHANNEL_ID:
+            missing_config.append("MALE_CHAT_CHANNEL_ID")
+        if not config.FEMALE_VERIFIED_ROLE_ID:
+            missing_config.append("FEMALE_VERIFIED_ROLE_ID")
+        if not config.MALE_VERIFIED_ROLE_ID:
+            missing_config.append("MALE_VERIFIED_ROLE_ID")
+
+        if missing_config:
             logger.tree("Announcement Service Disabled", [
-                ("Reason", "TICKET_CHANNEL_ID not configured"),
+                ("Reason", "Missing configuration"),
+                ("Missing", ", ".join(missing_config)),
             ], emoji="⚠️")
             return
 
@@ -99,37 +139,48 @@ class AnnouncementService:
 
         self._enabled = True
 
-        # Post immediately on startup
-        await self._post_announcement()
-
         # Start the periodic task
-        self._post_task.start()
+        self._task = asyncio.create_task(self._announcement_loop())
 
         logger.tree("Announcement Service Ready", [
             ("Channel", f"{self._channel.name} ({self._channel.id})"),
-            ("Interval", f"{ANNOUNCEMENT_INTERVAL_HOURS} hours"),
-            ("Next Post", f"In {ANNOUNCEMENT_INTERVAL_HOURS} hours"),
+            ("Interval", f"{config.ANNOUNCEMENT_INTERVAL_HOURS} hours"),
+            ("Persisted Message", str(self._last_message_id) if self._last_message_id else "None"),
         ], emoji="📢")
 
     def stop(self) -> None:
         """Stop the announcement service."""
-        if self._post_task.is_running():
-            self._post_task.cancel()
         self._enabled = False
+        if self._task and not self._task.done():
+            self._task.cancel()
         logger.tree("Announcement Service Stopped", [], emoji="📢")
 
-    @tasks.loop(hours=ANNOUNCEMENT_INTERVAL_HOURS)
-    async def _post_task(self) -> None:
-        """Periodic task to post announcement."""
-        if not self._enabled or not self._channel:
-            return
-
-        await self._post_announcement()
-
-    @_post_task.before_loop
-    async def _before_post_task(self) -> None:
-        """Wait for bot to be ready before starting task."""
+    async def _announcement_loop(self) -> None:
+        """Main loop that posts announcements at configured intervals."""
         await self.bot.wait_until_ready()
+
+        while self._enabled:
+            try:
+                await self._post_announcement()
+
+                # Sleep for configured interval
+                interval_seconds = config.ANNOUNCEMENT_INTERVAL_HOURS * 3600
+                logger.tree("Announcement Scheduled", [
+                    ("Next Post", f"In {config.ANNOUNCEMENT_INTERVAL_HOURS} hours"),
+                    ("Interval", f"{interval_seconds} seconds"),
+                ], emoji="⏰")
+
+                await asyncio.sleep(interval_seconds)
+
+            except asyncio.CancelledError:
+                logger.tree("Announcement Loop Cancelled", [], emoji="ℹ️")
+                break
+            except Exception as e:
+                logger.error_tree("Announcement Loop Error", e, [
+                    ("Action", "Will retry in 1 hour"),
+                ])
+                # Wait 1 hour before retrying on error
+                await asyncio.sleep(3600)
 
     async def _delete_previous(self) -> None:
         """Delete the previous announcement message."""
@@ -158,6 +209,7 @@ class AnnouncementService:
             ], emoji="⚠️")
 
         self._last_message_id = None
+        _save_state({"last_message_id": None})
 
     def _build_embed(self) -> discord.Embed:
         """Build the announcement embed."""
@@ -221,10 +273,12 @@ class AnnouncementService:
             msg = await self._channel.send(embed=embed, view=view)
             self._last_message_id = msg.id
 
+            # Persist message ID
+            _save_state({"last_message_id": msg.id})
+
             logger.tree("Announcement Posted", [
                 ("Channel", self._channel.name),
                 ("Message ID", str(msg.id)),
-                ("Next Post", f"In {ANNOUNCEMENT_INTERVAL_HOURS} hours"),
             ], emoji="📢")
 
         except discord.Forbidden:
