@@ -76,6 +76,16 @@ class MessageHandler(commands.Cog):
                     ("ID", str(message.author.id)),
                 ])
 
+        # Sticky messages (gender-verified channels)
+        if hasattr(self.bot, 'sticky_service') and self.bot.sticky_service:
+            try:
+                await self.bot.sticky_service.handle_message(message)
+            except Exception as e:
+                logger.error_tree("Sticky Handler Error", e, [
+                    ("User", f"{message.author.name} ({message.author.display_name})"),
+                    ("ID", str(message.author.id)),
+                ])
+
         # Gallery service (media-only channel)
         if hasattr(self.bot, 'gallery_service') and self.bot.gallery_service:
             try:
