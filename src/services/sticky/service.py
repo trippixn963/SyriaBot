@@ -200,7 +200,7 @@ class StickyService:
             self._sticky_message_ids[channel.id] = msg.id
             logger.tree("Sticky Message Sent", [
                 ("Channel", channel.name),
-                ("Type", role_name),
+                ("Type", "Female" if is_female else "Male"),
                 ("Message ID", str(msg.id)),
             ], emoji="📌")
         except discord.HTTPException as e:
