@@ -74,17 +74,7 @@ class StickyService:
         self._enabled = True
 
     async def setup(self) -> None:
-        """Initialize the sticky service and send initial messages."""
-        # Send initial sticky messages to both channels
-        for channel_id in [FEMALE_CHAT_ID, MALE_CHAT_ID]:
-            channel = self.bot.get_channel(channel_id)
-            if channel:
-                await self._send_sticky(channel)
-            else:
-                logger.tree("Sticky Channel Not Found", [
-                    ("Channel ID", str(channel_id)),
-                ], emoji="⚠️")
-
+        """Initialize the sticky service."""
         logger.tree("Sticky Service Ready", [
             ("Female Chat", str(FEMALE_CHAT_ID)),
             ("Male Chat", str(MALE_CHAT_ID)),
