@@ -23,6 +23,7 @@ from discord.ext import commands
 
 from src.core.config import config
 from src.core.colors import COLOR_FEMALE, COLOR_MALE
+from src.core.emojis import EMOJI_TICKET
 from src.core.logger import logger
 from src.utils.footer import set_footer
 
@@ -84,7 +85,7 @@ class StickyView(discord.ui.View):
         self.add_item(discord.ui.Button(
             style=discord.ButtonStyle.primary,
             label="Open a Ticket",
-            emoji="🎫",
+            emoji=discord.PartialEmoji.from_str(EMOJI_TICKET),
             url=ticket_url,
         ))
 
