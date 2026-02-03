@@ -121,8 +121,12 @@ class FunHandler:
         if command not in self.FUN_COMMANDS:
             # Check for typos - only in the fun channel
             if config.FUN_COMMANDS_CHANNEL_ID and message.channel.id == config.FUN_COMMANDS_CHANNEL_ID:
-                # Use difflib to find close matches (cutoff 0.6 = 60% similarity)
-                matches = difflib.get_close_matches(command, self.FUN_COMMANDS, n=1, cutoff=0.6)
+                # Skip typo correction for messages that are clearly sentences (3+ words without mentions)
+                non_mention_words = [p for p in parts if not p.startswith('<@')]
+                if len(non_mention_words) > 2:
+                    return False
+                # Use difflib to find close matches (cutoff 0.8 = 80% similarity)
+                matches = difflib.get_close_matches(command, self.FUN_COMMANDS, n=1, cutoff=0.8)
                 if matches:
                     # Auto-correct to the matched command
                     command = matches[0]

@@ -214,6 +214,7 @@ class XPMixin:
             cur = conn.cursor()
             cur.execute("""
                 SELECT user_id, xp, level, total_messages, voice_minutes,
+                       last_active_at, streak_days,
                        ROW_NUMBER() OVER (ORDER BY xp DESC) as rank
                 FROM user_xp
                 WHERE guild_id = ? AND is_active = 1

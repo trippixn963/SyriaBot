@@ -343,7 +343,13 @@ class SyriaAPI:
             if member:
                 display_name = member.global_name or member.display_name or member.name
                 username = member.name
-                avatar_url = member.avatar.url if member.avatar else member.default_avatar.url
+                # Prefer guild avatar (server-specific), fall back to global avatar
+                if member.guild_avatar:
+                    avatar_url = member.guild_avatar.url
+                elif member.avatar:
+                    avatar_url = member.avatar.url
+                else:
+                    avatar_url = member.default_avatar.url
                 joined_at = int(member.joined_at.timestamp()) if member.joined_at else None
                 is_booster = member.premium_since is not None
                 async with _avatar_cache_lock:
@@ -383,6 +389,26 @@ class SyriaAPI:
 
         return None, str(uid), None, None, False
 
+    def _format_last_seen(self, last_active_at: int) -> str:
+        """Format last_active_at timestamp as human-readable 'time ago'."""
+        if not last_active_at or last_active_at <= 0:
+            return "Unknown"
+
+        now = int(time.time())
+        seconds_ago = now - last_active_at
+
+        if seconds_ago < 60:
+            return "Just now"
+        elif seconds_ago < 3600:
+            mins = seconds_ago // 60
+            return f"{mins}m ago"
+        elif seconds_ago < 86400:
+            hours = seconds_ago // 3600
+            return f"{hours}h ago"
+        else:
+            days = seconds_ago // 86400
+            return f"{days}d ago"
+
     async def _enrich_leaderboard(self, leaderboard: list[dict]) -> list[dict]:
         """Add avatar URLs, names, and booster status to leaderboard entries (rate-limited parallel fetch)."""
         if not leaderboard:
@@ -409,6 +435,10 @@ class SyriaAPI:
             else:
                 avatar_url, display_name, username, _, is_booster = user_data
 
+            # Get activity data
+            last_active_at = entry.get("last_active_at", 0) or 0
+            streak_days = entry.get("streak_days", 0) or 0
+
             enriched.append({
                 "rank": entry["rank"],
                 "user_id": str(entry["user_id"]),
@@ -421,6 +451,9 @@ class SyriaAPI:
                 "voice_minutes": entry["voice_minutes"],
                 "voice_formatted": self._format_voice_time(entry["voice_minutes"]),
                 "is_booster": is_booster,
+                "last_active_at": last_active_at if last_active_at > 0 else None,
+                "last_seen": self._format_last_seen(last_active_at),
+                "streak_days": streak_days,
             })
 
         return enriched
@@ -537,6 +570,11 @@ class SyriaAPI:
             xp_per_day = round(xp_data["xp"] / days_in_server, 1) if days_in_server > 0 else 0
             messages_per_day = round(xp_data["total_messages"] / days_in_server, 1) if days_in_server > 0 else 0
 
+            # Activity tracking
+            last_active_at = xp_data.get("last_active_at", 0) or 0
+            streak_days = xp_data.get("streak_days", 0) or 0
+            last_seen = self._format_last_seen(last_active_at)
+
             logger.tree("User API Request", [
                 ("Client IP", client_ip),
                 ("ID", str(user_id)),
@@ -562,6 +600,9 @@ class SyriaAPI:
                 "xp_per_day": xp_per_day,
                 "messages_per_day": messages_per_day,
                 "is_booster": is_booster,
+                "last_active_at": last_active_at if last_active_at > 0 else None,
+                "last_seen": last_seen,
+                "streak_days": streak_days,
                 "updated_at": datetime.now(DAMASCUS_TZ).isoformat(),
             }, headers={
                 "Access-Control-Allow-Origin": "*",
@@ -1102,7 +1143,13 @@ class SyriaAPI:
                             # Status changed - update cache
                             display_name = member.global_name or member.display_name or member.name
                             username = member.name
-                            avatar_url = member.avatar.url if member.avatar else member.default_avatar.url
+                            # Prefer guild avatar (server-specific), fall back to global avatar
+                            if member.guild_avatar:
+                                avatar_url = member.guild_avatar.url
+                            elif member.avatar:
+                                avatar_url = member.avatar.url
+                            else:
+                                avatar_url = member.default_avatar.url
                             joined_at = int(member.joined_at.timestamp()) if member.joined_at else None
 
                             _avatar_cache[user_id] = (avatar_url, display_name, username, joined_at, current_is_booster)
