@@ -167,6 +167,16 @@ class Config:
     CONFESSIONS_MOD_CHANNEL_ID: int = _env_int("SYRIA_CONFESS_MOD_CH")
 
     # ==========================================================================
+    # Sticky Messages (Gender-Verified Channels)
+    # ==========================================================================
+    FEMALE_CHAT_CHANNEL_ID: int = _env_int("SYRIA_FEMALE_CHAT_CH", 1468272030574055652)
+    MALE_CHAT_CHANNEL_ID: int = _env_int("SYRIA_MALE_CHAT_CH", 1468273741799886952)
+    FEMALE_VERIFIED_ROLE_ID: int = _env_int("SYRIA_FEMALE_VERIFIED_ROLE", 1468272342429073440)
+    MALE_VERIFIED_ROLE_ID: int = _env_int("SYRIA_MALE_VERIFIED_ROLE", 1468272986527236438)
+    TICKET_CHANNEL_ID: int = _env_int("SYRIA_TICKET_CH", 1406750411779604561)
+    STICKY_MESSAGE_THRESHOLD: int = _env_int("SYRIA_STICKY_THRESHOLD", 50)
+
+    # ==========================================================================
     # Asset Storage (for permanent GIF URLs)
     # ==========================================================================
     ASSET_STORAGE_CHANNEL_ID: int = _env_int("SYRIA_ASSET_CH")

@@ -2,37 +2,70 @@
 SyriaBot - Sticky Message Service
 =================================
 
-Manages sticky messages in role-verified channels (female/male only).
-Resends the sticky message after every N messages.
+Manages sticky messages in role-verified channels.
+Resends the sticky message after a configurable number of messages.
+
+Features:
+    - Data-driven channel configuration
+    - Automatic old message cleanup
+    - Configurable message threshold
+    - Comprehensive logging
 
 Author: حَـــــنَّـــــا
 Server: discord.gg/syria
 """
 
+from dataclasses import dataclass
+from typing import Dict, List, Optional
+
 import discord
 from discord.ext import commands
-from typing import Dict, Optional
 
+from src.core.config import config
+from src.core.colors import COLOR_FEMALE, COLOR_MALE
 from src.core.logger import logger
-from src.core.colors import COLOR_GOLD
 from src.utils.footer import set_footer
 
 
 # =============================================================================
-# Configuration
+# Channel Configuration
 # =============================================================================
 
-# Channel IDs
-FEMALE_CHAT_ID = 1468272030574055652
-MALE_CHAT_ID = 1468273741799886952
-TICKET_CHANNEL_ID = 1406750411779604561
+@dataclass
+class StickyChannelConfig:
+    """Configuration for a sticky message channel."""
+    channel_id: int
+    role_id: int
+    name: str
+    emoji: str
+    color: int
 
-# Role IDs
-FEMALE_VERIFIED_ROLE_ID = 1468272342429073440
-MALE_VERIFIED_ROLE_ID = 1468272986527236438
 
-# Messages between sticky resends
-MESSAGES_THRESHOLD = 50
+def _get_channel_configs() -> List[StickyChannelConfig]:
+    """Build channel configurations from config values."""
+    configs = []
+
+    # Female chat
+    if config.FEMALE_CHAT_CHANNEL_ID and config.FEMALE_VERIFIED_ROLE_ID:
+        configs.append(StickyChannelConfig(
+            channel_id=config.FEMALE_CHAT_CHANNEL_ID,
+            role_id=config.FEMALE_VERIFIED_ROLE_ID,
+            name="Female",
+            emoji="👩",
+            color=COLOR_FEMALE,
+        ))
+
+    # Male chat
+    if config.MALE_CHAT_CHANNEL_ID and config.MALE_VERIFIED_ROLE_ID:
+        configs.append(StickyChannelConfig(
+            channel_id=config.MALE_CHAT_CHANNEL_ID,
+            role_id=config.MALE_VERIFIED_ROLE_ID,
+            name="Male",
+            emoji="👨",
+            color=COLOR_MALE,
+        ))
+
+    return configs
 
 
 # =============================================================================
@@ -42,13 +75,17 @@ MESSAGES_THRESHOLD = 50
 class StickyView(discord.ui.View):
     """Persistent view with button to open ticket channel."""
 
-    def __init__(self, ticket_channel_id: int):
+    def __init__(self):
         super().__init__(timeout=None)
+
+        # Build ticket URL using config
+        ticket_url = f"https://discord.com/channels/{config.GUILD_ID}/{config.TICKET_CHANNEL_ID}"
+
         self.add_item(discord.ui.Button(
             style=discord.ButtonStyle.primary,
             label="Open a Ticket",
             emoji="🎫",
-            url=f"https://discord.com/channels/1406750392280465511/{ticket_channel_id}",
+            url=ticket_url,
         ))
 
 
@@ -57,28 +94,64 @@ class StickyView(discord.ui.View):
 # =============================================================================
 
 class StickyService:
-    """Service for managing sticky messages in verified channels."""
+    """
+    Service for managing sticky messages in verified channels.
+
+    Tracks message counts per channel and resends the sticky embed
+    after a configured threshold is reached.
+    """
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+        self._enabled = False
+
+        # Load channel configurations
+        self._channel_configs: Dict[int, StickyChannelConfig] = {}
+        for cfg in _get_channel_configs():
+            self._channel_configs[cfg.channel_id] = cfg
+
         # Track message counts per channel
         self._message_counts: Dict[int, int] = {
-            FEMALE_CHAT_ID: 0,
-            MALE_CHAT_ID: 0,
+            channel_id: 0 for channel_id in self._channel_configs
         }
+
         # Track last sticky message IDs per channel
         self._sticky_message_ids: Dict[int, Optional[int]] = {
-            FEMALE_CHAT_ID: None,
-            MALE_CHAT_ID: None,
+            channel_id: None for channel_id in self._channel_configs
         }
-        self._enabled = True
 
     async def setup(self) -> None:
         """Initialize the sticky service."""
+        if not self._channel_configs:
+            logger.tree("Sticky Service Disabled", [
+                ("Reason", "No channels configured"),
+            ], emoji="⚠️")
+            return
+
+        # Validate channels exist
+        valid_channels = []
+        for channel_id, cfg in self._channel_configs.items():
+            channel = self.bot.get_channel(channel_id)
+            if channel:
+                valid_channels.append(f"{cfg.name} ({channel.name})")
+            else:
+                logger.tree("Sticky Channel Not Found", [
+                    ("Type", cfg.name),
+                    ("Channel ID", str(channel_id)),
+                ], emoji="⚠️")
+
+        if not valid_channels:
+            logger.tree("Sticky Service Disabled", [
+                ("Reason", "No valid channels found"),
+            ], emoji="⚠️")
+            return
+
+        self._enabled = True
+
         logger.tree("Sticky Service Ready", [
-            ("Female Chat", str(FEMALE_CHAT_ID)),
-            ("Male Chat", str(MALE_CHAT_ID)),
-            ("Threshold", f"{MESSAGES_THRESHOLD} messages"),
+            ("Channels", ", ".join(valid_channels)),
+            ("Threshold", f"{config.STICKY_MESSAGE_THRESHOLD} messages"),
+            ("Ticket Channel", str(config.TICKET_CHANNEL_ID)),
         ], emoji="📌")
 
     def stop(self) -> None:
@@ -90,14 +163,20 @@ class StickyService:
         """
         Handle a message in sticky channels.
 
-        Returns True if this is a sticky channel message.
-        Returns False otherwise.
+        Increments the message counter and triggers sticky resend
+        when threshold is reached.
+
+        Args:
+            message: The Discord message to process.
+
+        Returns:
+            True if this is a sticky channel message, False otherwise.
         """
         if not self._enabled:
             return False
 
         channel_id = message.channel.id
-        if channel_id not in self._message_counts:
+        if channel_id not in self._channel_configs:
             return False
 
         # Don't count bot messages
@@ -106,16 +185,40 @@ class StickyService:
 
         # Increment counter
         self._message_counts[channel_id] += 1
+        current_count = self._message_counts[channel_id]
+
+        # Log progress at intervals (every 10 messages)
+        if current_count % 10 == 0:
+            cfg = self._channel_configs[channel_id]
+            remaining = config.STICKY_MESSAGE_THRESHOLD - current_count
+            logger.tree("Sticky Counter Update", [
+                ("Channel", cfg.name),
+                ("Count", f"{current_count}/{config.STICKY_MESSAGE_THRESHOLD}"),
+                ("Remaining", str(remaining)),
+            ], emoji="📊")
 
         # Check if we need to resend sticky
-        if self._message_counts[channel_id] >= MESSAGES_THRESHOLD:
+        if current_count >= config.STICKY_MESSAGE_THRESHOLD:
             self._message_counts[channel_id] = 0
-            await self._send_sticky(message.channel)
+            cfg = self._channel_configs[channel_id]
+
+            logger.tree("Sticky Threshold Reached", [
+                ("Channel", cfg.name),
+                ("Threshold", str(config.STICKY_MESSAGE_THRESHOLD)),
+            ], emoji="🔔")
+
+            await self._send_sticky(message.channel, cfg)
 
         return True
 
-    async def _delete_old_sticky(self, channel: discord.TextChannel) -> None:
-        """Delete the previous sticky message if it exists."""
+    async def _delete_old_sticky(self, channel: discord.TextChannel, cfg: StickyChannelConfig) -> None:
+        """
+        Delete the previous sticky message if it exists.
+
+        Args:
+            channel: The channel to delete from.
+            cfg: The channel configuration.
+        """
         old_id = self._sticky_message_ids.get(channel.id)
         if not old_id:
             return
@@ -124,39 +227,51 @@ class StickyService:
             old_message = await channel.fetch_message(old_id)
             await old_message.delete()
             logger.tree("Old Sticky Deleted", [
-                ("Channel", channel.name),
+                ("Channel", cfg.name),
                 ("Message ID", str(old_id)),
             ], emoji="🗑️")
         except discord.NotFound:
-            pass  # Already deleted
+            logger.tree("Old Sticky Already Gone", [
+                ("Channel", cfg.name),
+                ("Message ID", str(old_id)),
+            ], emoji="ℹ️")
+        except discord.Forbidden:
+            logger.tree("Old Sticky Delete Forbidden", [
+                ("Channel", cfg.name),
+                ("Message ID", str(old_id)),
+                ("Reason", "Missing permissions"),
+            ], emoji="⚠️")
         except discord.HTTPException as e:
             logger.tree("Old Sticky Delete Failed", [
-                ("Channel", channel.name),
+                ("Channel", cfg.name),
+                ("Message ID", str(old_id)),
                 ("Error", str(e)[:50]),
             ], emoji="⚠️")
 
         self._sticky_message_ids[channel.id] = None
 
-    async def _send_sticky(self, channel: discord.TextChannel) -> None:
-        """Send the sticky message to a channel."""
-        # Delete old sticky first
-        await self._delete_old_sticky(channel)
+    async def _send_sticky(self, channel: discord.TextChannel, cfg: StickyChannelConfig) -> None:
+        """
+        Send the sticky message to a channel.
 
-        # Determine channel type
-        is_female = channel.id == FEMALE_CHAT_ID
-        role_id = FEMALE_VERIFIED_ROLE_ID if is_female else MALE_VERIFIED_ROLE_ID
-        role_mention = f"<@&{role_id}>"
-        emoji = "👩" if is_female else "👨"
-        color = 0xFF69B4 if is_female else 0x4169E1  # Pink for female, Royal Blue for male
+        Args:
+            channel: The channel to send to.
+            cfg: The channel configuration.
+        """
+        # Delete old sticky first
+        await self._delete_old_sticky(channel, cfg)
+
+        # Build role mention
+        role_mention = f"<@&{cfg.role_id}>"
 
         # Build the embed
         embed = discord.Embed(
-            title=f"{emoji} Role-Verified Channel",
+            title=f"{cfg.emoji} Role-Verified Channel",
             description=(
                 f"This channel is exclusively for members with the {role_mention} role.\n\n"
                 f"To gain access to this channel, you must verify your identity."
             ),
-            color=color
+            color=cfg.color
         )
 
         embed.add_field(
@@ -183,18 +298,24 @@ class StickyService:
         set_footer(embed)
 
         # Create view with ticket button
-        view = StickyView(TICKET_CHANNEL_ID)
+        view = StickyView()
 
         try:
             msg = await channel.send(embed=embed, view=view)
             self._sticky_message_ids[channel.id] = msg.id
             logger.tree("Sticky Message Sent", [
-                ("Channel", channel.name),
-                ("Type", "Female" if is_female else "Male"),
+                ("Channel", cfg.name),
+                ("Role", role_mention),
                 ("Message ID", str(msg.id)),
             ], emoji="📌")
+        except discord.Forbidden:
+            logger.tree("Sticky Send Forbidden", [
+                ("Channel", cfg.name),
+                ("Reason", "Missing permissions"),
+            ], emoji="❌")
         except discord.HTTPException as e:
             logger.tree("Sticky Send Failed", [
-                ("Channel", channel.name),
+                ("Channel", cfg.name),
+                ("Error Type", type(e).__name__),
                 ("Error", str(e)[:100]),
             ], emoji="❌")
