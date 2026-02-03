@@ -470,23 +470,6 @@ class DatabaseCore:
             """)
 
             # =====================================================================
-            # Suggestions Tables
-            # =====================================================================
-
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS suggestions (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    content TEXT NOT NULL,
-                    submitter_id INTEGER NOT NULL,
-                    message_id INTEGER NOT NULL,
-                    status TEXT DEFAULT 'pending',
-                    submitted_at INTEGER NOT NULL,
-                    reviewed_at INTEGER,
-                    reviewed_by INTEGER
-                )
-            """)
-
-            # =====================================================================
             # Giveaways Tables
             # =====================================================================
 
@@ -564,6 +547,23 @@ class DatabaseCore:
             """)
 
             # =====================================================================
+            # XP History / Snapshots Table (for period leaderboards)
+            # =====================================================================
+
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS xp_snapshots (
+                    user_id INTEGER NOT NULL,
+                    guild_id INTEGER NOT NULL,
+                    date TEXT NOT NULL,
+                    xp_total INTEGER NOT NULL,
+                    level INTEGER NOT NULL,
+                    total_messages INTEGER DEFAULT 0,
+                    voice_minutes INTEGER DEFAULT 0,
+                    PRIMARY KEY (user_id, guild_id, date)
+                )
+            """)
+
+            # =====================================================================
             # Indexes
             # =====================================================================
 
@@ -606,6 +606,10 @@ class DatabaseCore:
             cur.execute("""
                 CREATE INDEX IF NOT EXISTS idx_birthdays_date
                 ON birthdays(guild_id, birth_month, birth_day)
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_xp_snapshots_date
+                ON xp_snapshots(guild_id, date)
             """)
 
             # =====================================================================

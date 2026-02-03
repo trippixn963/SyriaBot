@@ -167,11 +167,6 @@ class Config:
     CONFESSIONS_MOD_CHANNEL_ID: int = _env_int("SYRIA_CONFESS_MOD_CH")
 
     # ==========================================================================
-    # Suggestions
-    # ==========================================================================
-    SUGGESTIONS_CHANNEL_ID: int = _env_int("SYRIA_SUGGESTIONS_CH")
-
-    # ==========================================================================
     # Asset Storage (for permanent GIF URLs)
     # ==========================================================================
     ASSET_STORAGE_CHANNEL_ID: int = _env_int("SYRIA_ASSET_CH")

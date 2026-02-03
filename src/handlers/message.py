@@ -76,17 +76,6 @@ class MessageHandler(commands.Cog):
                     ("ID", str(message.author.id)),
                 ])
 
-        # Suggestions channel (auto-delete messages to keep it clean)
-        if hasattr(self.bot, 'suggestion_service') and self.bot.suggestion_service:
-            try:
-                if await self.bot.suggestion_service.handle_message(message):
-                    return  # Message was deleted
-            except Exception as e:
-                logger.error_tree("Suggestion Handler Error", e, [
-                    ("User", f"{message.author.name} ({message.author.display_name})"),
-                    ("ID", str(message.author.id)),
-                ])
-
         # Gallery service (media-only channel)
         if hasattr(self.bot, 'gallery_service') and self.bot.gallery_service:
             try:

@@ -366,7 +366,6 @@ class MembersHandler(commands.Cog):
             value=(
                 "`/rank` — Check your level and XP\n"
                 "`/confess` — Share anonymously\n"
-                "`/suggest` — Submit a suggestion\n"
                 "`/download` — Download social media videos\n"
                 "`/birthday set` — Register your birthday"
             ),

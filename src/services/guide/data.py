@@ -245,7 +245,6 @@ COMMANDS_DATA = {
         "description": "Community features",
         "commands": [
             "`/confess` - Anonymous confessions",
-            "`/suggest` - Submit server suggestions",
             "`/afk` - Set AFK status",
             "`/birthday` - Set your birthday",
         ],

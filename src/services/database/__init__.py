@@ -14,7 +14,6 @@ Structure:
     - downloads.py: Download statistics
     - confessions.py: Anonymous confessions system
     - actions.py: Action command statistics
-    - suggestions.py: Suggestion system
     - birthdays.py: Birthday tracking
 
 Author: حَـــــنَّـــــا
@@ -30,7 +29,6 @@ from .afk import AFKMixin
 from .downloads import DownloadsMixin
 from .confessions import ConfessionsMixin
 from .actions import ActionsMixin
-from .suggestions import SuggestionsMixin
 from .birthdays import BirthdaysMixin
 from .guide import GuideMixin
 
@@ -44,7 +42,6 @@ class Database(
     DownloadsMixin,
     ConfessionsMixin,
     ActionsMixin,
-    SuggestionsMixin,
     BirthdaysMixin,
     GuideMixin,
     DatabaseCore,

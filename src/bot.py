@@ -48,7 +48,6 @@ from src.services.gallery import GalleryService
 from src.services.presence import PresenceHandler
 from src.services.bump_service import bump_service
 from src.services.confessions import ConfessionService
-from src.services.suggestions import SuggestionService
 from src.services.currency_service import CurrencyService
 from src.services.action_service import action_service
 from src.services.quote import quote_service
@@ -90,7 +89,6 @@ class SyriaBot(commands.Bot):
         self.gallery_service: Optional[GalleryService] = None
         self.presence_handler: Optional[PresenceHandler] = None
         self.confession_service: Optional[ConfessionService] = None
-        self.suggestion_service: Optional[SuggestionService] = None
         self.currency_service: Optional[CurrencyService] = None
         self.birthday_service: Optional[BirthdayService] = None
         self.city_game_service: Optional[CityGameService] = None
@@ -111,6 +109,7 @@ class SyriaBot(commands.Bot):
             "src.handlers.member",
             "src.handlers.message",
             "src.handlers.giveaway_reaction",
+            "src.handlers.presence",
         ]
         loaded_handlers = []
         for handler in handlers:
@@ -133,7 +132,6 @@ class SyriaBot(commands.Bot):
             "src.commands.afk",
             "src.commands.image",
             "src.commands.confess",
-            "src.commands.suggest",
             "src.commands.birthday",
             "src.commands.faq",
             "src.commands.guide",
@@ -415,14 +413,6 @@ class SyriaBot(commands.Bot):
         except Exception as e:
             logger.error_tree("Confessions Init Failed", e)
 
-        # Suggestions
-        try:
-            self.suggestion_service = SuggestionService(self)
-            await self.suggestion_service.setup()
-            initialized.append("Suggestions")
-        except Exception as e:
-            logger.error_tree("Suggestions Init Failed", e)
-
         # Currency (JawdatBot integration)
         try:
             self.currency_service = CurrencyService()
@@ -551,14 +541,6 @@ class SyriaBot(commands.Bot):
                 stopped.append("Confessions")
             except Exception as e:
                 logger.error_tree("Confessions Stop Error", e)
-
-        # Suggestions
-        if self.suggestion_service:
-            try:
-                self.suggestion_service.stop()
-                stopped.append("Suggestions")
-            except Exception as e:
-                logger.error_tree("Suggestions Stop Error", e)
 
         # Currency
         if self.currency_service:
