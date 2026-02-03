@@ -27,6 +27,10 @@ FEMALE_CHAT_ID = 1468272030574055652
 MALE_CHAT_ID = 1468273741799886952
 TICKET_CHANNEL_ID = 1406750411779604561
 
+# Role IDs
+FEMALE_VERIFIED_ROLE_ID = 1468272342429073440
+MALE_VERIFIED_ROLE_ID = 1468272986527236438
+
 # Messages between sticky resends
 MESSAGES_THRESHOLD = 50
 
@@ -150,8 +154,8 @@ class StickyService:
 
         # Determine channel type
         is_female = channel.id == FEMALE_CHAT_ID
-        gender = "female" if is_female else "male"
-        role_name = "Verified Female" if is_female else "Verified Male"
+        role_id = FEMALE_VERIFIED_ROLE_ID if is_female else MALE_VERIFIED_ROLE_ID
+        role_mention = f"<@&{role_id}>"
         emoji = "👩" if is_female else "👨"
         color = 0xFF69B4 if is_female else 0x4169E1  # Pink for female, Royal Blue for male
 
@@ -159,7 +163,7 @@ class StickyService:
         embed = discord.Embed(
             title=f"{emoji} Role-Verified Channel",
             description=(
-                f"This channel is exclusively for members with the **{role_name}** role.\n\n"
+                f"This channel is exclusively for members with the {role_mention} role.\n\n"
                 f"To gain access to this channel, you must verify your identity."
             ),
             color=color
@@ -178,7 +182,7 @@ class StickyService:
         embed.add_field(
             name="⚠️ Important",
             value=(
-                f"• Only verified {gender}s can access this channel\n"
+                f"• Only members with {role_mention} can access this channel\n"
                 "• Impersonation will result in a permanent ban\n"
                 "• Keep conversations respectful"
             ),
