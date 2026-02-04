@@ -2,13 +2,13 @@
 SyriaBot - Fun Service
 ======================
 
-Handles fun commands like ship, howsimp, howgay with deterministic results.
+Handles fun commands like ship, howsimp, howgay with random results.
 
 Author: حَـــــنَّـــــا
 Server: discord.gg/syria
 """
 
-import hashlib
+import random
 from typing import Tuple, List
 
 from src.core.logger import logger
@@ -213,15 +213,9 @@ class FunService:
             ("Commands", "ship, howsimp, howgay"),
         ], emoji="🎮")
 
-    def _hash_to_percentage(self, *args) -> int:
-        """Convert arguments to a deterministic percentage (0-100)."""
-        # Create a consistent hash from the arguments
-        # Sort as strings to avoid type comparison issues (int vs str)
-        combined = ":".join(sorted(str(arg) for arg in args))
-        hash_bytes = hashlib.md5(combined.encode()).digest()
-        # Use first 4 bytes as integer, mod 101 for 0-100 range
-        value = int.from_bytes(hash_bytes[:4], 'big') % 101
-        return value
+    def _random_percentage(self) -> int:
+        """Generate a random percentage (0-100) for fun commands."""
+        return random.randint(0, 100)
 
     def calculate_ship(self, user1_id: int, user2_id: int) -> Tuple[int, str]:
         """
@@ -253,8 +247,8 @@ class FunService:
             ], emoji="💕")
             return 0, "Not meant to be... 💔"
 
-        # Sort IDs so order doesn't matter (A+B = B+A)
-        percentage = self._hash_to_percentage(user1_id, user2_id, "ship")
+        # Random percentage each time
+        percentage = self._random_percentage()
         message = _get_message(SHIP_MESSAGES, percentage)
 
         logger.tree("Ship Calculated", [
@@ -284,7 +278,7 @@ class FunService:
             ], emoji="🥺")
             return 0, "Not a simp at all."
 
-        percentage = self._hash_to_percentage(user_id, guild_id, "howsimp")
+        percentage = self._random_percentage()
         message = _get_message(SIMP_MESSAGES, percentage)
 
         logger.tree("Howsimp Calculated", [
@@ -313,7 +307,7 @@ class FunService:
             ], emoji="🌈")
             return 0, "Straight as an arrow."
 
-        percentage = self._hash_to_percentage(user_id, guild_id, "gay")
+        percentage = self._random_percentage()
         message = _get_message(GAY_MESSAGES, percentage)
 
         logger.tree("Gay Calculated", [
@@ -342,7 +336,7 @@ class FunService:
             ], emoji="🧠")
             return 100, "GENIUS LEVEL! 🎓"
 
-        percentage = self._hash_to_percentage(user_id, guild_id, "smart")
+        percentage = self._random_percentage()
         message = _get_message(SMART_MESSAGES, percentage)
 
         logger.tree("Smart Calculated", [
@@ -371,7 +365,7 @@ class FunService:
             ], emoji="💪")
             return 8, "Shredded! 💪"
 
-        percentage = self._hash_to_percentage(user_id, guild_id, "howfat")
+        percentage = self._random_percentage()
         message = _get_message(HOWFAT_MESSAGES, percentage)
 
         logger.tree("Howfat Calculated", [

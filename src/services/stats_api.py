@@ -268,7 +268,8 @@ class SyriaAPI:
         self.app.router.add_get("/api/syria/leaderboard", self.handle_leaderboard)
         self.app.router.add_get("/api/syria/user/{user_id}", self.handle_user)
         self.app.router.add_get("/api/syria/stats", self.handle_stats)
-        # /health removed - now served by unified HealthCheckServer on port 8085
+        self.app.router.add_get("/api/syria/channels", self.handle_channels)
+        self.app.router.add_get("/health", self.handle_health)
 
         # XP modification endpoints (require API key)
         self.app.router.add_post("/api/syria/xp/grant", self.handle_xp_grant)
@@ -409,8 +410,13 @@ class SyriaAPI:
             days = seconds_ago // 86400
             return f"{days}d ago"
 
-    async def _enrich_leaderboard(self, leaderboard: list[dict]) -> list[dict]:
-        """Add avatar URLs, names, and booster status to leaderboard entries (rate-limited parallel fetch)."""
+    async def _enrich_leaderboard(
+        self,
+        leaderboard: list[dict],
+        include_xp_gained: bool = False,
+        previous_ranks: dict[int, int] = None
+    ) -> list[dict]:
+        """Add avatar URLs, names, booster status, and rank changes to leaderboard entries."""
         if not leaderboard:
             return []
 
@@ -439,9 +445,19 @@ class SyriaAPI:
             last_active_at = entry.get("last_active_at", 0) or 0
             streak_days = entry.get("streak_days", 0) or 0
 
-            enriched.append({
-                "rank": entry["rank"],
-                "user_id": str(entry["user_id"]),
+            # Calculate rank change (positive = moved up, negative = moved down)
+            rank_change = None
+            current_rank = entry["rank"]
+            user_id = entry["user_id"]
+            if previous_ranks and user_id in previous_ranks:
+                previous_rank = previous_ranks[user_id]
+                # If previous rank was 5 and current is 3, change is +2 (moved up)
+                rank_change = previous_rank - current_rank
+
+            enriched_entry = {
+                "rank": current_rank,
+                "rank_change": rank_change,
+                "user_id": str(user_id),
                 "display_name": display_name,
                 "username": username,
                 "avatar": avatar_url,
@@ -454,7 +470,13 @@ class SyriaAPI:
                 "last_active_at": last_active_at if last_active_at > 0 else None,
                 "last_seen": self._format_last_seen(last_active_at),
                 "streak_days": streak_days,
-            })
+            }
+
+            # Include XP gained during period (for period leaderboards)
+            if include_xp_gained and "xp_gained" in entry:
+                enriched_entry["xp_gained"] = entry["xp_gained"]
+
+            enriched.append(enriched_entry)
 
         return enriched
 
@@ -469,8 +491,13 @@ class SyriaAPI:
             limit = min(int(request.query.get("limit", 50)), 100)
             offset = int(request.query.get("offset", 0))
 
-            # Check response cache
-            cache_key = f"leaderboard:{limit}:{offset}"
+            # Get period filter (all, month, week, today)
+            period = request.query.get("period", "all")
+            if period not in ("all", "month", "week", "today"):
+                period = "all"
+
+            # Check response cache (include period in key)
+            cache_key = f"leaderboard:{limit}:{offset}:{period}"
             now = time.time()
             if cache_key in _response_cache:
                 cached_data, cached_time = _response_cache[cache_key]
@@ -478,6 +505,7 @@ class SyriaAPI:
                     elapsed_ms = round((time.time() - start_time) * 1000)
                     logger.tree("Leaderboard API (Cached)", [
                         ("Client IP", client_ip),
+                        ("Period", period),
                         ("Response Time", f"{elapsed_ms}ms"),
                     ], emoji="⚡")
                     return web.json_response(cached_data, headers={
@@ -486,20 +514,32 @@ class SyriaAPI:
                         "X-Cache": "HIT",
                     })
 
-            # Get leaderboard from database
-            raw_leaderboard = db.get_leaderboard(limit=limit, offset=offset)
+            # Get leaderboard from database with period filter
+            # For period queries (today/week/month), use period leaderboard which calculates XP gained
+            if period != "all":
+                raw_leaderboard = db.get_period_leaderboard(limit=limit, offset=offset, period=period)
+                total_users = db.get_total_period_users(period=period)
+            else:
+                raw_leaderboard = db.get_leaderboard(limit=limit, offset=offset, period="all")
+                total_users = db.get_total_ranked_users(period="all")
 
-            # Enrich with Discord data
-            leaderboard = await self._enrich_leaderboard(raw_leaderboard)
+            # Get previous ranks for rank change calculation (only for users on this page)
+            user_ids = [entry["user_id"] for entry in raw_leaderboard]
+            previous_ranks = db.get_previous_ranks(user_ids=user_ids) if user_ids else {}
 
-            # Get total count for pagination
-            total_users = db.get_total_ranked_users()
+            # Enrich with Discord data and rank changes
+            leaderboard = await self._enrich_leaderboard(
+                raw_leaderboard,
+                include_xp_gained=(period != "all"),
+                previous_ranks=previous_ranks
+            )
 
             response_data = {
                 "leaderboard": leaderboard,
                 "total": total_users,
                 "limit": limit,
                 "offset": offset,
+                "period": period,
                 "updated_at": datetime.now(DAMASCUS_TZ).isoformat(),
             }
 
@@ -515,6 +555,7 @@ class SyriaAPI:
                 ("Client IP", client_ip),
                 ("Limit", str(limit)),
                 ("Offset", str(offset)),
+                ("Period", period),
                 ("Response Time", f"{elapsed_ms}ms"),
             ], emoji="📊")
 
@@ -529,6 +570,7 @@ class SyriaAPI:
                 ("Client IP", client_ip),
                 ("Limit", str(request.query.get("limit", "50"))),
                 ("Offset", str(request.query.get("offset", "0"))),
+                ("Period", str(request.query.get("period", "all"))),
             ])
             return web.json_response(
                 {"error": "Internal server error"},
@@ -557,6 +599,12 @@ class SyriaAPI:
             # Get rank
             rank = db.get_user_rank(user_id, config.GUILD_ID)
 
+            # Get previous rank for rank change calculation (only for this user)
+            previous_ranks = db.get_previous_ranks(user_ids=[user_id])
+            rank_change = None
+            if user_id in previous_ranks:
+                rank_change = previous_ranks[user_id] - rank
+
             # Get Discord info (includes join date and booster status)
             avatar_url, display_name, username, joined_at, is_booster = await self._fetch_user_data(user_id)
 
@@ -575,6 +623,21 @@ class SyriaAPI:
             streak_days = xp_data.get("streak_days", 0) or 0
             last_seen = self._format_last_seen(last_active_at)
 
+            # Extended stats (already tracked in database)
+            commands_used = xp_data.get("commands_used", 0) or 0
+            reactions_given = xp_data.get("reactions_given", 0) or 0
+            images_shared = xp_data.get("images_shared", 0) or 0
+            total_voice_sessions = xp_data.get("total_voice_sessions", 0) or 0
+            longest_voice_session = xp_data.get("longest_voice_session", 0) or 0
+            first_message_at = xp_data.get("first_message_at", 0) or 0
+            mentions_received = xp_data.get("mentions_received", 0) or 0
+
+            # Get peak activity hour
+            peak_hour, peak_hour_count = db.get_peak_activity_hour(user_id, config.GUILD_ID)
+
+            # Get invite count
+            invites_count = db.get_invite_count(user_id, config.GUILD_ID)
+
             logger.tree("User API Request", [
                 ("Client IP", client_ip),
                 ("ID", str(user_id)),
@@ -587,6 +650,7 @@ class SyriaAPI:
                 "username": username,
                 "avatar": avatar_url,
                 "rank": rank,
+                "rank_change": rank_change,
                 "level": xp_data["level"],
                 "xp": xp_data["xp"],
                 "xp_into_level": xp_into_level,
@@ -603,6 +667,18 @@ class SyriaAPI:
                 "last_active_at": last_active_at if last_active_at > 0 else None,
                 "last_seen": last_seen,
                 "streak_days": streak_days,
+                # New extended stats
+                "commands_used": commands_used,
+                "reactions_given": reactions_given,
+                "images_shared": images_shared,
+                "total_voice_sessions": total_voice_sessions,
+                "longest_voice_session": longest_voice_session,
+                "longest_voice_formatted": self._format_voice_time(longest_voice_session),
+                "first_message_at": first_message_at if first_message_at > 0 else None,
+                "peak_hour": peak_hour if peak_hour >= 0 else None,
+                "peak_hour_count": peak_hour_count,
+                "invites_count": invites_count,
+                "mentions_received": mentions_received,
                 "updated_at": datetime.now(DAMASCUS_TZ).isoformat(),
             }, headers={
                 "Access-Control-Allow-Origin": "*",
@@ -675,6 +751,29 @@ class SyriaAPI:
                     if guild.banner:
                         guild_banner = guild.banner.url
 
+            # Get today's daily stats
+            from datetime import timezone
+            today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            daily_stats = db.get_daily_stats(config.GUILD_ID, days=7)
+
+            # Find today's stats
+            today_stats = next(
+                (d for d in daily_stats if d.get("date") == today_str),
+                {"unique_users": 0, "new_members": 0, "voice_peak_users": 0}
+            )
+
+            # Format daily stats history
+            daily_stats_history = [
+                {
+                    "date": d.get("date"),
+                    "unique_users": d.get("unique_users", 0),
+                    "total_messages": d.get("total_messages", 0),
+                    "voice_peak_users": d.get("voice_peak_users", 0),
+                    "new_members": d.get("new_members", 0),
+                }
+                for d in daily_stats
+            ]
+
             response_data = {
                 "guild_name": guild_name,
                 "guild_icon": guild_icon,
@@ -688,6 +787,11 @@ class SyriaAPI:
                 "total_voice_formatted": self._format_voice_time(stats.get("total_voice_minutes", 0)),
                 "highest_level": stats.get("highest_level", 0),
                 "top_3": top_3,
+                # New daily stats fields
+                "daily_active_users": today_stats.get("unique_users", 0),
+                "new_members_today": today_stats.get("new_members", 0),
+                "voice_peak_today": today_stats.get("voice_peak_users", 0),
+                "daily_stats_history": daily_stats_history,
                 "updated_at": datetime.now(DAMASCUS_TZ).isoformat(),
             }
 
@@ -720,6 +824,77 @@ class SyriaAPI:
                 headers={"Access-Control-Allow-Origin": "*"}
             )
 
+    async def handle_channels(self, request: web.Request) -> web.Response:
+        """GET /api/syria/channels - Return per-channel message counts."""
+        global _response_cache
+        client_ip = get_client_ip(request)
+        start_time = time.time()
+
+        try:
+            # Check response cache
+            cache_key = "channels"
+            now = time.time()
+            if cache_key in _response_cache:
+                cached_data, cached_time = _response_cache[cache_key]
+                if now - cached_time < _STATS_CACHE_TTL:
+                    elapsed_ms = round((time.time() - start_time) * 1000)
+                    logger.tree("Channels API (Cached)", [
+                        ("Client IP", client_ip),
+                        ("Response Time", f"{elapsed_ms}ms"),
+                    ], emoji="⚡")
+                    return web.json_response(cached_data, headers={
+                        "Access-Control-Allow-Origin": "*",
+                        "Cache-Control": "public, max-age=60",
+                        "X-Cache": "HIT",
+                    })
+
+            # Get channel stats from database
+            channel_stats = db.get_channel_stats(config.GUILD_ID, limit=100)
+
+            # Format response
+            channels = [
+                {
+                    "channel_id": str(ch.get("channel_id")),
+                    "channel_name": ch.get("channel_name", "Unknown"),
+                    "total_messages": ch.get("total_messages", 0),
+                }
+                for ch in channel_stats
+            ]
+
+            response_data = {
+                "channels": channels,
+                "updated_at": datetime.now(DAMASCUS_TZ).isoformat(),
+            }
+
+            # Cache the response
+            _response_cache[cache_key] = (response_data, now)
+            while len(_response_cache) > _RESPONSE_CACHE_MAX_SIZE:
+                oldest_key = min(_response_cache, key=lambda k: _response_cache[k][1])
+                del _response_cache[oldest_key]
+
+            elapsed_ms = round((time.time() - start_time) * 1000)
+            logger.tree("Channels API Request", [
+                ("Client IP", client_ip),
+                ("Channels", str(len(channels))),
+                ("Response Time", f"{elapsed_ms}ms"),
+            ], emoji="📺")
+
+            return web.json_response(response_data, headers={
+                "Access-Control-Allow-Origin": "*",
+                "Cache-Control": "public, max-age=60",
+                "X-Cache": "MISS",
+            })
+
+        except Exception as e:
+            logger.error_tree("Channels API Error", e, [
+                ("Client IP", client_ip),
+            ])
+            return web.json_response(
+                {"error": "Internal server error"},
+                status=500,
+                headers={"Access-Control-Allow-Origin": "*"}
+            )
+
     async def handle_health(self, request: web.Request) -> web.Response:
         """GET /health - Health check endpoint with full status."""
         now = datetime.now(EST_TZ)
@@ -738,7 +913,7 @@ class SyriaAPI:
         status = {
             "status": "healthy" if is_ready else "starting",
             "bot": "SyriaBot",
-            "run_id": getattr(log, "run_id", None),
+            "run_id": getattr(logger, "run_id", None),
             "uptime": uptime_str,
             "uptime_seconds": int(uptime_seconds),
             "started_at": start.isoformat(),
@@ -1076,6 +1251,47 @@ class SyriaAPI:
                 # Wait an hour before retrying on error
                 await asyncio.sleep(3600)
 
+    async def _daily_xp_snapshot(self) -> None:
+        """Create daily XP snapshots at midnight UTC for period-based leaderboards."""
+        from datetime import timezone
+
+        while True:
+            try:
+                # Calculate seconds until next midnight UTC
+                now_utc = datetime.now(timezone.utc)
+                tomorrow_utc = now_utc.replace(hour=0, minute=0, second=0, microsecond=0)
+                if now_utc.hour >= 0:
+                    tomorrow_utc += timedelta(days=1)
+                seconds_until_midnight = (tomorrow_utc - now_utc).total_seconds()
+
+                logger.tree("XP Snapshot Scheduled", [
+                    ("Next Run", tomorrow_utc.strftime("%Y-%m-%d %H:%M:%S UTC")),
+                    ("Wait Time", f"{int(seconds_until_midnight // 3600)}h {int((seconds_until_midnight % 3600) // 60)}m"),
+                ], emoji="📸")
+
+                await asyncio.sleep(seconds_until_midnight)
+
+                # Create snapshot in thread to avoid blocking
+                snapshot_count = await asyncio.to_thread(db.create_daily_snapshot)
+
+                # Cleanup old snapshots (keep 35 days for monthly leaderboards)
+                deleted = await asyncio.to_thread(db.cleanup_old_snapshots, 35)
+
+                logger.tree("Daily XP Snapshot Complete", [
+                    ("Users Snapshotted", str(snapshot_count)),
+                    ("Old Snapshots Deleted", str(deleted)),
+                ], emoji="✅")
+
+            except asyncio.CancelledError:
+                logger.tree("XP Snapshot Task", [
+                    ("Status", "Task cancelled"),
+                ], emoji="⏹️")
+                break
+            except Exception as e:
+                logger.error_tree("XP Snapshot Scheduler Error", e)
+                # Wait an hour before retrying on error
+                await asyncio.sleep(3600)
+
     async def _refresh_all_booster_status(self) -> None:
         """Refresh booster status for all cached users. Non-blocking with staggered checks."""
         global _avatar_cache, _response_cache
@@ -1191,6 +1407,55 @@ class SyriaAPI:
             ("Duration", f"{elapsed}s"),
         ], emoji="✅")
 
+    async def _bootstrap_snapshots(self) -> None:
+        """Create initial XP snapshot if none exist, enabling period leaderboards immediately."""
+        from datetime import timezone
+
+        try:
+            # Check if any snapshots exist for yesterday (needed for "today" period)
+            yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
+
+            with db._get_conn() as conn:
+                cur = conn.cursor()
+                cur.execute("""
+                    SELECT COUNT(*) as count FROM xp_snapshots
+                    WHERE guild_id = ? AND date = ?
+                """, (config.GUILD_ID, yesterday))
+                row = cur.fetchone()
+                has_yesterday = row["count"] > 0 if row else False
+
+            if not has_yesterday:
+                # Create a snapshot dated yesterday so "today" period works
+                # This is a bootstrap - actual XP gained will be tracked after first midnight
+                logger.tree("XP Snapshot Bootstrap", [
+                    ("Status", "Creating initial snapshot"),
+                    ("Date", yesterday),
+                ], emoji="🔧")
+
+                with db._get_conn() as conn:
+                    cur = conn.cursor()
+                    cur.execute("""
+                        INSERT OR IGNORE INTO xp_snapshots
+                            (user_id, guild_id, date, xp_total, level, total_messages, voice_minutes)
+                        SELECT
+                            user_id, guild_id, ?, xp, level, total_messages, voice_minutes
+                        FROM user_xp
+                        WHERE guild_id = ? AND is_active = 1
+                    """, (yesterday, config.GUILD_ID))
+                    count = cur.rowcount
+
+                logger.tree("XP Snapshot Bootstrap Complete", [
+                    ("Users", str(count)),
+                    ("Date", yesterday),
+                ], emoji="✅")
+            else:
+                logger.tree("XP Snapshots Found", [
+                    ("Status", "Period leaderboards ready"),
+                ], emoji="📸")
+
+        except Exception as e:
+            logger.error_tree("XP Snapshot Bootstrap Error", e)
+
     async def setup(self) -> None:
         """Initialize and start the API server."""
         self._start_time = datetime.now(DAMASCUS_TZ)
@@ -1201,8 +1466,12 @@ class SyriaAPI:
         site = web.TCPSite(self.runner, STATS_API_HOST, STATS_API_PORT)
         await site.start()
 
+        # Bootstrap XP snapshots if none exist (enables period leaderboards immediately)
+        await self._bootstrap_snapshots()
+
         self._cleanup_task = asyncio.create_task(self._periodic_cleanup())
         self._midnight_task = asyncio.create_task(self._midnight_booster_refresh())
+        self._snapshot_task = asyncio.create_task(self._daily_xp_snapshot())
 
         logger.tree("Syria API Ready", [
             ("Host", STATS_API_HOST),
@@ -1210,6 +1479,7 @@ class SyriaAPI:
             ("Endpoints", "/api/syria/leaderboard, /api/syria/user/{id}, /api/syria/stats"),
             ("Rate Limit", "60 req/min"),
             ("Midnight Refresh", "Enabled"),
+            ("Daily Snapshots", "Enabled (UTC midnight)"),
         ], emoji="🌐")
 
     async def stop(self) -> None:
@@ -1225,6 +1495,13 @@ class SyriaAPI:
             self._midnight_task.cancel()
             try:
                 await self._midnight_task
+            except asyncio.CancelledError:
+                pass
+
+        if hasattr(self, '_snapshot_task') and self._snapshot_task:
+            self._snapshot_task.cancel()
+            try:
+                await self._snapshot_task
             except asyncio.CancelledError:
                 pass
 

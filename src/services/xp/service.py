@@ -299,6 +299,29 @@ class XPService:
             ], emoji="⚠️")
 
     # =========================================================================
+    # Presence Tracking
+    # =========================================================================
+
+    async def on_presence_update(
+        self,
+        before: discord.Member,
+        after: discord.Member
+    ) -> None:
+        """Track user activity based on presence changes (online/idle/dnd)."""
+        if after.bot:
+            return
+
+        # Only track in main server
+        if after.guild.id != config.GUILD_ID:
+            return
+
+        # Update last_active_at when user becomes active (not offline)
+        # This includes: online, idle, dnd
+        if after.status != discord.Status.offline and before.status == discord.Status.offline:
+            now = int(time.time())
+            db.update_last_active(after.id, after.guild.id, now)
+
+    # =========================================================================
     # Voice XP
     # =========================================================================
 

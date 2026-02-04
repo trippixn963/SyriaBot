@@ -307,7 +307,8 @@ class DatabaseCore:
             VALID_COLUMN_NAMES = frozenset([
                 "first_message_at", "last_active_at", "streak_days", "last_streak_date",
                 "longest_voice_session", "total_voice_sessions", "commands_used",
-                "reactions_given", "images_shared", "activity_hours", "invited_by", "is_active"
+                "reactions_given", "images_shared", "activity_hours", "invited_by", "is_active",
+                "mentions_received"
             ])
             new_columns = [
                 ("first_message_at", "INTEGER DEFAULT 0"),
@@ -322,6 +323,7 @@ class DatabaseCore:
                 ("activity_hours", "TEXT DEFAULT '{}'"),
                 ("invited_by", "INTEGER DEFAULT 0"),
                 ("is_active", "INTEGER DEFAULT 1"),
+                ("mentions_received", "INTEGER DEFAULT 0"),
             ]
             for col_name, col_type in new_columns:
                 # Validate column name against whitelist to prevent injection

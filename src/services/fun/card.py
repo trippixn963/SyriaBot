@@ -6,7 +6,6 @@ HTML/CSS based cards rendered with Playwright for ship, howsimp, howgay commands
 Shares browser instance and semaphore with rank card for efficiency.
 """
 
-import time
 from typing import Optional
 
 from src.core.logger import logger
@@ -18,29 +17,7 @@ from src.services.xp.card import (
     get_render_semaphore,
 )
 
-# Card cache for fun cards (longer TTL since results are deterministic)
-_fun_cache: dict = {}
-_FUN_CACHE_TTL = 300  # seconds (5 minutes - deterministic results don't change)
-_MAX_CACHE_SIZE = 50  # Maximum cached cards before eviction
-
-
-def _evict_cache() -> None:
-    """Remove oldest entries if cache exceeds max size."""
-    global _fun_cache
-    if len(_fun_cache) <= _MAX_CACHE_SIZE:
-        return
-
-    # Sort by timestamp and keep newest entries
-    sorted_entries = sorted(_fun_cache.items(), key=lambda x: x[1][1])
-    entries_to_remove = len(_fun_cache) - _MAX_CACHE_SIZE
-
-    for key, _ in sorted_entries[:entries_to_remove]:
-        del _fun_cache[key]
-
-    logger.tree("Fun Cache Eviction", [
-        ("Removed", str(entries_to_remove)),
-        ("Remaining", str(len(_fun_cache))),
-    ], emoji="🧹")
+# No caching for fun cards - results are random each time
 
 # Card dimensions
 SHIP_CARD_WIDTH = 700
@@ -513,21 +490,7 @@ async def generate_ship_card(
     message: str,
     banner_url: Optional[str] = None,
 ) -> bytes:
-    """Generate ship card image."""
-    global _fun_cache
-
-    # Cache key uses sorted IDs for order-independence (A+B = B+A)
-    cache_key = ("ship", min(user1_id, user2_id), max(user1_id, user2_id))
-    now = time.time()
-
-    if cache_key in _fun_cache:
-        cached_bytes, cached_time = _fun_cache[cache_key]
-        if now - cached_time < _FUN_CACHE_TTL:
-            logger.tree("Ship Card Cache Hit", [
-                ("Users", f"{user1_name} + {user2_name}"),
-            ], emoji="⚡")
-            return cached_bytes
-
+    """Generate ship card image (no caching - results are random)."""
     # Use shared semaphore from rank card module
     async with get_render_semaphore():
         page = None
@@ -565,9 +528,6 @@ async def generate_ship_card(
             await _return_page(page)
             page = None
 
-            _fun_cache[cache_key] = (screenshot, now)
-            _evict_cache()
-
             logger.tree("Ship Card Generated", [
                 ("Users", f"{user1_name} + {user2_name}"),
                 ("Result", f"{percentage}%"),
@@ -597,21 +557,7 @@ async def generate_meter_card(
     meter_type: str,
     banner_url: Optional[str] = None,
 ) -> bytes:
-    """Generate howsimp/gay meter card image."""
-    global _fun_cache
-
-    # Cache key uses user_id + guild_id + type for stable identification
-    cache_key = (meter_type, user_id, guild_id)
-    now = time.time()
-
-    if cache_key in _fun_cache:
-        cached_bytes, cached_time = _fun_cache[cache_key]
-        if now - cached_time < _FUN_CACHE_TTL:
-            logger.tree(f"{meter_type.title()} Card Cache Hit", [
-                ("User", user_name),
-            ], emoji="⚡")
-            return cached_bytes
-
+    """Generate howsimp/gay meter card image (no caching - results are random)."""
     # Use shared semaphore from rank card module
     async with get_render_semaphore():
         page = None
@@ -647,9 +593,6 @@ async def generate_meter_card(
             await _return_page(page)
             page = None
 
-            _fun_cache[cache_key] = (screenshot, now)
-            _evict_cache()
-
             logger.tree(f"{meter_type.title()} Card Generated", [
                 ("User", user_name),
                 ("Result", f"{percentage}%"),
@@ -670,7 +613,5 @@ async def generate_meter_card(
 
 
 async def cleanup():
-    """Clean up fun card cache."""
-    global _fun_cache
-    _fun_cache.clear()
-    logger.tree("Fun Card Cache Cleared", [], emoji="🧹")
+    """Cleanup placeholder (no cache to clear)."""
+    pass

@@ -103,7 +103,7 @@ class Config:
     # ==========================================================================
     # Core
     # ==========================================================================
-    TOKEN: str = _env("DISCORD_TOKEN")
+    TOKEN: str = _env("SYRIA_TOKEN")
     GUILD_ID: int = _env_int("GUILD_ID")
     OWNER_ID: int = _env_int("OWNER_ID")
 
@@ -219,7 +219,7 @@ class Config:
     # ==========================================================================
     # Webhooks
     # ==========================================================================
-    STATUS_WEBHOOK_URL: str = _env("STATUS_WEBHOOK_URL")
+    STATUS_WEBHOOK_URL: str = _env("SYRIA_STATUS_WEBHOOK_URL")
 
     # ==========================================================================
     # URLs
@@ -252,7 +252,7 @@ def validate_config() -> bool:
 
     # Critical: Token must be set
     if not config.TOKEN:
-        errors.append(("DISCORD_TOKEN", "Bot token is required"))
+        errors.append(("SYRIA_TOKEN", "Bot token is required"))
         is_valid = False
 
     # Critical: Guild ID should be set

@@ -128,6 +128,27 @@ class MessageHandler(commands.Cog):
                     ("ID", str(message.author.id)),
                 ])
 
+        # Track mentions received (non-blocking)
+        if message.guild and message.guild.id == config.GUILD_ID and message.mentions:
+            try:
+                # Filter out self-mentions and bots
+                valid_mentions = [
+                    m for m in message.mentions
+                    if m.id != message.author.id and not m.bot
+                ]
+                for mentioned_user in valid_mentions:
+                    await asyncio.to_thread(
+                        db.increment_mentions_received,
+                        mentioned_user.id,
+                        message.guild.id,
+                        1
+                    )
+            except Exception as e:
+                logger.error_tree("Mention Track Failed", e, [
+                    ("User", f"{message.author.name} ({message.author.display_name})"),
+                    ("ID", str(message.author.id)),
+                ])
+
         # AFK service
         if message.guild and hasattr(self.bot, 'afk_service') and self.bot.afk_service:
             try:

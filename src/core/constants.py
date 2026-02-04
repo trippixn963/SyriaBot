@@ -140,7 +140,8 @@ RATE_LIMIT_ACTION_EMOJIS = {
 # Stats API
 # =============================================================================
 
-STATS_API_PORT = 8088
+import os
+STATS_API_PORT = int(os.getenv("SYRIA_API_PORT", "8084"))
 STATS_API_HOST = "0.0.0.0"
 
 

@@ -205,8 +205,8 @@ class AFKService:
 
         if mention_count > 0:
             if pinger_names:
-                # Show who mentioned them as <@id> format (clickable but no ping)
-                mentions_str = ", ".join(f"<@{uid}>" for uid in pinger_names)
+                # Show who mentioned them as plain usernames (no ping)
+                mentions_str = ", ".join(f"**{name}**" for name in pinger_names)
                 if mention_count > len(pinger_names):
                     # More mentions than unique pingers shown
                     welcome_msg += f" · Mentioned by {mentions_str} (+{mention_count - len(pinger_names)} more)"
@@ -298,7 +298,7 @@ class AFKService:
                 user_id,
                 guild_id,
                 pinger_id=message.author.id,
-                pinger_name=str(message.author.id)  # Store ID for <@id> format
+                pinger_name=message.author.display_name  # Store display name (no ping)
             )
 
         if afk_messages:

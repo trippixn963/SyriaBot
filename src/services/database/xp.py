@@ -205,36 +205,110 @@ class XPMixin:
     # Leaderboard Methods
     # =========================================================================
 
-    def get_leaderboard(self, guild_id: int = None, limit: int = 10, offset: int = 0) -> List[Dict[str, Any]]:
-        """Get top users by XP in a guild with pagination (only active members)."""
+    def get_leaderboard(
+        self,
+        guild_id: int = None,
+        limit: int = 10,
+        offset: int = 0,
+        period: str = "all"
+    ) -> List[Dict[str, Any]]:
+        """
+        Get top users by XP in a guild with pagination (only active members).
+
+        Args:
+            guild_id: Guild ID (defaults to config.GUILD_ID)
+            limit: Max results to return
+            offset: Starting position
+            period: Time period filter - "all", "month", "week", "today"
+                    Filters by last_active_at timestamp
+
+        Returns:
+            List of user dicts with rank calculated based on filtered results
+        """
         from src.core.config import config
+        import time
+
         gid = guild_id or config.GUILD_ID
+
+        # Calculate cutoff timestamp based on period
+        now = int(time.time())
+        if period == "today":
+            cutoff = now - 86400  # 24 hours
+        elif period == "week":
+            cutoff = now - 604800  # 7 days
+        elif period == "month":
+            cutoff = now - 2592000  # 30 days
+        else:
+            cutoff = 0  # All time (no filter)
 
         with self._get_conn() as conn:
             cur = conn.cursor()
-            cur.execute("""
-                SELECT user_id, xp, level, total_messages, voice_minutes,
-                       last_active_at, streak_days,
-                       ROW_NUMBER() OVER (ORDER BY xp DESC) as rank
-                FROM user_xp
-                WHERE guild_id = ? AND is_active = 1
-                ORDER BY xp DESC
-                LIMIT ? OFFSET ?
-            """, (gid, limit, offset))
+
+            if cutoff > 0:
+                # Filter by last_active_at for time periods
+                cur.execute("""
+                    SELECT user_id, xp, level, total_messages, voice_minutes,
+                           last_active_at, streak_days,
+                           ROW_NUMBER() OVER (ORDER BY xp DESC) as rank
+                    FROM user_xp
+                    WHERE guild_id = ? AND is_active = 1 AND last_active_at >= ?
+                    ORDER BY xp DESC
+                    LIMIT ? OFFSET ?
+                """, (gid, cutoff, limit, offset))
+            else:
+                # All time - no last_active_at filter
+                cur.execute("""
+                    SELECT user_id, xp, level, total_messages, voice_minutes,
+                           last_active_at, streak_days,
+                           ROW_NUMBER() OVER (ORDER BY xp DESC) as rank
+                    FROM user_xp
+                    WHERE guild_id = ? AND is_active = 1
+                    ORDER BY xp DESC
+                    LIMIT ? OFFSET ?
+                """, (gid, limit, offset))
+
             return [dict(row) for row in cur.fetchall()]
 
-    def get_total_ranked_users(self, guild_id: int = None) -> int:
-        """Get total number of active users with XP in a guild."""
+    def get_total_ranked_users(self, guild_id: int = None, period: str = "all") -> int:
+        """
+        Get total number of active users with XP in a guild.
+
+        Args:
+            guild_id: Guild ID (defaults to config.GUILD_ID)
+            period: Time period filter - "all", "month", "week", "today"
+        """
         from src.core.config import config
+        import time
+
         gid = guild_id or config.GUILD_ID
+
+        # Calculate cutoff timestamp based on period
+        now = int(time.time())
+        if period == "today":
+            cutoff = now - 86400
+        elif period == "week":
+            cutoff = now - 604800
+        elif period == "month":
+            cutoff = now - 2592000
+        else:
+            cutoff = 0
 
         with self._get_conn() as conn:
             cur = conn.cursor()
-            cur.execute("""
-                SELECT COUNT(*) as total
-                FROM user_xp
-                WHERE guild_id = ? AND is_active = 1
-            """, (gid,))
+
+            if cutoff > 0:
+                cur.execute("""
+                    SELECT COUNT(*) as total
+                    FROM user_xp
+                    WHERE guild_id = ? AND is_active = 1 AND last_active_at >= ?
+                """, (gid, cutoff))
+            else:
+                cur.execute("""
+                    SELECT COUNT(*) as total
+                    FROM user_xp
+                    WHERE guild_id = ? AND is_active = 1
+                """, (gid,))
+
             row = cur.fetchone()
             return row["total"] if row else 0
 
@@ -512,3 +586,323 @@ class XPMixin:
             """, (guild_id, user_id))
             row = cur.fetchone()
             return row["count"] if row else 0
+
+    def increment_mentions_received(self, user_id: int, guild_id: int, count: int = 1) -> None:
+        """Increment user's mentions received count."""
+        self.ensure_user_xp(user_id, guild_id)
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                UPDATE user_xp SET mentions_received = mentions_received + ?
+                WHERE user_id = ? AND guild_id = ?
+            """, (count, user_id, guild_id))
+
+    # =========================================================================
+    # XP Snapshots (for period-based leaderboards)
+    # =========================================================================
+
+    def create_daily_snapshot(self, guild_id: int = None) -> int:
+        """
+        Create a snapshot of all users' current XP for period tracking.
+        Should be called once daily (e.g., at midnight via scheduled task).
+
+        Args:
+            guild_id: Guild ID (defaults to config.GUILD_ID)
+
+        Returns:
+            Number of users snapshotted
+        """
+        from src.core.config import config
+        from datetime import datetime, timezone
+
+        gid = guild_id or config.GUILD_ID
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+
+            # Insert or replace snapshots for all active users
+            cur.execute("""
+                INSERT OR REPLACE INTO xp_snapshots
+                    (user_id, guild_id, date, xp_total, level, total_messages, voice_minutes)
+                SELECT
+                    user_id, guild_id, ?, xp, level, total_messages, voice_minutes
+                FROM user_xp
+                WHERE guild_id = ? AND is_active = 1
+            """, (today, gid))
+
+            count = cur.rowcount
+
+        logger.tree("XP Snapshot Created", [
+            ("Date", today),
+            ("Guild", str(gid)),
+            ("Users", str(count)),
+        ], emoji="📸")
+
+        return count
+
+    def get_snapshot_date_for_period(self, period: str) -> str:
+        """
+        Get the reference date for a period (the date to compare against).
+
+        Args:
+            period: "today", "week", or "month"
+
+        Returns:
+            Date string (YYYY-MM-DD) of the comparison snapshot
+        """
+        from datetime import datetime, timezone, timedelta
+
+        now = datetime.now(timezone.utc)
+
+        if period == "today":
+            # Compare to yesterday's snapshot
+            ref_date = now - timedelta(days=1)
+        elif period == "week":
+            # Compare to 7 days ago
+            ref_date = now - timedelta(days=7)
+        elif period == "month":
+            # Compare to 30 days ago
+            ref_date = now - timedelta(days=30)
+        else:
+            # All time - no snapshot needed
+            return ""
+
+        return ref_date.strftime("%Y-%m-%d")
+
+    def get_period_leaderboard(
+        self,
+        guild_id: int = None,
+        limit: int = 10,
+        offset: int = 0,
+        period: str = "all"
+    ) -> List[Dict[str, Any]]:
+        """
+        Get leaderboard ranked by XP gained during a specific period.
+
+        Unlike get_leaderboard (which filters by last_active_at),
+        this calculates actual XP gained = current_xp - snapshot_xp.
+
+        Args:
+            guild_id: Guild ID (defaults to config.GUILD_ID)
+            limit: Max results to return
+            offset: Starting position
+            period: Time period - "all", "month", "week", "today"
+
+        Returns:
+            List of user dicts with xp_gained field, ranked by XP gained
+        """
+        from src.core.config import config
+
+        gid = guild_id or config.GUILD_ID
+
+        # For "all" time, use regular leaderboard
+        if period == "all":
+            return self.get_leaderboard(guild_id=gid, limit=limit, offset=offset, period="all")
+
+        snapshot_date = self.get_snapshot_date_for_period(period)
+
+        logger.tree("Period Leaderboard Query", [
+            ("Period", period),
+            ("Snapshot Date", snapshot_date),
+            ("Limit", str(limit)),
+            ("Offset", str(offset)),
+        ], emoji="📊")
+
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+
+            # Join current XP with snapshot, calculate XP gained
+            # Users without a snapshot get full current XP as "gained"
+            cur.execute("""
+                SELECT
+                    u.user_id,
+                    u.xp as current_xp,
+                    u.level,
+                    u.total_messages,
+                    u.voice_minutes,
+                    u.last_active_at,
+                    u.streak_days,
+                    COALESCE(s.xp_total, 0) as snapshot_xp,
+                    (u.xp - COALESCE(s.xp_total, 0)) as xp_gained,
+                    ROW_NUMBER() OVER (ORDER BY (u.xp - COALESCE(s.xp_total, 0)) DESC) as rank
+                FROM user_xp u
+                LEFT JOIN xp_snapshots s ON
+                    u.user_id = s.user_id AND
+                    u.guild_id = s.guild_id AND
+                    s.date = ?
+                WHERE u.guild_id = ? AND u.is_active = 1
+                ORDER BY xp_gained DESC
+                LIMIT ? OFFSET ?
+            """, (snapshot_date, gid, limit, offset))
+
+            results = []
+            for row in cur.fetchall():
+                results.append({
+                    "user_id": row["user_id"],
+                    "xp": row["current_xp"],
+                    "xp_gained": row["xp_gained"],
+                    "level": row["level"],
+                    "total_messages": row["total_messages"],
+                    "voice_minutes": row["voice_minutes"],
+                    "last_active_at": row["last_active_at"],
+                    "streak_days": row["streak_days"],
+                    "rank": row["rank"],
+                })
+
+            # Log top gainer if results exist
+            if results:
+                top = results[0]
+                logger.tree("Period Leaderboard Results", [
+                    ("Period", period),
+                    ("Results", str(len(results))),
+                    ("Top Gainer", f"User {top['user_id']} (+{top['xp_gained']} XP)"),
+                ], emoji="🏆")
+
+            return results
+
+    def get_total_period_users(self, guild_id: int = None, period: str = "all") -> int:
+        """
+        Get total number of users with XP gained during a period.
+
+        Args:
+            guild_id: Guild ID (defaults to config.GUILD_ID)
+            period: Time period - "all", "month", "week", "today"
+        """
+        from src.core.config import config
+
+        gid = guild_id or config.GUILD_ID
+
+        if period == "all":
+            return self.get_total_ranked_users(guild_id=gid, period="all")
+
+        snapshot_date = self.get_snapshot_date_for_period(period)
+
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+
+            # Count users who gained XP (current > snapshot or no snapshot exists)
+            cur.execute("""
+                SELECT COUNT(*) as total
+                FROM user_xp u
+                LEFT JOIN xp_snapshots s ON
+                    u.user_id = s.user_id AND
+                    u.guild_id = s.guild_id AND
+                    s.date = ?
+                WHERE u.guild_id = ? AND u.is_active = 1
+                    AND (u.xp - COALESCE(s.xp_total, 0)) > 0
+            """, (snapshot_date, gid))
+
+            row = cur.fetchone()
+            total = row["total"] if row else 0
+
+            logger.tree("Period User Count", [
+                ("Period", period),
+                ("Snapshot Date", snapshot_date),
+                ("Active Users", str(total)),
+            ], emoji="👥")
+
+            return total
+
+    def get_previous_ranks(
+        self,
+        user_ids: List[int] = None,
+        guild_id: int = None,
+        snapshot_date: str = None
+    ) -> Dict[int, int]:
+        """
+        Get user ranks from a previous snapshot date.
+
+        Calculates what each user's rank would have been based on their
+        XP at the snapshot date.
+
+        Args:
+            user_ids: Optional list of user IDs to fetch ranks for.
+                     If provided, only returns ranks for these users (efficient).
+                     If None, returns all ranks (expensive - avoid in production).
+            guild_id: Guild ID (defaults to config.GUILD_ID)
+            snapshot_date: Date string (YYYY-MM-DD) to get ranks from.
+                          If None, uses yesterday.
+
+        Returns:
+            Dict mapping user_id to their rank at that snapshot
+        """
+        from src.core.config import config
+        from datetime import datetime, timezone, timedelta
+
+        gid = guild_id or config.GUILD_ID
+
+        if not snapshot_date:
+            snapshot_date = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
+
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+
+            if user_ids:
+                # Efficient: Only calculate ranks for specific users
+                # Use a CTE to rank all users, then filter to the ones we need
+                placeholders = ",".join("?" * len(user_ids))
+                cur.execute(f"""
+                    WITH ranked AS (
+                        SELECT
+                            user_id,
+                            ROW_NUMBER() OVER (ORDER BY xp_total DESC) as rank
+                        FROM xp_snapshots
+                        WHERE guild_id = ? AND date = ?
+                    )
+                    SELECT user_id, rank FROM ranked
+                    WHERE user_id IN ({placeholders})
+                """, (gid, snapshot_date, *user_ids))
+            else:
+                # Fallback: Get all ranks (expensive, avoid in production)
+                cur.execute("""
+                    SELECT
+                        user_id,
+                        ROW_NUMBER() OVER (ORDER BY xp_total DESC) as rank
+                    FROM xp_snapshots
+                    WHERE guild_id = ? AND date = ?
+                """, (gid, snapshot_date))
+
+            ranks = {row["user_id"]: row["rank"] for row in cur.fetchall()}
+
+        logger.tree("Previous Ranks Retrieved", [
+            ("Date", snapshot_date),
+            ("Requested", str(len(user_ids)) if user_ids else "All"),
+            ("Found", str(len(ranks))),
+        ], emoji="📈")
+
+        return ranks
+
+    def cleanup_old_snapshots(self, days_to_keep: int = 35, guild_id: int = None) -> int:
+        """
+        Delete snapshots older than specified days to prevent unbounded growth.
+
+        Args:
+            days_to_keep: Number of days of history to retain (default 35 for monthly)
+            guild_id: Guild ID (defaults to config.GUILD_ID)
+
+        Returns:
+            Number of rows deleted
+        """
+        from src.core.config import config
+        from datetime import datetime, timezone, timedelta
+
+        gid = guild_id or config.GUILD_ID
+        cutoff_date = (datetime.now(timezone.utc) - timedelta(days=days_to_keep)).strftime("%Y-%m-%d")
+
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                DELETE FROM xp_snapshots
+                WHERE guild_id = ? AND date < ?
+            """, (gid, cutoff_date))
+
+            deleted = cur.rowcount
+
+        if deleted > 0:
+            logger.tree("XP Snapshots Cleanup", [
+                ("Deleted", str(deleted)),
+                ("Cutoff", cutoff_date),
+            ], emoji="🧹")
+
+        return deleted
