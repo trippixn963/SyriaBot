@@ -112,7 +112,7 @@ class Config:
     # ==========================================================================
     MOD_ROLE_ID: int = _env_int("MOD_ROLE_ID")
     AUTO_ROLE_ID: int = _env_int("SYRIA_AUTO_ROLE")
-    BOOSTER_ROLE_ID: int = _env_int("SYRIA_BOOSTER_ROLE")
+    BOOSTER_ROLE_ID: int = _env_int("BOOSTER_ROLE_ID")
     DEAD_CHAT_ROLE_ID: int = _env_int("SYRIA_DEAD_CHAT_ROLE")
 
     # ==========================================================================
