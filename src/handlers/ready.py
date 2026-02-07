@@ -14,6 +14,8 @@ from discord.ext import commands
 from src.core.config import config
 from src.core.logger import logger
 from src.utils.footer import init_footer
+from src.services.database import db
+from src.api.services.websocket import get_ws_manager
 
 
 class ReadyHandler(commands.Cog):
@@ -91,6 +93,17 @@ class ReadyHandler(commands.Cog):
             logger.tree("DeepL Usage Check Skipped", [
                 ("Error", str(e)[:50]),
             ], emoji="⚠️")
+
+        # Initialize WebSocket with current message count
+        try:
+            stats = db.get_server_stats(config.GUILD_ID)
+            ws_manager = get_ws_manager()
+            ws_manager.set_message_count(stats.get("total_messages", 0))
+            logger.tree("WebSocket Initialized", [
+                ("Messages", str(stats.get("total_messages", 0))),
+            ], emoji="🔌")
+        except Exception as e:
+            logger.error_tree("WebSocket Init Failed", e)
 
 
 async def setup(bot: commands.Bot) -> None:

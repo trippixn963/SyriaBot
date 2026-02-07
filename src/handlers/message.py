@@ -18,6 +18,7 @@ from src.core.logger import logger
 from src.core.config import config
 from src.services.bump_service import bump_service
 from src.services.database import db
+from src.api.services.websocket import get_ws_manager
 from src.handlers.fun import fun
 from src.handlers.action import action
 from src.handlers.reply import ReplyHandler
@@ -112,6 +113,11 @@ class MessageHandler(commands.Cog):
         if hasattr(self.bot, 'xp_service') and self.bot.xp_service:
             try:
                 await self.bot.xp_service.on_message(message)
+                # Broadcast updated message count to WebSocket clients
+                ws_manager = get_ws_manager()
+                if ws_manager.connection_count > 0:
+                    stats = await asyncio.to_thread(db.get_server_stats, config.GUILD_ID)
+                    await ws_manager.broadcast_message_count(stats.get("total_messages", 0))
             except Exception as e:
                 logger.error_tree("XP Handler Error", e, [
                     ("User", f"{message.author.name} ({message.author.display_name})"),

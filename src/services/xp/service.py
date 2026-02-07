@@ -276,6 +276,14 @@ class XPService:
                 message.channel.name
             )
 
+            # Per-user-per-channel tracking (for channel activity API)
+            db.increment_user_channel_messages(
+                user_id,
+                message.channel.id,
+                guild_id,
+                message.channel.name
+            )
+
             # Track DAU (unique users) - use cache to avoid duplicate counts
             dau_key = (user_id, guild_id, today_date)
             async with self._dau_cache_lock:

@@ -638,10 +638,22 @@ class SyriaAPI:
             # Get invite count
             invites_count = db.get_invite_count(user_id, config.GUILD_ID)
 
+            # Get top channel activity for this user
+            channel_activity = db.get_user_channel_activity(user_id, config.GUILD_ID, limit=10)
+            channels = [
+                {
+                    "channel_id": str(ch.get("channel_id")),
+                    "channel_name": ch.get("channel_name", "Unknown"),
+                    "message_count": ch.get("message_count", 0),
+                }
+                for ch in channel_activity
+            ]
+
             logger.tree("User API Request", [
                 ("Client IP", client_ip),
                 ("ID", str(user_id)),
                 ("Booster", "Yes" if is_booster else "No"),
+                ("Channels", str(len(channels))),
             ], emoji="👤")
 
             return web.json_response({
@@ -679,6 +691,7 @@ class SyriaAPI:
                 "peak_hour_count": peak_hour_count,
                 "invites_count": invites_count,
                 "mentions_received": mentions_received,
+                "channels": channels,
                 "updated_at": datetime.now(DAMASCUS_TZ).isoformat(),
             }, headers={
                 "Access-Control-Allow-Origin": "*",

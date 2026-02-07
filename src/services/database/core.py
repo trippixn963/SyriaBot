@@ -615,6 +615,27 @@ class DatabaseCore:
             """)
 
             # =====================================================================
+            # User Channel Activity Table (per-user-per-channel message counts)
+            # =====================================================================
+
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS user_channel_activity (
+                    user_id INTEGER NOT NULL,
+                    channel_id INTEGER NOT NULL,
+                    guild_id INTEGER NOT NULL,
+                    channel_name TEXT,
+                    message_count INTEGER DEFAULT 0,
+                    last_message_at INTEGER DEFAULT 0,
+                    PRIMARY KEY (user_id, channel_id)
+                )
+            """)
+
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_user_channel_activity_user
+                ON user_channel_activity(user_id, guild_id, message_count DESC)
+            """)
+
+            # =====================================================================
             # Migrations Table
             # =====================================================================
 

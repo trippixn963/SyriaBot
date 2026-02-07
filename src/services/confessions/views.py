@@ -150,61 +150,72 @@ class ConfessionReplyView(ui.View):
         await interaction.response.send_modal(modal)
 
 
-class ConfessionReplyHandler(ui.View):
+async def handle_confession_reply_interaction(interaction: discord.Interaction) -> bool:
     """
-    Handler for persistent confession reply buttons.
-    Register this once on bot startup.
+    Handle confession reply button interactions.
+
+    Returns True if the interaction was handled, False otherwise.
+    Called from on_interaction listener.
     """
+    # Only handle button interactions
+    if interaction.type != discord.InteractionType.component:
+        return False
 
-    def __init__(self):
-        super().__init__(timeout=None)
+    # Check if this is a confession reply button
+    custom_id = interaction.data.get("custom_id", "")
+    if not custom_id.startswith("confession:reply:"):
+        return False
 
-    @ui.button(custom_id="confession:reply", style=discord.ButtonStyle.secondary)
-    async def reply(self, interaction: discord.Interaction, button: ui.Button) -> None:
-        """Handle reply button from any confession thread."""
-        # Parse confession number from actual custom_id
-        parts = interaction.data.get("custom_id", "").split(":")
-        if len(parts) < 3:
-            await interaction.response.defer()
-            return
+    # Parse confession number
+    parts = custom_id.split(":")
+    if len(parts) < 3:
+        await interaction.response.defer()
+        return True
 
-        try:
-            confession_number = int(parts[2])
-        except ValueError:
-            await interaction.response.defer()
-            return
+    try:
+        confession_number = int(parts[2])
+    except ValueError:
+        await interaction.response.defer()
+        return True
 
-        # Get service
-        if not hasattr(interaction.client, 'confession_service') or not interaction.client.confession_service:
-            await interaction.response.send_message(
-                "❌ Confessions system is not available.",
-                ephemeral=True
-            )
-            return
+    # Get service
+    if not hasattr(interaction.client, 'confession_service') or not interaction.client.confession_service:
+        await interaction.response.send_message(
+            "❌ Confessions system is not available.",
+            ephemeral=True
+        )
+        return True
 
-        service = interaction.client.confession_service
+    service = interaction.client.confession_service
 
-        # Must be in a thread
-        if not isinstance(interaction.channel, discord.Thread):
-            await interaction.response.send_message(
-                "❌ This button only works in confession threads.",
-                ephemeral=True
-            )
-            return
+    # Must be in a thread
+    if not isinstance(interaction.channel, discord.Thread):
+        await interaction.response.send_message(
+            "❌ This button only works in confession threads.",
+            ephemeral=True
+        )
+        return True
 
-        logger.tree("Reply Button Clicked (Persistent)", [
-            ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-            ("ID", str(interaction.user.id)),
-            ("Confession", f"#{confession_number}"),
-        ], emoji="🔘")
+    logger.tree("Reply Button Clicked (Persistent)", [
+        ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+        ("ID", str(interaction.user.id)),
+        ("Confession", f"#{confession_number}"),
+    ], emoji="🔘")
 
-        modal = ReplyModal(service, confession_number, interaction.channel)
-        await interaction.response.send_modal(modal)
+    modal = ReplyModal(service, confession_number, interaction.channel)
+    await interaction.response.send_modal(modal)
+    return True
 
 
 def setup_confession_views(bot: discord.Client) -> None:
-    """Register persistent confession views with the bot."""
-    bot.add_view(ConfessionReplyHandler())
+    """Register persistent confession interaction handler."""
+
+    async def confession_interaction_listener(interaction: discord.Interaction) -> None:
+        """Handle confession reply button interactions."""
+        await handle_confession_reply_interaction(interaction)
+
+    bot.add_listener(confession_interaction_listener, "on_interaction")
+
     logger.tree("Confession Persistent Views", [
-        ("Status", "Registered"),
+        ("Status", "Registered (interaction listener)"),
     ], emoji="✅")

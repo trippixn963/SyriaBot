@@ -131,6 +131,49 @@ class StatsMixin:
             return [dict(row) for row in cur.fetchall()]
 
     # =========================================================================
+    # User Channel Activity (per-user-per-channel tracking)
+    # =========================================================================
+
+    def increment_user_channel_messages(
+        self,
+        user_id: int,
+        channel_id: int,
+        guild_id: int,
+        channel_name: str
+    ) -> None:
+        """Increment message count for a user in a specific channel."""
+        now = int(time.time())
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO user_channel_activity
+                    (user_id, channel_id, guild_id, channel_name, message_count, last_message_at)
+                VALUES (?, ?, ?, ?, 1, ?)
+                ON CONFLICT(user_id, channel_id) DO UPDATE SET
+                    message_count = message_count + 1,
+                    last_message_at = ?,
+                    channel_name = ?
+            """, (user_id, channel_id, guild_id, channel_name, now, now, channel_name))
+
+    def get_user_channel_activity(
+        self,
+        user_id: int,
+        guild_id: int,
+        limit: int = 10
+    ) -> List[Dict[str, Any]]:
+        """Get top channels for a user sorted by message count."""
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT channel_id, channel_name, message_count, last_message_at
+                FROM user_channel_activity
+                WHERE user_id = ? AND guild_id = ?
+                ORDER BY message_count DESC
+                LIMIT ?
+            """, (user_id, guild_id, limit))
+            return [dict(row) for row in cur.fetchall()]
+
+    # =========================================================================
     # Server Hourly Activity
     # =========================================================================
 

@@ -39,8 +39,7 @@ from src.services.tempvoice import TempVoiceService
 from src.services.sync_profile import ProfileSyncService
 from src.services.xp import XPService
 from src.services.xp import card as rank_card
-from src.services.stats_api import SyriaAPI
-from src.core.health import HealthCheckServer
+from src.api import APIService
 from src.services.status_webhook import get_status_service
 from src.services.backup import BackupScheduler
 from src.services.afk import AFKService
@@ -84,8 +83,7 @@ class SyriaBot(commands.Bot):
         self.tempvoice: Optional[TempVoiceService] = None
         self.profile_sync: Optional[ProfileSyncService] = None
         self.xp_service: Optional[XPService] = None
-        self.stats_api: Optional[SyriaAPI] = None
-        self.health_server: Optional[HealthCheckServer] = None
+        self.stats_api: Optional[APIService] = None
         self.status_webhook = None
         self.afk_service: Optional[AFKService] = None
         self.gallery_service: Optional[GalleryService] = None
@@ -308,51 +306,10 @@ class SyriaBot(commands.Bot):
         except Exception as e:
             logger.error_tree("XP Service Init Failed", e)
 
-        # Health Check Server (unified)
+        # Stats API (FastAPI, includes /health)
         try:
-            self.health_server = HealthCheckServer(self)
-
-            # Register database health callback
-            async def db_health() -> dict:
-                try:
-                    connected = db.is_healthy
-                    error = db.corruption_reason if not connected else None
-                    return {"connected": connected, "error": error}
-                except Exception as e:
-                    return {"connected": False, "error": str(e)}
-
-            self.health_server.register_db_health(db_health)
-
-            # Register system health callback
-            import psutil
-            _psutil_process = psutil.Process()
-
-            async def system_health() -> dict:
-                cpu_percent = psutil.cpu_percent(interval=None)
-                memory = psutil.virtual_memory()
-                disk = psutil.disk_usage("/")
-                bot_memory_mb = _psutil_process.memory_info().rss / (1024 * 1024)
-                return {
-                    "cpu_percent": cpu_percent,
-                    "memory_percent": memory.percent,
-                    "disk_percent": disk.percent,
-                    "disk_total_gb": round(disk.total / (1024 ** 3), 1),
-                    "disk_used_gb": round(disk.used / (1024 ** 3), 1),
-                    "bot_memory_mb": round(bot_memory_mb, 1),
-                    "threads": _psutil_process.num_threads(),
-                    "open_files": len(_psutil_process.open_files()),
-                }
-
-            self.health_server.register_system(system_health)
-            await self.health_server.start()
-            initialized.append("HealthServer")
-        except Exception as e:
-            logger.error_tree("Health Server Init Failed", e)
-
-        # Stats API
-        try:
-            self.stats_api = SyriaAPI(self)
-            await self.stats_api.setup()
+            self.stats_api = APIService(self)
+            await self.stats_api.start()
             initialized.append("StatsAPI")
         except Exception as e:
             logger.error_tree("Stats API Init Failed", e)
