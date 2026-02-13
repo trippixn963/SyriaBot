@@ -161,13 +161,20 @@ class StatsMixin:
         guild_id: int,
         limit: int = 10
     ) -> List[Dict[str, Any]]:
-        """Get top channels for a user sorted by message count."""
+        """Get top channels for a user sorted by message count.
+        
+        Excludes private channels like appeals, tickets, and mod channels.
+        """
         with self._get_conn() as conn:
             cur = conn.cursor()
             cur.execute("""
                 SELECT channel_id, channel_name, message_count, last_message_at
                 FROM user_channel_activity
                 WHERE user_id = ? AND guild_id = ?
+                  AND channel_name NOT LIKE '%appeal%'
+                  AND channel_name NOT LIKE '%ticket%'
+                  AND channel_name NOT LIKE 't___-%'
+                  AND channel_name NOT LIKE '%-closed'
                 ORDER BY message_count DESC
                 LIMIT ?
             """, (user_id, guild_id, limit))
@@ -298,3 +305,94 @@ class StatsMixin:
                 "still_active": active,
                 "retention_rate": round(retention, 1),
             }
+
+    # =========================================================================
+    # Server Counters (O(1) atomic operations)
+    # =========================================================================
+
+    def increment_server_counter(self, guild_id: int, counter_name: str, amount: int = 1) -> int:
+        """
+        Atomically increment a server counter and return new value.
+
+        This is O(1) - no scanning or aggregation needed.
+        Used for fast real-time counters like total messages.
+        """
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO server_counters (guild_id, counter_name, value)
+                VALUES (?, ?, ?)
+                ON CONFLICT(guild_id, counter_name) DO UPDATE SET
+                    value = value + ?
+                RETURNING value
+            """, (guild_id, counter_name, amount, amount))
+            row = cur.fetchone()
+            return row[0] if row else amount
+
+    def get_server_counter(self, guild_id: int, counter_name: str) -> int:
+        """Get a server counter value."""
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT value FROM server_counters
+                WHERE guild_id = ? AND counter_name = ?
+            """, (guild_id, counter_name))
+            row = cur.fetchone()
+            return row[0] if row else 0
+
+    def set_server_counter(self, guild_id: int, counter_name: str, value: int) -> None:
+        """Set a server counter to a specific value."""
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO server_counters (guild_id, counter_name, value)
+                VALUES (?, ?, ?)
+                ON CONFLICT(guild_id, counter_name) DO UPDATE SET
+                    value = ?
+            """, (guild_id, counter_name, value, value))
+
+    def init_message_counter_from_sum(self, guild_id: int) -> int:
+        """
+        Initialize the message counter from the sum of all user messages.
+
+        Called on startup. If counter exists and is close to user sum, returns it.
+        If counter is way off (migration not done), recalculates from user sum.
+        """
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+
+            # Calculate sum from all users (ground truth)
+            cur.execute("""
+                SELECT COALESCE(SUM(total_messages), 0) as total
+                FROM user_xp WHERE guild_id = ?
+            """, (guild_id,))
+            user_sum = cur.fetchone()[0]
+
+            # Check if counter exists
+            cur.execute("""
+                SELECT value FROM server_counters
+                WHERE guild_id = ? AND counter_name = 'total_messages'
+            """, (guild_id,))
+            existing = cur.fetchone()
+
+            if existing:
+                counter_value = existing[0]
+                # Counter should be >= user_sum (might be slightly higher due to timing)
+                # If counter is way lower, it wasn't properly initialized
+                if counter_value >= user_sum - 100:  # Allow small margin
+                    return counter_value
+
+            # Initialize or fix the counter
+            cur.execute("""
+                INSERT INTO server_counters (guild_id, counter_name, value)
+                VALUES (?, 'total_messages', ?)
+                ON CONFLICT(guild_id, counter_name) DO UPDATE SET
+                    value = ?
+            """, (guild_id, user_sum, user_sum))
+
+            logger.tree("Message Counter Initialized", [
+                ("Guild", str(guild_id)),
+                ("Total", f"{user_sum:,}"),
+            ], emoji="📊")
+
+            return user_sum
