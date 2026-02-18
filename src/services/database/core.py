@@ -352,6 +352,16 @@ class DatabaseCore:
                 )
             """)
 
+            # Server-level counters (fast O(1) lookups)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS server_counters (
+                    guild_id INTEGER NOT NULL,
+                    counter_name TEXT NOT NULL,
+                    value INTEGER DEFAULT 0,
+                    PRIMARY KEY (guild_id, counter_name)
+                )
+            """)
+
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS channel_stats (
                     channel_id INTEGER PRIMARY KEY,

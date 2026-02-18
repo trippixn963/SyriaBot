@@ -109,15 +109,30 @@ class MessageHandler(commands.Cog):
                     ("ID", str(message.author.id)),
                 ])
 
-        # XP gain from messages
+        # Track message count (every message, regardless of XP cooldown)
+        if message.guild and message.guild.id == config.GUILD_ID:
+            try:
+                # Increment message count and get new total
+                new_total = await asyncio.to_thread(
+                    db.increment_message_count,
+                    message.author.id,
+                    message.guild.id
+                )
+
+                # Broadcast to WebSocket clients immediately
+                ws_manager = get_ws_manager()
+                if ws_manager.connection_count > 0:
+                    await ws_manager.broadcast_message_count(new_total)
+            except Exception as e:
+                logger.error_tree("Message Count Error", e, [
+                    ("User", f"{message.author.name} ({message.author.display_name})"),
+                    ("ID", str(message.author.id)),
+                ])
+
+        # XP gain from messages (with cooldown)
         if hasattr(self.bot, 'xp_service') and self.bot.xp_service:
             try:
                 await self.bot.xp_service.on_message(message)
-                # Broadcast updated message count to WebSocket clients
-                ws_manager = get_ws_manager()
-                if ws_manager.connection_count > 0:
-                    stats = await asyncio.to_thread(db.get_server_stats, config.GUILD_ID)
-                    await ws_manager.broadcast_message_count(stats.get("total_messages", 0))
             except Exception as e:
                 logger.error_tree("XP Handler Error", e, [
                     ("User", f"{message.author.name} ({message.author.display_name})"),

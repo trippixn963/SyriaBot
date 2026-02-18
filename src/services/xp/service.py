@@ -547,6 +547,16 @@ class XPService:
 
                         await self._grant_xp(member, xp_amount, "voice")
 
+                    # Broadcast voice minutes update (1 minute per user)
+                    if users_to_reward:
+                        try:
+                            from src.api.services.websocket import get_ws_manager
+                            ws = get_ws_manager()
+                            if ws.connection_count > 0:
+                                await ws.increment_voice_minutes(len(users_to_reward))
+                        except Exception:
+                            pass
+
             except asyncio.CancelledError:
                 break
             except Exception as e:
@@ -689,6 +699,19 @@ class XPService:
                             ("Level", str(new_level)),
                             ("Amount", "10,000 coins → Bank"),
                         ], emoji="🏦")
+
+            # Broadcast updated XP stats via WebSocket (in-memory increment, no DB query)
+            try:
+                from src.api.services.websocket import get_ws_manager
+                ws = get_ws_manager()
+                if ws.connection_count > 0:
+                    # Increment XP counter
+                    await ws.increment_xp(amount)
+                    # If this was a new user (first XP), increment ranked counter
+                    if result["old_xp"] == 0:
+                        await ws.increment_ranked()
+            except Exception:
+                pass  # Don't fail XP grant if WebSocket broadcast fails
 
         except Exception as e:
             logger.error_tree("XP Grant Error", e, [

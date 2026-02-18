@@ -20,6 +20,7 @@ from src.services.database import db
 from src.services.xp.utils import level_from_xp
 from src.api.dependencies import require_api_key
 from src.api.services.cache import get_cache_service
+from src.api.services.websocket import get_ws_manager
 from src.api.utils import get_client_ip
 
 
@@ -125,6 +126,10 @@ async def grant_xp(
         # Clear response cache
         await cache.clear_responses()
 
+        # Broadcast XP change to dashboard via WebSocket
+        ws = get_ws_manager()
+        await ws.increment_xp(body.amount)
+
         return JSONResponse(
             content=XPGrantResponse(
                 success=True,
@@ -218,3 +223,108 @@ async def set_xp(
 
 
 __all__ = ["router"]
+
+
+class XPDrainRequest(BaseModel):
+    """Request body for draining XP."""
+
+    user_id: int = Field(..., description="Discord user ID")
+    amount: int = Field(..., ge=1, le=100000, description="XP amount to drain (1-100000)")
+    reason: str = Field(default="API drain", description="Reason for the drain (for logging)")
+
+
+class XPDrainResponse(BaseModel):
+    """Response for XP drain operation."""
+
+    success: bool = True
+    user_id: int
+    xp_drained: int
+    old_xp: int
+    new_xp: int
+    old_level: int
+    new_level: int
+    level_dropped: bool
+
+
+@router.post("/drain", response_model=XPDrainResponse)
+async def drain_xp(
+    request: Request,
+    body: XPDrainRequest,
+    api_key: str = Depends(require_api_key),
+) -> JSONResponse:
+    """
+    Drain XP from a user (subtractive).
+
+    Requires X-API-Key header for authentication.
+    XP cannot go below 0.
+
+    Request Body:
+    - user_id: Discord user ID
+    - amount: XP to drain (1-100000)
+    - reason: Optional reason for logging
+    """
+    client_ip = get_client_ip(request)
+    cache = get_cache_service()
+
+    try:
+        guild_id = config.GUILD_ID
+        user_data = await asyncio.to_thread(db.get_user_xp, body.user_id, guild_id)
+
+        if not user_data:
+            return JSONResponse(
+                content={"error": "User not found", "success": False},
+                status_code=404,
+            )
+
+        old_xp = user_data.get("xp", 0)
+        old_level = user_data.get("level", 0)
+
+        # Calculate new XP (cannot go below 0)
+        new_xp = max(0, old_xp - body.amount)
+        actual_drain = old_xp - new_xp
+        new_level = level_from_xp(new_xp)
+
+        # Set XP in database
+        await asyncio.to_thread(db.set_xp, body.user_id, guild_id, new_xp, new_level)
+
+        logger.tree("XP Drained via API", [
+            ("ID", str(body.user_id)),
+            ("Drained", f"-{actual_drain}"),
+            ("XP", f"{old_xp} -> {new_xp}"),
+            ("Level", f"{old_level} -> {new_level}" if new_level != old_level else str(new_level)),
+            ("Reason", body.reason[:50]),
+            ("Client IP", client_ip),
+        ], emoji="⬇️")
+
+        # Clear response cache
+        await cache.clear_responses()
+
+        # Broadcast XP change to dashboard via WebSocket
+        if actual_drain > 0:
+            ws = get_ws_manager()
+            ws._stats["xp"] = max(0, ws._stats["xp"] - actual_drain)
+            await ws.broadcast_stat("xp", ws._stats["xp"])
+
+        return JSONResponse(
+            content=XPDrainResponse(
+                success=True,
+                user_id=body.user_id,
+                xp_drained=actual_drain,
+                old_xp=old_xp,
+                new_xp=new_xp,
+                old_level=old_level,
+                new_level=new_level,
+                level_dropped=new_level < old_level,
+            ).model_dump()
+        )
+
+    except Exception as e:
+        logger.error_tree("XP Drain API Error", e, [
+            ("ID", str(body.user_id)),
+            ("Amount", str(body.amount)),
+            ("Client IP", client_ip),
+        ])
+        return JSONResponse(
+            content={"error": "Internal server error"},
+            status_code=500,
+        )

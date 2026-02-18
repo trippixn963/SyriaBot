@@ -123,7 +123,7 @@ class XPMixin:
                 if source == "message":
                     cur.execute("""
                         UPDATE user_xp
-                        SET xp = ?, level = ?, last_message_xp = ?, total_messages = total_messages + 1
+                        SET xp = ?, level = ?, last_message_xp = ?
                         WHERE user_id = ? AND guild_id = ?
                     """, (new_xp, new_level, now, user_id, guild_id))
                 else:  # voice
@@ -145,6 +145,40 @@ class XPMixin:
             "new_level": new_level,
             "leveled_up": new_level > old_level,
         }
+
+    def increment_message_count(self, user_id: int, guild_id: int) -> int:
+        """
+        Increment user's message count and server total atomically.
+
+        Called on every message, regardless of XP cooldown.
+        - User's personal count: useful for individual stats
+        - Server counter: O(1) for real-time WebSocket broadcast
+
+        Returns:
+            New server-wide total message count
+        """
+        self.ensure_user_xp(user_id, guild_id)
+
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+
+            # Increment user's personal count
+            cur.execute("""
+                UPDATE user_xp
+                SET total_messages = total_messages + 1
+                WHERE user_id = ? AND guild_id = ?
+            """, (user_id, guild_id))
+
+            # Increment server counter (O(1)) and return new value
+            cur.execute("""
+                INSERT INTO server_counters (guild_id, counter_name, value)
+                VALUES (?, 'total_messages', 1)
+                ON CONFLICT(guild_id, counter_name) DO UPDATE SET
+                    value = value + 1
+                RETURNING value
+            """, (guild_id,))
+            row = cur.fetchone()
+            return row[0] if row else 1
 
     def set_user_level(self, user_id: int, guild_id: int, level: int) -> None:
         """Set user's level."""
@@ -319,24 +353,34 @@ class XPMixin:
 
         with self._get_conn() as conn:
             cur = conn.cursor()
+
+            # Get user stats (excluding total_messages which uses server counter)
             cur.execute("""
                 SELECT
                     COUNT(*) as total_users,
                     COALESCE(SUM(xp), 0) as total_xp,
-                    COALESCE(SUM(total_messages), 0) as total_messages,
                     COALESCE(SUM(voice_minutes), 0) as total_voice_minutes,
                     COALESCE(MAX(level), 0) as highest_level
                 FROM user_xp
                 WHERE guild_id = ? AND is_active = 1
             """, (gid,))
             row = cur.fetchone()
-            return dict(row) if row else {
+            stats = dict(row) if row else {
                 "total_users": 0,
                 "total_xp": 0,
-                "total_messages": 0,
                 "total_voice_minutes": 0,
                 "highest_level": 0,
             }
+
+            # Get total messages from server counter (O(1) instead of SUM)
+            cur.execute("""
+                SELECT value FROM server_counters
+                WHERE guild_id = ? AND counter_name = 'total_messages'
+            """, (gid,))
+            counter_row = cur.fetchone()
+            stats["total_messages"] = counter_row[0] if counter_row else 0
+
+            return stats
 
     def get_user_rank(self, user_id: int, guild_id: int) -> int:
         """Get user's rank position in the guild (1-indexed, only active members)."""

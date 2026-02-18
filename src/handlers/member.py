@@ -18,6 +18,7 @@ from src.core.config import config
 from src.core.colors import COLOR_BOOST, COLOR_SYRIA_GREEN
 from src.core.logger import logger
 from src.services.database import db
+from src.api.services.websocket import get_ws_manager
 from src.utils.footer import set_footer
 
 
@@ -193,6 +194,14 @@ class MembersHandler(commands.Cog):
         # Send welcome DM
         await self._send_welcome_dm(member)
 
+        # Broadcast updated member count via WebSocket
+        try:
+            ws_manager = get_ws_manager()
+            if ws_manager.connection_count > 0:
+                await ws_manager.broadcast_stat("members", member.guild.member_count)
+        except Exception as e:
+            logger.error_tree("WS Member Broadcast Error", e)
+
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member) -> None:
         """Called when a member leaves/is kicked/banned."""
@@ -218,6 +227,14 @@ class MembersHandler(commands.Cog):
                 ("Error", str(e)[:50]),
             ], emoji="⚠️")
 
+        # Broadcast updated member count via WebSocket
+        try:
+            ws_manager = get_ws_manager()
+            if ws_manager.connection_count > 0:
+                await ws_manager.broadcast_stat("members", member.guild.member_count)
+        except Exception as e:
+            logger.error_tree("WS Member Broadcast Error", e)
+
     @commands.Cog.listener()
     async def on_member_update(self, before: discord.Member, after: discord.Member) -> None:
         """Called when a member is updated - detects new boosts."""
@@ -240,6 +257,15 @@ class MembersHandler(commands.Cog):
             self._invalidate_api_cache(after.id)
             await self._handle_new_boost(after)
 
+            # Broadcast updated boost count via WebSocket
+            try:
+                ws_manager = get_ws_manager()
+                if ws_manager.connection_count > 0:
+                    boost_count = after.guild.premium_subscription_count or 0
+                    await ws_manager.broadcast_stat("boosts", boost_count)
+            except Exception as e:
+                logger.error_tree("WS Boost Broadcast Error", e)
+
         # Check if member stopped boosting
         elif before.premium_since is not None and after.premium_since is None:
             try:
@@ -256,6 +282,15 @@ class MembersHandler(commands.Cog):
                 ], emoji="⚠️")
             # Invalidate API cache for this user
             self._invalidate_api_cache(after.id)
+
+            # Broadcast updated boost count via WebSocket
+            try:
+                ws_manager = get_ws_manager()
+                if ws_manager.connection_count > 0:
+                    boost_count = after.guild.premium_subscription_count or 0
+                    await ws_manager.broadcast_stat("boosts", boost_count)
+            except Exception as e:
+                logger.error_tree("WS Boost Broadcast Error", e)
 
     def _invalidate_api_cache(self, user_id: int) -> None:
         """Invalidate API caches when user's boost status changes."""

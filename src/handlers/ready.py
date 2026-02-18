@@ -94,13 +94,51 @@ class ReadyHandler(commands.Cog):
                 ("Error", str(e)[:50]),
             ], emoji="⚠️")
 
-        # Initialize WebSocket with current message count
+        # Initialize WebSocket with all stats
         try:
-            stats = db.get_server_stats(config.GUILD_ID)
             ws_manager = get_ws_manager()
-            ws_manager.set_message_count(stats.get("total_messages", 0))
+            ws_manager.set_bot(self.bot)
+
+            # Get guild stats
+            guild = self.bot.get_guild(config.GUILD_ID)
+            members = guild.member_count if guild else 0
+            boosts = guild.premium_subscription_count if guild else 0
+            online = sum(
+                1 for m in guild.members
+                if not m.bot and m.status.name != "offline"
+            ) if guild else 0
+
+            # Get message count from server counter
+            total_messages = db.init_message_counter_from_sum(config.GUILD_ID)
+
+            # Get XP stats (ranked users, total XP, voice minutes)
+            xp_stats = db.get_xp_stats(config.GUILD_ID)
+            ranked_users = xp_stats.get("total_users", 0)
+            total_xp = xp_stats.get("total_xp", 0)
+            voice_minutes = xp_stats.get("total_voice_minutes", 0)
+
+            # Set all stats
+            ws_manager.set_stats(
+                members=members,
+                online=online,
+                boosts=boosts,
+                messages=total_messages,
+                ranked=ranked_users,
+                xp=total_xp,
+                voice_minutes=voice_minutes
+            )
+
+            # Start periodic online updates
+            await ws_manager.start_online_updates()
+
             logger.tree("WebSocket Initialized", [
-                ("Messages", str(stats.get("total_messages", 0))),
+                ("Members", f"{members:,}"),
+                ("Online", f"{online:,}"),
+                ("Boosts", str(boosts)),
+                ("Messages", f"{total_messages:,}"),
+                ("Ranked", f"{ranked_users:,}"),
+                ("Total XP", f"{total_xp:,}"),
+                ("Voice Minutes", f"{voice_minutes:,}"),
             ], emoji="🔌")
         except Exception as e:
             logger.error_tree("WebSocket Init Failed", e)
