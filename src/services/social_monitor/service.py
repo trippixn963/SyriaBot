@@ -636,11 +636,6 @@ class SocialMonitorService:
             if post["thumbnail"]:
                 embed.set_image(url=post["thumbnail"])
 
-            # Footer with profile link and server icon
-            guild = self.bot.get_guild(config.GUILD_ID)
-            server_icon = guild.icon.url if guild and guild.icon else None
-            embed.set_footer(text=profile_url, icon_url=server_icon)
-
             # Create view with link button
             view = SocialLinkView(url=video_url, platform=platform)
 

@@ -1,11 +1,19 @@
 # Claude
 CLAUDE.md
 
-# Scripts (internal use only)
+# Scripts and standalone files
 scripts/
+giveaway_6k.py
 
 # Assets
 assets/
+
+# Symlinks
+shared
+
+# Legal (not needed in repo)
+LICENSE
+TERMS.md
 
 # Environment
 .env

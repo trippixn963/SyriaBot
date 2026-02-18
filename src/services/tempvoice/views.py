@@ -43,7 +43,6 @@ class ClaimApprovalView(ui.View):
                     embed = message.embeds[0]
                     if embed.title and "Claim Request" in embed.title:
                         embed.color = 0x95a5a6  # Gray
-                        embed.set_footer(text="Request expired")
                         await message.edit(embed=embed, view=None)
                         logger.tree("Claim Request Expired", [
                             ("Channel", self.channel.name),

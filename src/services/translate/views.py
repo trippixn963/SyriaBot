@@ -425,7 +425,6 @@ def create_translate_embed(result, is_ai: bool = False) -> tuple[discord.Embed, 
             fp=io.BytesIO(file_content.encode('utf-8')),
             filename="translation.txt"
         )
-        embed.set_footer(text="Full translation attached as file • trippixn.com/Syria")
     else:
         set_footer(embed)
 
