@@ -22,7 +22,7 @@ from src.core.colors import COLOR_GOLD
 from src.core.constants import XP_COOLDOWN_CACHE_THRESHOLD, XP_COOLDOWN_CACHE_MAX_SIZE
 from src.core.logger import logger
 from src.services.database import db
-from src.services.birthday_service import has_birthday_bonus, BIRTHDAY_XP_MULTIPLIER
+from src.services.birthday import has_birthday_bonus, BIRTHDAY_XP_MULTIPLIER
 from src.utils.footer import set_footer
 from .utils import level_from_xp, format_xp
 
@@ -975,7 +975,7 @@ class XPService:
 
         # 6. Rate limiter cleanup (backup - also triggers on week boundary)
         try:
-            from src.services.rate_limiter import get_rate_limiter
+            from src.services.rate_limit import get_rate_limiter
             rate_limiter = get_rate_limiter()
             deleted = rate_limiter.cleanup_old_records(weeks_to_keep=4)
             if deleted > 0:

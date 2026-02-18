@@ -19,7 +19,7 @@ from src.core.logger import logger
 from src.core.config import config
 from src.core.colors import COLOR_ERROR, COLOR_GOLD
 from src.core.constants import DELETE_DELAY_SHORT
-from src.services.action_service import action_service
+from src.services.actions import action_service
 from src.services.database import db
 from src.utils.footer import set_footer
 from src.utils.permissions import is_cooldown_exempt

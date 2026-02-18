@@ -44,13 +44,13 @@ from src.services.backup import BackupScheduler
 from src.services.afk import AFKService
 from src.services.gallery import GalleryService
 from src.services.presence import PresenceHandler
-from src.services.bump_service import bump_service
+from src.services.bump import bump_service
 from src.services.confessions import ConfessionService
 from src.services.sticky import StickyService
-from src.services.currency_service import CurrencyService
-from src.services.action_service import action_service
+from src.services.currency import CurrencyService
+from src.services.actions import action_service
 from src.services.quote import quote_service
-from src.services.birthday_service import get_birthday_service, BirthdayService
+from src.services.birthday import get_birthday_service, BirthdayService
 from src.services.faq import setup_persistent_views
 from src.services.confessions.views import setup_confession_views
 from src.services.guide import setup_guide_views, get_guide_service, GuideService

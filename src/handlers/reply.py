@@ -25,7 +25,7 @@ from src.utils.permissions import is_cooldown_exempt
 from src.services.convert import convert_service
 from src.services.quote import quote_service
 from src.services.translate import translate_service, find_similar_language
-from src.services.rate_limiter import check_rate_limit
+from src.services.rate_limit import check_rate_limit
 from src.services.convert.views import start_convert_editor
 from src.services.translate.views import TranslateView, create_translate_embed
 from src.services.quote.views import QuoteView

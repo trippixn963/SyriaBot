@@ -17,7 +17,7 @@ from discord.ext import commands
 from src.core.logger import logger
 from src.core.colors import COLOR_SYRIA_GREEN, COLOR_ERROR
 from src.utils.footer import set_footer
-from src.services.birthday_service import get_birthday_service, MONTH_NAMES
+from src.services.birthday import get_birthday_service, MONTH_NAMES
 
 
 class BirthdayCog(commands.Cog):

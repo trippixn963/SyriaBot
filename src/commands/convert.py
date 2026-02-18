@@ -21,7 +21,7 @@ from src.core.config import config
 from src.core.colors import COLOR_ERROR, COLOR_WARNING
 from src.core.logger import logger
 from src.services.convert import convert_service
-from src.services.rate_limiter import check_rate_limit
+from src.services.rate_limit import check_rate_limit
 from src.services.convert.views import start_convert_editor
 from src.utils.footer import set_footer
 
