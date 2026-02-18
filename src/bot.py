@@ -47,7 +47,6 @@ from src.services.presence import PresenceHandler
 from src.services.bump_service import bump_service
 from src.services.confessions import ConfessionService
 from src.services.sticky import StickyService
-from src.services.announcements import AnnouncementService
 from src.services.currency_service import CurrencyService
 from src.services.action_service import action_service
 from src.services.quote import quote_service
@@ -87,7 +86,6 @@ class SyriaBot(commands.Bot):
         self.presence_handler: Optional[PresenceHandler] = None
         self.confession_service: Optional[ConfessionService] = None
         self.sticky_service: Optional[StickyService] = None
-        self.announcement_service: Optional[AnnouncementService] = None
         self.currency_service: Optional[CurrencyService] = None
         self.birthday_service: Optional[BirthdayService] = None
         self.guide_service: Optional[GuideService] = None
@@ -367,14 +365,6 @@ class SyriaBot(commands.Bot):
         except Exception as e:
             logger.error_tree("Sticky Service Init Failed", e)
 
-        # Periodic Announcements
-        try:
-            self.announcement_service = AnnouncementService(self)
-            await self.announcement_service.setup()
-            initialized.append("Announcements")
-        except Exception as e:
-            logger.error_tree("Announcement Service Init Failed", e)
-
         # Currency (JawdatBot integration)
         try:
             self.currency_service = CurrencyService()
@@ -493,14 +483,6 @@ class SyriaBot(commands.Bot):
                 stopped.append("Sticky")
             except Exception as e:
                 logger.error_tree("Sticky Service Stop Error", e)
-
-        # Announcements
-        if self.announcement_service:
-            try:
-                self.announcement_service.stop()
-                stopped.append("Announcements")
-            except Exception as e:
-                logger.error_tree("Announcement Service Stop Error", e)
 
         # Currency
         if self.currency_service:

@@ -175,7 +175,6 @@ class Config:
     MALE_VERIFIED_ROLE_ID: int = _env_int("SYRIA_MALE_VERIFIED_ROLE")
     TICKET_CHANNEL_ID: int = _env_int("SYRIA_TICKET_CH")
     STICKY_MESSAGE_THRESHOLD: int = _env_int("SYRIA_STICKY_THRESHOLD", 50)
-    ANNOUNCEMENT_INTERVAL_HOURS: int = _env_int("SYRIA_ANNOUNCE_INTERVAL", 12)
 
     # ==========================================================================
     # Asset Storage (for permanent GIF URLs)
