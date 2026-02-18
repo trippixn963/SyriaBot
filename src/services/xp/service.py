@@ -1217,3 +1217,87 @@ class XPService:
                 ("Level", str(level)),
                 ("Error", str(e)[:50]),
             ], emoji="❌")
+
+    async def sync_user_role(self, user_id: int, new_level: int) -> bool:
+        """
+        Sync a user's XP role to match their current level.
+
+        Used by API endpoints when XP is drained/set and level changes.
+        Handles both level ups and level drops.
+
+        Args:
+            user_id: Discord user ID
+            new_level: The user's new level
+
+        Returns:
+            True if roles were updated, False otherwise
+        """
+        if not config.XP_ROLE_REWARDS:
+            return False
+
+        guild = self.bot.get_guild(config.GUILD_ID)
+        if not guild:
+            return False
+
+        member = guild.get_member(user_id)
+        if not member or member.bot:
+            return False
+
+        # Get all XP role IDs
+        all_xp_role_ids = set(config.XP_ROLE_REWARDS.values())
+
+        # Find the correct role for their new level
+        correct_role_id = None
+        for role_level, role_id in sorted(config.XP_ROLE_REWARDS.items()):
+            if role_level <= new_level:
+                correct_role_id = role_id
+            else:
+                break
+
+        # Determine roles to add/remove
+        roles_to_add = []
+        roles_to_remove = []
+
+        # If they should have a role, check if they have it
+        if correct_role_id:
+            correct_role = guild.get_role(correct_role_id)
+            if correct_role and correct_role not in member.roles:
+                roles_to_add.append(correct_role)
+
+        # Remove any XP roles they shouldn't have
+        for member_role in member.roles:
+            if member_role.id in all_xp_role_ids:
+                if member_role.id != correct_role_id:
+                    roles_to_remove.append(member_role)
+
+        if not roles_to_add and not roles_to_remove:
+            return False
+
+        try:
+            if roles_to_remove:
+                await member.remove_roles(
+                    *roles_to_remove,
+                    reason=f"XP Level Change - now level {new_level}"
+                )
+            if roles_to_add:
+                await member.add_roles(
+                    *roles_to_add,
+                    reason=f"XP Level Change - now level {new_level}"
+                )
+
+            logger.tree("XP Role Synced", [
+                ("User", f"{member.name} ({member.display_name})"),
+                ("ID", str(member.id)),
+                ("Level", str(new_level)),
+                ("Added", ", ".join(r.name for r in roles_to_add) if roles_to_add else "None"),
+                ("Removed", ", ".join(r.name for r in roles_to_remove) if roles_to_remove else "None"),
+            ], emoji="🔄")
+            return True
+
+        except discord.HTTPException as e:
+            logger.error_tree("XP Role Sync Failed", e, [
+                ("User", f"{member.name} ({member.display_name})"),
+                ("ID", str(member.id)),
+                ("Level", str(new_level)),
+            ])
+            return False

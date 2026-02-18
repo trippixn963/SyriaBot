@@ -19,7 +19,7 @@ from src.api.errors import APIError, ErrorCode
 from src.core.config import config
 from src.services.database import db
 from src.services.xp.utils import level_from_xp
-from src.api.dependencies import require_api_key
+from src.api.dependencies import require_api_key, get_bot_optional
 from src.api.services.cache import get_cache_service
 from src.api.services.websocket import get_ws_manager
 from src.api.utils import get_client_ip
@@ -194,6 +194,12 @@ async def set_xp(
             ("Client IP", client_ip),
         ], emoji="✏️")
 
+        # Sync Discord roles if level changed
+        if new_level != old_level:
+            bot = get_bot_optional()
+            if bot and hasattr(bot, "xp") and bot.xp:
+                await bot.xp.sync_user_role(body.user_id, new_level)
+
         # Clear response cache
         await cache.clear_responses()
 
@@ -279,14 +285,23 @@ async def drain_xp(
         # Set XP in database
         await asyncio.to_thread(db.set_xp, body.user_id, guild_id, new_xp, new_level)
 
+        level_dropped = new_level < old_level
+
         logger.tree("XP Drained via API", [
             ("ID", str(body.user_id)),
             ("Drained", f"-{actual_drain}"),
             ("XP", f"{old_xp} -> {new_xp}"),
             ("Level", f"{old_level} -> {new_level}" if new_level != old_level else str(new_level)),
+            ("Level Dropped", "Yes" if level_dropped else "No"),
             ("Reason", body.reason[:50]),
             ("Client IP", client_ip),
         ], emoji="⬇️")
+
+        # Sync Discord roles if level changed
+        if new_level != old_level:
+            bot = get_bot_optional()
+            if bot and hasattr(bot, "xp") and bot.xp:
+                await bot.xp.sync_user_role(body.user_id, new_level)
 
         # Clear response cache
         await cache.clear_responses()
@@ -306,7 +321,7 @@ async def drain_xp(
                 new_xp=new_xp,
                 old_level=old_level,
                 new_level=new_level,
-                level_dropped=new_level < old_level,
+                level_dropped=level_dropped,
             ).model_dump()
         )
 
