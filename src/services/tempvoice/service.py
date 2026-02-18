@@ -1,5 +1,18 @@
 """
-TempVoice - Main Service
+SyriaBot - TempVoice Service
+============================
+
+Temporary voice channel system with ownership and control panel.
+
+Features:
+    - Join-to-create voice channels
+    - Owner controls (lock, limit, rename, transfer)
+    - Trust/block user management
+    - Auto-cleanup of empty channels
+    - Sticky control panel messages
+
+Author: حَـــــنَّـــــا
+Server: discord.gg/syria
 """
 
 import asyncio
@@ -48,10 +61,30 @@ REORDER_DEBOUNCE_DELAY = TEMPVOICE_REORDER_DEBOUNCE_DELAY
 
 
 class TempVoiceService:
-    """Service for managing temporary voice channels."""
+    """
+    Service for managing temporary voice channels.
+
+    DESIGN:
+        Users join a creator channel to spawn their own temp VC.
+        The creator becomes the owner with full control.
+        Channels auto-delete when empty after cleanup interval.
+        Control panel allows lock/unlock, user limit, rename, etc.
+    """
 
     def __init__(self, bot: "SyriaBot") -> None:
-        """Initialize TempVoice service with bot reference and control panel."""
+        """
+        Initialize the TempVoice service.
+
+        Sets up tracking for:
+        - Control panel view (persistent buttons)
+        - Join cooldowns (prevents spam creation)
+        - Member join times (for ownership transfer)
+        - Pending transfers (when owner leaves)
+        - Message counts (for sticky panel refresh)
+
+        Args:
+            bot: Main bot instance for Discord API access.
+        """
         self.bot = bot
         self.control_panel = TempVoiceControlPanel(self)
         self._cleanup_task: asyncio.Task = None
@@ -64,7 +97,13 @@ class TempVoiceService:
         self._panel_locks: dict[int, asyncio.Lock] = {}  # channel_id -> lock for panel updates
 
     async def setup(self) -> None:
-        """Set up the TempVoice service."""
+        """
+        Initialize and start the TempVoice service.
+
+        Validates configuration, registers the control panel view,
+        cleans up orphaned channels from previous runs, and starts
+        the periodic cleanup task.
+        """
         # Validate config
         warnings = []
         if not config.VC_CREATOR_CHANNEL_ID:
@@ -97,7 +136,12 @@ class TempVoiceService:
         ], emoji="🔊")
 
     async def stop(self) -> None:
-        """Stop the TempVoice service."""
+        """
+        Stop the TempVoice service and cleanup resources.
+
+        Cancels all background tasks (cleanup, transfers, reorders)
+        and clears all tracking caches to prevent memory leaks.
+        """
         cancelled_tasks = []
 
         # Cancel cleanup task

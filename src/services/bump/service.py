@@ -26,7 +26,14 @@ from src.utils.footer import set_footer
 # =============================================================================
 
 class BumpService:
-    """Service for reminding staff to bump the server on Disboard."""
+    """
+    Service for reminding staff to bump the server on Disboard.
+
+    DESIGN:
+        Monitors for Disboard's "bump done" embed to track successful bumps.
+        Sends reminder pings after 2-hour cooldown expires.
+        Persists last bump time across bot restarts.
+    """
 
     BUMP_INTERVAL = 2 * 60 * 60  # 2 hours in seconds
     DISBOARD_BOT_ID = 302050872383242240  # Disboard's bot ID

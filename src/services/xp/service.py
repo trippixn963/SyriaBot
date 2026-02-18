@@ -1,8 +1,19 @@
 """
-SyriaBot - Service
-==================
+SyriaBot - XP Service
+=====================
 
 Main XP service handling message and voice XP gains.
+
+Features:
+    - Message XP with cooldown and duplicate detection
+    - Voice XP for active participants (non-muted, non-AFK)
+    - Booster multiplier support
+    - Birthday bonus (3x XP)
+    - Automatic role rewards at level milestones
+    - Daily active user tracking
+
+Author: حَـــــنَّـــــا
+Server: discord.gg/syria
 """
 
 from __future__ import annotations
@@ -41,10 +52,29 @@ LEVEL_PERKS: Dict[int, str] = {
 
 
 class XPService:
-    """Manages XP gains from messages and voice activity."""
+    """
+    Service for managing XP gains from messages and voice activity.
+
+    DESIGN:
+        XP is awarded for messages (with cooldown) and voice activity.
+        Boosters and birthday users get multiplied XP.
+        Role rewards are granted automatically at level milestones.
+    """
 
     def __init__(self, bot: "SyriaBot") -> None:
-        """Initialize XP service with bot reference and tracking caches."""
+        """
+        Initialize the XP service.
+
+        Sets up tracking caches for:
+        - Voice sessions (who's in voice and when they joined)
+        - Message cooldowns (prevents XP spam)
+        - Last messages (detects duplicate content)
+        - Daily active users (for DAU tracking)
+        - Mute timestamps (anti-AFK farming)
+
+        Args:
+            bot: Main bot instance for Discord API access.
+        """
         self.bot = bot
 
         # Track users in voice channels: {guild_id: {user_id: join_timestamp}}
@@ -76,7 +106,17 @@ class XPService:
         self._cleanup_task: Optional[asyncio.Task] = None
 
     async def setup(self) -> None:
-        """Initialize XP service."""
+        """
+        Initialize and start the XP service.
+
+        Starts background tasks for:
+        - Voice XP loop (awards XP every minute)
+        - Cache cleanup loop (hourly maintenance)
+        - Midnight role sync (daily at 5:00 UTC)
+
+        Also initializes voice sessions for users already in voice
+        and performs initial role sync.
+        """
         # Start voice XP background task with auto-restart wrapper
         self._voice_xp_task = asyncio.create_task(self._run_with_restart(
             self._voice_xp_loop, "Voice XP Loop"
@@ -115,7 +155,12 @@ class XPService:
         await self._sync_roles()
 
     async def stop(self) -> None:
-        """Cleanup XP service."""
+        """
+        Stop the XP service and cleanup resources.
+
+        Cancels all background tasks and clears all caches
+        to prevent memory leaks on shutdown.
+        """
         if self._voice_xp_task:
             self._voice_xp_task.cancel()
             try:

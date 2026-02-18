@@ -56,7 +56,13 @@ class RateLimiter:
     _lock: Lock = Lock()
 
     def __init__(self) -> None:
-        """Initialize the rate limiter."""
+        """
+        Initialize the rate limiter.
+
+        Sets up database table, loads exempt role IDs from config,
+        and initializes tracking for cleanup scheduling.
+        Thread-safe singleton pattern ensures one instance.
+        """
         self._db_lock = Lock()
         self._exempt_role_ids: Set[int] = set()
         self._initialized = False

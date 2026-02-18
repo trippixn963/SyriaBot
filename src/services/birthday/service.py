@@ -57,17 +57,35 @@ MONTH_NAMES = [
 
 
 class BirthdayService:
-    """Service for birthday tracking and role management."""
+    """
+    Service for birthday tracking and role management.
+
+    DESIGN:
+        Users set their birthday once via /birthday set.
+        Daily check at 5:00 AM EST grants birthday role for 24 hours.
+        Birthday users get 3x XP and coin rewards via DM.
+    """
 
     def __init__(self, bot: "SyriaBot") -> None:
-        """Initialize birthday service."""
+        """
+        Initialize the birthday service.
+
+        Args:
+            bot: Main bot instance for Discord API access.
+        """
         self.bot = bot
         self._birthday_role_id: Optional[int] = None
         self._announcement_channel_id: Optional[int] = None
         self._enabled = False
 
     async def setup(self) -> None:
-        """Initialize and start the birthday service."""
+        """
+        Initialize and start the birthday service.
+
+        Validates configuration, starts the daily birthday check task,
+        starts the hourly role expiry check, and restores any active
+        birthday bonuses from a previous session.
+        """
         # Get config - role ID is required, channel is optional
         self._birthday_role_id = config.BIRTHDAY_ROLE_ID
         self._announcement_channel_id = config.BIRTHDAY_ANNOUNCE_CHANNEL_ID

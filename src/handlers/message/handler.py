@@ -29,10 +29,24 @@ DISBOARD_BOT_ID = 302050872383242240
 
 
 class MessageHandler(commands.Cog):
-    """Handles message events - thin dispatcher to specialized handlers."""
+    """
+    Central message handler that dispatches to specialized handlers.
+
+    DESIGN:
+        Acts as thin coordinator, routing messages to:
+        - FunHandler: Fun responses and reactions
+        - ActionHandler: Action GIF commands (slap, hug, etc.)
+        - ReplyHandler: Reply-based commands (convert, quote, translate)
+        - FAQHandler: Automatic FAQ responses
+    """
 
     def __init__(self, bot: commands.Bot) -> None:
-        """Initialize the message handler with bot reference."""
+        """
+        Initialize the message handler.
+
+        Args:
+            bot: Main bot instance for Discord API access.
+        """
         self.bot = bot
         self.reply = ReplyHandler(bot)
 

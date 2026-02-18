@@ -23,10 +23,24 @@ from src.utils.footer import set_footer
 
 
 class MembersHandler(commands.Cog):
-    """Handles member events."""
+    """
+    Handler for member join/leave/update events.
+
+    DESIGN:
+        Tracks member joins with invite attribution.
+        Handles boost events with special announcements.
+        Manages auto-role assignment on join.
+    """
 
     def __init__(self, bot: commands.Bot) -> None:
-        """Initialize the members handler with bot reference and invite cache."""
+        """
+        Initialize the members handler.
+
+        Sets up invite tracking cache for join attribution.
+
+        Args:
+            bot: Main bot instance for Discord API access.
+        """
         self.bot = bot
         # Cache invites for tracking: {invite_code: uses}
         self._invite_cache: dict[str, int] = {}

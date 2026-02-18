@@ -32,7 +32,15 @@ if TYPE_CHECKING:
 
 
 class ConfessionService:
-    """Service for managing anonymous confessions."""
+    """
+    Service for managing anonymous confessions.
+
+    DESIGN:
+        Users submit confessions via /confess command.
+        Each confession gets a unique number and creates a thread.
+        Thread participants get anonymous IDs (Anon A, B, C...).
+        OP maintains consistent identity across their replies.
+    """
 
     # Letters for anon-ids (A-Z)
     ANON_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -74,7 +82,12 @@ class ConfessionService:
     MAX_CACHE_SIZE = 100
 
     def __init__(self, bot: "SyriaBot") -> None:
-        """Initialize the confession service."""
+        """
+        Initialize the confession service.
+
+        Args:
+            bot: Main bot instance for Discord API access.
+        """
         self.bot: "SyriaBot" = bot
         self._enabled: bool = False
         self._channel_id: Optional[int] = None
