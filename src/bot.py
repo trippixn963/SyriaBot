@@ -52,7 +52,6 @@ from src.services.currency_service import CurrencyService
 from src.services.action_service import action_service
 from src.services.quote import quote_service
 from src.services.birthday_service import get_birthday_service, BirthdayService
-from src.services.city_game import get_city_game_service, CityGameService, setup_city_game_cog
 from src.services.faq import setup_persistent_views
 from src.services.confessions.views import setup_confession_views
 from src.services.guide import setup_guide_views, get_guide_service, GuideService
@@ -91,7 +90,6 @@ class SyriaBot(commands.Bot):
         self.announcement_service: Optional[AnnouncementService] = None
         self.currency_service: Optional[CurrencyService] = None
         self.birthday_service: Optional[BirthdayService] = None
-        self.city_game_service: Optional[CityGameService] = None
         self.guide_service: Optional[GuideService] = None
         self.social_monitor: Optional[SocialMonitorService] = None
         self.backup_scheduler: Optional[BackupScheduler] = None
@@ -410,15 +408,6 @@ class SyriaBot(commands.Bot):
             except Exception as e:
                 logger.error_tree("Social Monitor Init Failed", e)
 
-        # City Game (dead chat reviver) - DISABLED until images are added manually
-        # try:
-        #     self.city_game_service = get_city_game_service(self)
-        #     await self.city_game_service.setup()
-        #     await setup_city_game_cog(self)
-        #     initialized.append("CityGame")
-        # except Exception as e:
-        #     logger.error_tree("City Game Service Init Failed", e)
-
         logger.tree("Services Init Complete", [
             ("Services", ", ".join(initialized)),
             ("Count", f"{len(initialized)}/16"),
@@ -544,14 +533,6 @@ class SyriaBot(commands.Bot):
                 stopped.append("SocialMonitor")
             except Exception as e:
                 logger.error_tree("Social Monitor Stop Error", e)
-
-        # City Game
-        if self.city_game_service:
-            try:
-                await self.city_game_service.close()
-                stopped.append("CityGame")
-            except Exception as e:
-                logger.error_tree("City Game Service Stop Error", e)
 
         # Quote Service (close aiohttp session)
         try:
