@@ -217,11 +217,6 @@ class Config:
     INSTAGRAM_USERNAME: str = _env("SYRIA_INSTAGRAM_USER")
 
     # ==========================================================================
-    # Webhooks
-    # ==========================================================================
-    STATUS_WEBHOOK_URL: str = _env("SYRIA_STATUS_WEBHOOK_URL")
-
-    # ==========================================================================
     # URLs
     # ==========================================================================
     LEADERBOARD_BASE_URL: str = _env("SYRIA_LEADERBOARD_URL", "https://trippixn.com/syria/leaderboard")

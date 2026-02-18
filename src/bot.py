@@ -40,7 +40,6 @@ from src.services.sync_profile import ProfileSyncService
 from src.services.xp import XPService
 from src.services.xp import card as rank_card
 from src.api import APIService
-from src.services.status_webhook import get_status_service
 from src.services.backup import BackupScheduler
 from src.services.afk import AFKService
 from src.services.gallery import GalleryService
@@ -84,7 +83,6 @@ class SyriaBot(commands.Bot):
         self.profile_sync: Optional[ProfileSyncService] = None
         self.xp_service: Optional[XPService] = None
         self.stats_api: Optional[APIService] = None
-        self.status_webhook = None
         self.afk_service: Optional[AFKService] = None
         self.gallery_service: Optional[GalleryService] = None
         self.presence_handler: Optional[PresenceHandler] = None
@@ -314,17 +312,6 @@ class SyriaBot(commands.Bot):
         except Exception as e:
             logger.error_tree("Stats API Init Failed", e)
 
-        # Status Webhook
-        if config.STATUS_WEBHOOK_URL:
-            try:
-                self.status_webhook = get_status_service(config.STATUS_WEBHOOK_URL, bot_name="SyriaBot")
-                self.status_webhook.set_bot(self)
-                await self.status_webhook.send_startup_alert()
-                await self.status_webhook.start_hourly_alerts()
-                initialized.append("StatusWebhook")
-            except Exception as e:
-                logger.error_tree("Status Webhook Init Failed", e)
-
         # Backup Scheduler
         try:
             self.backup_scheduler = BackupScheduler()
@@ -444,15 +431,6 @@ class SyriaBot(commands.Bot):
         ], emoji="🛑")
 
         stopped = []
-
-        # Send shutdown alert first (while bot is still functional)
-        if self.status_webhook:
-            try:
-                await self.status_webhook.send_shutdown_alert()
-                self.status_webhook.stop_hourly_alerts()
-                stopped.append("StatusWebhook")
-            except Exception as e:
-                logger.error_tree("Status Webhook Stop Error", e)
 
         if self.backup_scheduler:
             try:
