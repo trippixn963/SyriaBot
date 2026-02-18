@@ -15,6 +15,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from src.core.logger import logger
+from src.api.errors import APIError, ErrorCode
 from src.core.config import config
 from src.core.constants import TIMEZONE_DAMASCUS
 from src.services.database import db
@@ -98,10 +99,7 @@ async def get_channels(request: Request) -> JSONResponse:
         logger.error_tree("Channels API Error", e, [
             ("Client IP", client_ip),
         ])
-        return JSONResponse(
-            content={"error": "Internal server error"},
-            status_code=500,
-        )
+        raise APIError(ErrorCode.SERVER_ERROR)
 
 
 __all__ = ["router"]

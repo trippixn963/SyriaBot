@@ -18,6 +18,7 @@ from starlette.status import HTTP_500_INTERNAL_SERVER_ERROR
 
 from src.core.logger import logger
 from src.api.config import get_api_config
+from src.api.errors import APIError, ErrorCode, error_response
 from src.api.middleware.rate_limit import RateLimitMiddleware, get_rate_limiter
 from src.api.middleware.logging import LoggingMiddleware
 from src.api.dependencies import set_bot
@@ -111,6 +112,26 @@ def create_app(bot: Optional[Any] = None) -> FastAPI:
     # Exception Handlers
     # ==========================================================================
 
+    @app.exception_handler(APIError)
+    async def api_error_handler(request: Request, exc: APIError):
+        """Handle APIError exceptions with structured response."""
+        logger.tree("API Error", [
+            ("Path", str(request.url.path)[:50]),
+            ("Code", exc.error_code.value),
+            ("Status", str(exc.status_code)),
+        ], emoji="⚠️")
+
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "success": False,
+                "error_code": exc.error_code.value,
+                "message": exc.error_message,
+                "details": exc.error_details,
+            },
+            headers=exc.headers,
+        )
+
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception):
         """Handle uncaught exceptions."""
@@ -119,10 +140,7 @@ def create_app(bot: Optional[Any] = None) -> FastAPI:
             ("Error", str(exc)[:100]),
         ])
 
-        return JSONResponse(
-            status_code=HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"error": "Internal server error"},
-        )
+        return error_response(ErrorCode.SERVER_ERROR)
 
     # ==========================================================================
     # Routers

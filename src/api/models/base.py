@@ -9,12 +9,21 @@ Server: discord.gg/syria
 """
 
 from datetime import datetime
-from typing import Generic, Optional, TypeVar
+from typing import Any, Generic, Optional, TypeVar
+
 from pydantic import BaseModel, Field
 
 
+# =============================================================================
+# Generic Type Variables
+# =============================================================================
+
 T = TypeVar("T")
 
+
+# =============================================================================
+# Base Response Models
+# =============================================================================
 
 class APIResponse(BaseModel, Generic[T]):
     """Standard API response wrapper."""
@@ -29,6 +38,16 @@ class APIResponse(BaseModel, Generic[T]):
         json_encoders = {
             datetime: lambda v: v.isoformat()
         }
+
+
+class ErrorResponse(BaseModel):
+    """Error response model."""
+
+    success: bool = False
+    error_code: str
+    message: str
+    details: Optional[dict[str, Any]] = None
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
 
 
 class PaginationMeta(BaseModel):
@@ -54,6 +73,18 @@ class PaginatedResponse(BaseModel, Generic[T]):
         }
 
 
+# =============================================================================
+# Health Models
+# =============================================================================
+
+class DiscordStatus(BaseModel):
+    """Discord connection status."""
+
+    connected: bool
+    latency_ms: Optional[int] = None
+    guilds: int = 0
+
+
 class HealthResponse(BaseModel):
     """Health check response."""
 
@@ -65,25 +96,52 @@ class HealthResponse(BaseModel):
     started_at: datetime
     timestamp: datetime
     timezone: str = "America/New_York (EST)"
-    discord: Optional["DiscordStatus"] = None
+    discord: Optional[DiscordStatus] = None
 
 
-class DiscordStatus(BaseModel):
-    """Discord connection status."""
+# =============================================================================
+# WebSocket Models
+# =============================================================================
 
-    connected: bool
-    latency_ms: Optional[int] = None
-    guilds: int = 0
+class WSMessage(BaseModel):
+    """WebSocket message format."""
+
+    type: str = Field(description="Event type")
+    data: dict[str, Any] = Field(default_factory=dict)
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
 
 
-# Update forward reference
-HealthResponse.model_rebuild()
+class WSEventType:
+    """WebSocket event type constants."""
+
+    # Connection events
+    CONNECTED = "connected"
+    DISCONNECTED = "disconnected"
+    HEARTBEAT = "heartbeat"
+    PONG = "pong"
+
+    # Stats events
+    STATS_UPDATED = "stats.updated"
+    STATS_LEADERBOARD = "stats.leaderboard"
+    STATS_USER = "stats.user"
+
+    # XP events
+    XP_GRANTED = "xp.granted"
+    XP_SET = "xp.set"
+    XP_DRAINED = "xp.drained"
+    XP_LEVEL_UP = "xp.level_up"
+
+    # Error events
+    ERROR = "error"
 
 
 __all__ = [
     "APIResponse",
+    "ErrorResponse",
     "PaginationMeta",
     "PaginatedResponse",
     "HealthResponse",
     "DiscordStatus",
+    "WSMessage",
+    "WSEventType",
 ]

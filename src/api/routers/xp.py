@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from src.core.logger import logger
+from src.api.errors import APIError, ErrorCode
 from src.core.config import config
 from src.services.database import db
 from src.services.xp.utils import level_from_xp
@@ -148,10 +149,7 @@ async def grant_xp(
             ("Amount", str(body.amount)),
             ("Client IP", client_ip),
         ])
-        return JSONResponse(
-            content={"error": "Internal server error"},
-            status_code=500,
-        )
+        raise APIError(ErrorCode.SERVER_ERROR)
 
 
 @router.post("/set", response_model=XPSetResponse)
@@ -216,10 +214,7 @@ async def set_xp(
             ("XP", str(body.xp)),
             ("Client IP", client_ip),
         ])
-        return JSONResponse(
-            content={"error": "Internal server error"},
-            status_code=500,
-        )
+        raise APIError(ErrorCode.SERVER_ERROR)
 
 
 __all__ = ["router"]
@@ -271,10 +266,7 @@ async def drain_xp(
         user_data = await asyncio.to_thread(db.get_user_xp, body.user_id, guild_id)
 
         if not user_data:
-            return JSONResponse(
-                content={"error": "User not found", "success": False},
-                status_code=404,
-            )
+            raise APIError(ErrorCode.USER_NOT_FOUND)
 
         old_xp = user_data.get("xp", 0)
         old_level = user_data.get("level", 0)
@@ -318,13 +310,12 @@ async def drain_xp(
             ).model_dump()
         )
 
+    except APIError:
+        raise
     except Exception as e:
         logger.error_tree("XP Drain API Error", e, [
             ("ID", str(body.user_id)),
             ("Amount", str(body.amount)),
             ("Client IP", client_ip),
         ])
-        return JSONResponse(
-            content={"error": "Internal server error"},
-            status_code=500,
-        )
+        raise APIError(ErrorCode.SERVER_ERROR)

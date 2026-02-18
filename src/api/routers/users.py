@@ -12,11 +12,11 @@ import time
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, Path, Request, HTTPException
+from fastapi import APIRouter, Depends, Path, Request
 from fastapi.responses import JSONResponse
-from starlette.status import HTTP_404_NOT_FOUND, HTTP_400_BAD_REQUEST
 
 from src.core.logger import logger
+from src.api.errors import APIError, ErrorCode, error_response
 from src.core.config import config
 from src.core.constants import TIMEZONE_DAMASCUS
 from src.services.database import db
@@ -49,10 +49,7 @@ async def get_user(
         xp_data = db.get_user_xp(user_id, config.GUILD_ID)
 
         if not xp_data:
-            raise HTTPException(
-                status_code=HTTP_404_NOT_FOUND,
-                detail="User not found"
-            )
+            raise APIError(ErrorCode.USER_NOT_FOUND)
 
         # Get rank
         rank = db.get_user_rank(user_id, config.GUILD_ID)
@@ -157,22 +154,16 @@ async def get_user(
             headers={"Cache-Control": "public, max-age=30"},
         )
 
-    except HTTPException:
+    except APIError:
         raise
     except ValueError:
-        raise HTTPException(
-            status_code=HTTP_400_BAD_REQUEST,
-            detail="Invalid user ID"
-        )
+        raise APIError(ErrorCode.USER_INVALID_ID)
     except Exception as e:
         logger.error_tree("User API Error", e, [
             ("Client IP", client_ip),
             ("ID", str(user_id)),
         ])
-        return JSONResponse(
-            content={"error": "Internal server error"},
-            status_code=500,
-        )
+        raise APIError(ErrorCode.SERVER_ERROR)
 
 
 __all__ = ["router"]

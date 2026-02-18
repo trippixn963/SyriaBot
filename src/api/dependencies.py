@@ -11,10 +11,10 @@ Server: discord.gg/syria
 import hmac
 from typing import Any, Optional
 
-from fastapi import Depends, HTTPException, Header, Query
-from starlette.status import HTTP_401_UNAUTHORIZED, HTTP_503_SERVICE_UNAVAILABLE
+from fastapi import Depends, Header, Query
 
 from src.api.config import get_api_config
+from src.api.errors import APIError, ErrorCode
 
 
 # =============================================================================
@@ -33,10 +33,7 @@ def set_bot(bot: Any) -> None:
 def get_bot() -> Any:
     """Get the bot instance."""
     if _bot_instance is None:
-        raise HTTPException(
-            status_code=HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Bot not initialized",
-        )
+        raise APIError(ErrorCode.BOT_NOT_INITIALIZED)
     return _bot_instance
 
 
@@ -60,23 +57,17 @@ async def require_api_key(
     config = get_api_config()
 
     if not config.api_key:
-        raise HTTPException(
-            status_code=HTTP_401_UNAUTHORIZED,
-            detail="API key not configured on server",
+        raise APIError(
+            ErrorCode.AUTH_MISSING_KEY,
+            message="API key not configured on server",
         )
 
     if not x_api_key:
-        raise HTTPException(
-            status_code=HTTP_401_UNAUTHORIZED,
-            detail="X-API-Key header required",
-        )
+        raise APIError(ErrorCode.AUTH_MISSING_KEY)
 
     # Use constant-time comparison to prevent timing attacks
     if not hmac.compare_digest(x_api_key, config.api_key):
-        raise HTTPException(
-            status_code=HTTP_401_UNAUTHORIZED,
-            detail="Invalid API key",
-        )
+        raise APIError(ErrorCode.AUTH_INVALID_KEY)
 
     return x_api_key
 

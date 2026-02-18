@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 
 from src.core.logger import logger
+from src.api.errors import APIError, ErrorCode
 from src.core.constants import TIMEZONE_DAMASCUS
 from src.services.database import db
 from src.api.dependencies import get_bot, PaginationParams, get_pagination, get_period
@@ -189,10 +190,7 @@ async def get_leaderboard(
             ("Offset", str(pagination.offset)),
             ("Period", period),
         ])
-        return JSONResponse(
-            content={"error": "Internal server error"},
-            status_code=500,
-        )
+        raise APIError(ErrorCode.SERVER_ERROR)
 
 
 __all__ = ["router"]
