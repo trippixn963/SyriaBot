@@ -18,10 +18,22 @@ from src.core.logger import logger
 
 
 class CurrencyService:
-    """Service for granting JawdatBot casino currency."""
+    """
+    Service for granting JawdatBot casino currency.
+
+    DESIGN:
+        Integrates with JawdatBot's economy system via REST API.
+        Allows SyriaBot to reward users with casino coins for activities.
+        Supports granting to wallet or bank with balance queries.
+    """
 
     def __init__(self) -> None:
-        """Initialize the currency service."""
+        """
+        Initialize the currency service.
+
+        Sets up state tracking. Actual API connection happens in setup().
+        Requires JAWDAT_API_KEY environment variable to be enabled.
+        """
         self._enabled: bool = False
         self._session: Optional[aiohttp.ClientSession] = None
 

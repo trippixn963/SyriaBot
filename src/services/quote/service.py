@@ -75,9 +75,25 @@ class QuoteResult:
 # =============================================================================
 
 class QuoteService:
-    """Generates quote images in Make it a Quote style."""
+    """
+    Service for generating stylized quote images.
 
-    def __init__(self):
+    DESIGN:
+        Creates "Make it a Quote" style images with:
+        - Blurred guild banner background with vignette
+        - Ghosted avatar overlay with gradient fade
+        - Syria green & gold theme colors
+        - Arabic font support and emoji rendering
+        - Film grain effect for aesthetic polish
+    """
+
+    def __init__(self) -> None:
+        """
+        Initialize the quote service.
+
+        Sets up HTTP session, finds system fonts with Arabic support,
+        and initializes banner cache for performance.
+        """
         self._session: Optional[aiohttp.ClientSession] = None
         self._font_path: Optional[str] = None
         self._font_italic_path: Optional[str] = None

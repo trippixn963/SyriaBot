@@ -30,13 +30,25 @@ MAX_COOLDOWN_CACHE_SIZE = 100
 
 
 class ActionHandler:
-    """Handles action commands with GIFs."""
+    """
+    Handler for action commands with GIF responses.
+
+    DESIGN:
+        Processes message-based action commands (slap, hug, kiss, cry, etc.)
+        Supports: self-targets, multiple targets (combo), stats tracking.
+        Uses strict matching to prevent false triggers ("kick boxing" != kick).
+        Fetches GIFs from nekos.best/waifu.pics via ActionService.
+    """
 
     # Action command cooldown (60 seconds)
     ACTION_COOLDOWN = 60
 
     def __init__(self) -> None:
-        """Initialize the action handler."""
+        """
+        Initialize the action handler.
+
+        Sets up cooldown tracking for rate limiting.
+        """
         self._cooldowns: OrderedDict[int, float] = OrderedDict()
         self._cooldown_lock = asyncio.Lock()
 

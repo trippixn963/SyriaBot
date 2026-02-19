@@ -17,7 +17,14 @@ from src.core.logger import logger
 
 
 class XPMixin:
-    """Mixin for XP system database operations."""
+    """
+    Mixin for XP system database operations.
+
+    DESIGN:
+        Handles XP storage, level calculation, and leaderboard queries.
+        Supports activity tracking (messages, voice), daily snapshots for
+        period leaderboards, and user activity states for filtering.
+    """
 
     # =========================================================================
     # Core XP Methods

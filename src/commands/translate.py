@@ -21,9 +21,23 @@ from src.utils.footer import set_footer
 
 
 class TranslateCog(commands.Cog):
-    """Commands for translating text."""
+    """
+    Commands for translating text.
 
-    def __init__(self, bot: commands.Bot):
+    DESIGN:
+        Integrates with TranslateService's tiered API system:
+        DeepL (primary) -> Google (fallback) -> AI (last resort).
+        Supports language codes (en, ar) or names (english, arabic).
+        Interactive view for re-translating to different languages.
+    """
+
+    def __init__(self, bot: commands.Bot) -> None:
+        """
+        Initialize the translate cog.
+
+        Args:
+            bot: Main bot instance for view message tracking.
+        """
         self.bot = bot
 
     @app_commands.command(

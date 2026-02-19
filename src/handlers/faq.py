@@ -37,12 +37,6 @@ CHANNEL_TOPIC_COOLDOWN = 120  # 2 minutes for same topic in same channel
 # Max tracked entries (memory management)
 MAX_COOLDOWN_ENTRIES = 500
 
-# Channels where auto-FAQ is disabled (manual /faq still works)
-FAQ_IGNORED_CHANNELS = {
-    1457000381702738105,
-    1459144517449158719,
-}
-
 
 # =============================================================================
 # Fuzzy Matching
@@ -195,9 +189,22 @@ FAQ_PATTERNS = {
 # =============================================================================
 
 class FAQAutoResponder:
-    """Watches messages and auto-replies with FAQ when questions are detected."""
+    """
+    Auto-responder for frequently asked questions.
 
-    def __init__(self):
+    DESIGN:
+        Watches messages for common question patterns about server features.
+        Uses regex matching with fuzzy typo correction (Levenshtein distance).
+        Includes per-user and per-channel+topic cooldowns to prevent spam.
+        Tracks analytics for popular FAQ topics.
+    """
+
+    def __init__(self) -> None:
+        """
+        Initialize the FAQ auto-responder.
+
+        Compiles regex patterns for efficient matching.
+        """
         # Compile regex patterns for efficiency
         self._compiled_patterns: dict[str, list[re.Pattern]] = {}
         for topic, patterns in FAQ_PATTERNS.items():
@@ -291,7 +298,7 @@ class FAQAutoResponder:
             return False
 
         # Skip ignored channels
-        if message.channel.id in FAQ_IGNORED_CHANNELS:
+        if message.channel.id in config.FAQ_IGNORED_CHANNELS:
             return False
 
         content = message.content.strip()

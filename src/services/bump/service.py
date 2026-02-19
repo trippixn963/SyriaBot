@@ -18,6 +18,7 @@ from typing import Optional
 import time
 
 from src.core.logger import logger
+from src.core.constants import DISBOARD_BOT_ID
 from src.utils.footer import set_footer
 
 
@@ -36,10 +37,9 @@ class BumpService:
     """
 
     BUMP_INTERVAL = 2 * 60 * 60  # 2 hours in seconds
-    DISBOARD_BOT_ID = 302050872383242240  # Disboard's bot ID
     DATA_FILE = Path(__file__).parent.parent.parent / "data" / "bump_data.json"
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.bot: discord.Client = None
         self.bump_channel_id: int = None
         self.ping_role_id: int = None

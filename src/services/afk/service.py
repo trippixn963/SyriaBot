@@ -23,9 +23,23 @@ EMOJI_ZZZ = "💤"
 
 
 class AFKService:
-    """Service for managing AFK status."""
+    """
+    Service for managing AFK status with Dyno-style features.
 
-    def __init__(self, bot: commands.Bot):
+    DESIGN:
+        Adds [AFK] prefix to nickname when going AFK.
+        Tracks mentions while away with pinger attribution.
+        Auto-removes AFK on first message with welcome back notification.
+        Supports emoji shortcodes in AFK reasons.
+    """
+
+    def __init__(self, bot: commands.Bot) -> None:
+        """
+        Initialize the AFK service.
+
+        Args:
+            bot: Main bot instance for Discord API access.
+        """
         self.bot = bot
 
     async def setup(self) -> None:
@@ -67,7 +81,7 @@ class AFKService:
         # Step 4: Convert :emoji_name: shortcodes to Discord emoji format
         shortcode_pattern = re.compile(r':([a-zA-Z0-9_]+):')
 
-        def replace_emoji(match):
+        def replace_emoji(match: "re.Match") -> str:
             emoji_name = match.group(1)
 
             # Look up in guild emojis (case-insensitive)

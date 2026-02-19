@@ -50,10 +50,11 @@ class BasePresenceHandler(ABC):
     """
     Base class for Discord presence management.
 
-    Features:
-    - Rotating status messages (bot-specific stats)
-    - Hourly promotional presence window
-    - Graceful start/stop lifecycle
+    DESIGN:
+        Manages two concurrent tasks:
+        - Rotation loop: Cycles through status messages at configurable interval
+        - Promo loop: Shows promotional text at the top of each hour
+        Subclasses implement get_status_messages() and get_promo_text().
     """
 
     def __init__(
@@ -63,7 +64,14 @@ class BasePresenceHandler(ABC):
         update_interval: int = DEFAULT_UPDATE_INTERVAL,
         promo_duration_minutes: int = DEFAULT_PROMO_DURATION_MINUTES,
     ) -> None:
-        """Initialize the presence handler."""
+        """
+        Initialize the presence handler.
+
+        Args:
+            bot: Discord client/bot instance.
+            update_interval: Seconds between status rotations.
+            promo_duration_minutes: How long to show promo at top of each hour.
+        """
         self.bot = bot
         self.update_interval = update_interval
         self.promo_duration_minutes = promo_duration_minutes
@@ -92,7 +100,7 @@ class BasePresenceHandler(ABC):
         pass
 
     @abstractmethod
-    def get_timezone(self):
+    def get_timezone(self) -> "ZoneInfo":
         """Get the timezone for promo scheduling."""
         pass
 
@@ -281,9 +289,22 @@ class BasePresenceHandler(ABC):
 # =============================================================================
 
 class PresenceHandler(BasePresenceHandler):
-    """Presence handler configured for SyriaBot with XP/leveling stats."""
+    """
+    SyriaBot presence handler with XP/leveling stats.
+
+    DESIGN:
+        Rotates through XP statistics (total XP, messages, voice hours).
+        Shows discord.gg/syria promo at the top of each hour.
+        Stats pulled from database on each rotation cycle.
+    """
 
     def __init__(self, bot: commands.Bot) -> None:
+        """
+        Initialize the SyriaBot presence handler.
+
+        Args:
+            bot: Main bot instance for Discord API access.
+        """
         super().__init__(
             bot,
             update_interval=PRESENCE_UPDATE_INTERVAL,
@@ -331,7 +352,7 @@ class PresenceHandler(BasePresenceHandler):
         """Return SyriaBot promo text."""
         return PROMO_TEXT
 
-    def get_timezone(self):
+    def get_timezone(self) -> "ZoneInfo":
         """Return EST timezone for promo scheduling."""
         return TIMEZONE_EST
 

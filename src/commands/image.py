@@ -55,9 +55,23 @@ async def _check_image_limit(user: discord.Member) -> tuple[bool, int, str]:
 # =============================================================================
 
 class ImageCog(commands.Cog):
-    """Commands for searching images."""
+    """
+    Commands for searching images.
 
-    def __init__(self, bot: commands.Bot):
+    DESIGN:
+        Uses Google Custom Search API for image search with pagination.
+        Rate limited: 5 searches/week for free users, unlimited for boosters.
+        Images are proxied through bot to avoid embed failures.
+        Interactive view with prev/next buttons for browsing results.
+    """
+
+    def __init__(self, bot: commands.Bot) -> None:
+        """
+        Initialize the image cog.
+
+        Args:
+            bot: Main bot instance for view message tracking.
+        """
         self.bot = bot
 
     @app_commands.command(

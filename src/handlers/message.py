@@ -16,6 +16,7 @@ from discord.ext import commands
 
 from src.core.logger import logger
 from src.core.config import config
+from src.core.constants import DISBOARD_BOT_ID
 from src.services.bump import bump_service
 from src.services.database import db
 from src.api.services.websocket import get_ws_manager
@@ -23,9 +24,6 @@ from src.handlers.fun import fun
 from src.handlers.action import action
 from src.handlers.reply import ReplyHandler
 from src.handlers.faq import faq
-
-# Disboard bot ID
-DISBOARD_BOT_ID = 302050872383242240
 
 
 class MessageHandler(commands.Cog):

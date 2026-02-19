@@ -464,11 +464,18 @@ Win coins by participating in games!""",
 # =============================================================================
 
 class FAQAnalytics:
-    """Tracks FAQ usage statistics."""
+    """
+    Tracks FAQ usage statistics.
+
+    DESIGN:
+        Persists analytics to JSON file for tracking FAQ engagement.
+        Records triggers, helpful/unhelpful feedback, ticket clicks,
+        and language switches per topic.
+    """
 
     DATA_FILE = Path(__file__).parent.parent.parent.parent / "data" / "faq_analytics.json"
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._stats: dict = {
             "triggers": defaultdict(int),  # topic -> count
             "helpful": defaultdict(int),   # topic -> helpful count

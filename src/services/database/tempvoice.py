@@ -16,7 +16,14 @@ from src.core.logger import logger
 
 
 class TempVoiceMixin:
-    """Mixin for TempVoice database operations."""
+    """
+    Mixin for TempVoice database operations.
+
+    DESIGN:
+        Provides CRUD operations for temp channels, user settings, and access
+        control (trusted/blocked users). Uses composite primary keys for
+        relationships (owner_id + trusted_id) to prevent duplicates.
+    """
 
     # =========================================================================
     # Temp Channels

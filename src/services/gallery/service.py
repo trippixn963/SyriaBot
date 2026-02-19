@@ -23,13 +23,28 @@ from src.utils.footer import set_footer
 
 
 class GalleryService:
-    """Service for managing gallery and memes channels."""
+    """
+    Service for managing gallery and memes channels.
+
+    DESIGN:
+        Instagram-style media channels with automatic features:
+        - Validates media (images/videos only, no GIFs)
+        - Adds heart reactions and creates comment threads
+        - Sends notifications to general chat
+        - Removes invalid messages automatically
+    """
 
     # Channel types for identification
     GALLERY = "gallery"
     MEMES = "memes"
 
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot) -> None:
+        """
+        Initialize the gallery service.
+
+        Args:
+            bot: Main bot instance for Discord API access.
+        """
         self.bot = bot
         # Cleanup disabled - let Discord's 7-day auto-archive handle empty threads
         # self.cleanup_task.start()
@@ -42,14 +57,14 @@ class GalleryService:
             ("Thread Cleanup", "Disabled"),
         ], emoji="📸")
 
-    def stop(self):
+    def stop(self) -> None:
         """Stop the cleanup task (if running)."""
         if self.cleanup_task.is_running():
             self.cleanup_task.cancel()
         logger.tree("Gallery Service Stopped", [], emoji="📸")
 
     @tasks.loop(hours=1)
-    async def cleanup_task(self):
+    async def cleanup_task(self) -> None:
         """Clean up empty threads older than 1 hour from gallery and memes channels."""
         channel_ids = [
             (config.GALLERY_CHANNEL_ID, "Gallery"),
@@ -103,7 +118,7 @@ class GalleryService:
                 ], emoji="⚠️")
 
     @cleanup_task.before_loop
-    async def before_cleanup(self):
+    async def before_cleanup(self) -> None:
         await self.bot.wait_until_ready()
 
     def _get_channel_type(self, channel_id: int) -> Optional[str]:

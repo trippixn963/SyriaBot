@@ -19,10 +19,24 @@ from src.api.services.websocket import get_ws_manager
 
 
 class ReadyHandler(commands.Cog):
-    """Handles bot ready event."""
+    """
+    Handler for bot startup and initialization.
+
+    DESIGN:
+        Orchestrates startup sequence on bot ready:
+        - Logs feature status and startup banner
+        - Syncs slash commands to guild
+        - Initializes all services (XP, TempVoice, etc.)
+        - Sets up WebSocket for real-time dashboard stats
+    """
 
     def __init__(self, bot: commands.Bot) -> None:
-        """Initialize the ready handler with bot reference."""
+        """
+        Initialize the ready handler.
+
+        Args:
+            bot: Main bot instance for accessing services and guilds.
+        """
         self.bot = bot
 
     def _log_feature_status(self) -> None:

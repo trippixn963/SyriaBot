@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 class ConfirmView(ui.View):
     """Confirmation view for destructive actions."""
 
-    def __init__(self, action: str, channel: discord.VoiceChannel, target: discord.Member = None):
+    def __init__(self, action: str, channel: discord.VoiceChannel, target: discord.Member = None) -> None:
         super().__init__(timeout=SELECT_TIMEOUT_DEFAULT)
         self.action = action
         self.channel = channel
@@ -35,7 +35,7 @@ class ConfirmView(ui.View):
         self.confirmed = False
         self.message: discord.Message = None
 
-    async def on_timeout(self):
+    async def on_timeout(self) -> None:
         """Handle timeout - disable buttons and update message."""
         for item in self.children:
             item.disabled = True
@@ -55,7 +55,7 @@ class ConfirmView(ui.View):
         ], emoji="⏳")
 
     @ui.button(label="Confirm", style=discord.ButtonStyle.secondary, emoji=EMOJI_ALLOW)
-    async def confirm(self, interaction: discord.Interaction, button: ui.Button):
+    async def confirm(self, interaction: discord.Interaction, button: ui.Button) -> None:
         self.confirmed = True
         self.stop()
 
@@ -168,7 +168,7 @@ class ConfirmView(ui.View):
                 await interaction.response.edit_message(embed=embed, view=None)
 
     @ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
-    async def cancel(self, interaction: discord.Interaction, button: ui.Button):
+    async def cancel(self, interaction: discord.Interaction, button: ui.Button) -> None:
         self.stop()
         embed = discord.Embed(description="↩️ Cancelled", color=COLOR_NEUTRAL)
         set_footer(embed)
@@ -184,7 +184,7 @@ class ConfirmView(ui.View):
 class UserSelectView(ui.View):
     """View for user selection actions."""
 
-    def __init__(self, channel: discord.VoiceChannel, action: str, service: "TempVoiceService" = None):
+    def __init__(self, channel: discord.VoiceChannel, action: str, service: "TempVoiceService" = None) -> None:
         super().__init__(timeout=SELECT_TIMEOUT_DEFAULT)
         self.channel = channel
         self.action = action
@@ -192,7 +192,7 @@ class UserSelectView(ui.View):
         self.message: discord.Message = None
         self.add_item(UserSelect(channel, action, service))
 
-    async def on_timeout(self):
+    async def on_timeout(self) -> None:
         """Handle timeout - disable dropdown and update message."""
         for item in self.children:
             item.disabled = True
@@ -215,7 +215,7 @@ class UserSelectView(ui.View):
 class UserSelect(ui.UserSelect):
     """User select dropdown."""
 
-    def __init__(self, channel: discord.VoiceChannel, action: str, service: "TempVoiceService" = None):
+    def __init__(self, channel: discord.VoiceChannel, action: str, service: "TempVoiceService" = None) -> None:
         placeholders = {
             "permit": "Select user to permit",
             "block": "Select user to block",
@@ -227,7 +227,7 @@ class UserSelect(ui.UserSelect):
         self.action = action
         self.service = service
 
-    async def callback(self, interaction: discord.Interaction):
+    async def callback(self, interaction: discord.Interaction) -> None:
         user = self.values[0]
 
         try:
@@ -290,7 +290,7 @@ class UserSelect(ui.UserSelect):
                 set_footer(embed)
                 await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    async def _handle_permit(self, interaction: discord.Interaction, channel: discord.VoiceChannel, user: discord.Member, owner_id: int):
+    async def _handle_permit(self, interaction: discord.Interaction, channel: discord.VoiceChannel, user: discord.Member, owner_id: int) -> None:
         """Handle permit/unpermit action."""
         if user.id == owner_id:
             embed = discord.Embed(description="⚠️ Can't permit yourself", color=COLOR_WARNING)
@@ -436,7 +436,7 @@ class UserSelect(ui.UserSelect):
                     ("Error", str(e)),
                 ], emoji="⚠️")
 
-    async def _handle_block(self, interaction: discord.Interaction, channel: discord.VoiceChannel, user: discord.Member, owner_id: int):
+    async def _handle_block(self, interaction: discord.Interaction, channel: discord.VoiceChannel, user: discord.Member, owner_id: int) -> None:
         """Handle block/unblock action."""
         if user.id == owner_id:
             embed = discord.Embed(description="⚠️ Can't block yourself", color=COLOR_WARNING)
@@ -550,7 +550,7 @@ class UserSelect(ui.UserSelect):
                     ("Error", str(e)),
                 ], emoji="⚠️")
 
-    async def _handle_kick(self, interaction: discord.Interaction, channel: discord.VoiceChannel, user: discord.Member, owner_id: int):
+    async def _handle_kick(self, interaction: discord.Interaction, channel: discord.VoiceChannel, user: discord.Member, owner_id: int) -> None:
         """Handle kick action."""
         if user.id == owner_id:
             embed = discord.Embed(description="⚠️ Can't kick yourself", color=COLOR_WARNING)
@@ -610,7 +610,7 @@ class UserSelect(ui.UserSelect):
                 ("Reason", "Not in channel"),
             ], emoji="⚠️")
 
-    async def _handle_transfer(self, interaction: discord.Interaction, channel: discord.VoiceChannel, user: discord.Member, owner_id: int):
+    async def _handle_transfer(self, interaction: discord.Interaction, channel: discord.VoiceChannel, user: discord.Member, owner_id: int) -> None:
         """Handle transfer action."""
         if user.id == owner_id:
             embed = discord.Embed(description="⚠️ Already the owner", color=COLOR_WARNING)

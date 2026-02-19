@@ -612,6 +612,6 @@ async def generate_meter_card(
             raise
 
 
-async def cleanup():
+async def cleanup() -> None:
     """Cleanup placeholder (no cache to clear)."""
     pass

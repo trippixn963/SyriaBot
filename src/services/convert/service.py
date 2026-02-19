@@ -93,9 +93,23 @@ class VideoInfo:
 # =============================================================================
 
 class ConvertService:
-    """Service for converting images to GIFs with text bars."""
+    """
+    Service for converting images and videos to GIFs with text bars.
 
-    def __init__(self):
+    DESIGN:
+        NotSoBot-style text bars with dynamic sizing based on image dimensions.
+        Supports static images, animated GIFs, and short videos.
+        Uses Wand/ImageMagick for high-quality GIF processing with Pillow fallback.
+        FFmpeg handles video-to-GIF conversion with palette generation.
+    """
+
+    def __init__(self) -> None:
+        """
+        Initialize the convert service.
+
+        Sets up temp directory, finds system fonts, and pre-caches
+        common font sizes for faster first-use performance.
+        """
         # Ensure temp directory exists
         TEMP_DIR.mkdir(parents=True, exist_ok=True)
 

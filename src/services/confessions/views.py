@@ -106,7 +106,7 @@ class ReplyModal(ui.Modal, title="Anonymous Reply"):
 class ConfessionReplyView(ui.View):
     """Persistent view with Reply button for confession threads."""
 
-    def __init__(self, confession_number: int):
+    def __init__(self, confession_number: int) -> None:
         super().__init__(timeout=None)
         self.confession_number = confession_number
 

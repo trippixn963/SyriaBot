@@ -71,7 +71,15 @@ MAX_COOLDOWN_CACHE_SIZE = 100
 
 
 class ReplyHandler:
-    """Handles reply commands (convert, quote, translate, download)."""
+    """
+    Handler for reply-based commands.
+
+    DESIGN:
+        User replies to a message with a keyword to trigger the command.
+        Supports: convert (image/video to GIF), quote (generate quote image),
+        translate (language translation), download (social media video).
+        Includes typo tolerance for translate triggers.
+    """
 
     # Download reply cooldown (5 minutes = 300 seconds)
     DOWNLOAD_REPLY_COOLDOWN = 300
@@ -97,7 +105,12 @@ class ReplyHandler:
     )
 
     def __init__(self, bot: "Bot") -> None:
-        """Initialize the reply handler with bot reference."""
+        """
+        Initialize the reply handler.
+
+        Args:
+            bot: Main bot instance for channel lookups and API access.
+        """
         self.bot = bot
         self._download_cooldowns: OrderedDict[int, float] = OrderedDict()
         self._cooldown_lock = asyncio.Lock()

@@ -25,9 +25,23 @@ from src.services.database import db
 # =============================================================================
 
 class GuideCog(commands.Cog):
-    """Admin command to post the server guide panel."""
+    """
+    Admin command to post the server guide panel.
+
+    DESIGN:
+        Posts interactive guide panel with buttons for Rules, Roles, FAQ,
+        and Commands. Optionally purges channel before posting (safety limit:
+        500 messages). Saves panel location in database for auto-updates
+        when server info changes.
+    """
 
     def __init__(self, bot: commands.Bot) -> None:
+        """
+        Initialize the guide cog.
+
+        Args:
+            bot: Main bot instance for guild access.
+        """
         self.bot = bot
 
     @app_commands.command(

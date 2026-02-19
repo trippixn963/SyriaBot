@@ -15,7 +15,14 @@ from src.core.logger import logger
 
 
 class StatsMixin:
-    """Mixin for server statistics database operations."""
+    """
+    Mixin for server statistics database operations.
+
+    DESIGN:
+        Tracks server-level metrics: daily stats, hourly activity patterns,
+        channel usage, boost history. Uses server_counters table for O(1)
+        message count lookups instead of aggregating user_xp.
+    """
 
     # =========================================================================
     # Daily Stats

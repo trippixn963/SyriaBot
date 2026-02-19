@@ -24,9 +24,22 @@ from src.services.database import db
 
 
 class AFKCog(commands.Cog):
-    """AFK command for setting away status."""
+    """
+    AFK command for setting away status.
 
-    def __init__(self, bot: commands.Bot):
+    DESIGN:
+        Integrates with AFKService for nickname management and mention tracking.
+        Supports emoji shortcodes in reasons (e.g., :heart: becomes ❤️).
+        Shows embed confirmation with user avatar thumbnail.
+    """
+
+    def __init__(self, bot: commands.Bot) -> None:
+        """
+        Initialize the AFK cog.
+
+        Args:
+            bot: Main bot instance with afk_service attribute.
+        """
         self.bot = bot
 
     @app_commands.command(

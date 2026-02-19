@@ -25,9 +25,22 @@ from src.services.faq import FAQ_DATA, faq_analytics, FAQView
 # =============================================================================
 
 class FAQCog(commands.Cog):
-    """Moderator FAQ response system."""
+    """
+    Moderator FAQ response system.
+
+    DESIGN:
+        Provides /faq command for mods to quickly respond to common questions.
+        Supports topic autocomplete, optional user mention, and multilingual
+        embeds with toggle buttons. Analytics track which topics are most used.
+    """
 
     def __init__(self, bot: commands.Bot) -> None:
+        """
+        Initialize the FAQ cog.
+
+        Args:
+            bot: Main bot instance for channel access.
+        """
         self.bot = bot
 
     async def faq_autocomplete(

@@ -385,7 +385,7 @@ class RateLimiter:
                 )
 
                 # Schedule deletion after 10 seconds (non-blocking)
-                async def delete_after_delay(task_set: Set, msg: discord.Message):
+                async def delete_after_delay(task_set: Set, msg: discord.Message) -> None:
                     try:
                         await asyncio.sleep(10)
                         await msg.delete()

@@ -412,10 +412,23 @@ class BannerToggleView(ui.View):
 
 
 class GetCog(commands.Cog):
-    """Get avatar/banner command."""
+    """
+    Get avatar/banner command.
+
+    DESIGN:
+        Unified /get command for user avatars, user banners, server icon,
+        and server banner. Supports toggle between server and global variants.
+        Save button downloads as GIF file and deletes original embed.
+        Dynamic cooldown (5 min for users, exempt for staff).
+    """
 
     def __init__(self, bot: commands.Bot) -> None:
-        """Initialize the get cog."""
+        """
+        Initialize the get cog.
+
+        Args:
+            bot: Main bot instance for fetching user data.
+        """
         self.bot = bot
 
     @app_commands.command(name="get", description="Get avatars, banners, or server assets")

@@ -221,6 +221,24 @@ class Config:
     LEADERBOARD_BASE_URL: str = _env("SYRIA_LEADERBOARD_URL", "https://trippixn.com/syria/leaderboard")
 
     # ==========================================================================
+    # Giveaway
+    # ==========================================================================
+    GIVEAWAY_JOIN_EMOJI_ID: int = _env_int("SYRIA_GIVEAWAY_EMOJI")
+    GIVEAWAY_REQUIRED_LEVEL: int = _env_int("SYRIA_GIVEAWAY_LEVEL", 10)
+
+    # ==========================================================================
+    # Fun Commands (Ship special override)
+    # ==========================================================================
+    SHIP_SPECIAL_USER_ID: int = _env_int("SYRIA_SHIP_SPECIAL_USER")
+
+    # ==========================================================================
+    # FAQ Ignored Channels
+    # ==========================================================================
+    FAQ_IGNORED_CHANNELS: FrozenSet[int] = field(
+        default_factory=lambda: _env_set("SYRIA_FAQ_IGNORED")
+    )
+
+    # ==========================================================================
     # Paths (computed)
     # ==========================================================================
     DATABASE_PATH: str = str(DATA_DIR / "syria.db")

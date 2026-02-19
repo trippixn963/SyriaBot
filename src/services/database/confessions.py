@@ -15,7 +15,14 @@ from src.core.logger import logger
 
 
 class ConfessionsMixin:
-    """Mixin for confessions system database operations."""
+    """
+    Mixin for confessions system database operations.
+
+    DESIGN:
+        Manages confession lifecycle: submission, moderation, publication.
+        Auto-increments confession numbers on approval. Supports image
+        attachments and tracks reviewer for audit purposes.
+    """
 
     def create_confession(self, content: str, submitter_id: int, image_url: Optional[str] = None) -> Optional[int]:
         """

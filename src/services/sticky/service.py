@@ -76,7 +76,7 @@ def _get_channel_configs() -> List[StickyChannelConfig]:
 class StickyView(discord.ui.View):
     """Persistent view with button to open ticket channel."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(timeout=None)
 
         # Build ticket URL using config
@@ -98,11 +98,22 @@ class StickyService:
     """
     Service for managing sticky messages in verified channels.
 
-    Tracks message counts per channel and resends the sticky embed
-    after a configured threshold is reached.
+    DESIGN:
+        Tracks message counts per channel and resends the sticky embed
+        after a configured threshold is reached. Used in gender-verified
+        channels to keep verification instructions visible.
+        Automatically deletes old stickies before posting new ones.
     """
 
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot) -> None:
+        """
+        Initialize the sticky service.
+
+        Loads channel configurations and sets up message tracking state.
+
+        Args:
+            bot: Main bot instance for Discord API access.
+        """
         self.bot = bot
         self._enabled = False
 

@@ -22,9 +22,22 @@ SYNC_TIME = time(0, 0)  # Midnight
 
 
 class ProfileSyncService:
-    """Syncs bot avatar with server icon."""
+    """
+    Service for syncing bot avatar with server icon.
 
-    def __init__(self, bot):
+    DESIGN:
+        Keeps bot profile in sync with server branding.
+        Runs immediately on startup, then daily at midnight EST.
+        Handles rate limits gracefully by retrying next sync cycle.
+    """
+
+    def __init__(self, bot) -> None:
+        """
+        Initialize the profile sync service.
+
+        Args:
+            bot: Main bot instance for Discord API access.
+        """
         self.bot = bot
         self.guild_id: int = None
         self._task: asyncio.Task = None

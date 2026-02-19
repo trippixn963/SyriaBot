@@ -59,10 +59,23 @@ class LeaderboardView(discord.ui.View):
 
 
 class RankCog(commands.Cog):
-    """XP and ranking commands."""
+    """
+    XP and ranking commands.
+
+    DESIGN:
+        Generates graphical rank cards with PIL showing level, XP, rank,
+        messages, and voice time. Falls back to embed if image generation
+        fails. Includes dynamic cooldown (5 min for regular users, exempt
+        for staff). Links to web leaderboard for detailed stats.
+    """
 
     def __init__(self, bot: commands.Bot) -> None:
-        """Initialize the rank cog."""
+        """
+        Initialize the rank cog.
+
+        Args:
+            bot: Main bot instance for guild access.
+        """
         self.bot = bot
 
     @app_commands.command(name="rank", description="View your XP and level")

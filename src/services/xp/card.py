@@ -58,7 +58,7 @@ def get_render_semaphore() -> asyncio.Semaphore:
     return _render_semaphore
 
 
-def _sync_cleanup():
+def _sync_cleanup() -> None:
     """Synchronous cleanup for atexit/signal handlers."""
     import subprocess
     try:
@@ -76,7 +76,7 @@ def _sync_cleanup():
 atexit.register(_sync_cleanup)
 
 
-async def _check_idle_timeout():
+async def _check_idle_timeout() -> None:
     """Check if browser should be closed due to inactivity."""
     global _last_activity
     if _browser is not None and _last_activity > 0:
@@ -89,7 +89,7 @@ async def _check_idle_timeout():
             await cleanup()
 
 
-async def _check_render_restart():
+async def _check_render_restart() -> None:
     """Check if browser should be restarted due to render count (memory cleanup)."""
     global _render_count
     if _browser is not None and _render_count >= _RESTART_AFTER_RENDERS:
@@ -101,7 +101,7 @@ async def _check_render_restart():
         _render_count = 0
 
 
-async def _get_context():
+async def _get_context() -> "BrowserContext":
     """Get or create browser context (reusable)."""
     global _browser, _context, _playwright, _last_activity
 
@@ -153,7 +153,7 @@ async def _get_context():
     return _context
 
 
-async def _get_page():
+async def _get_page() -> "Page":
     """Get a page from pool or create new one."""
     # First, run cleanup checks BEFORE getting a page
     # This ensures we don't get a page that's about to become stale
@@ -175,7 +175,7 @@ async def _get_page():
     return await context.new_page()
 
 
-async def _return_page(page):
+async def _return_page(page: "Page") -> None:
     """Return page to pool for reuse."""
     # Don't pool closed/invalid pages
     try:
@@ -759,7 +759,7 @@ async def generate_rank_card(
             raise
 
 
-async def cleanup():
+async def cleanup() -> None:
     """Clean up browser resources. Call on bot shutdown."""
     global _browser, _context, _playwright, _page_pool, _card_cache, _last_activity
 

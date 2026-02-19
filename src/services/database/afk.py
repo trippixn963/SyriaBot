@@ -15,7 +15,13 @@ from src.core.logger import logger
 
 
 class AFKMixin:
-    """Mixin for AFK system database operations."""
+    """
+    Mixin for AFK system database operations.
+
+    DESIGN:
+        Stores AFK status with reason and timestamp. Tracks mentions received
+        while AFK (with pinger details) for notification on return.
+    """
 
     def set_afk(self, user_id: int, guild_id: int, reason: str = "") -> None:
         """Set a user as AFK."""

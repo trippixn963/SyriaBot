@@ -45,7 +45,7 @@ class PersistentFAQView(ui.View):
     Uses custom_id format: faq:{topic}:{lang}
     """
 
-    def __init__(self, topic: str, current_lang: str = "en"):
+    def __init__(self, topic: str, current_lang: str = "en") -> None:
         super().__init__(timeout=None)  # No timeout for persistent views
         self.topic = topic
         self.current_lang = current_lang
@@ -133,7 +133,7 @@ class FAQPersistentHandler(ui.View):
     for messages sent before bot restart.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(timeout=None)
 
     @ui.button(custom_id="faq:lang", style=discord.ButtonStyle.secondary)

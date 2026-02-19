@@ -101,7 +101,7 @@ class DatabaseCore:
             logger.error_tree("DB Backup Failed", e)
 
     @contextmanager
-    def _get_conn(self):
+    def _get_conn(self) -> "Generator[sqlite3.Connection, None, None]":
         """Get database connection context manager.
 
         Raises:
@@ -136,6 +136,10 @@ class DatabaseCore:
                 self._corruption_reason = str(e)
                 logger.error_tree("Database Corruption Detected", e)
                 self._backup_corrupted()
+            elif isinstance(e, sqlite3.IntegrityError):
+                # IntegrityError is expected for UNIQUE constraint violations
+                # (e.g., blocking already-blocked users) - re-raise for handlers
+                raise
             else:
                 logger.tree("Database Error", [
                     ("Type", type(e).__name__),

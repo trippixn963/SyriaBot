@@ -10,7 +10,6 @@ Server: discord.gg/syria
 """
 
 import asyncio
-import os
 import time
 import discord
 from discord.ext import commands
@@ -26,9 +25,7 @@ from src.services.database import db
 # =============================================================================
 
 GIVEAWAY_CHANNEL_ID = config.GIVEAWAY_CHANNEL_ID
-JOIN_EMOJI_ID = 1459322239311937606
-REQUIRED_LEVEL = 10
-GIVEAWAY_ID_FILE = Path(__file__).parent.parent.parent / "data" / "giveaway_message.txt"
+GIVEAWAY_ID_FILE = Path(__file__).parent.parent / "data" / "giveaway_message.txt"
 
 
 def get_giveaway_message_id() -> int | None:
@@ -42,9 +39,22 @@ def get_giveaway_message_id() -> int | None:
 
 
 class GiveawayReactionHandler(commands.Cog):
-    """Handles giveaway reaction validation."""
+    """
+    Handler for giveaway reaction validation.
+
+    DESIGN:
+        Monitors reactions on giveaway messages and enforces level requirements.
+        Users below the required level have their reaction removed with a warning.
+        Warning cooldown prevents spam (1 hour per user).
+    """
 
     def __init__(self, bot: commands.Bot) -> None:
+        """
+        Initialize the giveaway handler.
+
+        Args:
+            bot: Main bot instance for channel/message access.
+        """
         self.bot = bot
         self._warned_users: dict[int, float] = {}  # user_id -> timestamp
         self._warn_cooldown = 3600  # 1 hour
@@ -64,7 +74,7 @@ class GiveawayReactionHandler(commands.Cog):
             return
 
         # Skip if not the join emoji
-        if not hasattr(payload.emoji, 'id') or payload.emoji.id != JOIN_EMOJI_ID:
+        if not hasattr(payload.emoji, 'id') or payload.emoji.id != config.GIVEAWAY_JOIN_EMOJI_ID:
             return
 
         # Skip bots
@@ -78,7 +88,7 @@ class GiveawayReactionHandler(commands.Cog):
         xp_data = db.get_user_xp(user_id, guild_id)
         user_level = xp_data.get("level", 0) if xp_data else 0
 
-        if user_level >= REQUIRED_LEVEL:
+        if user_level >= config.GIVEAWAY_REQUIRED_LEVEL:
             # User meets requirement
             logger.tree("Giveaway Entry", [
                 ("User", payload.member.name),
@@ -107,7 +117,7 @@ class GiveawayReactionHandler(commands.Cog):
 
                 # Send warning message
                 warning = await channel.send(
-                    f"{payload.member.mention} You need to be **Level {REQUIRED_LEVEL}+** to enter this giveaway. "
+                    f"{payload.member.mention} You need to be **Level {config.GIVEAWAY_REQUIRED_LEVEL}+** to enter this giveaway. "
                     f"You are currently Level {user_level}.",
                 )
 
@@ -118,7 +128,7 @@ class GiveawayReactionHandler(commands.Cog):
                 logger.tree("Giveaway Entry Denied", [
                     ("User", payload.member.name),
                     ("ID", str(user_id)),
-                    ("Level", f"{user_level} (need {REQUIRED_LEVEL})"),
+                    ("Level", f"{user_level} (need {config.GIVEAWAY_REQUIRED_LEVEL})"),
                 ], emoji="🚫")
 
         except discord.HTTPException as e:

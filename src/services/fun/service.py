@@ -206,9 +206,16 @@ def _get_message(messages_dict: dict, percentage: int) -> str:
 
 
 class FunService:
-    """Service for fun commands with deterministic results."""
+    """
+    Service for fun commands with deterministic results.
 
-    def __init__(self):
+    DESIGN:
+        Provides ship/howsimp/howgay calculations with random percentages.
+        Special overrides for owner user (0% for self, 100% with specific user).
+        Messages are deterministic based on percentage ranges.
+    """
+
+    def __init__(self) -> None:
         logger.tree("Fun Service Initialized", [
             ("Commands", "ship, howsimp, howgay"),
         ], emoji="🎮")
@@ -228,8 +235,8 @@ class FunService:
         Returns:
             Tuple of (percentage, message)
         """
-        # Special ship override - owner + 979101331312754699 = 100%
-        special_pair = {config.OWNER_ID, 979101331312754699}
+        # Special ship override - owner + special user = 100%
+        special_pair = {config.OWNER_ID, config.SHIP_SPECIAL_USER_ID}
         if {user1_id, user2_id} == special_pair:
             logger.tree("Ship Calculated", [
                 ("User 1", str(user1_id)),

@@ -15,10 +15,21 @@ from src.core.logger import logger
 
 
 class PresenceHandler(commands.Cog):
-    """Handles presence updates for activity tracking."""
+    """
+    Handler for Discord presence updates.
+
+    DESIGN:
+        Forwards presence changes (online/idle/dnd/offline) to XP service
+        for daily active user tracking. Helps measure engagement patterns.
+    """
 
     def __init__(self, bot: commands.Bot) -> None:
-        """Initialize the presence handler with bot reference."""
+        """
+        Initialize the presence handler.
+
+        Args:
+            bot: Main bot instance with xp_service attribute.
+        """
         self.bot = bot
 
     @commands.Cog.listener()

@@ -263,9 +263,23 @@ class ReplyModal(discord.ui.Modal, title="Anonymous Reply"):
 
 
 class ConfessCog(commands.Cog):
-    """Confession slash commands."""
+    """
+    Confession slash commands.
+
+    DESIGN:
+        Provides /confess for anonymous confessions (1/day limit) and /reply
+        for anonymous replies in confession threads. Strips mentions and custom
+        emojis to prevent abuse. All confessions go through mod review before
+        being posted publicly with auto-generated thread for discussion.
+    """
 
     def __init__(self, bot: commands.Bot) -> None:
+        """
+        Initialize the confess cog.
+
+        Args:
+            bot: Main bot instance with confession_service attribute.
+        """
         self.bot: commands.Bot = bot
 
     @app_commands.command(name="confess", description="Submit an anonymous confession")

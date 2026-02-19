@@ -82,10 +82,23 @@ TWITTER_MEDIA_PATTERN = re.compile(
 # =============================================================================
 
 class ConvertCog(commands.Cog):
-    """Cog for the /convert command."""
+    """
+    Cog for the /convert command.
+
+    DESIGN:
+        Converts images and short videos to GIFs with customizable text bars.
+        Supports direct media uploads, URLs, and hosting sites (Tenor, Giphy,
+        Imgur, Reddit, Discord CDN, Twitter). Interactive editor allows
+        customizing text, colors, and font size before final conversion.
+    """
 
     def __init__(self, bot: commands.Bot) -> None:
-        """Initialize the convert cog."""
+        """
+        Initialize the convert cog.
+
+        Args:
+            bot: Main bot instance for view message tracking.
+        """
         self.bot = bot
 
     @app_commands.command(

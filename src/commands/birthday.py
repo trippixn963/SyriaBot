@@ -21,9 +21,23 @@ from src.services.birthday import get_birthday_service, MONTH_NAMES
 
 
 class BirthdayCog(commands.Cog):
-    """Birthday commands for registering your birthday."""
+    """
+    Birthday commands for registering your birthday.
 
-    def __init__(self, bot: commands.Bot):
+    DESIGN:
+        Users register with /birthday set (month, day, year). On their birthday,
+        they receive the birthday role automatically (assigned by background task).
+        Admins can remove birthdays, and /birthday list shows upcoming ones.
+        Age validation ensures reasonable birth years.
+    """
+
+    def __init__(self, bot: commands.Bot) -> None:
+        """
+        Initialize the birthday cog.
+
+        Args:
+            bot: Main bot instance for guild access.
+        """
         self.bot = bot
 
     birthday_group = app_commands.Group(

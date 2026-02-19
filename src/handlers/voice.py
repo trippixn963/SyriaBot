@@ -20,10 +20,22 @@ from src.services.database import db
 
 
 class VoiceHandler(commands.Cog):
-    """Handles voice state updates."""
+    """
+    Handler for voice state updates.
+
+    DESIGN:
+        Forwards voice events to TempVoice service (channel creation/cleanup)
+        and XP service (voice XP tracking). Also tracks server-level stats
+        for hourly activity charts and peak concurrent users.
+    """
 
     def __init__(self, bot: commands.Bot) -> None:
-        """Initialize the voice handler with bot reference."""
+        """
+        Initialize the voice handler.
+
+        Args:
+            bot: Main bot instance with tempvoice and xp_service attributes.
+        """
         self.bot = bot
 
     @commands.Cog.listener()

@@ -377,9 +377,23 @@ SELF_ACTIONS: Dict[str, Dict] = {
 
 
 class ActionService:
-    """Service for handling action commands."""
+    """
+    Service for handling action commands with GIF responses.
 
-    def __init__(self):
+    DESIGN:
+        Uses dual API system for reliability:
+        - Primary: nekos.best (better curated anime content)
+        - Fallback: waifu.pics (wider selection)
+        Actions split into target actions (hug @user) and self actions (cry).
+    """
+
+    def __init__(self) -> None:
+        """
+        Initialize the action service.
+
+        Sets up HTTP session for API requests.
+        Pre-loads action dictionaries for quick lookup.
+        """
         self._session: Optional[aiohttp.ClientSession] = None
         logger.tree("Action Service Initialized", [
             ("Actions", str(len(ACTIONS))),
@@ -394,7 +408,7 @@ class ActionService:
             self._session = aiohttp.ClientSession()
         return self._session
 
-    async def close(self):
+    async def close(self) -> None:
         """Close the aiohttp session."""
         if self._session and not self._session.closed:
             await self._session.close()

@@ -144,7 +144,7 @@ class TextInputModal(ui.Modal, title="Edit Caption Text"):
         max_length=200,
     )
 
-    def __init__(self, current_text: str, view, callback_method: str = "update_preview"):
+    def __init__(self, current_text: str, view: "ui.View", callback_method: str = "update_preview") -> None:
         super().__init__()
         self.view = view
         self.callback_method = callback_method
@@ -177,7 +177,7 @@ COLOR_OPTIONS = [
 class ColorSelect(ui.Select):
     """Dropdown for selecting bar color preset. Works with both image and video views."""
 
-    def __init__(self, view, callback_method: str = "update_preview", custom_id: str = "color_select"):
+    def __init__(self, view: "ui.View", callback_method: str = "update_preview", custom_id: str = "color_select") -> None:
         self.convert_view = view
         self.callback_method = callback_method
         super().__init__(

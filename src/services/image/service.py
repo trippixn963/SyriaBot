@@ -52,11 +52,24 @@ class ImageSearchResult:
 # =============================================================================
 
 class ImageService:
-    """Service for searching images via Google Custom Search API."""
+    """
+    Service for searching images via Google Custom Search API.
+
+    DESIGN:
+        Wraps Google Custom Search JSON API for image queries.
+        Returns structured results with thumbnails for preview.
+        Supports SafeSearch filtering (off/medium/high).
+    """
 
     GOOGLE_API_URL: str = "https://www.googleapis.com/customsearch/v1"
 
     def __init__(self) -> None:
+        """
+        Initialize the image search service.
+
+        Checks for required API credentials (GOOGLE_API_KEY, GOOGLE_CX).
+        Service is disabled if credentials are missing.
+        """
         self._available: bool = bool(config.GOOGLE_API_KEY and config.GOOGLE_CX)
 
         if self._available:

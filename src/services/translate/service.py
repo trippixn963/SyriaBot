@@ -318,9 +318,23 @@ class TranslationResult:
 # =============================================================================
 
 class TranslateService:
-    """Service for translating text."""
+    """
+    Service for translating text between languages.
 
-    def __init__(self):
+    DESIGN:
+        Uses dual-API approach for quality and reliability:
+        - Primary: DeepL API (higher quality, especially for European languages)
+        - Fallback: Google Translate (wider language support)
+        - Optional: GPT-4o-mini for AI-enhanced translation with dialect awareness
+        Supports fuzzy language matching (accepts typos, country names).
+    """
+
+    def __init__(self) -> None:
+        """
+        Initialize the translation service.
+
+        No setup required - APIs are called on-demand.
+        """
         pass
 
     def resolve_language(self, lang_input: str) -> Optional[str]:

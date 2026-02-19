@@ -32,7 +32,15 @@ MAX_COOLDOWN_CACHE_SIZE = 100
 
 
 class FunHandler:
-    """Handles fun commands with visual cards."""
+    """
+    Handler for fun commands with visual card generation.
+
+    DESIGN:
+        Generates image cards for commands: ship, howsimp, howgay, howsmart, howfat.
+        Includes typo detection in the fun channel for common misspellings.
+        Sends periodic sticky messages with command help.
+        Uses per-user cooldowns to prevent spam.
+    """
 
     # Fun command cooldown (30 seconds - image generation is heavier)
     FUN_COOLDOWN = 30
@@ -44,7 +52,11 @@ class FunHandler:
     FUN_COMMANDS = ("ship", "howsimp", "howgay", "howsmart", "howfat")
 
     def __init__(self) -> None:
-        """Initialize the fun handler."""
+        """
+        Initialize the fun handler.
+
+        Sets up cooldown tracking and sticky message state.
+        """
         self._cooldowns: OrderedDict[int, float] = OrderedDict()
         self._cooldown_lock = asyncio.Lock()
         self._channel_msg_count: int = 0
@@ -194,13 +206,9 @@ class FunHandler:
         if message.guild and message.guild.banner:
             banner_url = str(message.guild.banner.url)
 
-        # Record cooldown (skip for exempt users)
-        if not exempt:
-            self._cooldowns[user_id] = time.time()
-        await self._cleanup_cooldowns()
-
         try:
-            result = False
+            # Handlers return: True = success (apply cooldown), None = validation error (no cooldown)
+            result = None
             if command == "ship":
                 result = await self._handle_ship(message, banner_url)
             elif command == "howsimp":
@@ -211,6 +219,11 @@ class FunHandler:
                 result = await self._handle_howsmart(message, banner_url)
             elif command == "howfat":
                 result = await self._handle_howfat(message, banner_url)
+
+            # Only apply cooldown on successful image generation (not validation errors)
+            if result and not exempt:
+                self._cooldowns[user_id] = time.time()
+                await self._cleanup_cooldowns()
 
             # Track message count and send sticky every N messages (atomic)
             if result:
@@ -238,8 +251,8 @@ class FunHandler:
             await message.channel.send(embed=embed)
             return True
 
-    async def _handle_ship(self, message: discord.Message, banner_url: str) -> bool:
-        """Handle the ship command."""
+    async def _handle_ship(self, message: discord.Message, banner_url: str) -> Optional[bool]:
+        """Handle the ship command. Returns True on success, None on validation error."""
         # Need exactly 2 mentions
         if len(message.mentions) < 2:
             # If 1 mention, ship author with mentioned user
@@ -259,10 +272,41 @@ class FunHandler:
                 set_footer(embed)
                 msg = await message.channel.send(embed=embed)
                 await msg.delete(delay=DELETE_DELAY_SHORT)
-                return True
+                return None  # No cooldown for usage errors
         else:
             user1 = message.mentions[0]
             user2 = message.mentions[1]
+
+        # Prevent shipping yourself
+        if user1.id == user2.id:
+            logger.tree("Ship Self Blocked", [
+                ("User", f"{message.author.name}"),
+                ("ID", str(message.author.id)),
+            ], emoji="🚫")
+            embed = discord.Embed(
+                description="You can't ship someone with themselves!",
+                color=COLOR_WARNING
+            )
+            set_footer(embed)
+            msg = await message.channel.send(embed=embed)
+            await msg.delete(delay=DELETE_DELAY_SHORT)
+            return None  # No cooldown for validation errors
+
+        # Prevent shipping bots
+        if user1.bot or user2.bot:
+            logger.tree("Ship Bot Blocked", [
+                ("User", f"{message.author.name}"),
+                ("ID", str(message.author.id)),
+                ("Bot", user1.name if user1.bot else user2.name),
+            ], emoji="🤖")
+            embed = discord.Embed(
+                description="You can't ship bots!",
+                color=COLOR_WARNING
+            )
+            set_footer(embed)
+            msg = await message.channel.send(embed=embed)
+            await msg.delete(delay=DELETE_DELAY_SHORT)
+            return None  # No cooldown for validation errors
 
         logger.tree("Ship Command", [
             ("User", f"{message.author.name}"),

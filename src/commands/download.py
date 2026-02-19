@@ -384,9 +384,23 @@ async def handle_download(
 
 
 class DownloadCog(commands.Cog):
-    """Commands for downloading social media content."""
+    """
+    Commands for downloading social media content.
 
-    def __init__(self, bot: commands.Bot):
+    DESIGN:
+        Downloads media from Instagram, Twitter/X, TikTok, Reddit, Facebook,
+        Snapchat, and Twitch. Uses Cobalt API with yt-dlp fallback.
+        Rate limited: 5 downloads/week for free users, unlimited for boosters.
+        Clean output: sends just the video file + user ping, no embed clutter.
+    """
+
+    def __init__(self, bot: commands.Bot) -> None:
+        """
+        Initialize the download cog.
+
+        Args:
+            bot: Main bot instance for channel access.
+        """
         self.bot = bot
 
     @app_commands.command(

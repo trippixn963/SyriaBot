@@ -28,9 +28,22 @@ from . import ytdlp
 
 
 class DownloaderService:
-    """Service for downloading and processing social media content."""
+    """
+    Service for downloading media from social media platforms.
 
-    def __init__(self):
+    DESIGN:
+        Uses dual-source strategy for reliability:
+        - Primary: Cobalt API (fast, Discord-ready files)
+        - Fallback: yt-dlp (wider platform support)
+        Files are renamed with branding (discord.gg/syria) before delivery.
+    """
+
+    def __init__(self) -> None:
+        """
+        Initialize the downloader service.
+
+        Sets up temp directory and cleans orphaned files from previous runs.
+        """
         TEMP_DIR.mkdir(parents=True, exist_ok=True)
         self._cleanup_orphaned_files()
         logger.tree("Downloader Service Initialized", [

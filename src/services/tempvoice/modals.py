@@ -43,7 +43,7 @@ class NameModal(ui.Modal, title="Rename Channel"):
         required=False,
     )
 
-    def __init__(self, channel: discord.VoiceChannel, member: discord.Member):
+    def __init__(self, channel: discord.VoiceChannel, member: discord.Member) -> None:
         super().__init__()
         self.channel = channel
         self.member = member
@@ -132,7 +132,7 @@ class LimitModal(ui.Modal, title="Set User Limit"):
         required=True,
     )
 
-    def __init__(self, channel: discord.VoiceChannel):
+    def __init__(self, channel: discord.VoiceChannel) -> None:
         super().__init__()
         self.channel = channel
         current = channel.user_limit

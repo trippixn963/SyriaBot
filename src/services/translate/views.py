@@ -35,7 +35,7 @@ PRIORITY_LANGUAGES = [
 class LanguageSelect(ui.Select):
     """Dropdown to select a language for translation."""
 
-    def __init__(self, original_text: str, current_lang: str, shown_buttons: set):
+    def __init__(self, original_text: str, current_lang: str, shown_buttons: set) -> None:
         self.original_text = original_text
 
         options = []
@@ -69,7 +69,7 @@ class LanguageSelect(ui.Select):
             row=0,
         )
 
-    async def callback(self, interaction: discord.Interaction):
+    async def callback(self, interaction: discord.Interaction) -> None:
         selected = self.values[0]
 
         if selected == "none":
@@ -114,7 +114,7 @@ class TranslateView(ui.View):
 
         self._rebuild_buttons()
 
-    def _rebuild_buttons(self):
+    def _rebuild_buttons(self) -> None:
         """Rebuild buttons based on current and source language."""
         self.clear_items()
 
@@ -159,9 +159,9 @@ class TranslateView(ui.View):
         ai_button.callback = self._ai_button_callback
         self.add_item(ai_button)
 
-    def _make_button_callback(self, target_lang: str, lang_name: str):
+    def _make_button_callback(self, target_lang: str, lang_name: str) -> "Callable":
         """Create a callback for a language button."""
-        async def callback(interaction: discord.Interaction):
+        async def callback(interaction: discord.Interaction) -> None:
             logger.tree("Language Button Pressed", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
@@ -171,7 +171,7 @@ class TranslateView(ui.View):
             await self.translate_to(interaction, target_lang)
         return callback
 
-    async def _ai_button_callback(self, interaction: discord.Interaction):
+    async def _ai_button_callback(self, interaction: discord.Interaction) -> None:
         """Handle AI translate button - boosters only."""
         logger.tree("AI Button Pressed", [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
@@ -297,7 +297,7 @@ class TranslateView(ui.View):
                     ("Error", str(e)[:50]),
                 ], emoji="⚠️")
 
-    async def translate_to(self, interaction: discord.Interaction, target_lang: str):
+    async def translate_to(self, interaction: discord.Interaction, target_lang: str) -> None:
         """Translate to a new language and update the embed."""
         if target_lang == self.current_lang:
             logger.tree("Translation Skipped", [

@@ -304,10 +304,24 @@ class WeatherView(discord.ui.View):
 # =============================================================================
 
 class WeatherCog(commands.Cog):
-    """Weather command with fuzzy city search."""
+    """
+    Weather command with fuzzy city search.
+
+    DESIGN:
+        Uses OpenWeatherMap API for current weather data. Fuzzy autocomplete
+        matches against 100+ popular cities worldwide (Middle East, Americas,
+        Europe, Asia, Africa, Oceania). Interactive view allows toggling
+        between Celsius and Fahrenheit. Dynamic cooldown (5 min for users,
+        exempt for staff).
+    """
 
     def __init__(self, bot: commands.Bot) -> None:
-        """Initialize the weather cog with API key."""
+        """
+        Initialize the weather cog.
+
+        Args:
+            bot: Main bot instance for Discord API access.
+        """
         self.bot = bot
         self.api_key = config.OPENWEATHER_API_KEY
 
