@@ -315,6 +315,7 @@ class XPService:
             # Server-level tracking
             db.increment_daily_messages(guild_id, today_date)
             db.increment_server_hour_activity(guild_id, current_hour, "message")
+            db.increment_channel_daily(guild_id, message.channel.id, today_date)
             db.increment_channel_messages(
                 message.channel.id,
                 guild_id,
@@ -703,8 +704,10 @@ class XPService:
             db.update_last_active(member.id, member.guild.id, now)
 
             # Update streak
-            from datetime import datetime, timezone
-            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            from datetime import datetime
+            from zoneinfo import ZoneInfo
+            est = ZoneInfo("America/New_York")
+            today = datetime.now(est).strftime("%Y-%m-%d")
             db.update_streak(member.id, member.guild.id, today)
 
             old_level = result["old_level"]

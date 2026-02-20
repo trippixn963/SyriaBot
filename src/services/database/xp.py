@@ -957,3 +957,278 @@ class XPMixin:
             ], emoji="🧹")
 
         return deleted
+
+    # =========================================================================
+    # Enhanced Analytics Tracking Methods
+    # =========================================================================
+
+    def increment_reactions_received(self, user_id: int, guild_id: int, count: int = 1) -> None:
+        """Increment user's reactions received count (when their messages get reactions)."""
+        self.ensure_user_xp(user_id, guild_id)
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                UPDATE user_xp SET reactions_received = reactions_received + ?
+                WHERE user_id = ? AND guild_id = ?
+            """, (count, user_id, guild_id))
+
+    def increment_replies_sent(self, user_id: int, guild_id: int) -> None:
+        """Increment user's replies sent count."""
+        self.ensure_user_xp(user_id, guild_id)
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                UPDATE user_xp SET replies_sent = replies_sent + 1
+                WHERE user_id = ? AND guild_id = ?
+            """, (user_id, guild_id))
+
+    def increment_threads_created(self, user_id: int, guild_id: int) -> None:
+        """Increment user's threads created count."""
+        self.ensure_user_xp(user_id, guild_id)
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                UPDATE user_xp SET threads_created = threads_created + 1
+                WHERE user_id = ? AND guild_id = ?
+            """, (user_id, guild_id))
+
+    def increment_links_shared(self, user_id: int, guild_id: int) -> None:
+        """Increment user's links shared count."""
+        self.ensure_user_xp(user_id, guild_id)
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                UPDATE user_xp SET links_shared = links_shared + 1
+                WHERE user_id = ? AND guild_id = ?
+            """, (user_id, guild_id))
+
+    def get_reaction_stats(self, guild_id: int, limit: int = 50) -> List[Dict[str, Any]]:
+        """Get users sorted by total reactions (given + received)."""
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT
+                    user_id,
+                    reactions_given,
+                    reactions_received,
+                    (reactions_given + reactions_received) as total_reactions
+                FROM user_xp
+                WHERE guild_id = ? AND is_active = 1
+                    AND (reactions_given > 0 OR reactions_received > 0)
+                ORDER BY total_reactions DESC
+                LIMIT ?
+            """, (guild_id, limit))
+            return [dict(row) for row in cur.fetchall()]
+
+    def get_engagement_leaderboard(self, guild_id: int, limit: int = 50) -> List[Dict[str, Any]]:
+        """
+        Get users sorted by engagement score.
+
+        Engagement score formula:
+        - messages * 1
+        - voice_minutes * 0.5
+        - reactions_given * 2
+        - reactions_received * 3
+        - replies_sent * 4
+        - threads_created * 10
+        - links_shared * 2
+        - commands_used * 3
+        - streak_days * 50
+        """
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT
+                    user_id,
+                    xp,
+                    level,
+                    total_messages,
+                    voice_minutes,
+                    reactions_given,
+                    reactions_received,
+                    replies_sent,
+                    threads_created,
+                    links_shared,
+                    commands_used,
+                    streak_days,
+                    (
+                        total_messages * 1 +
+                        voice_minutes * 0.5 +
+                        reactions_given * 2 +
+                        reactions_received * 3 +
+                        replies_sent * 4 +
+                        threads_created * 10 +
+                        links_shared * 2 +
+                        commands_used * 3 +
+                        streak_days * 50
+                    ) as engagement_score
+                FROM user_xp
+                WHERE guild_id = ? AND is_active = 1
+                ORDER BY engagement_score DESC
+                LIMIT ?
+            """, (guild_id, limit))
+            return [dict(row) for row in cur.fetchall()]
+
+    # =========================================================================
+    # =========================================================================
+    # User Interactions Tracking (social connections)
+    # =========================================================================
+
+    def increment_interaction_mention(self, user_id: int, target_id: int, guild_id: int) -> None:
+        """
+        Track when user_id mentions target_id.
+
+        Args:
+            user_id: The user who made the mention.
+            target_id: The user who was mentioned.
+            guild_id: The guild where the mention occurred.
+        """
+        try:
+            now = int(time.time())
+            with self._get_conn() as conn:
+                cur = conn.cursor()
+                cur.execute("""
+                    INSERT INTO user_interactions (user_id, target_user_id, guild_id, mentions, last_interaction)
+                    VALUES (?, ?, ?, 1, ?)
+                    ON CONFLICT(user_id, target_user_id, guild_id) DO UPDATE SET
+                        mentions = mentions + 1,
+                        last_interaction = ?
+                """, (user_id, target_id, guild_id, now, now))
+        except Exception as e:
+            logger.error_tree("Interaction Mention Track Failed", e, [
+                ("User", str(user_id)),
+                ("Target", str(target_id)),
+                ("Guild", str(guild_id)),
+            ])
+
+    def increment_interaction_reply(self, user_id: int, target_id: int, guild_id: int) -> None:
+        """
+        Track when user_id replies to target_id.
+
+        Args:
+            user_id: The user who made the reply.
+            target_id: The user who was replied to.
+            guild_id: The guild where the reply occurred.
+        """
+        try:
+            now = int(time.time())
+            with self._get_conn() as conn:
+                cur = conn.cursor()
+                cur.execute("""
+                    INSERT INTO user_interactions (user_id, target_user_id, guild_id, replies, last_interaction)
+                    VALUES (?, ?, ?, 1, ?)
+                    ON CONFLICT(user_id, target_user_id, guild_id) DO UPDATE SET
+                        replies = replies + 1,
+                        last_interaction = ?
+                """, (user_id, target_id, guild_id, now, now))
+        except Exception as e:
+            logger.error_tree("Interaction Reply Track Failed", e, [
+                ("User", str(user_id)),
+                ("Target", str(target_id)),
+                ("Guild", str(guild_id)),
+            ])
+
+    def add_voice_together(self, user_id: int, partner_id: int, guild_id: int, minutes: int) -> None:
+        """
+        Track voice time between two users (bidirectional).
+
+        Adds minutes to both user_id -> partner_id and partner_id -> user_id
+        so that both users see each other in their top voice partners.
+
+        Args:
+            user_id: First user in the voice channel.
+            partner_id: Second user in the voice channel.
+            guild_id: The guild where they are in voice together.
+            minutes: Number of minutes to add to their shared time.
+        """
+        try:
+            now = int(time.time())
+            with self._get_conn() as conn:
+                cur = conn.cursor()
+                # Add for user -> partner
+                cur.execute("""
+                    INSERT INTO user_interactions (user_id, target_user_id, guild_id, voice_minutes_together, last_interaction)
+                    VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT(user_id, target_user_id, guild_id) DO UPDATE SET
+                        voice_minutes_together = voice_minutes_together + ?,
+                        last_interaction = ?
+                """, (user_id, partner_id, guild_id, minutes, now, minutes, now))
+                # Add for partner -> user (bidirectional)
+                cur.execute("""
+                    INSERT INTO user_interactions (user_id, target_user_id, guild_id, voice_minutes_together, last_interaction)
+                    VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT(user_id, target_user_id, guild_id) DO UPDATE SET
+                        voice_minutes_together = voice_minutes_together + ?,
+                        last_interaction = ?
+                """, (partner_id, user_id, guild_id, minutes, now, minutes, now))
+        except Exception as e:
+            logger.error_tree("Voice Together Track Failed", e, [
+                ("User", str(user_id)),
+                ("Partner", str(partner_id)),
+                ("Guild", str(guild_id)),
+                ("Minutes", str(minutes)),
+            ])
+
+    def get_top_interactions(self, user_id: int, guild_id: int, limit: int = 5) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        Get user's top social interactions.
+
+        Returns top voice partners, most mentioned users, and most replied-to users
+        for displaying in the user's profile card.
+
+        Args:
+            user_id: The user to get interactions for.
+            guild_id: The guild to filter by.
+            limit: Maximum number of results per category (default 5).
+
+        Returns:
+            Dict with keys: voice_partners, mentions, replies.
+            Each contains a list of {user_id, count/minutes} sorted by count desc.
+            Returns empty dict on error.
+        """
+        try:
+            with self._get_conn() as conn:
+                cur = conn.cursor()
+
+                # Top voice partners
+                cur.execute("""
+                    SELECT target_user_id as user_id, voice_minutes_together as minutes
+                    FROM user_interactions
+                    WHERE user_id = ? AND guild_id = ? AND voice_minutes_together > 0
+                    ORDER BY voice_minutes_together DESC
+                    LIMIT ?
+                """, (user_id, guild_id, limit))
+                voice_partners = [dict(row) for row in cur.fetchall()]
+
+                # Top mentioned users
+                cur.execute("""
+                    SELECT target_user_id as user_id, mentions as count
+                    FROM user_interactions
+                    WHERE user_id = ? AND guild_id = ? AND mentions > 0
+                    ORDER BY mentions DESC
+                    LIMIT ?
+                """, (user_id, guild_id, limit))
+                mentions = [dict(row) for row in cur.fetchall()]
+
+                # Top replied-to users
+                cur.execute("""
+                    SELECT target_user_id as user_id, replies as count
+                    FROM user_interactions
+                    WHERE user_id = ? AND guild_id = ? AND replies > 0
+                    ORDER BY replies DESC
+                    LIMIT ?
+                """, (user_id, guild_id, limit))
+                replies = [dict(row) for row in cur.fetchall()]
+
+                return {
+                    "voice_partners": voice_partners,
+                    "mentions": mentions,
+                    "replies": replies,
+                }
+        except Exception as e:
+            logger.error_tree("Get Top Interactions Failed", e, [
+                ("User", str(user_id)),
+                ("Guild", str(guild_id)),
+                ("Limit", str(limit)),
+            ])
+            return {"voice_partners": [], "mentions": [], "replies": []}

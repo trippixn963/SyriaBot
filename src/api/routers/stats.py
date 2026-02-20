@@ -9,6 +9,7 @@ Server: discord.gg/syria
 """
 
 import time
+import discord
 from datetime import datetime, timezone
 from typing import Any
 
@@ -122,6 +123,7 @@ async def get_stats(
         guild_name = "Syria"
         member_count = 0
         booster_count = 0
+        online_count = 0
 
         if bot and bot.is_ready():
             guild = bot.get_guild(config.GUILD_ID)
@@ -129,6 +131,7 @@ async def get_stats(
                 guild_name = guild.name
                 member_count = guild.member_count or 0
                 booster_count = guild.premium_subscription_count or 0
+                online_count = sum(1 for m in guild.members if m.status != discord.Status.offline)
                 if guild.icon:
                     guild_icon = guild.icon.url
                 if guild.banner:
@@ -162,6 +165,7 @@ async def get_stats(
             guild_banner=guild_banner,
             member_count=member_count,
             booster_count=booster_count,
+            online_count=online_count,
             total_users=stats.get("total_users", 0),
             total_xp=stats.get("total_xp", 0),
             total_messages=stats.get("total_messages", 0),

@@ -72,6 +72,7 @@ class ServerStats(BaseModel):
     guild_banner: Optional[str] = None
     member_count: int = 0
     booster_count: int = 0
+    online_count: int = 0
 
     # XP stats
     total_users: int = 0

@@ -546,13 +546,13 @@ class ConvertService:
             max_text_width = int(orig_width * 0.90)
 
             # Start with large font (70% of bar height)
-            font_size = max(16, int(bar_height * FONT_SIZE_RATIO)) if has_text else 0
+            font_size = max(24, int(bar_height * FONT_SIZE_RATIO)) if has_text else 0
 
             # SHRINK font until text fits (NotSoBot style)
             if has_text:
                 with Drawing() as measure_draw:
                     measure_draw.font = self._font_path or 'DejaVu-Sans-Bold'
-                    while font_size > 12:
+                    while font_size > 16:
                         measure_draw.font_size = font_size
                         with WandImage(width=orig_width, height=bar_height) as temp_img:
                             metrics = measure_draw.get_font_metrics(temp_img, text)
@@ -954,11 +954,11 @@ class ConvertService:
                 max_text_width = int(scale_width * 0.90)
 
                 # Start with large font (70% of bar height)
-                font_size = max(16, int(bar_height * FONT_SIZE_RATIO))
+                font_size = max(24, int(bar_height * FONT_SIZE_RATIO))
 
                 # SHRINK font until text fits (NotSoBot style)
                 # Use conservative estimate: char_width ≈ 0.65 * font_size
-                while font_size > 12:
+                while font_size > 16:
                     estimated_width = len(text) * font_size * 0.65
                     if estimated_width <= max_text_width:
                         break

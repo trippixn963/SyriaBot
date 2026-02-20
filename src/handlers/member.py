@@ -157,6 +157,16 @@ class MembersHandler(commands.Cog):
                 ("Error", str(e)[:50]),
             ], emoji="⚠️")
 
+        # Record member join event for growth tracking
+        try:
+            db.record_member_event(member.guild.id, member.id, "join")
+        except Exception as e:
+            logger.tree("Member Event Track Failed", [
+                ("Member", f"{member.name} ({member.id})"),
+                ("Event", "join"),
+                ("Error", str(e)[:50]),
+            ], emoji="⚠️")
+
         # Give auto-role
         if not config.AUTO_ROLE_ID:
             return
@@ -225,6 +235,16 @@ class MembersHandler(commands.Cog):
         # Only track in main server
         if member.guild.id != config.GUILD_ID:
             return
+
+        # Record member leave event for growth tracking
+        try:
+            db.record_member_event(member.guild.id, member.id, "leave")
+        except Exception as e:
+            logger.tree("Member Event Track Failed", [
+                ("Member", f"{member.name} ({member.id})"),
+                ("Event", "leave"),
+                ("Error", str(e)[:50]),
+            ], emoji="⚠️")
 
         # Mark user as inactive for leaderboard
         try:

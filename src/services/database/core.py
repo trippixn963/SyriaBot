@@ -312,7 +312,8 @@ class DatabaseCore:
                 "first_message_at", "last_active_at", "streak_days", "last_streak_date",
                 "longest_voice_session", "total_voice_sessions", "commands_used",
                 "reactions_given", "images_shared", "activity_hours", "invited_by", "is_active",
-                "mentions_received"
+                "mentions_received", "reactions_received", "replies_sent", "threads_created",
+                "links_shared"
             ])
             new_columns = [
                 ("first_message_at", "INTEGER DEFAULT 0"),
@@ -328,6 +329,11 @@ class DatabaseCore:
                 ("invited_by", "INTEGER DEFAULT 0"),
                 ("is_active", "INTEGER DEFAULT 1"),
                 ("mentions_received", "INTEGER DEFAULT 0"),
+                # New columns for enhanced analytics
+                ("reactions_received", "INTEGER DEFAULT 0"),
+                ("replies_sent", "INTEGER DEFAULT 0"),
+                ("threads_created", "INTEGER DEFAULT 0"),
+                ("links_shared", "INTEGER DEFAULT 0"),
             ]
             for col_name, col_type in new_columns:
                 # Validate column name against whitelist to prevent injection
@@ -394,6 +400,49 @@ class DatabaseCore:
                     action TEXT NOT NULL,
                     timestamp INTEGER NOT NULL
                 )
+            """)
+
+            # =====================================================================
+            # Voice Channel Stats Table (NEW)
+            # =====================================================================
+
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS voice_channel_stats (
+                    channel_id INTEGER NOT NULL,
+                    guild_id INTEGER NOT NULL,
+                    channel_name TEXT NOT NULL,
+                    total_minutes INTEGER DEFAULT 0,
+                    peak_users INTEGER DEFAULT 0,
+                    session_count INTEGER DEFAULT 0,
+                    last_active_at INTEGER DEFAULT 0,
+                    PRIMARY KEY (channel_id, guild_id)
+                )
+            """)
+
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_voice_channel_stats_guild
+                ON voice_channel_stats(guild_id, total_minutes DESC)
+            """)
+
+            # =====================================================================
+            # Role Snapshots Table (NEW)
+            # =====================================================================
+
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS role_snapshots (
+                    snapshot_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    date TEXT NOT NULL,
+                    guild_id INTEGER NOT NULL,
+                    role_id INTEGER NOT NULL,
+                    role_name TEXT NOT NULL,
+                    member_count INTEGER DEFAULT 0,
+                    UNIQUE(date, guild_id, role_id)
+                )
+            """)
+
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_role_snapshots_date
+                ON role_snapshots(guild_id, date DESC)
             """)
 
             # =====================================================================
@@ -641,6 +690,30 @@ class DatabaseCore:
             """)
 
             # =====================================================================
+            # Member Events Table (join/leave tracking for growth charts)
+            # =====================================================================
+
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS member_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    guild_id INTEGER NOT NULL,
+                    user_id INTEGER NOT NULL,
+                    event_type TEXT NOT NULL,
+                    timestamp INTEGER NOT NULL
+                )
+            """)
+
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_member_events_guild_time
+                ON member_events(guild_id, timestamp DESC)
+            """)
+
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_member_events_type
+                ON member_events(guild_id, event_type, timestamp)
+            """)
+
+            # =====================================================================
             # User Channel Activity Table (per-user-per-channel message counts)
             # =====================================================================
 
@@ -659,6 +732,52 @@ class DatabaseCore:
             cur.execute("""
                 CREATE INDEX IF NOT EXISTS idx_user_channel_activity_user
                 ON user_channel_activity(user_id, guild_id, message_count DESC)
+            """)
+
+            # =====================================================================
+            # Channel Daily Stats Table (for per-channel trends)
+            # =====================================================================
+
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS channel_daily_stats (
+                    guild_id INTEGER NOT NULL,
+                    channel_id INTEGER NOT NULL,
+                    date TEXT NOT NULL,
+                    message_count INTEGER DEFAULT 0,
+                    PRIMARY KEY (guild_id, channel_id, date)
+                )
+            """)
+
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_channel_daily_stats_date
+                ON channel_daily_stats(guild_id, date DESC)
+            """)
+
+            # =====================================================================
+            # User Interactions Table (tracks social connections)
+            # =====================================================================
+
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS user_interactions (
+                    user_id INTEGER NOT NULL,
+                    target_user_id INTEGER NOT NULL,
+                    guild_id INTEGER NOT NULL,
+                    mentions INTEGER DEFAULT 0,
+                    replies INTEGER DEFAULT 0,
+                    voice_minutes_together INTEGER DEFAULT 0,
+                    last_interaction INTEGER DEFAULT 0,
+                    PRIMARY KEY (user_id, target_user_id, guild_id)
+                )
+            """)
+
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_user_interactions_user
+                ON user_interactions(user_id, guild_id)
+            """)
+
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_user_interactions_target
+                ON user_interactions(target_user_id, guild_id)
             """)
 
             # =====================================================================

@@ -10,6 +10,7 @@ Server: discord.gg/syria
 """
 
 import asyncio
+import re
 
 import discord
 from discord.ext import commands
@@ -24,6 +25,9 @@ from src.handlers.fun import fun
 from src.handlers.action import action
 from src.handlers.reply import ReplyHandler
 from src.handlers.faq import faq
+
+# URL regex pattern for link tracking
+URL_PATTERN = re.compile(r'https?://\S+')
 
 
 class MessageHandler(commands.Cog):
@@ -75,15 +79,6 @@ class MessageHandler(commands.Cog):
                     ("ID", str(message.author.id)),
                 ])
 
-        # Sticky messages (gender-verified channels)
-        if hasattr(self.bot, 'sticky_service') and self.bot.sticky_service:
-            try:
-                await self.bot.sticky_service.handle_message(message)
-            except Exception as e:
-                logger.error_tree("Sticky Handler Error", e, [
-                    ("User", f"{message.author.name} ({message.author.display_name})"),
-                    ("ID", str(message.author.id)),
-                ])
 
         # Gallery service (media-only channel)
         if hasattr(self.bot, 'gallery_service') and self.bot.gallery_service:
@@ -166,17 +161,68 @@ class MessageHandler(commands.Cog):
                     if m.id != message.author.id and not m.bot
                 ]
                 for mentioned_user in valid_mentions:
+                    # Track in user_xp (mentions_received for the mentioned user)
                     await asyncio.to_thread(
                         db.increment_mentions_received,
                         mentioned_user.id,
                         message.guild.id,
                         1
                     )
+                    # Track in user_interactions (who the author mentions)
+                    await asyncio.to_thread(
+                        db.increment_interaction_mention,
+                        message.author.id,
+                        mentioned_user.id,
+                        message.guild.id
+                    )
             except Exception as e:
                 logger.error_tree("Mention Track Failed", e, [
                     ("User", f"{message.author.name} ({message.author.display_name})"),
                     ("ID", str(message.author.id)),
                 ])
+
+        # Track replies sent (non-blocking)
+        if message.guild and message.guild.id == config.GUILD_ID:
+            if message.reference and message.reference.message_id:
+                try:
+                    # Track reply count in user_xp
+                    await asyncio.to_thread(
+                        db.increment_replies_sent,
+                        message.author.id,
+                        message.guild.id
+                    )
+                    # Track interaction (who they replied to)
+                    try:
+                        ref_msg = await message.channel.fetch_message(message.reference.message_id)
+                        if ref_msg.author and not ref_msg.author.bot and ref_msg.author.id != message.author.id:
+                            await asyncio.to_thread(
+                                db.increment_interaction_reply,
+                                message.author.id,
+                                ref_msg.author.id,
+                                message.guild.id
+                            )
+                    except discord.NotFound:
+                        pass  # Original message was deleted
+                except Exception as e:
+                    logger.error_tree("Reply Track Failed", e, [
+                        ("User", f"{message.author.name} ({message.author.display_name})"),
+                        ("ID", str(message.author.id)),
+                    ])
+
+        # Track links shared (non-blocking)
+        if message.guild and message.guild.id == config.GUILD_ID:
+            if URL_PATTERN.search(message.content):
+                try:
+                    await asyncio.to_thread(
+                        db.increment_links_shared,
+                        message.author.id,
+                        message.guild.id
+                    )
+                except Exception as e:
+                    logger.error_tree("Link Track Failed", e, [
+                        ("User", f"{message.author.name} ({message.author.display_name})"),
+                        ("ID", str(message.author.id)),
+                    ])
 
         # AFK service
         if message.guild and hasattr(self.bot, 'afk_service') and self.bot.afk_service:
@@ -256,12 +302,41 @@ class MessageHandler(commands.Cog):
             return
 
         try:
+            # Track reaction given by user
             await asyncio.to_thread(db.increment_reactions_given, user.id, reaction.message.guild.id)
+
+            # Track reaction received by message author (if not a bot and not self-react)
+            if reaction.message.author and not reaction.message.author.bot:
+                if reaction.message.author.id != user.id:
+                    await asyncio.to_thread(
+                        db.increment_reactions_received,
+                        reaction.message.author.id,
+                        reaction.message.guild.id
+                    )
         except Exception as e:
             logger.error_tree("Reaction Track Failed", e, [
                 ("User", f"{user.name} ({user.display_name})"),
                 ("ID", str(user.id)),
             ])
+
+    @commands.Cog.listener()
+    async def on_thread_create(self, thread: discord.Thread) -> None:
+        """Track thread creation."""
+        if not thread.guild or thread.guild.id != config.GUILD_ID:
+            return
+
+        if thread.owner_id:
+            try:
+                await asyncio.to_thread(
+                    db.increment_threads_created,
+                    thread.owner_id,
+                    thread.guild.id
+                )
+            except Exception as e:
+                logger.error_tree("Thread Track Failed", e, [
+                    ("Thread", thread.name),
+                    ("Owner", str(thread.owner_id)),
+                ])
 
     @commands.Cog.listener()
     async def on_raw_message_delete(self, payload: discord.RawMessageDeleteEvent) -> None:

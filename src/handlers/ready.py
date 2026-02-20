@@ -9,7 +9,7 @@ Server: discord.gg/syria
 """
 
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 
 from src.core.config import config
 from src.core.logger import logger
@@ -28,6 +28,7 @@ class ReadyHandler(commands.Cog):
         - Syncs slash commands to guild
         - Initializes all services (XP, TempVoice, etc.)
         - Sets up WebSocket for real-time dashboard stats
+        - Starts scheduled tasks (role snapshots, etc.)
     """
 
     def __init__(self, bot: commands.Bot) -> None:
@@ -156,6 +157,94 @@ class ReadyHandler(commands.Cog):
             ], emoji="🔌")
         except Exception as e:
             logger.error_tree("WebSocket Init Failed", e)
+
+        # Start scheduled tasks
+        try:
+            if not self.snapshot_roles.is_running():
+                self.snapshot_roles.start()
+            if not self.track_voice_together.is_running():
+                self.track_voice_together.start()
+            logger.tree("Scheduled Tasks Started", [
+                ("Role Snapshots", "Every 24h"),
+                ("Voice Together", "Every 60s"),
+            ], emoji="⏰")
+        except Exception as e:
+            logger.error_tree("Scheduled Tasks Start Failed", e)
+
+    @tasks.loop(hours=24)
+    async def snapshot_roles(self) -> None:
+        """Take a daily snapshot of role distribution."""
+        try:
+            guild = self.bot.get_guild(config.GUILD_ID)
+            if not guild:
+                return
+
+            # Build role data (exclude @everyone)
+            role_data = [
+                {
+                    "role_id": role.id,
+                    "role_name": role.name,
+                    "member_count": len(role.members)
+                }
+                for role in guild.roles
+                if role.id != guild.id  # Exclude @everyone
+            ]
+
+            # Save to database
+            db.snapshot_role_distribution(config.GUILD_ID, role_data)
+
+            logger.tree("Daily Role Snapshot", [
+                ("Guild", guild.name),
+                ("Roles", str(len(role_data))),
+            ], emoji="📸")
+        except Exception as e:
+            logger.error_tree("Role Snapshot Failed", e)
+
+    @snapshot_roles.before_loop
+    async def before_snapshot_roles(self) -> None:
+        """Wait until bot is ready before starting the task."""
+        await self.bot.wait_until_ready()
+
+    @tasks.loop(seconds=60)
+    async def track_voice_together(self) -> None:
+        """Track voice time together for users in the same channel."""
+        try:
+            guild = self.bot.get_guild(config.GUILD_ID)
+            if not guild:
+                return
+
+            # Iterate through all voice channels
+            for vc in guild.voice_channels:
+                # Get non-bot members in this channel
+                members = [m for m in vc.members if not m.bot]
+
+                # Need at least 2 people to track "together" time
+                if len(members) < 2:
+                    continue
+
+                # For each unique pair, add 1 minute
+                for i, member_a in enumerate(members):
+                    for member_b in members[i + 1:]:
+                        # add_voice_together is bidirectional, so only call once per pair
+                        db.add_voice_together(
+                            member_a.id,
+                            member_b.id,
+                            guild.id,
+                            1  # 1 minute
+                        )
+
+        except Exception as e:
+            logger.error_tree("Voice Together Track Failed", e)
+
+    @track_voice_together.before_loop
+    async def before_track_voice_together(self) -> None:
+        """Wait until bot is ready before starting the task."""
+        await self.bot.wait_until_ready()
+
+    def cog_unload(self) -> None:
+        """Cancel tasks when cog is unloaded."""
+        self.snapshot_roles.cancel()
+        self.track_voice_together.cancel()
 
 
 async def setup(bot: commands.Bot) -> None:

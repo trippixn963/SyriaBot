@@ -46,7 +46,6 @@ from src.services.gallery import GalleryService
 from src.services.presence import PresenceHandler
 from src.services.bump import bump_service
 from src.services.confessions import ConfessionService
-from src.services.sticky import StickyService
 from src.services.currency import CurrencyService
 from src.services.actions import action_service
 from src.services.actions.panel import ActionsPanelService
@@ -87,7 +86,6 @@ class SyriaBot(commands.Bot):
         self.gallery_service: Optional[GalleryService] = None
         self.presence_handler: Optional[PresenceHandler] = None
         self.confession_service: Optional[ConfessionService] = None
-        self.sticky_service: Optional[StickyService] = None
         self.currency_service: Optional[CurrencyService] = None
         self.birthday_service: Optional[BirthdayService] = None
         self.guide_service: Optional[GuideService] = None
@@ -361,13 +359,6 @@ class SyriaBot(commands.Bot):
         except Exception as e:
             logger.error_tree("Confessions Init Failed", e)
 
-        # Sticky Messages (gender-verified channels)
-        try:
-            self.sticky_service = StickyService(self)
-            await self.sticky_service.setup()
-            initialized.append("Sticky")
-        except Exception as e:
-            logger.error_tree("Sticky Service Init Failed", e)
 
         # Currency (JawdatBot integration)
         try:
@@ -496,13 +487,6 @@ class SyriaBot(commands.Bot):
             except Exception as e:
                 logger.error_tree("Confessions Stop Error", e)
 
-        # Sticky Messages
-        if self.sticky_service:
-            try:
-                self.sticky_service.stop()
-                stopped.append("Sticky")
-            except Exception as e:
-                logger.error_tree("Sticky Service Stop Error", e)
 
         # Currency
         if self.currency_service:

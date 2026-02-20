@@ -8,6 +8,7 @@ Author: حَـــــنَّـــــا
 Server: discord.gg/syria
 """
 
+import asyncio
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -37,6 +38,8 @@ class VoiceHandler(commands.Cog):
             bot: Main bot instance with tempvoice and xp_service attributes.
         """
         self.bot = bot
+        # Track when users joined voice channels for session duration
+        self.voice_join_times: dict[int, tuple[int, int]] = {}  # user_id -> (timestamp, channel_id)
 
     @commands.Cog.listener()
     async def on_voice_state_update(
@@ -77,11 +80,35 @@ class VoiceHandler(commands.Cog):
         # Track server-level voice stats (main server only)
         if member.guild.id == config.GUILD_ID:
             try:
-                # Track voice joins for hourly stats
+                now = int(datetime.now().timestamp())
+                est = ZoneInfo("America/New_York")
+
+                # User joined a voice channel
                 if after.channel and (not before.channel or before.channel.id != after.channel.id):
-                    est = ZoneInfo("America/New_York")
                     current_hour = datetime.now(est).hour
                     db.increment_server_hour_activity(member.guild.id, current_hour, "voice")
+
+                    # Track join time for session duration
+                    self.voice_join_times[member.id] = (now, after.channel.id)
+
+                # User left a voice channel
+                if before.channel and (not after.channel or before.channel.id != after.channel.id):
+                    # Calculate session duration
+                    if member.id in self.voice_join_times:
+                        join_time, join_channel_id = self.voice_join_times.pop(member.id)
+                        if join_channel_id == before.channel.id:
+                            minutes = max(1, (now - join_time) // 60)
+
+                            # Track voice channel stats
+                            await asyncio.to_thread(
+                                db.record_voice_channel_activity,
+                                before.channel.id,
+                                member.guild.id,
+                                before.channel.name,
+                                minutes,
+                                len([m for m in before.channel.members if not m.bot])
+                            )
+                            # Note: Voice together tracking is handled by periodic task in ready.py
 
                 # Track peak concurrent voice users
                 if after.channel:
@@ -89,7 +116,7 @@ class VoiceHandler(commands.Cog):
                         1 for vc in member.guild.voice_channels
                         for m in vc.members if not m.bot
                     )
-                    today = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
+                    today = datetime.now(est).strftime("%Y-%m-%d")
                     db.update_voice_peak(member.guild.id, today, total_voice_users)
             except Exception as e:
                 logger.error_tree("Voice Stats Track Failed", e, [
