@@ -8,8 +8,9 @@ Author: John Hamwi
 Server: discord.gg/syria
 """
 
-from typing import Union
+from typing import Union, Optional, Callable
 import discord
+from discord import app_commands
 
 from src.core.config import config
 
@@ -44,3 +45,44 @@ def is_cooldown_exempt(user: Union[int, discord.Member, discord.User]) -> bool:
             return True
 
     return False
+
+
+def create_cooldown(
+    rate: int,
+    per: float,
+    *,
+    owner_only: bool = False,
+) -> Callable[[discord.Interaction], Optional[app_commands.Cooldown]]:
+    """
+    Factory function to create dynamic cooldown functions for slash commands.
+
+    Creates a cooldown that exempt users (owner, mods, boosters) bypass.
+    Use with @app_commands.checks.dynamic_cooldown decorator.
+
+    Args:
+        rate: Number of uses allowed per cooldown period
+        per: Cooldown duration in seconds
+        owner_only: If True, only owner bypasses (not mods/boosters)
+
+    Returns:
+        A function suitable for dynamic_cooldown decorator
+
+    Example:
+        @app_commands.checks.dynamic_cooldown(create_cooldown(1, 60))
+        async def my_command(interaction): ...
+    """
+    def cooldown_check(interaction: discord.Interaction) -> Optional[app_commands.Cooldown]:
+        user = interaction.user
+
+        if owner_only:
+            # Only owner bypasses
+            if config.OWNER_ID and user.id == config.OWNER_ID:
+                return None
+        else:
+            # Standard exemption check (owner, mods, boosters)
+            if is_cooldown_exempt(user):
+                return None
+
+        return app_commands.Cooldown(rate, per)
+
+    return cooldown_check

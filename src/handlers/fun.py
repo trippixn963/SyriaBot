@@ -132,7 +132,7 @@ class FunHandler:
         # Check for exact match
         if command not in self.FUN_COMMANDS:
             # Check for typos - only in the fun channel
-            if config.FUN_COMMANDS_CHANNEL_ID and message.channel.id == config.FUN_COMMANDS_CHANNEL_ID:
+            if config.CMDS_CHANNEL_ID and message.channel.id == config.CMDS_CHANNEL_ID:
                 # Skip typo correction for messages that are clearly sentences (3+ words without mentions)
                 non_mention_words = [p for p in parts if not p.startswith('<@')]
                 if len(non_mention_words) > 2:
@@ -159,9 +159,9 @@ class FunHandler:
         exempt = is_cooldown_exempt(message.author)
 
         # Check if in correct channel
-        if config.FUN_COMMANDS_CHANNEL_ID and message.channel.id != config.FUN_COMMANDS_CHANNEL_ID:
+        if config.CMDS_CHANNEL_ID and message.channel.id != config.CMDS_CHANNEL_ID:
             embed = discord.Embed(
-                description=f"Fun commands only work in <#{config.FUN_COMMANDS_CHANNEL_ID}>",
+                description=f"Fun commands only work in <#{config.CMDS_CHANNEL_ID}>",
                 color=COLOR_WARNING
             )
             set_footer(embed)

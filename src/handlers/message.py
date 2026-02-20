@@ -107,6 +107,16 @@ class MessageHandler(commands.Cog):
                     ("ID", str(message.author.id)),
                 ])
 
+        # Roulette activity tracking (for spawn timing)
+        if hasattr(self.bot, 'roulette_service') and self.bot.roulette_service:
+            try:
+                self.bot.roulette_service.on_message(message)
+            except Exception as e:
+                logger.error_tree("Roulette Activity Track Error", e, [
+                    ("User", f"{message.author.name} ({message.author.display_name})"),
+                    ("ID", str(message.author.id)),
+                ])
+
         # Track message count (every message, regardless of XP cooldown)
         if message.guild and message.guild.id == config.GUILD_ID:
             try:
@@ -252,6 +262,18 @@ class MessageHandler(commands.Cog):
                 ("User", f"{user.name} ({user.display_name})"),
                 ("ID", str(user.id)),
             ])
+
+    @commands.Cog.listener()
+    async def on_raw_message_delete(self, payload: discord.RawMessageDeleteEvent) -> None:
+        """Handle raw message deletions for persistent panels."""
+        # Actions panel auto-resend on delete
+        if hasattr(self.bot, 'actions_panel') and self.bot.actions_panel:
+            try:
+                await self.bot.actions_panel.handle_message_delete(payload.message_id)
+            except Exception as e:
+                logger.error_tree("Actions Panel Delete Handler Error", e, [
+                    ("Message ID", str(payload.message_id)),
+                ])
 
 
 async def setup(bot: commands.Bot) -> None:

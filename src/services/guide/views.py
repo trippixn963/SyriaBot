@@ -563,17 +563,17 @@ class CommandsTopicSelect(ui.Select["CommandsSelectView"]):
 
     def _build_command_content(self, category: str) -> str:
         """Build command content for a category with config fallbacks."""
-        fun_ch: str = f"<#{config.FUN_COMMANDS_CHANNEL_ID}>" if config.FUN_COMMANDS_CHANNEL_ID else "the fun channel"
+        cmds_ch: str = f"<#{config.CMDS_CHANNEL_ID}>" if config.CMDS_CHANNEL_ID else "the cmds channel"
 
-        if not config.FUN_COMMANDS_CHANNEL_ID and category == "fun":
+        if not config.CMDS_CHANNEL_ID and category == "fun":
             logger.tree("Config Fallback", [
-                ("Field", "FUN_COMMANDS_CHANNEL_ID"),
-                ("Using", "the fun channel (text)"),
+                ("Field", "CMDS_CHANNEL_ID"),
+                ("Using", "the cmds channel (text)"),
             ], emoji="ℹ️")
 
         if category == "fun":
             return (
-                f"*Use these in {fun_ch}*\n\n"
+                f"*Use these in {cmds_ch}*\n\n"
                 "**Compatibility**\n"
                 "`ship @user @user` - Check love compatibility\n\n"
                 "**Meter Cards**\n"

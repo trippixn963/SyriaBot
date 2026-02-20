@@ -75,7 +75,7 @@ class NameModal(ui.Modal, title="Rename Channel"):
                 db.update_temp_channel(self.channel.id, name=full_name, base_name=new_base_name)
                 db.save_user_settings(interaction.user.id, default_name=new_base_name)
                 embed = discord.Embed(
-                    description=f"✏️ Renamed to **{full_name}**\nThis will be your default name for future VCs",
+                    description=f"✏️ Renamed to **{full_name}**\n*Saved as default for future VCs*",
                     color=COLOR_SUCCESS
                 )
                 set_footer(embed)
@@ -98,7 +98,7 @@ class NameModal(ui.Modal, title="Rename Channel"):
                 # Clear saved default name
                 db.save_user_settings(interaction.user.id, default_name=None)
                 embed = discord.Embed(
-                    description=f"🔄 Reset to **{auto_name}**\nFuture VCs will use auto-naming",
+                    description=f"🔄 Reset to **{auto_name}**\n*Future VCs will use auto-naming*",
                     color=COLOR_SUCCESS
                 )
                 set_footer(embed)
@@ -158,7 +158,7 @@ class LimitModal(ui.Modal, title="Set User Limit"):
             db.save_user_settings(interaction.user.id, default_limit=limit)
             limit_text = "unlimited" if limit == 0 else f"{limit} users"
             embed = discord.Embed(
-                description=f"👥 Limit set to **{limit_text}**\nThis will be your default for future VCs",
+                description=f"👥 Limit set to **{limit_text}**\n*Saved as default for future VCs*",
                 color=COLOR_SUCCESS
             )
             set_footer(embed)

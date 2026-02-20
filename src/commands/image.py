@@ -20,6 +20,18 @@ from src.services.image import image_service
 from src.services.database import db
 from src.services.image.views import ImageView
 from src.utils.footer import set_footer
+from src.utils.permissions import create_cooldown
+
+
+# Minimum images we want after filtering - if below this, fetch more
+MIN_IMAGES_AFTER_FILTER = 5
+
+
+class ImageSize:
+    """Image size choices for the command."""
+    MEDIUM = "medium"
+    LARGE = "large"
+    XLARGE = "xlarge"
 
 
 def _is_booster(member: discord.Member) -> bool:
@@ -79,13 +91,20 @@ class ImageCog(commands.Cog):
         description="Search for images on Google"
     )
     @app_commands.describe(
-        query="What to search for",
+        subject="What to search for",
+        size="Image size preference (default: large)",
     )
-    @app_commands.checks.cooldown(1, 60, key=lambda i: i.user.id)
+    @app_commands.choices(size=[
+        app_commands.Choice(name="Medium", value=ImageSize.MEDIUM),
+        app_commands.Choice(name="Large (Recommended)", value=ImageSize.LARGE),
+        app_commands.Choice(name="Extra Large", value=ImageSize.XLARGE),
+    ])
+    @app_commands.checks.dynamic_cooldown(create_cooldown(1, 60))
     async def image(
         self,
         interaction: discord.Interaction,
-        query: str,
+        subject: str,
+        size: str = ImageSize.LARGE,
     ) -> None:
         """Search for images."""
         await interaction.response.defer()
@@ -97,7 +116,7 @@ class ImageCog(commands.Cog):
         logger.tree("Image Command", [
             ("User", f"{user.name} ({user.display_name})"),
             ("ID", str(user.id)),
-            ("Query", query[:50] + "..." if len(query) > 50 else query),
+            ("Subject", subject[:50] + "..." if len(subject) > 50 else subject),
         ], emoji="🖼️")
 
         # Check if service is available
@@ -144,12 +163,13 @@ class ImageCog(commands.Cog):
         logger.tree("Image Search Starting", [
             ("User", f"{user.name} ({user.display_name})"),
             ("ID", str(user.id)),
-            ("Query", query[:50] + "..." if len(query) > 50 else query),
+            ("Subject", subject[:50] + "..." if len(subject) > 50 else subject),
+            ("Size", size),
             ("Remaining", "Unlimited" if remaining == -1 else str(remaining)),
         ], emoji="🔍")
 
-        # Search for images
-        result = await image_service.search(query, num_results=10)
+        # Search for images (first batch)
+        result = await image_service.search(subject, num_results=10, img_size=size)
 
         if not result.success:
             embed = discord.Embed(
@@ -163,15 +183,33 @@ class ImageCog(commands.Cog):
             logger.tree("Image Search Failed", [
                 ("User", f"{user.name} ({user.display_name})"),
                 ("ID", str(user.id)),
-                ("Query", query[:30]),
+                ("Subject", subject[:30]),
                 ("Error", result.error[:50] if result.error else "Unknown"),
             ], emoji="❌")
             return
 
-        if not result.images:
+        # If too few images after filtering, fetch more
+        all_images = result.images
+        if len(all_images) < MIN_IMAGES_AFTER_FILTER:
+            logger.tree("Image Search Fetching More", [
+                ("Current", str(len(all_images))),
+                ("Min Required", str(MIN_IMAGES_AFTER_FILTER)),
+                ("Action", "Fetching second batch"),
+            ], emoji="🔄")
+
+            # Fetch second batch starting at index 11
+            result2 = await image_service.search(subject, num_results=10, img_size=size, start_index=11)
+            if result2.success and result2.images:
+                all_images.extend(result2.images)
+                logger.tree("Image Search Extended", [
+                    ("Total", str(len(all_images))),
+                    ("Added", str(len(result2.images))),
+                ], emoji="✅")
+
+        if not all_images:
             embed = discord.Embed(
                 title="No Results",
-                description=f"No images found for: **{query}**",
+                description=f"No images found for: **{subject}**\nTry a different size or search term.",
                 color=COLOR_WARNING
             )
             set_footer(embed)
@@ -180,7 +218,8 @@ class ImageCog(commands.Cog):
             logger.tree("Image Search No Results", [
                 ("User", f"{user.name} ({user.display_name})"),
                 ("ID", str(user.id)),
-                ("Query", query[:30]),
+                ("Subject", subject[:30]),
+                ("Size", size),
             ], emoji="⚠️")
             return
 
@@ -197,8 +236,8 @@ class ImageCog(commands.Cog):
 
         # Create view and embed with attached image
         view = ImageView(
-            images=result.images,
-            query=query,
+            images=all_images,
+            query=subject,
             requester_id=user.id,
             bot=self.bot,
         )
@@ -211,9 +250,10 @@ class ImageCog(commands.Cog):
             logger.tree("Image Search Complete", [
                 ("User", f"{user.name} ({user.display_name})"),
                 ("ID", str(user.id)),
-                ("Query", query[:50] + "..." if len(query) > 50 else query),
-                ("Results", str(len(result.images))),
-                ("Position", f"{view.current_index + 1}/{len(result.images)}"),
+                ("Subject", subject[:50] + "..." if len(subject) > 50 else subject),
+                ("Size", size),
+                ("Results", str(len(all_images))),
+                ("Position", f"{view.current_index + 1}/{len(all_images)}"),
                 ("Remaining", "Unlimited" if new_remaining == -1 else str(new_remaining)),
             ], emoji="✅")
         else:
@@ -223,8 +263,8 @@ class ImageCog(commands.Cog):
             logger.tree("Image Search All Failed", [
                 ("User", f"{user.name} ({user.display_name})"),
                 ("ID", str(user.id)),
-                ("Query", query[:50] + "..." if len(query) > 50 else query),
-                ("Results Tried", str(len(result.images))),
+                ("Subject", subject[:50] + "..." if len(subject) > 50 else subject),
+                ("Results Tried", str(len(all_images))),
             ], emoji="❌")
 
     @image.error

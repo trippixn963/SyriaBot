@@ -24,6 +24,7 @@ from src.core.constants import DELETE_DELAY_MEDIUM
 from src.services.downloader import downloader
 from src.services.database import db
 from src.utils.footer import set_footer
+from src.utils.permissions import create_cooldown
 
 
 def _is_booster(member: discord.Member) -> bool:
@@ -408,7 +409,7 @@ class DownloadCog(commands.Cog):
         description="Download media from Instagram, Twitter, TikTok, Reddit & more"
     )
     @app_commands.describe(url="URL to download (Instagram, Twitter, TikTok, Reddit, Facebook, Snapchat, Twitch)")
-    @app_commands.checks.cooldown(1, 300, key=lambda i: i.user.id)
+    @app_commands.checks.dynamic_cooldown(create_cooldown(1, 300))
     async def download(self, interaction: discord.Interaction, url: str) -> None:
         """Download media from a social media URL."""
         await interaction.response.defer()

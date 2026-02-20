@@ -220,11 +220,11 @@ COMMANDS_DATA = {
     },
     "actions": {
         "title": "Action Commands",
-        "description": "Anime GIF reactions",
+        "description": "Anime GIF reactions • Use in <#1459144517449158719>",
         "commands": [
-            "`hug` `kiss` `slap` `pat` `poke` - Target actions",
-            "`cry` `dance` `laugh` `sleep` - Self actions",
-            "40+ actions available!",
+            "**Target:** `hug` `kiss` `slap` `pat` `punch` `kill` + more",
+            "**Self:** `cry` `dance` `laugh` `blush` `sleep` + more",
+            "**45 actions** — See pinned message for full list!",
         ],
     },
     "utility": {

@@ -24,6 +24,7 @@ from src.services.convert import convert_service
 from src.services.rate_limit import check_rate_limit
 from src.services.convert.views import start_convert_editor
 from src.utils.footer import set_footer
+from src.utils.permissions import create_cooldown
 
 
 # =============================================================================
@@ -109,7 +110,7 @@ class ConvertCog(commands.Cog):
         media="Image or video to convert (attachment)",
         url="Media URL to convert (if no attachment)",
     )
-    @app_commands.checks.cooldown(1, 10, key=lambda i: i.user.id)
+    @app_commands.checks.dynamic_cooldown(create_cooldown(1, 10))
     async def convert(
         self,
         interaction: discord.Interaction,

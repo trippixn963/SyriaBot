@@ -152,16 +152,63 @@ class ActionHandler:
         is_target_action = action_service.is_target_action(action)
 
         if is_target_action:
+            bots_filtered = 0
             if message.mentions:
-                # Filter out self-mentions and duplicates
+                # Filter out self-mentions, bots, and duplicates
                 seen = set()
                 for mention in message.mentions:
+                    if mention.bot:
+                        bots_filtered += 1
+                        continue  # Skip bots
                     if mention.id != message.author.id and mention.id not in seen:
                         targets.append(mention)
                         seen.add(mention.id)
 
+            # If only bots were mentioned, show error and don't apply cooldown
+            if not targets and bots_filtered > 0:
+                logger.tree("Action Blocked - Bot Target", [
+                    ("User", f"{message.author.name}"),
+                    ("ID", str(user_id)),
+                    ("Action", action),
+                    ("Bots Filtered", str(bots_filtered)),
+                ], emoji="🤖")
+                error_msg = await message.reply(
+                    "You can't use actions on bots!",
+                    mention_author=False
+                )
+                await asyncio.gather(
+                    message.delete(delay=DELETE_DELAY_SHORT),
+                    error_msg.delete(delay=DELETE_DELAY_SHORT),
+                    return_exceptions=True
+                )
+                # Remove cooldown since action didn't execute
+                async with self._cooldown_lock:
+                    self._cooldowns.pop(user_id, None)
+                return True
+
             # If no valid targets, treat as self-action (hug alone = self hug)
+            # But block self-targeting for violent actions
             if not targets:
+                if action_service.is_violent_action(action):
+                    logger.tree("Action Blocked - Violent Self-Target", [
+                        ("User", f"{message.author.name}"),
+                        ("ID", str(user_id)),
+                        ("Action", action),
+                    ], emoji="⚠️")
+                    error_msg = await message.reply(
+                        f"You need to mention someone to {action}!",
+                        mention_author=False
+                    )
+                    await asyncio.gather(
+                        message.delete(delay=DELETE_DELAY_SHORT),
+                        error_msg.delete(delay=DELETE_DELAY_SHORT),
+                        return_exceptions=True
+                    )
+                    # Remove cooldown since action didn't execute
+                    async with self._cooldown_lock:
+                        self._cooldowns.pop(user_id, None)
+                    return True
+
                 targets = [None]  # None means self-target
                 logger.tree("Action Self-Target", [
                     ("User", f"{message.author.name}"),

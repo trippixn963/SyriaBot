@@ -28,7 +28,12 @@ NEKOS_BEST_ACTIONS = {
     "cry", "smile", "dance", "blush", "happy", "smug", "tickle",
     "feed", "shoot", "shrug", "stare", "think", "thumbsup", "pout",
     "laugh", "nod", "nom", "nope", "peck", "run", "sleep", "yawn",
-    "facepalm", "bored", "angry", "baka", "handshake"
+    "facepalm", "bored", "angry", "baka", "handshake",
+}
+
+# Violent actions that shouldn't allow self-targeting
+VIOLENT_ACTIONS = {
+    "kill", "shoot", "punch", "slap", "kick", "stab",
 }
 
 # Available actions (target required)
@@ -215,6 +220,30 @@ ACTIONS: Dict[str, Dict] = {
             "{user} stares at {target}",
             "{user} is staring at {target}",
             "{target} is being stared at by {user}",
+        ]
+    },
+    "nom": {
+        "endpoint": "nom",
+        "messages": [
+            "{user} noms on {target}",
+            "{user} takes a bite of {target}",
+            "{target} got nommed by {user}",
+        ]
+    },
+    "baka": {
+        "endpoint": "baka",
+        "messages": [
+            "{user} calls {target} a baka",
+            "{user} thinks {target} is a baka",
+            "{target} got called baka by {user}",
+        ]
+    },
+    "handshake": {
+        "endpoint": "handshake",
+        "messages": [
+            "{user} shakes hands with {target}",
+            "{user} and {target} shake hands",
+            "{target} shook hands with {user}",
         ]
     },
 }
@@ -548,6 +577,10 @@ class ActionService:
     def is_self_action(self, word: str) -> bool:
         """Check if an action is self-targeted."""
         return word.lower() in SELF_ACTIONS
+
+    def is_violent_action(self, word: str) -> bool:
+        """Check if an action is violent (shouldn't allow self-targeting)."""
+        return word.lower() in VIOLENT_ACTIONS
 
     def get_all_actions(self) -> List[str]:
         """Get list of all available actions."""

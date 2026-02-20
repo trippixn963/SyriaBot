@@ -49,12 +49,14 @@ from src.services.confessions import ConfessionService
 from src.services.sticky import StickyService
 from src.services.currency import CurrencyService
 from src.services.actions import action_service
+from src.services.actions.panel import ActionsPanelService
 from src.services.quote import quote_service
 from src.services.birthday import get_birthday_service, BirthdayService
 from src.services.faq import setup_persistent_views
 from src.services.confessions.views import setup_confession_views
 from src.services.guide import setup_guide_views, get_guide_service, GuideService
 from src.services.social_monitor import SocialMonitorService
+from src.services.roulette import RouletteService, get_roulette_service
 from src.services.database import db
 from src.utils.http import http_session
 
@@ -91,6 +93,8 @@ class SyriaBot(commands.Bot):
         self.guide_service: Optional[GuideService] = None
         self.social_monitor: Optional[SocialMonitorService] = None
         self.backup_scheduler: Optional[BackupScheduler] = None
+        self.actions_panel: Optional[ActionsPanelService] = None
+        self.roulette_service: Optional[RouletteService] = None
 
     async def setup_hook(self) -> None:
         """Called when the bot is starting up."""
@@ -389,6 +393,14 @@ class SyriaBot(commands.Bot):
         except Exception as e:
             logger.error_tree("Guide Service Init Failed", e)
 
+        # Actions Panel (persistent actions list in fun channel)
+        try:
+            self.actions_panel = ActionsPanelService(self)
+            await self.actions_panel.setup()
+            initialized.append("ActionsPanel")
+        except Exception as e:
+            logger.error_tree("Actions Panel Init Failed", e)
+
         # Social Media Monitor
         if config.SOCIAL_MONITOR_CH:
             try:
@@ -398,9 +410,17 @@ class SyriaBot(commands.Bot):
             except Exception as e:
                 logger.error_tree("Social Monitor Init Failed", e)
 
+        # Roulette Minigame
+        try:
+            self.roulette_service = get_roulette_service(self)
+            await self.roulette_service.setup()
+            initialized.append("Roulette")
+        except Exception as e:
+            logger.error_tree("Roulette Service Init Failed", e)
+
         logger.tree("Services Init Complete", [
             ("Services", ", ".join(initialized)),
-            ("Count", f"{len(initialized)}/16"),
+            ("Count", f"{len(initialized)}/17"),
         ], emoji="✅")
 
     async def close(self) -> None:
@@ -515,6 +535,14 @@ class SyriaBot(commands.Bot):
                 stopped.append("SocialMonitor")
             except Exception as e:
                 logger.error_tree("Social Monitor Stop Error", e)
+
+        # Roulette
+        if self.roulette_service:
+            try:
+                self.roulette_service.stop()
+                stopped.append("Roulette")
+            except Exception as e:
+                logger.error_tree("Roulette Service Stop Error", e)
 
         # Quote Service (close aiohttp session)
         try:

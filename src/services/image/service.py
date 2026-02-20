@@ -21,6 +21,10 @@ from src.utils.http import http_session
 # Max query length to prevent abuse
 MAX_QUERY_LENGTH = 200
 
+# Minimum image dimensions to filter out thumbnails/icons
+MIN_IMAGE_WIDTH = 200
+MIN_IMAGE_HEIGHT = 200
+
 
 # =============================================================================
 # Data Classes
@@ -90,7 +94,9 @@ class ImageService:
         self,
         query: str,
         num_results: int = 10,
-        safe_search: str = "medium"
+        safe_search: str = "medium",
+        img_size: str = "large",
+        start_index: int = 1,
     ) -> ImageSearchResult:
         """
         Search for images using Google Custom Search API.
@@ -99,6 +105,8 @@ class ImageService:
             query: Search query
             num_results: Number of results to fetch (max 10 per request)
             safe_search: SafeSearch level (off, medium, high)
+            img_size: Image size filter (small, medium, large, xlarge, xxlarge)
+            start_index: Starting index for pagination (1-based)
 
         Returns:
             ImageSearchResult with list of images
@@ -128,6 +136,8 @@ class ImageService:
             ("Query", query[:50] + "..." if len(query) > 50 else query),
             ("Results Requested", str(num_results)),
             ("SafeSearch", safe_search),
+            ("Size", img_size),
+            ("Start Index", str(start_index)),
         ], emoji="🔍")
 
         # Map safe search levels
@@ -138,6 +148,16 @@ class ImageService:
         }
         safe_param: str = safe_map.get(safe_search, "medium")
 
+        # Map image size levels
+        size_map: dict[str, str] = {
+            "small": "small",
+            "medium": "medium",
+            "large": "large",
+            "xlarge": "xlarge",
+            "xxlarge": "xxlarge",
+        }
+        size_param: str = size_map.get(img_size, "large")
+
         # Google CSE params
         params: dict[str, Any] = {
             "key": config.GOOGLE_API_KEY,
@@ -146,6 +166,8 @@ class ImageService:
             "searchType": "image",
             "num": min(num_results, 10),  # Max 10 per request
             "safe": safe_param,
+            "imgSize": size_param,
+            "start": start_index,
         }
 
         try:
@@ -195,20 +217,36 @@ class ImageService:
                 error=str(e)
             )
 
-        # Parse results
+        # Parse results (filter out small images)
         images: list[ImageResult] = []
         items: list[dict[str, Any]] = data.get("items", [])
+        skipped_small = 0
 
         for item in items:
             img_info: dict[str, Any] = item.get("image", {})
+            width = img_info.get("width", 0)
+            height = img_info.get("height", 0)
+
+            # Skip images that are too small
+            if width < MIN_IMAGE_WIDTH or height < MIN_IMAGE_HEIGHT:
+                skipped_small += 1
+                continue
+
             images.append(ImageResult(
                 url=item.get("link", ""),
                 title=item.get("title", "No title"),
                 source_url=item.get("image", {}).get("contextLink", ""),
-                width=img_info.get("width", 0),
-                height=img_info.get("height", 0),
+                width=width,
+                height=height,
                 thumbnail_url=img_info.get("thumbnailLink", ""),  # Google-hosted
             ))
+
+        if skipped_small > 0:
+            logger.tree("Image Search Filtered Small", [
+                ("Query", query[:50]),
+                ("Skipped", str(skipped_small)),
+                ("Min Size", f"{MIN_IMAGE_WIDTH}x{MIN_IMAGE_HEIGHT}"),
+            ], emoji="📐")
 
         if not images:
             logger.tree("Image Search No Results", [

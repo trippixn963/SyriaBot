@@ -1605,28 +1605,39 @@ class TempVoiceService:
                     )
                     trusted_count += 1
 
-            # Notify new owner in channel chat
+            # Clear all messages in the VC chat (fresh start for new owner)
             try:
-                notification = await channel.send(
-                    f"{EMOJI_TRANSFER} {new_owner.mention} you are now the owner of this channel!\n"
+                await channel.purge(limit=500, reason="Ownership transfer - clearing chat")
+                logger.tree("VC Chat Cleared", [
+                    ("Channel", channel.name),
+                    ("Reason", "Ownership transfer"),
+                ], emoji="🧹")
+            except discord.HTTPException as e:
+                logger.error_tree("VC Chat Clear Failed", e, [
+                    ("Channel", channel.name),
+                ])
+
+            # Send fresh control panel for the new owner
+            try:
+                await self._send_channel_interface(channel, new_owner, trusted_count, blocked_count)
+            except discord.HTTPException as e:
+                logger.error_tree("New Panel Send Failed", e, [
+                    ("Channel", channel.name),
+                    ("New Owner", str(new_owner)),
+                ])
+
+            # Notify new owner about the transfer
+            try:
+                await channel.send(
+                    f"{EMOJI_TRANSFER} **Ownership Transferred**\n"
+                    f"{new_owner.mention} you are now the owner of this channel.\n"
                     f"*The previous owner left and you were here the longest.*"
                 )
-                # Auto-delete notification after 30 seconds
-                await asyncio.sleep(30)
-                try:
-                    await notification.delete()
-                except discord.HTTPException as e:
-                    logger.error_tree("Notification Delete Failed", e, [
-                        ("Channel", channel.name),
-                    ])
             except discord.HTTPException as e:
                 logger.error_tree("Transfer Notification Failed", e, [
                     ("Channel", channel.name),
                     ("New Owner", str(new_owner)),
                 ])
-
-            # Update the control panel
-            await self._update_panel(channel)
 
             logger.tree("Auto-Transfer Complete", [
                 ("Channel", channel_name),

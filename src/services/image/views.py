@@ -169,11 +169,11 @@ class ImageView(ui.View):
                 image_bytes = await response.read()
 
                 # Check minimum size (avoid placeholder images)
-                if len(image_bytes) < 1000:
+                if len(image_bytes) < 5000:
                     logger.tree("Image Fetch Too Small", [
                         ("URL", url[:60] + "..." if len(url) > 60 else url),
                         ("Size", f"{len(image_bytes)} bytes"),
-                        ("Min Required", "1000 bytes"),
+                        ("Min Required", "5000 bytes"),
                     ], emoji="⚠️")
                     return None, ""
 

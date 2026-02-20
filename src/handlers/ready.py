@@ -49,7 +49,7 @@ class ReadyHandler(commands.Cog):
         features.append(("Confessions", "✅" if config.CONFESSIONS_CHANNEL_ID else "❌"))
         features.append(("Gallery", "✅" if config.GALLERY_CHANNEL_ID else "❌"))
         features.append(("Bump Reminder", "✅" if config.BUMP_CHANNEL_ID else "❌"))
-        features.append(("Fun Commands", "✅" if config.FUN_COMMANDS_CHANNEL_ID else "❌"))
+        features.append(("Cmds Channel", "✅" if config.CMDS_CHANNEL_ID else "❌"))
 
         # API-dependent features
         features.append(("Weather", "✅" if config.OPENWEATHER_API_KEY else "❌"))

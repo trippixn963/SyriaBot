@@ -563,6 +563,18 @@ class DatabaseCore:
             """)
 
             # =====================================================================
+            # Actions Panel Table (persistent actions list messages per channel)
+            # =====================================================================
+
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS actions_panel (
+                    channel_id INTEGER PRIMARY KEY,
+                    message_id INTEGER NOT NULL,
+                    actions_hash TEXT
+                )
+            """)
+
+            # =====================================================================
             # XP History / Snapshots Table (for period leaderboards)
             # =====================================================================
 
