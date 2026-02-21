@@ -4,7 +4,7 @@ SyriaBot - Guide Data
 
 Content for the server guide panel sections.
 
-Author: John Hamwi
+Author: حَـــــنَّـــــا
 Server: discord.gg/syria
 """
 

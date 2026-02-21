@@ -4,7 +4,7 @@ SyriaBot - Permission Utilities
 
 Centralized permission checks for cooldown exemptions and other privileges.
 
-Author: John Hamwi
+Author: حَـــــنَّـــــا
 Server: discord.gg/syria
 """
 

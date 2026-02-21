@@ -4,7 +4,7 @@ SyriaBot - Guide Service
 
 Handles hourly auto-update of the guide panel with live server stats.
 
-Author: John Hamwi
+Author: حَـــــنَّـــــا
 Server: discord.gg/syria
 """
 

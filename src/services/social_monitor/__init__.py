@@ -5,7 +5,7 @@ SyriaBot - Social Media Monitor
 Monitors TikTok and Instagram accounts for new posts
 and sends notifications to Discord.
 
-Author: John Hamwi
+Author: حَـــــنَّـــــا
 Server: discord.gg/syria
 """
 

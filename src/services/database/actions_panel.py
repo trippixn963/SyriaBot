@@ -5,7 +5,7 @@ SyriaBot - Actions Panel Database Mixin
 Database operations for actions panel persistence.
 Supports multiple channels with hash-based change detection.
 
-Author: John Hamwi
+Author: حَـــــنَّـــــا
 Server: discord.gg/syria
 """
 

@@ -4,7 +4,7 @@ SyriaBot - Guide Command
 
 Admin command to post the interactive server guide panel.
 
-Author: John Hamwi
+Author: حَـــــنَّـــــا
 Server: discord.gg/syria
 """
 

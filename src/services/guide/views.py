@@ -5,7 +5,7 @@ SyriaBot - Guide Views
 Persistent button views for the server guide panel.
 All sections have nested dropdowns for better organization.
 
-Author: John Hamwi
+Author: حَـــــنَّـــــا
 Server: discord.gg/syria
 """
 

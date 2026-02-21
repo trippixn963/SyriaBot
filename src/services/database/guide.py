@@ -4,7 +4,7 @@ SyriaBot - Database Guide Mixin
 
 Guide panel message tracking.
 
-Author: John Hamwi
+Author: حَـــــنَّـــــا
 Server: discord.gg/syria
 """
 

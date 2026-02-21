@@ -6,7 +6,7 @@ Manages persistent actions list panels in multiple channels.
 Auto-sends on startup, auto-edits if actions change, auto-resends if deleted.
 Includes rate limit protection against delete spam.
 
-Author: John Hamwi
+Author: حَـــــنَّـــــا
 Server: discord.gg/syria
 """
 

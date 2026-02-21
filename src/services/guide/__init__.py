@@ -4,7 +4,7 @@ SyriaBot - Guide Service
 
 Interactive server guide panel with buttons.
 
-Author: John Hamwi
+Author: حَـــــنَّـــــا
 Server: discord.gg/syria
 """
 

@@ -5,7 +5,7 @@ SyriaBot - Social Media Monitor Service
 Monitors TikTok and Instagram accounts for new posts using yt-dlp
 and sends notifications to a Discord channel with video thumbnails.
 
-Author: John Hamwi
+Author: حَـــــنَّـــــا
 Server: discord.gg/syria
 """
 
