@@ -1,6 +1,6 @@
 """
 SyriaBot - Extended Stats Router
-=================================
+================================
 
 StatBot-like analytics endpoints with caching.
 
