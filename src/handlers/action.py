@@ -153,9 +153,25 @@ class ActionHandler:
 
         if is_target_action:
             bots_filtered = 0
+            seen = set()
+
+            # Check if replying to someone - use them as target
+            if message.reference and message.reference.message_id:
+                try:
+                    replied_msg = message.reference.resolved
+                    if replied_msg and isinstance(replied_msg, discord.Message):
+                        reply_author = replied_msg.author
+                        if reply_author.bot:
+                            bots_filtered += 1
+                        elif reply_author.id != message.author.id:
+                            targets.append(reply_author)
+                            seen.add(reply_author.id)
+                except Exception:
+                    pass  # Couldn't get reply author, continue with mentions
+
+            # Also check explicit mentions
             if message.mentions:
                 # Filter out self-mentions, bots, and duplicates
-                seen = set()
                 for mention in message.mentions:
                     if mention.bot:
                         bots_filtered += 1
