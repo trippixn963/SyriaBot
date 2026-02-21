@@ -30,7 +30,6 @@ from .downloads import DownloadsMixin
 from .confessions import ConfessionsMixin
 from .actions import ActionsMixin
 from .birthdays import BirthdaysMixin
-from .guide import GuideMixin
 from .actions_panel import ActionsPanelMixin
 
 
@@ -44,7 +43,6 @@ class Database(
     ConfessionsMixin,
     ActionsMixin,
     BirthdaysMixin,
-    GuideMixin,
     ActionsPanelMixin,
     DatabaseCore,
 ):

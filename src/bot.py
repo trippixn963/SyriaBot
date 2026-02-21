@@ -53,7 +53,6 @@ from src.services.quote import quote_service
 from src.services.birthday import get_birthday_service, BirthdayService
 from src.services.faq import setup_persistent_views
 from src.services.confessions.views import setup_confession_views
-from src.services.guide import setup_guide_views, get_guide_service, GuideService
 from src.services.social_monitor import SocialMonitorService
 from src.services.roulette import RouletteService, get_roulette_service
 from src.services.database import db
@@ -88,7 +87,6 @@ class SyriaBot(commands.Bot):
         self.confession_service: Optional[ConfessionService] = None
         self.currency_service: Optional[CurrencyService] = None
         self.birthday_service: Optional[BirthdayService] = None
-        self.guide_service: Optional[GuideService] = None
         self.social_monitor: Optional[SocialMonitorService] = None
         self.backup_scheduler: Optional[BackupScheduler] = None
         self.actions_panel: Optional[ActionsPanelService] = None
@@ -132,7 +130,6 @@ class SyriaBot(commands.Bot):
             "src.commands.confess",
             "src.commands.birthday",
             "src.commands.faq",
-            "src.commands.guide",
         ]
         loaded_commands = []
         for cmd in commands_list:
@@ -147,7 +144,6 @@ class SyriaBot(commands.Bot):
         # Register persistent views
         setup_persistent_views(self)
         setup_confession_views(self)
-        setup_guide_views(self)
 
         logger.tree("Setup Hook Complete", [
             ("Handlers", ", ".join(loaded_handlers)),
@@ -376,14 +372,6 @@ class SyriaBot(commands.Bot):
         except Exception as e:
             logger.error_tree("Birthday Service Init Failed", e)
 
-        # Guide (hourly auto-update)
-        try:
-            self.guide_service = get_guide_service(self)
-            await self.guide_service.setup()
-            initialized.append("Guide")
-        except Exception as e:
-            logger.error_tree("Guide Service Init Failed", e)
-
         # Actions Panel (persistent actions list in fun channel)
         try:
             self.actions_panel = ActionsPanelService(self)
@@ -503,14 +491,6 @@ class SyriaBot(commands.Bot):
                 stopped.append("Birthdays")
             except Exception as e:
                 logger.error_tree("Birthday Service Stop Error", e)
-
-        # Guide
-        if self.guide_service:
-            try:
-                self.guide_service.stop()
-                stopped.append("Guide")
-            except Exception as e:
-                logger.error_tree("Guide Service Stop Error", e)
 
         # Social Media Monitor
         if self.social_monitor:
