@@ -21,7 +21,7 @@ from src.core.logger import logger
 class WebSocketManager:
     """Manages WebSocket connections and real-time stats broadcasting."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._connections: Set[WebSocket] = set()
         self._lock = asyncio.Lock()
 

@@ -28,7 +28,11 @@ from src.core.constants import (
     PROMO_TEXT,
     TIMEZONE_EST,
 )
-from src.services.database import db
+from src.utils.server_stats import (
+    get_server_stats,
+    format_number,
+    format_voice_hours,
+)
 
 if TYPE_CHECKING:
     from discord import Client
@@ -316,29 +320,51 @@ class PresenceHandler(BasePresenceHandler):
     # =========================================================================
 
     def get_status_messages(self) -> List[str]:
-        """Get XP stats for presence rotation."""
+        """Get dynamic stats for presence rotation (same data as dashboard)."""
         messages = []
 
         try:
-            stats = db.get_xp_stats()
-            total_users = stats.get("total_users", 0)
-            total_xp = stats.get("total_xp", 0)
-            total_messages = stats.get("total_messages", 0)
-            total_voice = stats.get("total_voice_minutes", 0)
+            stats = get_server_stats(self.bot)
 
-            voice_hours = total_voice // 60
+            # Guild stats (live from Discord)
+            if stats.guild.member_count > 0:
+                messages.append(f"👥 {format_number(stats.guild.member_count)} members")
 
-            if total_users > 0:
-                messages.append(f"🏆 {self._format_number(total_users)} members ranked")
+            if stats.guild.online_count > 0:
+                messages.append(f"🟢 {format_number(stats.guild.online_count)} online")
 
-            if total_xp > 0:
-                messages.append(f"⭐ {self._format_number(total_xp)} total XP earned")
+            if stats.guild.booster_count > 0:
+                messages.append(f"💎 {stats.guild.booster_count} boosters")
 
-            if total_messages > 0:
-                messages.append(f"💬 {self._format_number(total_messages)} messages sent")
+            # XP stats (from database)
+            if stats.xp.total_users > 0:
+                messages.append(f"🏆 {format_number(stats.xp.total_users)} ranked")
 
-            if voice_hours > 0:
-                messages.append(f"🎙️ {self._format_number(voice_hours)}h in voice")
+            if stats.xp.total_xp > 0:
+                messages.append(f"⭐ {format_number(stats.xp.total_xp)} XP earned")
+
+            if stats.xp.total_messages > 0:
+                messages.append(f"💬 {format_number(stats.xp.total_messages)} messages")
+
+            if stats.xp.voice_hours > 0:
+                messages.append(f"🎙️ {format_voice_hours(stats.xp.total_voice_minutes)} voice")
+
+            if stats.xp.highest_level > 0:
+                messages.append(f"🎯 Level {stats.xp.highest_level} top rank")
+
+            # Daily activity
+            if stats.daily.active_users > 0:
+                messages.append(f"📊 {stats.daily.active_users} active today")
+
+            if stats.daily.voice_peak > 0:
+                messages.append(f"🔊 {stats.daily.voice_peak} peak in VC")
+
+            # Streaks
+            if stats.streaks.active_streaks > 0:
+                messages.append(f"🔥 {stats.streaks.active_streaks} active streaks")
+
+            if stats.streaks.longest_streak > 0:
+                messages.append(f"📅 {stats.streaks.longest_streak}d longest streak")
 
         except Exception as e:
             logger.error_tree("Presence Stats Error", e)
@@ -395,19 +421,6 @@ class PresenceHandler(BasePresenceHandler):
 
     def on_error(self, context: str, error: Exception) -> None:
         logger.error_tree(f"{context} Error", error)
-
-    # =========================================================================
-    # Helpers
-    # =========================================================================
-
-    @staticmethod
-    def _format_number(n: int) -> str:
-        """Format a number with K/M abbreviations."""
-        if n >= 1_000_000:
-            return f"{n/1_000_000:.1f}M"
-        elif n >= 1_000:
-            return f"{n/1_000:.1f}K"
-        return str(n)
 
     # =========================================================================
     # Compatibility Alias

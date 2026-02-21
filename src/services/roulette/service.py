@@ -23,7 +23,7 @@ from src.core.config import config
 from src.core.logger import logger
 from src.services.database import db
 
-from .graphics import RoulettePlayer, generate_wheel_static, generate_wheel_result
+from .graphics import RoulettePlayer, generate_wheel_result
 from .views import (
     RouletteJoinView,
     create_join_embed,

@@ -11,7 +11,7 @@ Server: discord.gg/syria
 import time
 from collections import OrderedDict
 from dataclasses import dataclass, field
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -34,7 +34,7 @@ class TokenBucket:
     last_update: float = field(default_factory=time.time)
     refill_rate: float = 1.0  # tokens per second
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self.tokens = float(self.capacity)
 
     def consume(self, tokens: int = 1) -> bool:
@@ -181,7 +181,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     FastAPI middleware for rate limiting.
     """
 
-    def __init__(self, app, rate_limiter: Optional[RateLimiter] = None):
+    def __init__(self, app: Any, rate_limiter: Optional[RateLimiter] = None) -> None:
         super().__init__(app)
         self._limiter = rate_limiter or get_rate_limiter()
 

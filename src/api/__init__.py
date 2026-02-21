@@ -59,7 +59,7 @@ class APIService:
     the bot and API to run concurrently.
     """
 
-    def __init__(self, bot: Any):
+    def __init__(self, bot: Any) -> None:
         """
         Initialize the API service.
 

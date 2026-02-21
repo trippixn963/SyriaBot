@@ -766,7 +766,7 @@ class Logger:
             else:
                 lines.append(f"{indent_str}{prefix} {key}: {value}")
 
-    def _render_nested(self, data: Dict[str, Any], indent: int, parent_is_last: bool) -> None:
+    def _render_nested(self, data: Dict[str, Any], indent: int, _parent_is_last: bool) -> None:
         """Recursively render nested tree data."""
         items = list(data.items())
         for i, (key, value) in enumerate(items):

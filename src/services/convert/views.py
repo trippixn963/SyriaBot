@@ -363,7 +363,7 @@ class ConvertView(ui.View):
             handle_rgba=True,
         )
 
-    def create_embed(self, preview_url: str = None) -> discord.Embed:
+    def create_embed(self) -> discord.Embed:
         """Create embed showing current settings and preview."""
         info = self._get_image_info()
 

@@ -113,7 +113,6 @@ class Config:
     MOD_ROLE_ID: int = _env_int("MOD_ROLE_ID")
     AUTO_ROLE_ID: int = _env_int("SYRIA_AUTO_ROLE")
     BOOSTER_ROLE_ID: int = _env_int("BOOSTER_ROLE_ID")
-    DEAD_CHAT_ROLE_ID: int = _env_int("SYRIA_DEAD_CHAT_ROLE")
 
     # ==========================================================================
     # Channels
@@ -124,9 +123,6 @@ class Config:
     MEMES_CHANNEL_ID: int = _env_int("SYRIA_MEMES_CH")
     BUMP_CHANNEL_ID: int = _env_int("SYRIA_BUMP_CH")
     CMDS_CHANNEL_ID: int = _env_int("SYRIA_CMDS_CH")
-    ROLES_CHANNEL_ID: int = _env_int("SYRIA_ROLES_CH")
-    BANK_CHANNEL_ID: int = _env_int("SYRIA_BANK_CH")
-    DEBATES_CHANNEL_ID: int = _env_int("SYRIA_DEBATES_CH")
     INBOX_CHANNEL_ID: int = _env_int("SYRIA_INBOX_CH")
     GIVEAWAY_CHANNEL_ID: int = _env_int("SYRIA_GIVEAWAY_CH")
 
@@ -158,15 +154,11 @@ class Config:
     XP_ROLE_REWARDS: Dict[int, int] = field(
         default_factory=lambda: _env_map("SYRIA_XP_ROLES")
     )
-    XP_API_KEY: str = _env("SYRIA_XP_API_KEY")
 
     # ==========================================================================
     # Confessions
     # ==========================================================================
     CONFESSIONS_CHANNEL_ID: int = _env_int("SYRIA_CONFESS_CH")
-    CONFESSIONS_MOD_CHANNEL_ID: int = _env_int("SYRIA_CONFESS_MOD_CH")
-
-    # ==========================================================================
 
     # ==========================================================================
     # Asset Storage (for permanent GIF URLs)

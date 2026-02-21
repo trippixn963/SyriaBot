@@ -24,7 +24,7 @@ class CacheService:
     Manages response and avatar caching with LRU eviction.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         config = get_api_config()
 
         # Response cache: {key: (data, timestamp)}

@@ -159,18 +159,6 @@ VIDEO_EXTENSIONS = {
 
 
 # =============================================================================
-# XP Card Colors
-# =============================================================================
-
-XP_STATUS_COLORS = {
-    "online": (67, 181, 129),    # Green
-    "idle": (250, 166, 26),      # Yellow/Orange
-    "dnd": (240, 71, 71),        # Red
-    "offline": (116, 127, 141),  # Gray
-}
-
-
-# =============================================================================
 # Discord View/Component Timeouts
 # =============================================================================
 
@@ -189,14 +177,6 @@ XP_COOLDOWN_CACHE_MAX_SIZE = 2000   # Hard limit - evict oldest entries beyond t
 
 
 # =============================================================================
-# Processing Timeouts
-# =============================================================================
-
-VIDEO_PROCESS_TIMEOUT = 30      # FFmpeg command timeout in seconds
-QUOTE_FETCH_TIMEOUT = 15        # Banner/avatar fetch timeout
-
-
-# =============================================================================
 # Message Auto-Delete Delays
 # =============================================================================
 
@@ -211,16 +191,6 @@ DELETE_DELAY_MEDIUM = 10        # Longer for download status messages
 PRESENCE_UPDATE_INTERVAL = 60   # Rotate presence status every 60 seconds
 PROMO_DURATION_MINUTES = 10     # Promo message duration at top of each hour
 PROMO_TEXT = "🌐 trippixn.com/syria"
-
-
-# =============================================================================
-# Guide Panel Emojis (Custom Discord emojis)
-# =============================================================================
-
-GUIDE_EMOJI_RULES = "<:discotoolsxyzicon56:1460257117977055283>"
-GUIDE_EMOJI_COMMANDS = "<:commands:1460257283530297468>"
-GUIDE_EMOJI_FAQ = "<:FAQ:1460257427189534762>"
-GUIDE_EMOJI_ROLES = "<:roles:1460257549688508516>"
 
 
 # =============================================================================

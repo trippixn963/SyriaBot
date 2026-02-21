@@ -24,7 +24,7 @@ class BackgroundTaskService:
     Manages background tasks for the API.
     """
 
-    def __init__(self, bot: Any):
+    def __init__(self, bot: Any) -> None:
         self._bot = bot
         self._cache = get_cache_service()
         self._cleanup_task: Optional[asyncio.Task] = None

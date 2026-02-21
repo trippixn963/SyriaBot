@@ -38,7 +38,7 @@ Server: discord.gg/syria
 
 import asyncio
 import aiohttp
-from typing import Optional, Callable
+from typing import Any, Optional, Callable
 
 from src.core.logger import logger
 
@@ -82,7 +82,7 @@ class HTTPSessionManager:
     - Lazy initialization for convenience in development
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._session: Optional[aiohttp.ClientSession] = None
         self._user_agent: str = "DiscordBot/1.0"
 
@@ -159,23 +159,23 @@ class HTTPSessionManager:
     # Basic Request Methods
     # =========================================================================
 
-    def get(self, url: str, **kwargs):
+    def get(self, url: str, **kwargs: Any) -> Any:
         """Perform a GET request. Returns a context manager."""
         return self.session.get(url, **kwargs)
 
-    def post(self, url: str, **kwargs):
+    def post(self, url: str, **kwargs: Any) -> Any:
         """Perform a POST request. Returns a context manager."""
         return self.session.post(url, **kwargs)
 
-    def put(self, url: str, **kwargs):
+    def put(self, url: str, **kwargs: Any) -> Any:
         """Perform a PUT request. Returns a context manager."""
         return self.session.put(url, **kwargs)
 
-    def delete(self, url: str, **kwargs):
+    def delete(self, url: str, **kwargs: Any) -> Any:
         """Perform a DELETE request. Returns a context manager."""
         return self.session.delete(url, **kwargs)
 
-    def patch(self, url: str, **kwargs):
+    def patch(self, url: str, **kwargs: Any) -> Any:
         """Perform a PATCH request. Returns a context manager."""
         return self.session.patch(url, **kwargs)
 

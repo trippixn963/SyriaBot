@@ -130,6 +130,7 @@ class SyriaBot(commands.Bot):
             "src.commands.confess",
             "src.commands.birthday",
             "src.commands.faq",
+            "src.commands.rules",
         ]
         loaded_commands = []
         for cmd in commands_list:

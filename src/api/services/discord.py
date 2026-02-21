@@ -39,7 +39,7 @@ class DiscordService:
     Uses the avatar cache from CacheService to avoid redundant API calls.
     """
 
-    def __init__(self, bot: Any):
+    def __init__(self, bot: Any) -> None:
         self._bot = bot
         self._cache = get_cache_service()
 
