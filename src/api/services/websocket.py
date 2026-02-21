@@ -5,6 +5,7 @@ SyriaBot - WebSocket Manager
 Real-time server stats broadcasting.
 
 Author: حَـــــنَّـــــا
+Server: discord.gg/syria
 """
 
 import asyncio

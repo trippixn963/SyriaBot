@@ -1,6 +1,6 @@
 """
-Unified Tree Logger
-===================
+SyriaBot - Tree Logger
+======================
 
 Custom logging system with tree-style formatting and EST timezone support.
 Provides structured logging for Discord bot events with visual formatting

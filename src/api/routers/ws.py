@@ -5,6 +5,7 @@ SyriaBot - WebSocket Router
 Real-time stats updates via WebSocket.
 
 Author: حَـــــنَّـــــا
+Server: discord.gg/syria
 """
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect

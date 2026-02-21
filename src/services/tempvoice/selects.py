@@ -1,5 +1,11 @@
 """
-TempVoice - User Select Dropdowns
+SyriaBot - TempVoice User Selects
+=================================
+
+User select dropdowns for TempVoice control panel.
+
+Author: حَـــــنَّـــــا
+Server: discord.gg/syria
 """
 
 from typing import TYPE_CHECKING

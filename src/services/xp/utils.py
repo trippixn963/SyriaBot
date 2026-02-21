@@ -1,8 +1,11 @@
 """
-SyriaBot - Utility Functions
-============================
+SyriaBot - XP Utilities
+=======================
 
 Level calculations and XP formulas.
+
+Author: حَـــــنَّـــــا
+Server: discord.gg/syria
 """
 
 import math

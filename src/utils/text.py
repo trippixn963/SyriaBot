@@ -3,6 +3,9 @@ SyriaBot - Text Utilities
 =========================
 
 Shared text processing functions.
+
+Author: حَـــــنَّـــــا
+Server: discord.gg/syria
 """
 
 from typing import Optional

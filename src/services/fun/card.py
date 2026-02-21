@@ -4,6 +4,9 @@ SyriaBot - Card Generator
 
 HTML/CSS based cards rendered with Playwright for ship, howsimp, howgay commands.
 Shares browser instance and semaphore with rank card for efficiency.
+
+Author: حَـــــنَّـــــا
+Server: discord.gg/syria
 """
 
 from typing import Optional

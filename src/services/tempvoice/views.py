@@ -1,5 +1,11 @@
 """
-TempVoice - Control Panel Views
+SyriaBot - TempVoice Control Panel
+==================================
+
+Control panel views for TempVoice channels.
+
+Author: حَـــــنَّـــــا
+Server: discord.gg/syria
 """
 
 from typing import TYPE_CHECKING, Optional

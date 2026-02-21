@@ -1,5 +1,11 @@
 """
-TempVoice - Input Modals
+SyriaBot - TempVoice Input Modals
+=================================
+
+Input modals for TempVoice channel customization.
+
+Author: حَـــــنَّـــــا
+Server: discord.gg/syria
 """
 
 import discord
