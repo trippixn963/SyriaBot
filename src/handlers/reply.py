@@ -165,7 +165,7 @@ class ReplyHandler:
         elif content == "quote":
             await self._handle_quote(message)
             return True
-        elif content in ("download", "dw", "dl"):
+        elif content in ("download", "dl"):
             await self._handle_download(message)
             return True
         elif content == "tr" or content == "translate":
@@ -599,7 +599,7 @@ class ReplyHandler:
         ], emoji="✅")
 
     async def _handle_download(self, message: discord.Message) -> None:
-        """Handle replying 'download' or 'dw' to a message with a link."""
+        """Handle replying 'download' or 'dl' to a message with a link."""
         logger.tree("Download Reply Started", [
             ("User", f"{message.author.name} ({message.author.display_name})"),
             ("ID", str(message.author.id)),
