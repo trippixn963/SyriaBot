@@ -152,38 +152,40 @@ class MessageHandler(commands.Cog):
                     ("ID", str(message.author.id)),
                 ])
 
-        # Track mentions received (non-blocking)
-        if message.guild and message.guild.id == config.GUILD_ID and message.mentions:
-            try:
-                # Filter out self-mentions and bots
-                valid_mentions = [
-                    m for m in message.mentions
-                    if m.id != message.author.id and not m.bot
-                ]
-                for mentioned_user in valid_mentions:
-                    # Track in user_xp (mentions_received for the mentioned user)
-                    await asyncio.to_thread(
-                        db.increment_mentions_received,
-                        mentioned_user.id,
-                        message.guild.id,
-                        1
-                    )
-                    # Track in user_interactions (who the author mentions)
-                    await asyncio.to_thread(
-                        db.increment_interaction_mention,
-                        message.author.id,
-                        mentioned_user.id,
-                        message.guild.id
-                    )
-            except Exception as e:
-                logger.error_tree("Mention Track Failed", e, [
-                    ("User", f"{message.author.name} ({message.author.display_name})"),
-                    ("ID", str(message.author.id)),
-                ])
+        # =================================================================
+        # Social Interaction Tracking (mentions + replies)
+        # =================================================================
+        # We handle these together because Discord includes the replied-to
+        # user in message.mentions, so we need to exclude them to avoid
+        # double-counting. Fetch replied-to author ONCE and reuse.
+        # =================================================================
 
-        # Track replies sent (non-blocking)
         if message.guild and message.guild.id == config.GUILD_ID:
+            replied_to_author: discord.Member | None = None
+
+            # Determine replied-to author (if this is a reply)
             if message.reference and message.reference.message_id:
+                try:
+                    # Try cached first (fast path)
+                    ref_msg = message.reference.resolved
+                    if not ref_msg:
+                        # Not cached, fetch from API (slow path)
+                        ref_msg = await message.channel.fetch_message(message.reference.message_id)
+
+                    if ref_msg and ref_msg.author and not ref_msg.author.bot:
+                        if ref_msg.author.id != message.author.id:
+                            replied_to_author = ref_msg.author
+                except discord.NotFound:
+                    pass  # Original message was deleted
+                except discord.HTTPException as e:
+                    logger.error_tree("Reply Fetch Failed", e, [
+                        ("User", f"{message.author.name} ({message.author.display_name})"),
+                        ("ID", str(message.author.id)),
+                        ("Reference", str(message.reference.message_id)),
+                    ])
+
+            # Track replies (if we found a valid replied-to author)
+            if replied_to_author:
                 try:
                     # Track reply count in user_xp
                     await asyncio.to_thread(
@@ -192,19 +194,44 @@ class MessageHandler(commands.Cog):
                         message.guild.id
                     )
                     # Track interaction (who they replied to)
-                    try:
-                        ref_msg = await message.channel.fetch_message(message.reference.message_id)
-                        if ref_msg.author and not ref_msg.author.bot and ref_msg.author.id != message.author.id:
-                            await asyncio.to_thread(
-                                db.increment_interaction_reply,
-                                message.author.id,
-                                ref_msg.author.id,
-                                message.guild.id
-                            )
-                    except discord.NotFound:
-                        pass  # Original message was deleted
+                    await asyncio.to_thread(
+                        db.increment_interaction_reply,
+                        message.author.id,
+                        replied_to_author.id,
+                        message.guild.id
+                    )
                 except Exception as e:
                     logger.error_tree("Reply Track Failed", e, [
+                        ("User", f"{message.author.name} ({message.author.display_name})"),
+                        ("ID", str(message.author.id)),
+                        ("Replied To", str(replied_to_author.id)),
+                    ])
+
+            # Track mentions (excluding replied-to user to avoid double-counting)
+            if message.mentions:
+                try:
+                    replied_to_id = replied_to_author.id if replied_to_author else None
+                    valid_mentions = [
+                        m for m in message.mentions
+                        if m.id != message.author.id and not m.bot and m.id != replied_to_id
+                    ]
+                    for mentioned_user in valid_mentions:
+                        # Track in user_xp (mentions_received for the mentioned user)
+                        await asyncio.to_thread(
+                            db.increment_mentions_received,
+                            mentioned_user.id,
+                            message.guild.id,
+                            1
+                        )
+                        # Track in user_interactions (who the author mentions)
+                        await asyncio.to_thread(
+                            db.increment_interaction_mention,
+                            message.author.id,
+                            mentioned_user.id,
+                            message.guild.id
+                        )
+                except Exception as e:
+                    logger.error_tree("Mention Track Failed", e, [
                         ("User", f"{message.author.name} ({message.author.display_name})"),
                         ("ID", str(message.author.id)),
                     ])

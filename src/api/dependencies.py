@@ -11,10 +11,20 @@ Server: discord.gg/syria
 import hmac
 from typing import Any, Optional
 
+import jwt
+from jwt.exceptions import InvalidTokenError, ExpiredSignatureError
 from fastapi import Depends, Header, Query
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from src.api.config import get_api_config
 from src.api.errors import APIError, ErrorCode
+
+
+# =============================================================================
+# Security
+# =============================================================================
+
+security = HTTPBearer(auto_error=False)
 
 
 # =============================================================================
@@ -73,6 +83,63 @@ async def require_api_key(
 
 
 # =============================================================================
+# Bearer Token Authentication (shared with AzabBot)
+# =============================================================================
+
+async def require_auth(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+) -> int:
+    """
+    Require a valid Bearer token (JWT from AzabBot login).
+    Returns the Discord user ID if valid.
+    """
+    config = get_api_config()
+
+    if not config.jwt_secret:
+        raise APIError(
+            ErrorCode.AUTH_MISSING_KEY,
+            message="JWT secret not configured",
+        )
+
+    if credentials is None:
+        raise APIError(
+            ErrorCode.AUTH_MISSING_KEY,
+            message="Bearer token required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    try:
+        payload = jwt.decode(
+            credentials.credentials,
+            config.jwt_secret,
+            algorithms=[config.jwt_algorithm],
+        )
+
+        # Check token type
+        if payload.get("type") != "access":
+            raise APIError(
+                ErrorCode.AUTH_INVALID_KEY,
+                message="Invalid token type",
+            )
+
+        # Return the Discord user ID
+        return int(payload["sub"])
+
+    except ExpiredSignatureError:
+        raise APIError(
+            ErrorCode.AUTH_INVALID_KEY,
+            message="Token expired",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    except (InvalidTokenError, ValueError, TypeError, KeyError):
+        raise APIError(
+            ErrorCode.AUTH_INVALID_KEY,
+            message="Invalid token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
+# =============================================================================
 # Pagination Dependencies
 # =============================================================================
 
@@ -125,6 +192,7 @@ __all__ = [
     "get_bot",
     "get_bot_optional",
     "require_api_key",
+    "require_auth",
     "PaginationParams",
     "get_pagination",
     "get_period",

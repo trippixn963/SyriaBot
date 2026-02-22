@@ -139,6 +139,9 @@ class Config:
     VC_IGNORED_CHANNELS: FrozenSet[int] = field(
         default_factory=lambda: _env_set("SYRIA_VC_IGNORED")
     )
+    VC_MOD_ROLES: FrozenSet[int] = field(
+        default_factory=lambda: _env_set("SYRIA_VC_MOD_ROLES")
+    )
 
     # ==========================================================================
     # XP System

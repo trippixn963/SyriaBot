@@ -31,6 +31,7 @@ from src.api.routers import (
     xp_router,
     ws_router,
     extended_stats_router,
+    bot_router,
 )
 from src.api.routers.health import set_start_time
 
@@ -158,6 +159,7 @@ def create_app(bot: Optional[Any] = None) -> FastAPI:
     app.include_router(xp_router)
     app.include_router(ws_router)
     app.include_router(extended_stats_router)
+    app.include_router(bot_router)
 
     return app
 

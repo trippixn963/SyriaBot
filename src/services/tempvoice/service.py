@@ -42,6 +42,7 @@ from .utils import (
     build_full_name,
     extract_base_name,
     is_booster,
+    has_vc_mod_role,
     get_owner_overwrite,
     set_owner_permissions,
     get_trusted_overwrite,
@@ -110,8 +111,8 @@ class TempVoiceService:
             warnings.append("VC_CREATOR_CHANNEL_ID not set - join-to-create disabled")
         if not config.VC_CATEGORY_ID:
             warnings.append("VC_CATEGORY_ID not set - VCs will be created without category")
-        if not config.MOD_ROLE_ID:
-            warnings.append("MOD_ROLE_ID not set - mod permissions disabled")
+        if not config.VC_MOD_ROLES:
+            warnings.append("VC_MOD_ROLES not set - no roles can enter locked VCs")
 
         if warnings:
             logger.tree("TempVoice Config Warnings", [
@@ -131,7 +132,7 @@ class TempVoiceService:
             ("Status", "Initialized"),
             ("Creator Channel", str(config.VC_CREATOR_CHANNEL_ID) if config.VC_CREATOR_CHANNEL_ID else "Not set"),
             ("Category", str(config.VC_CATEGORY_ID) if config.VC_CATEGORY_ID else "Not set"),
-            ("Mod Role", str(config.MOD_ROLE_ID) if config.MOD_ROLE_ID else "Not set"),
+            ("VC Mod Roles", str(len(config.VC_MOD_ROLES)) if config.VC_MOD_ROLES else "Not set"),
             ("Cleanup Interval", f"{cleanup_mins} minutes"),
         ], emoji="🔊")
 
@@ -1313,39 +1314,35 @@ class TempVoiceService:
                 member: get_owner_overwrite(),
             }
 
-            # Mod role gets full access (except developer's channels)
-            if config.MOD_ROLE_ID and member.id != config.OWNER_ID:
-                mod_role = guild.get_role(config.MOD_ROLE_ID)
-                if mod_role:
-                    overwrites[mod_role] = discord.PermissionOverwrite(
-                        connect=True,
-                        speak=True,
-                        mute_members=True,
-                        deafen_members=True,
-                        move_members=True,
-                        send_messages=True,
-                        read_message_history=True,
-                        manage_messages=True,
-                        attach_files=True,
-                        embed_links=True,
-                    )
-                else:
-                    logger.tree("Mod Role Not Found", [
-                        ("Role ID", str(config.MOD_ROLE_ID)),
-                        ("Action", "Skipping mod permissions"),
-                    ], emoji="⚠️")
+            # Specific mod roles get full access (except developer's channels)
+            if config.VC_MOD_ROLES and member.id != config.OWNER_ID:
+                for role_id in config.VC_MOD_ROLES:
+                    mod_role = guild.get_role(role_id)
+                    if mod_role:
+                        overwrites[mod_role] = discord.PermissionOverwrite(
+                            connect=True,
+                            speak=True,
+                            mute_members=True,
+                            deafen_members=True,
+                            move_members=True,
+                            send_messages=True,
+                            read_message_history=True,
+                            manage_messages=True,
+                            attach_files=True,
+                            embed_links=True,
+                        )
 
             # Pre-build blocked user overwrites
             blocked_count = 0
             for blocked_id in db.get_blocked_list(member.id):
                 blocked_user = guild.get_member(blocked_id)
                 if blocked_user:
-                    is_mod = any(r.id == config.MOD_ROLE_ID for r in blocked_user.roles)
-                    if is_mod and member.id != config.OWNER_ID:
+                    # Check if user has any VC mod role
+                    if has_vc_mod_role(blocked_user) and member.id != config.OWNER_ID:
                         logger.tree("Block Skipped", [
                             ("User", f"{blocked_user.name} ({blocked_user.display_name})"),
                             ("ID", str(blocked_user.id)),
-                            ("Reason", "Is moderator"),
+                            ("Reason", "Has VC mod role"),
                         ], emoji="⚠️")
                         continue
                     overwrites[blocked_user] = get_blocked_overwrite()
@@ -1575,9 +1572,8 @@ class TempVoiceService:
             for blocked_id in db.get_blocked_list(new_owner.id):
                 blocked_user = guild.get_member(blocked_id)
                 if blocked_user:
-                    # Skip mods unless new owner is developer
-                    is_mod = any(r.id == config.MOD_ROLE_ID for r in blocked_user.roles)
-                    if is_mod and new_owner.id != config.OWNER_ID:
+                    # Skip VC mod roles unless new owner is developer
+                    if has_vc_mod_role(blocked_user) and new_owner.id != config.OWNER_ID:
                         continue
                     await channel.set_permissions(blocked_user, connect=False)
                     # Kick if in channel

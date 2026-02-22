@@ -40,6 +40,10 @@ class APIConfig:
     # API Key for protected endpoints
     api_key: str = ""
 
+    # JWT for Bearer token auth (shared with AzabBot)
+    jwt_secret: str = ""
+    jwt_algorithm: str = "HS256"
+
     # Pagination
     default_page_size: int = 50
     max_page_size: int = 100
@@ -52,11 +56,19 @@ class APIConfig:
 
 def load_api_config() -> APIConfig:
     """Load API configuration from environment."""
+    # Use same JWT secret as AzabBot for shared auth
+    jwt_secret = (
+        os.getenv("AZAB_JWT_SECRET") or
+        os.getenv("JWT_SECRET_KEY") or
+        ""
+    )
+
     return APIConfig(
         host=os.getenv("SYRIA_API_HOST", "0.0.0.0"),
         port=int(os.getenv("SYRIA_API_PORT", "8088")),
         debug=os.getenv("SYRIA_API_DEBUG", "false").lower() == "true",
         api_key=os.getenv("SYRIA_XP_API_KEY", ""),
+        jwt_secret=jwt_secret,
     )
 
 

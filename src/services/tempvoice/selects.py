@@ -21,6 +21,7 @@ from src.services.database import db
 from src.utils.footer import set_footer
 from .utils import (
     is_booster,
+    has_vc_mod_role,
     generate_channel_name,
     MAX_ALLOWED_USERS_FREE,
     set_owner_permissions,
@@ -467,9 +468,8 @@ class UserSelect(ui.UserSelect):
             ], emoji="⚠️")
             return
 
-        # Check if target is a mod - can only be blocked by developer
-        is_target_mod = any(r.id == config.MOD_ROLE_ID for r in user.roles)
-        if is_target_mod and owner_id != config.OWNER_ID:
+        # Check if target has VC mod role - can only be blocked by developer
+        if has_vc_mod_role(user) and owner_id != config.OWNER_ID:
             embed = discord.Embed(description="⚠️ Can't block moderators", color=COLOR_WARNING)
             set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
@@ -570,16 +570,16 @@ class UserSelect(ui.UserSelect):
             ], emoji="⚠️")
             return
 
-        # Protect moderators from being kicked
-        if config.MOD_ROLE_ID and any(role.id == config.MOD_ROLE_ID for role in user.roles):
-            embed = discord.Embed(description="⚠️ Can't kick moderators", color=COLOR_WARNING)
+        # Protect VC mod roles from being kicked
+        if has_vc_mod_role(user):
+            embed = discord.Embed(description="⚠️ Can't kick staff members", color=COLOR_WARNING)
             set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
             logger.tree("Kick Rejected", [
                 ("Channel", channel.name),
                 ("User", f"{user.name} ({user.display_name})"),
                 ("ID", str(user.id)),
-                ("Reason", "Target is moderator"),
+                ("Reason", "Has VC mod role"),
             ], emoji="⚠️")
             return
 

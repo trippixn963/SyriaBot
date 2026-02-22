@@ -252,6 +252,31 @@ class WebSocketManager:
         """Get current connection count."""
         return len(self._connections)
 
+    # Bot log and status broadcasting
+    async def broadcast_bot_log(self, log_data: Dict[str, Any]) -> None:
+        """Broadcast a bot log entry to all connected clients."""
+        if not self._connections:
+            return
+
+        message = json.dumps({
+            "type": "bot_log",
+            "data": log_data
+        })
+
+        await self._broadcast(message)
+
+    async def broadcast_bot_status(self, status_data: Dict[str, Any]) -> None:
+        """Broadcast bot status update to all connected clients."""
+        if not self._connections:
+            return
+
+        message = json.dumps({
+            "type": "bot_status",
+            "data": status_data
+        })
+
+        await self._broadcast(message)
+
 
 # Singleton
 _ws_manager: WebSocketManager | None = None

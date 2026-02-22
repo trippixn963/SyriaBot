@@ -84,6 +84,22 @@ def get_next_available_number(channel_names: list[str]) -> int:
 
 
 # =============================================================================
+# VC Mod Role Check
+# =============================================================================
+
+def has_vc_mod_role(member: discord.Member) -> bool:
+    """
+    Check if member has a VC mod role (can enter locked VCs).
+
+    These are specific roles defined in SYRIA_VC_MOD_ROLES, separate from
+    the general MOD_ROLE_ID which is used for other moderation features.
+    """
+    if not config.VC_MOD_ROLES:
+        return False
+    return any(role.id in config.VC_MOD_ROLES for role in member.roles)
+
+
+# =============================================================================
 # Booster Check
 # =============================================================================
 
@@ -266,7 +282,8 @@ __all__ = [
     # Channel numbers
     "get_used_numbers",
     "get_next_available_number",
-    # Booster check
+    # Role checks
+    "has_vc_mod_role",
     "is_booster",
     # Channel name
     "extract_base_name",
