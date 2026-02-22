@@ -125,6 +125,10 @@ class Config:
     CMDS_CHANNEL_ID: int = _env_int("SYRIA_CMDS_CH")
     INBOX_CHANNEL_ID: int = _env_int("SYRIA_INBOX_CH")
     GIVEAWAY_CHANNEL_ID: int = _env_int("SYRIA_GIVEAWAY_CH")
+    TICKET_CHANNEL_ID: int = _env_int("SYRIA_TICKET_CH")
+    ROLE_SHOP_CHANNEL_ID: int = _env_int("SYRIA_ROLE_SHOP_CH")
+    FLAGS_GAME_CHANNEL_ID: int = _env_int("SYRIA_FLAGS_CH")
+    COUNTING_CHANNEL_ID: int = _env_int("SYRIA_COUNTING_CH")
 
     # ==========================================================================
     # TempVoice

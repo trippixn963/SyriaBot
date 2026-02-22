@@ -177,11 +177,13 @@ RULES_SECTIONS = [
     },
 ]
 
-RULES_FOOTER = """══════════════════════
+def get_rules_footer() -> str:
+    """Build rules footer with config channel ID."""
+    return f"""══════════════════════
 
 Staff reserves the right to take any action deemed appropriate.
 
-🎫 **Questions?** Open a ticket in <#1406750411779604561>
+🎫 **Questions?** Open a ticket in <#{config.TICKET_CHANNEL_ID}>
 🔗 **Invite:** discord.gg/syria"""
 
 
@@ -245,7 +247,7 @@ class RulesCog(commands.Cog):
                 await channel.send(section_text)
 
             # Footer
-            await channel.send(RULES_FOOTER)
+            await channel.send(get_rules_footer())
 
             await interaction.edit_original_response(
                 content=f"✅ Rules posted to {channel.mention} ({len(deleted)} messages purged)",

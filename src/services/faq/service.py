@@ -14,14 +14,58 @@ from pathlib import Path
 from typing import Optional
 from collections import defaultdict
 
+from src.core.config import config
 from src.core.logger import logger
 
 
 # =============================================================================
-# FAQ Data
+# FAQ Data Builder
 # =============================================================================
 
-FAQ_DATA = {
+def _replace_placeholders(text: str) -> str:
+    """Replace config placeholders in FAQ text."""
+    replacements = {
+        "{config.BOOSTER_ROLE_ID}": str(config.BOOSTER_ROLE_ID),
+        "{config.AUTO_ROLE_ID}": str(config.AUTO_ROLE_ID),
+        "{config.CMDS_CHANNEL_ID}": str(config.CMDS_CHANNEL_ID),
+        "{config.ROLE_SHOP_CHANNEL_ID}": str(config.ROLE_SHOP_CHANNEL_ID),
+        "{config.VC_CREATOR_CHANNEL_ID}": str(config.VC_CREATOR_CHANNEL_ID),
+        "{config.TICKET_CHANNEL_ID}": str(config.TICKET_CHANNEL_ID),
+        "{config.CONFESSIONS_CHANNEL_ID}": str(config.CONFESSIONS_CHANNEL_ID),
+        "{config.FLAGS_GAME_CHANNEL_ID}": str(config.FLAGS_GAME_CHANNEL_ID),
+        "{config.COUNTING_CHANNEL_ID}": str(config.COUNTING_CHANNEL_ID),
+    }
+    for placeholder, value in replacements.items():
+        text = text.replace(placeholder, value)
+    return text
+
+
+def get_faq_description(topic: str, lang: str = "en") -> str | None:
+    """Get FAQ description with config values replaced."""
+    faq = _FAQ_DATA_RAW.get(topic)
+    if not faq:
+        return None
+    desc = faq.get("description", {}).get(lang)
+    if desc:
+        return _replace_placeholders(desc)
+    return None
+
+
+def get_faq_title(topic: str, lang: str = "en") -> str | None:
+    """Get FAQ title."""
+    faq = _FAQ_DATA_RAW.get(topic)
+    if not faq:
+        return None
+    return faq.get("title", {}).get(lang)
+
+
+def get_faq_topics() -> list[str]:
+    """Get all FAQ topic keys."""
+    return list(_FAQ_DATA_RAW.keys())
+
+
+# Raw FAQ data with placeholders (use get_faq_* functions to access)
+_FAQ_DATA_RAW = {
     "xp": {
         "title": {
             "en": "📊 How XP & Leveling Works",
@@ -31,7 +75,7 @@ FAQ_DATA = {
             "en": """**Earning XP:**
 • **Messages:** 8-12 XP per message (60 second cooldown)
 • **Voice:** 3 XP per minute (must have 2+ people, not deafened)
-• **Boosters:** <@&1230147693490471023> get 2x XP multiplier
+• **Boosters:** <@&{config.BOOSTER_ROLE_ID}> get 2x XP multiplier
 
 **Level Rewards:**
 • Level 1 → Connect to voice channels
@@ -44,7 +88,7 @@ Check your rank with `/rank`""",
             "ar": """**كسب XP:**
 • **الرسائل:** 8-12 XP لكل رسالة (كولداون 60 ثانية)
 • **الصوت:** 3 XP لكل دقيقة (يجب أن يكون هناك 2+ أشخاص)
-• **البوسترز:** <@&1230147693490471023> يحصلون على 2x XP
+• **البوسترز:** <@&{config.BOOSTER_ROLE_ID}> يحصلون على 2x XP
 
 **مكافآت المستويات:**
 • مستوى 1 ← الاتصال بالقنوات الصوتية
@@ -63,7 +107,7 @@ Check your rank with `/rank`""",
         },
         "description": {
             "en": """**Auto Roles:**
-• You get <@&1236824194722041876> automatically when you join
+• You get <@&{config.AUTO_ROLE_ID}> automatically when you join
 • Level roles are given automatically as you level up
 
 **Self-Assign Roles:**
@@ -72,14 +116,14 @@ Check your rank with `/rank`""",
 
 **Purchasable Roles (Economy):**
 • Earn coins by chatting, playing games, and being active
-• Check your balance in <#1459658497879707883>
-• Buy custom roles in <#1459644341361447181>
+• Check your balance in <#{config.CMDS_CHANNEL_ID}>
+• Buy custom roles in <#{config.ROLE_SHOP_CHANNEL_ID}>
 
 **Special Roles:**
-• <@&1230147693490471023> roles → boost the server
+• <@&{config.BOOSTER_ROLE_ID}> roles → boost the server
 • Staff roles → given by admins only""",
             "ar": """**الرولات التلقائية:**
-• تحصل على <@&1236824194722041876> تلقائياً عند الانضمام
+• تحصل على <@&{config.AUTO_ROLE_ID}> تلقائياً عند الانضمام
 • رولات المستوى تُعطى تلقائياً مع ارتفاع مستواك
 
 **الرولات الذاتية:**
@@ -88,11 +132,11 @@ Check your rank with `/rank`""",
 
 **الرولات القابلة للشراء:**
 • اكسب عملات بالدردشة واللعب والنشاط
-• تحقق من رصيدك في <#1459658497879707883>
-• اشترِ رولات في <#1459644341361447181>
+• تحقق من رصيدك في <#{config.CMDS_CHANNEL_ID}>
+• اشترِ رولات في <#{config.ROLE_SHOP_CHANNEL_ID}>
 
 **الرولات الخاصة:**
-• رولات <@&1230147693490471023> ← بوست السيرفر
+• رولات <@&{config.BOOSTER_ROLE_ID}> ← بوست السيرفر
 • رولات الستاف ← تُعطى من الأدمن فقط""",
         },
     },
@@ -103,7 +147,7 @@ Check your rank with `/rank`""",
         },
         "description": {
             "en": """**How to Create:**
-1. Join <#1455684848977969399>
+1. Join <#{config.VC_CREATOR_CHANNEL_ID}>
 2. You'll be moved to your own private channel
 3. Use the control panel to manage it
 
@@ -116,7 +160,7 @@ Check your rank with `/rank`""",
 
 Your channel is deleted when everyone leaves.""",
             "ar": """**كيفية الإنشاء:**
-1. انضم إلى <#1455684848977969399>
+1. انضم إلى <#{config.VC_CREATOR_CHANNEL_ID}>
 2. سيتم نقلك إلى قناتك الخاصة
 3. استخدم لوحة التحكم لإدارتها
 
@@ -137,7 +181,7 @@ Your channel is deleted when everyone leaves.""",
         },
         "description": {
             "en": """**To report a rule violation:**
-1. Go to <#1406750411779604561>
+1. Go to <#{config.TICKET_CHANNEL_ID}>
 2. Create a ticket with details
 3. Include screenshots/evidence if possible
 
@@ -148,7 +192,7 @@ Your channel is deleted when everyone leaves.""",
 
 Staff will handle it privately.""",
             "ar": """**للإبلاغ عن مخالفة:**
-1. اذهب إلى <#1406750411779604561>
+1. اذهب إلى <#{config.TICKET_CHANNEL_ID}>
 2. أنشئ تذكرة مع التفاصيل
 3. أرفق صور/أدلة إن أمكن
 
@@ -169,7 +213,7 @@ Staff will handle it privately.""",
             "en": """**How to Confess:**
 1. Use `/confess` command anywhere
 2. Type your confession (text only)
-3. It will be posted in <#1459123706189058110>
+3. It will be posted in <#{config.CONFESSIONS_CHANNEL_ID}>
 
 **Rules:**
 • No hate speech or harassment
@@ -180,7 +224,7 @@ Confessions can be traced by staff if rules are broken.""",
             "ar": """**كيف تعترف:**
 1. استخدم أمر `/confess` في أي مكان
 2. اكتب اعترافك (نص فقط)
-3. سيُنشر في <#1459123706189058110>
+3. سيُنشر في <#{config.CONFESSIONS_CHANNEL_ID}>
 
 **القواعد:**
 • لا كلام كراهية أو تحرش
@@ -333,10 +377,10 @@ Reply to a message with a link and say `download` to download it.""",
 • Daily rewards with `/daily`
 
 **Check Balance:**
-• Use commands in <#1459658497879707883>
+• Use commands in <#{config.CMDS_CHANNEL_ID}>
 
 **Spending:**
-• Buy roles in <#1459644341361447181>
+• Buy roles in <#{config.ROLE_SHOP_CHANNEL_ID}>
 • Gamble in the casino""",
             "ar": """**كيف تكسب عملات:**
 • الدردشة في السيرفر (دخل سلبي)
@@ -345,10 +389,10 @@ Reply to a message with a link and say `download` to download it.""",
 • مكافآت يومية بـ `/daily`
 
 **تحقق من رصيدك:**
-• استخدم الأوامر في <#1459658497879707883>
+• استخدم الأوامر في <#{config.CMDS_CHANNEL_ID}>
 
 **الإنفاق:**
-• اشترِ رولات في <#1459644341361447181>
+• اشترِ رولات في <#{config.ROLE_SHOP_CHANNEL_ID}>
 • قامر في الكازينو""",
         },
     },
@@ -395,10 +439,10 @@ Reply to a message with a link and say `download` to download it.""",
 • More coming soon!
 
 **Flag Game:**
-Guess countries from their flags in <#1402445407312941158>
+Guess countries from their flags in <#{config.FLAGS_GAME_CHANNEL_ID}>
 
 **Counting:**
-Count together in <#1457434957772488714> - don't break the chain!
+Count together in <#{config.COUNTING_CHANNEL_ID}> - don't break the chain!
 
 Win coins by participating in games!""",
             "ar": """**الألعاب المتوفرة:**
@@ -408,10 +452,10 @@ Win coins by participating in games!""",
 • المزيد قريباً!
 
 **لعبة الأعلام:**
-خمّن الدول من أعلامها في <#1402445407312941158>
+خمّن الدول من أعلامها في <#{config.FLAGS_GAME_CHANNEL_ID}>
 
 **العد:**
-عدّوا معاً في <#1457434957772488714> - لا تكسروا السلسلة!
+عدّوا معاً في <#{config.COUNTING_CHANNEL_ID}> - لا تكسروا السلسلة!
 
 اربح عملات بالمشاركة في الألعاب!""",
         },
@@ -424,7 +468,7 @@ Win coins by participating in games!""",
         "description": {
             "en": """**Want to partner with us?**
 
-1. Go to <#1406750411779604561>
+1. Go to <#{config.TICKET_CHANNEL_ID}>
 2. Open a **Partnership** ticket
 3. Include your server's invite link and member count
 4. Wait for a staff member to review
@@ -440,7 +484,7 @@ Win coins by participating in games!""",
 • Spam partnership requests""",
             "ar": """**تريد الشراكة معنا؟**
 
-1. اذهب إلى <#1406750411779604561>
+1. اذهب إلى <#{config.TICKET_CHANNEL_ID}>
 2. افتح تذكرة **شراكة**
 3. أرفق رابط سيرفرك وعدد الأعضاء
 4. انتظر مراجعة أحد الستاف
@@ -457,6 +501,24 @@ Win coins by participating in games!""",
         },
     },
 }
+
+
+def _build_faq_data() -> dict:
+    """Build FAQ_DATA with config values replaced in all strings."""
+    result = {}
+    for topic, data in _FAQ_DATA_RAW.items():
+        result[topic] = {
+            "title": data["title"].copy(),
+            "description": {
+                lang: _replace_placeholders(desc)
+                for lang, desc in data["description"].items()
+            },
+        }
+    return result
+
+
+# Build FAQ_DATA at module load time (backward compatible export)
+FAQ_DATA = _build_faq_data()
 
 
 # =============================================================================

@@ -366,7 +366,7 @@ class BirthdayService:
             db.get_birthday, user.id, user.guild.id
         )
         if existing:
-            return False, "You already have a birthday set. If you made a mistake, open a ticket in <#1406750411779604561> to have it fixed."
+            return False, f"You already have a birthday set. If you made a mistake, open a ticket in <#{config.TICKET_CHANNEL_ID}> to have it fixed."
 
         # Validate month
         if not 1 <= month <= 12:
