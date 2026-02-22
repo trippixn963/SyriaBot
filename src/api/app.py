@@ -32,8 +32,12 @@ from src.api.routers import (
     ws_router,
     extended_stats_router,
     bot_router,
+    events_router,
 )
 from src.api.routers.health import set_start_time
+from src.api.services.log_storage import get_log_storage
+from src.api.services.event_storage import get_event_storage
+from src.api.services.websocket import get_ws_manager
 
 
 # =============================================================================
@@ -49,6 +53,23 @@ async def lifespan(app: FastAPI):
     """
     # Startup
     set_start_time()
+    get_log_storage()  # Initialize log capture early
+
+    # Set up WebSocket callback for events
+    def broadcast_event(event_data: dict):
+        """Callback called when events are added."""
+        import asyncio
+        ws_manager = get_ws_manager()
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                asyncio.create_task(ws_manager.broadcast_discord_event(event_data))
+        except Exception:
+            pass
+
+    event_storage = get_event_storage()
+    event_storage.set_on_event(broadcast_event)
+
     logger.tree("API Starting", [
         ("Version", "2.0.0"),
         ("Framework", "FastAPI"),
@@ -160,6 +181,7 @@ def create_app(bot: Optional[Any] = None) -> FastAPI:
     app.include_router(ws_router)
     app.include_router(extended_stats_router)
     app.include_router(bot_router)
+    app.include_router(events_router)
 
     return app
 

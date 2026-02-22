@@ -25,6 +25,7 @@ from src.handlers.fun import fun
 from src.handlers.action import action
 from src.handlers.reply import ReplyHandler
 from src.handlers.faq import faq
+from src.api.services.event_logger import event_logger
 
 # URL regex pattern for link tracking
 URL_PATTERN = re.compile(r'https?://\S+')
@@ -62,6 +63,8 @@ class MessageHandler(commands.Cog):
                     desc = (embed.description or "").lower()
                     if "bump done" in desc:
                         bump_service.record_bump()
+                        # Log to events system (for dashboard Events tab)
+                        event_logger.log_bump(message.guild)
                         break
             return
 
@@ -359,6 +362,9 @@ class MessageHandler(commands.Cog):
                     thread.owner_id,
                     thread.guild.id
                 )
+                # Log to events system (for dashboard Events tab)
+                owner = thread.guild.get_member(thread.owner_id)
+                event_logger.log_thread_create(thread, owner)
             except Exception as e:
                 logger.error_tree("Thread Track Failed", e, [
                     ("Thread", thread.name),
@@ -367,7 +373,7 @@ class MessageHandler(commands.Cog):
 
     @commands.Cog.listener()
     async def on_raw_message_delete(self, payload: discord.RawMessageDeleteEvent) -> None:
-        """Handle raw message deletions for persistent panels."""
+        """Handle raw message deletions for persistent panels and event logging."""
         # Actions panel auto-resend on delete
         if hasattr(self.bot, 'actions_panel') and self.bot.actions_panel:
             try:
@@ -376,6 +382,232 @@ class MessageHandler(commands.Cog):
                 logger.error_tree("Actions Panel Delete Handler Error", e, [
                     ("Message ID", str(payload.message_id)),
                 ])
+
+        # Log message delete to events (only for main server)
+        if payload.guild_id == config.GUILD_ID:
+            try:
+                guild = self.bot.get_guild(payload.guild_id)
+                channel = guild.get_channel(payload.channel_id) if guild else None
+
+                # Get cached message info if available
+                author = None
+                content = None
+                if payload.cached_message:
+                    author = payload.cached_message.author
+                    content = payload.cached_message.content
+                    # Skip bot messages
+                    if author and author.bot:
+                        return
+
+                if guild and channel:
+                    event_logger.log_message_delete(guild, channel, author, content)
+            except Exception as e:
+                logger.error_tree("Message Delete Event Log Error", e, [
+                    ("Message ID", str(payload.message_id)),
+                ])
+
+    @commands.Cog.listener()
+    async def on_raw_bulk_message_delete(self, payload: discord.RawBulkMessageDeleteEvent) -> None:
+        """Handle bulk message deletions (purge commands)."""
+        if payload.guild_id != config.GUILD_ID:
+            return
+
+        try:
+            guild = self.bot.get_guild(payload.guild_id)
+            channel = guild.get_channel(payload.channel_id) if guild else None
+
+            if guild and channel:
+                event_logger.log_bulk_delete(guild, channel, len(payload.message_ids))
+        except Exception as e:
+            logger.error_tree("Bulk Delete Event Log Error", e, [
+                ("Channel ID", str(payload.channel_id)),
+                ("Count", str(len(payload.message_ids))),
+            ])
+
+    @commands.Cog.listener()
+    async def on_message_edit(self, before: discord.Message, after: discord.Message) -> None:
+        """Handle message edits for event logging."""
+        # Skip bots and DMs
+        if after.author.bot or not after.guild:
+            return
+
+        # Only track in main server
+        if after.guild.id != config.GUILD_ID:
+            return
+
+        # Skip if content didn't change (could be embed update)
+        if before.content == after.content:
+            return
+
+        try:
+            event_logger.log_message_edit(
+                after.guild,
+                after.channel,
+                after.author,
+                before.content,
+                after.content
+            )
+        except Exception as e:
+            logger.error_tree("Message Edit Event Log Error", e, [
+                ("Author", str(after.author.id)),
+                ("Channel", str(after.channel.id)),
+            ])
+
+    @commands.Cog.listener()
+    async def on_guild_channel_create(self, channel: discord.abc.GuildChannel) -> None:
+        """Handle channel creation for event logging."""
+        if channel.guild.id != config.GUILD_ID:
+            return
+
+        # Try to get creator from audit log
+        creator = None
+        try:
+            async for entry in channel.guild.audit_logs(limit=5, action=discord.AuditLogAction.channel_create):
+                if entry.target and entry.target.id == channel.id:
+                    creator = entry.user
+                    break
+        except discord.Forbidden:
+            pass
+
+        event_logger.log_channel_create(channel, creator)
+
+    @commands.Cog.listener()
+    async def on_guild_channel_delete(self, channel: discord.abc.GuildChannel) -> None:
+        """Handle channel deletion for event logging."""
+        if channel.guild.id != config.GUILD_ID:
+            return
+
+        # Try to get deleter from audit log
+        deleter = None
+        try:
+            async for entry in channel.guild.audit_logs(limit=5, action=discord.AuditLogAction.channel_delete):
+                if entry.target and entry.target.id == channel.id:
+                    deleter = entry.user
+                    break
+        except discord.Forbidden:
+            pass
+
+        event_logger.log_channel_delete(channel, deleter)
+
+    @commands.Cog.listener()
+    async def on_thread_delete(self, thread: discord.Thread) -> None:
+        """Handle thread deletion for event logging."""
+        if not thread.guild or thread.guild.id != config.GUILD_ID:
+            return
+
+        # Try to get deleter from audit log
+        deleter = None
+        try:
+            async for entry in thread.guild.audit_logs(limit=5, action=discord.AuditLogAction.thread_delete):
+                if entry.target and entry.target.id == thread.id:
+                    deleter = entry.user
+                    break
+        except discord.Forbidden:
+            pass
+
+        event_logger.log_thread_delete(thread, deleter)
+
+    @commands.Cog.listener()
+    async def on_guild_role_create(self, role: discord.Role) -> None:
+        """Handle role creation for event logging."""
+        if role.guild.id != config.GUILD_ID:
+            return
+
+        # Try to get creator from audit log
+        creator = None
+        try:
+            async for entry in role.guild.audit_logs(limit=5, action=discord.AuditLogAction.role_create):
+                if entry.target and entry.target.id == role.id:
+                    creator = entry.user
+                    break
+        except discord.Forbidden:
+            pass
+
+        event_logger.log_role_create(role, creator)
+
+    @commands.Cog.listener()
+    async def on_guild_role_delete(self, role: discord.Role) -> None:
+        """Handle role deletion for event logging."""
+        if role.guild.id != config.GUILD_ID:
+            return
+
+        # Try to get deleter from audit log
+        deleter = None
+        try:
+            async for entry in role.guild.audit_logs(limit=5, action=discord.AuditLogAction.role_delete):
+                if entry.target and entry.target.id == role.id:
+                    deleter = entry.user
+                    break
+        except discord.Forbidden:
+            pass
+
+        event_logger.log_role_delete(role, deleter)
+
+    @commands.Cog.listener()
+    async def on_guild_role_update(self, before: discord.Role, after: discord.Role) -> None:
+        """Handle role update for event logging."""
+        if after.guild.id != config.GUILD_ID:
+            return
+
+        # Only log if something meaningful changed
+        if before.name == after.name and before.color == after.color and before.permissions == after.permissions:
+            return
+
+        # Try to get updater from audit log
+        updater = None
+        try:
+            async for entry in after.guild.audit_logs(limit=5, action=discord.AuditLogAction.role_update):
+                if entry.target and entry.target.id == after.id:
+                    updater = entry.user
+                    break
+        except discord.Forbidden:
+            pass
+
+        event_logger.log_role_update(before, after, updater)
+
+    @commands.Cog.listener()
+    async def on_guild_emojis_update(
+        self,
+        guild: discord.Guild,
+        before: tuple[discord.Emoji, ...],
+        after: tuple[discord.Emoji, ...]
+    ) -> None:
+        """Handle emoji create/delete for event logging."""
+        if guild.id != config.GUILD_ID:
+            return
+
+        before_ids = {e.id for e in before}
+        after_ids = {e.id for e in after}
+
+        # Find added emojis
+        added_ids = after_ids - before_ids
+        for emoji in after:
+            if emoji.id in added_ids:
+                # Try to get creator from audit log
+                creator = None
+                try:
+                    async for entry in guild.audit_logs(limit=5, action=discord.AuditLogAction.emoji_create):
+                        if entry.target and entry.target.id == emoji.id:
+                            creator = entry.user
+                            break
+                except discord.Forbidden:
+                    pass
+                event_logger.log_emoji_create(emoji, creator)
+
+        # Find removed emojis
+        removed_ids = before_ids - after_ids
+        for emoji in before:
+            if emoji.id in removed_ids:
+                # Try to get deleter from audit log
+                deleter = None
+                try:
+                    async for entry in guild.audit_logs(limit=5, action=discord.AuditLogAction.emoji_delete):
+                        if entry.target and entry.target.id == emoji.id:
+                            deleter = entry.user
+                            break
+                except discord.Forbidden:
+                    pass
+                event_logger.log_emoji_delete(emoji, deleter)
 
 
 async def setup(bot: commands.Bot) -> None:

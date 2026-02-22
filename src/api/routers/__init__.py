@@ -17,6 +17,7 @@ from .xp import router as xp_router
 from .ws import router as ws_router
 from .extended_stats import router as extended_stats_router
 from .bot import router as bot_router
+from .events import router as events_router
 
 __all__ = [
     "health_router",
@@ -28,4 +29,5 @@ __all__ = [
     "ws_router",
     "extended_stats_router",
     "bot_router",
+    "events_router",
 ]

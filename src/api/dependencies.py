@@ -18,6 +18,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from src.api.config import get_api_config
 from src.api.errors import APIError, ErrorCode
+from src.core.logger import logger
 
 
 # =============================================================================
@@ -96,6 +97,9 @@ async def require_auth(
     config = get_api_config()
 
     if not config.jwt_secret:
+        logger.tree("Auth Failed", [
+            ("Reason", "JWT secret not configured"),
+        ], emoji="🔐")
         raise APIError(
             ErrorCode.AUTH_MISSING_KEY,
             message="JWT secret not configured",
@@ -108,15 +112,37 @@ async def require_auth(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    token = credentials.credentials
+    segments = token.count(".") + 1
+
+    # Log malformed tokens for debugging
+    if segments != 3:
+        token_preview = token[:30] + "..." if len(token) > 30 else token
+        logger.tree("Auth Failed", [
+            ("Reason", "Malformed token"),
+            ("Token Preview", token_preview),
+            ("Segments", f"{segments} (expected 3)"),
+        ], emoji="🔐")
+        raise APIError(
+            ErrorCode.AUTH_INVALID_KEY,
+            message="Invalid token format",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     try:
         payload = jwt.decode(
-            credentials.credentials,
+            token,
             config.jwt_secret,
             algorithms=[config.jwt_algorithm],
         )
 
         # Check token type
         if payload.get("type") != "access":
+            logger.tree("Auth Failed", [
+                ("Reason", "Invalid token type"),
+                ("Got", str(payload.get("type"))),
+                ("Expected", "access"),
+            ], emoji="🔐")
             raise APIError(
                 ErrorCode.AUTH_INVALID_KEY,
                 message="Invalid token type",
@@ -126,12 +152,19 @@ async def require_auth(
         return int(payload["sub"])
 
     except ExpiredSignatureError:
+        logger.tree("Auth Failed", [
+            ("Reason", "Token expired"),
+        ], emoji="🔐")
         raise APIError(
             ErrorCode.AUTH_INVALID_KEY,
             message="Token expired",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    except (InvalidTokenError, ValueError, TypeError, KeyError):
+    except (InvalidTokenError, ValueError, TypeError, KeyError) as e:
+        logger.tree("Auth Failed", [
+            ("Reason", "Invalid token"),
+            ("Error", str(e)[:50]),
+        ], emoji="🔐")
         raise APIError(
             ErrorCode.AUTH_INVALID_KEY,
             message="Invalid token",

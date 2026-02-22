@@ -18,6 +18,7 @@ from discord.ext import commands
 from src.core.config import config
 from src.core.logger import logger
 from src.services.database import db
+from src.api.services.event_logger import event_logger
 
 
 class VoiceHandler(commands.Cog):
@@ -83,6 +84,21 @@ class VoiceHandler(commands.Cog):
                 now = int(datetime.now().timestamp())
                 est = ZoneInfo("America/New_York")
 
+                # Track server mute changes (by moderator)
+                if before.mute != after.mute:
+                    event_logger.log_voice_mute(member, muted=after.mute)
+
+                # Track server deafen changes (by moderator)
+                if before.deaf != after.deaf:
+                    event_logger.log_voice_deafen(member, deafened=after.deaf)
+
+                # Track streaming changes (screen share / Go Live)
+                if before.self_stream != after.self_stream and after.channel:
+                    if after.self_stream:
+                        event_logger.log_voice_stream_start(member, after.channel)
+                    else:
+                        event_logger.log_voice_stream_end(member, before.channel or after.channel)
+
                 # User joined a voice channel
                 if after.channel and (not before.channel or before.channel.id != after.channel.id):
                     current_hour = datetime.now(est).hour
@@ -90,6 +106,13 @@ class VoiceHandler(commands.Cog):
 
                     # Track join time for session duration
                     self.voice_join_times[member.id] = (now, after.channel.id)
+
+                    # Log voice join (to events system for dashboard)
+                    if not before.channel:
+                        member_count = len([m for m in after.channel.members if not m.bot])
+                        event_logger.log_voice_join(member, after.channel, member_count)
+                    else:
+                        event_logger.log_voice_switch(member, before.channel, after.channel)
 
                 # User left a voice channel
                 if before.channel and (not after.channel or before.channel.id != after.channel.id):
@@ -108,7 +131,10 @@ class VoiceHandler(commands.Cog):
                                 minutes,
                                 len([m for m in before.channel.members if not m.bot])
                             )
-                            # Note: Voice together tracking is handled by periodic task in ready.py
+
+                            # Log voice leave (to events system for dashboard)
+                            if not after.channel:
+                                event_logger.log_voice_leave(member, before.channel, minutes)
 
                 # Track peak concurrent voice users
                 if after.channel:

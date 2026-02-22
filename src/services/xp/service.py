@@ -34,6 +34,7 @@ from src.core.constants import XP_COOLDOWN_CACHE_THRESHOLD, XP_COOLDOWN_CACHE_MA
 from src.core.logger import logger
 from src.services.database import db
 from src.services.birthday import has_birthday_bonus, BIRTHDAY_XP_MULTIPLIER
+from src.api.services.event_logger import event_logger
 from src.utils.footer import set_footer
 from .utils import level_from_xp, format_xp
 
@@ -725,6 +726,9 @@ class XPService:
                     ("XP", format_xp(result["new_xp"])),
                 ], emoji="🎉")
 
+                # Log to events system (for dashboard Events tab)
+                event_logger.log_level_up(member, old_level, new_level)
+
                 # Award role rewards and send DM if any earned
                 roles_earned = await self._check_role_rewards(member, old_level, new_level)
 
@@ -866,6 +870,9 @@ class XPService:
                             ("Role ID", str(role.id)),
                             ("Perk", perk if perk else "None"),
                         ], emoji="🏆")
+
+                        # Log to events system (for dashboard Events tab)
+                        event_logger.log_xp_role_reward(member, role, level)
 
                 return earned
 

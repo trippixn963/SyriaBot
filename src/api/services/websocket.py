@@ -277,6 +277,18 @@ class WebSocketManager:
 
         await self._broadcast(message)
 
+    async def broadcast_discord_event(self, event_data: Dict[str, Any]) -> None:
+        """Broadcast a Discord event to all connected clients."""
+        if not self._connections:
+            return
+
+        message = json.dumps({
+            "type": "discord_event",
+            "data": event_data
+        })
+
+        await self._broadcast(message)
+
 
 # Singleton
 _ws_manager: WebSocketManager | None = None

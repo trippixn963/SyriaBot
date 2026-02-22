@@ -19,6 +19,7 @@ from src.core.colors import COLOR_BOOST, COLOR_SYRIA_GREEN
 from src.core.logger import logger
 from src.services.database import db
 from src.api.services.websocket import get_ws_manager
+from src.api.services.event_logger import event_logger
 from src.utils.footer import set_footer
 
 
@@ -119,11 +120,22 @@ class MembersHandler(commands.Cog):
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member) -> None:
         """Called when a member joins the server."""
-        if member.bot:
-            return
-
         # Only track in main server
         if member.guild.id != config.GUILD_ID:
+            return
+
+        # Log bot additions separately
+        if member.bot:
+            # Try to find who added the bot from audit log
+            added_by = None
+            try:
+                async for entry in member.guild.audit_logs(limit=5, action=discord.AuditLogAction.bot_add):
+                    if entry.target and entry.target.id == member.id:
+                        added_by = entry.user
+                        break
+            except discord.Forbidden:
+                pass
+            event_logger.log_bot_add(member, added_by)
             return
 
         # Track who invited them
@@ -181,12 +193,12 @@ class MembersHandler(commands.Cog):
 
         try:
             await member.add_roles(role, reason="Auto-role on join")
-            logger.tree("Member Joined", [
-                ("User", f"{member.name} ({member.display_name})"),
-                ("ID", str(member.id)),
-                ("Role Given", role.name),
-                ("Invited By", str(inviter_id) if inviter_id else "Unknown"),
-            ], emoji="👋")
+            # Log to events system (for dashboard Events tab)
+            event_logger.log_join(
+                member=member,
+                invite_code=invite.code if invite else None,
+                inviter=invite.inviter if invite else None,
+            )
         except discord.HTTPException as e:
             logger.tree("Auto-Role Failed", [
                 ("User", f"{member.name} ({member.id})"),
@@ -249,11 +261,30 @@ class MembersHandler(commands.Cog):
         # Mark user as inactive for leaderboard
         try:
             db.set_user_inactive(member.id, member.guild.id)
-            logger.tree("Member Left", [
-                ("User", f"{member.name} ({member.display_name})"),
-                ("ID", str(member.id)),
-                ("Action", "Marked inactive on leaderboard"),
-            ], emoji="👋")
+
+            # Check if this was a kick (not a ban - bans are logged in on_member_ban)
+            was_kicked = False
+            kick_moderator = None
+            kick_reason = None
+            try:
+                async for entry in member.guild.audit_logs(limit=5, action=discord.AuditLogAction.kick):
+                    if entry.target and entry.target.id == member.id:
+                        # Check if this kick was recent (within 5 seconds)
+                        from datetime import datetime, timezone
+                        if (datetime.now(timezone.utc) - entry.created_at).total_seconds() < 5:
+                            was_kicked = True
+                            kick_moderator = entry.user
+                            kick_reason = entry.reason
+                            break
+            except discord.Forbidden:
+                pass
+
+            # Log to events system (for dashboard Events tab)
+            if was_kicked:
+                event_logger.log_kick(member.guild, member, kick_moderator, kick_reason)
+            else:
+                role_names = [r.name for r in member.roles if r.name != "@everyone"]
+                event_logger.log_leave(member=member, roles=role_names)
         except Exception as e:
             logger.tree("Set User Inactive Failed", [
                 ("User", f"{member.name} ({member.display_name})"),
@@ -271,10 +302,45 @@ class MembersHandler(commands.Cog):
 
     @commands.Cog.listener()
     async def on_member_update(self, before: discord.Member, after: discord.Member) -> None:
-        """Called when a member is updated - detects new boosts."""
+        """Called when a member is updated - detects boosts, roles, timeouts, nicknames."""
         # Only track in main server
         if after.guild.id != config.GUILD_ID:
             return
+
+        # Track role changes
+        added_roles = set(after.roles) - set(before.roles)
+        removed_roles = set(before.roles) - set(after.roles)
+
+        for role in added_roles:
+            if role.name != "@everyone":
+                event_logger.log_role_add(after, role)
+
+        for role in removed_roles:
+            if role.name != "@everyone":
+                event_logger.log_role_remove(after, role)
+
+        # Track nickname changes
+        if before.nick != after.nick:
+            event_logger.log_nick_change(after, before.nick, after.nick)
+
+        # Track timeout changes
+        if before.timed_out_until != after.timed_out_until:
+            if after.timed_out_until is not None:
+                # Member was timed out
+                from datetime import datetime, timezone
+                now = datetime.now(timezone.utc)
+                if after.timed_out_until > now:
+                    delta = after.timed_out_until - now
+                    if delta.days > 0:
+                        duration = f"{delta.days}d"
+                    elif delta.seconds >= 3600:
+                        duration = f"{delta.seconds // 3600}h"
+                    else:
+                        duration = f"{delta.seconds // 60}m"
+                    event_logger.log_timeout(after, duration=duration)
+            else:
+                # Timeout was removed
+                event_logger.log_timeout_remove(after)
 
         # Check if member started boosting
         if before.premium_since is None and after.premium_since is not None:
@@ -304,10 +370,8 @@ class MembersHandler(commands.Cog):
         elif before.premium_since is not None and after.premium_since is None:
             try:
                 db.record_boost(after.id, after.guild.id, "unboost")
-                logger.tree("Boost Ended", [
-                    ("User", f"{after.name} ({after.id})"),
-                    ("Guild", after.guild.name),
-                ], emoji="💔")
+                # Log to events system (for dashboard Events tab)
+                event_logger.log_unboost(after)
             except Exception as e:
                 logger.tree("Unboost Record Failed", [
                     ("User", f"{after.name} ({after.id})"),
@@ -347,11 +411,8 @@ class MembersHandler(commands.Cog):
 
     async def _handle_new_boost(self, member: discord.Member) -> None:
         """Send thank you message when someone boosts."""
-        logger.tree("New Boost", [
-            ("User", f"{member.name} ({member.display_name})"),
-            ("ID", str(member.id)),
-            ("Guild", member.guild.name),
-        ], emoji="💎")
+        # Log to events system (for dashboard Events tab)
+        event_logger.log_boost(member)
 
         # Get general channel
         if not config.GENERAL_CHANNEL_ID:
@@ -471,6 +532,66 @@ class MembersHandler(commands.Cog):
                 ("ID", str(member.id)),
                 ("Error", str(e)[:50]),
             ], emoji="⚠️")
+
+    @commands.Cog.listener()
+    async def on_member_ban(self, guild: discord.Guild, user: discord.User) -> None:
+        """Called when a member is banned."""
+        if guild.id != config.GUILD_ID:
+            return
+
+        # Try to get moderator from audit log
+        moderator = None
+        reason = None
+        try:
+            async for entry in guild.audit_logs(limit=5, action=discord.AuditLogAction.ban):
+                if entry.target and entry.target.id == user.id:
+                    moderator = entry.user
+                    reason = entry.reason
+                    break
+        except discord.Forbidden:
+            pass
+
+        event_logger.log_ban(guild, user, moderator, reason)
+
+    @commands.Cog.listener()
+    async def on_member_unban(self, guild: discord.Guild, user: discord.User) -> None:
+        """Called when a member is unbanned."""
+        if guild.id != config.GUILD_ID:
+            return
+
+        # Try to get moderator from audit log
+        moderator = None
+        try:
+            async for entry in guild.audit_logs(limit=5, action=discord.AuditLogAction.unban):
+                if entry.target and entry.target.id == user.id:
+                    moderator = entry.user
+                    break
+        except discord.Forbidden:
+            pass
+
+        event_logger.log_unban(guild, user, moderator)
+
+    @commands.Cog.listener()
+    async def on_invite_create(self, invite: discord.Invite) -> None:
+        """Called when an invite is created."""
+        if not invite.guild or invite.guild.id != config.GUILD_ID:
+            return
+
+        event_logger.log_invite_create(invite)
+
+        # Update invite cache
+        self._invite_cache[invite.code] = invite.uses or 0
+
+    @commands.Cog.listener()
+    async def on_invite_delete(self, invite: discord.Invite) -> None:
+        """Called when an invite is deleted."""
+        if not invite.guild or invite.guild.id != config.GUILD_ID:
+            return
+
+        event_logger.log_invite_delete(invite)
+
+        # Remove from cache
+        self._invite_cache.pop(invite.code, None)
 
 
 async def setup(bot: commands.Bot) -> None:
