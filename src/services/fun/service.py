@@ -236,8 +236,8 @@ class FunService:
             Tuple of (percentage, message)
         """
         # Special ship override - owner + special user = 100%
-        special_pair = {config.OWNER_ID, config.SHIP_SPECIAL_USER_ID}
-        if {user1_id, user2_id} == special_pair:
+        users = {user1_id, user2_id}
+        if config.OWNER_ID in users and any(uid in users for uid in config.SHIP_SPECIAL_USER_IDS):
             logger.tree("Ship Calculated", [
                 ("User 1", str(user1_id)),
                 ("User 2", str(user2_id)),
@@ -251,6 +251,15 @@ class FunService:
                 ("User 1", str(user1_id)),
                 ("User 2", str(user2_id)),
                 ("Result", "0% (owner override)"),
+            ], emoji="💕")
+            return 0, "Not meant to be... 💔"
+
+        # Special user override - anyone shipped with special user = 0%
+        if user1_id in config.SHIP_SPECIAL_USER_IDS or user2_id in config.SHIP_SPECIAL_USER_IDS:
+            logger.tree("Ship Calculated", [
+                ("User 1", str(user1_id)),
+                ("User 2", str(user2_id)),
+                ("Result", "0% (special user override)"),
             ], emoji="💕")
             return 0, "Not meant to be... 💔"
 

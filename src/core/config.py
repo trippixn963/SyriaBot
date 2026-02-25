@@ -220,7 +220,7 @@ class Config:
     # ==========================================================================
     # Fun Commands (Ship special override)
     # ==========================================================================
-    SHIP_SPECIAL_USER_ID: int = _env_int("SYRIA_SHIP_SPECIAL_USER")
+    SHIP_SPECIAL_USER_IDS: tuple = tuple(int(x) for x in os.getenv("SYRIA_SHIP_SPECIAL_USER", "").split(",") if x.strip())
 
     # ==========================================================================
     # FAQ Ignored Channels

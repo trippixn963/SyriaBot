@@ -206,4 +206,23 @@ async def get_stats(
         raise APIError(ErrorCode.SERVER_ERROR)
 
 
+
+
+@router.get("/boosters")
+async def get_boosters(bot: Any = Depends(get_bot)):
+    """Get list of server boosters."""
+    boosters = []
+    if bot and bot.is_ready():
+        guild = bot.get_guild(config.GUILD_ID)
+        if guild and guild.premium_subscribers:
+            for member in guild.premium_subscribers:
+                boosters.append({
+                    "user_id": str(member.id),
+                    "display_name": member.display_name,
+                    "username": member.name,
+                    "avatar": member.display_avatar.url if member.display_avatar else None,
+                })
+    
+    return {"boosters": boosters, "count": len(boosters)}
+
 __all__ = ["router"]
