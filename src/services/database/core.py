@@ -701,6 +701,28 @@ class DatabaseCore:
             """)
 
             # =====================================================================
+            # Additional Performance Indexes
+            # =====================================================================
+
+            # Confessions - filter by status and sort by submitted_at
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_confessions_status
+                ON confessions(status, submitted_at DESC)
+            """)
+
+            # Action stats - query by action type per guild
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_action_stats_action_guild
+                ON action_stats(guild_id, action, count DESC)
+            """)
+
+            # User XP - active status filtering for leaderboard
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_user_xp_active_xp
+                ON user_xp(guild_id, is_active, xp DESC)
+            """)
+
+            # =====================================================================
             # User Channel Activity Table (per-user-per-channel message counts)
             # =====================================================================
 

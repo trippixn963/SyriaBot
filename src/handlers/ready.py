@@ -11,6 +11,8 @@ Server: discord.gg/syria
 import discord
 from discord.ext import commands, tasks
 
+from datetime import datetime, timezone
+
 from src.core.config import config
 from src.core.logger import logger
 from src.utils.footer import init_footer
@@ -63,6 +65,9 @@ class ReadyHandler(commands.Cog):
     @commands.Cog.listener()
     async def on_ready(self) -> None:
         """Called when the bot is ready."""
+        # Set start time for uptime tracking
+        self.bot.start_time = datetime.now(timezone.utc)
+
         # Use startup_banner for bot ready
         logger.startup_banner(
             bot_name=str(self.bot.user),
@@ -164,9 +169,12 @@ class ReadyHandler(commands.Cog):
                 self.snapshot_roles.start()
             if not self.track_voice_together.is_running():
                 self.track_voice_together.start()
+            if not self.daily_cleanup.is_running():
+                self.daily_cleanup.start()
             logger.tree("Scheduled Tasks Started", [
                 ("Role Snapshots", "Every 24h"),
                 ("Voice Together", "Every 60s"),
+                ("Daily Cleanup", "Every 24h"),
             ], emoji="⏰")
         except Exception as e:
             logger.error_tree("Scheduled Tasks Start Failed", e)
@@ -241,10 +249,43 @@ class ReadyHandler(commands.Cog):
         """Wait until bot is ready before starting the task."""
         await self.bot.wait_until_ready()
 
+    @tasks.loop(hours=24)
+    async def daily_cleanup(self) -> None:
+        """Clean up old data from unbounded tables."""
+        import asyncio
+
+        try:
+            # Run cleanup in thread pool to avoid blocking event loop
+            results = await asyncio.to_thread(
+                db.run_all_cleanups,
+                config.GUILD_ID
+            )
+
+            total = sum(results.values())
+            if total > 0:
+                logger.tree("Daily Cleanup Complete", [
+                    ("XP Snapshots", str(results.get("xp_snapshots", 0))),
+                    ("Role Snapshots", str(results.get("role_snapshots", 0))),
+                    ("Member Events", str(results.get("member_events", 0))),
+                    ("Channel Daily", str(results.get("channel_daily_stats", 0))),
+                    ("Total Deleted", str(total)),
+                ], emoji="🧹")
+        except Exception as e:
+            logger.error_tree("Daily Cleanup Failed", e)
+
+    @daily_cleanup.before_loop
+    async def before_daily_cleanup(self) -> None:
+        """Wait until bot is ready before starting the task."""
+        await self.bot.wait_until_ready()
+        # Delay first cleanup by 1 hour to not run immediately on startup
+        import asyncio
+        await asyncio.sleep(3600)
+
     def cog_unload(self) -> None:
         """Cancel tasks when cog is unloaded."""
         self.snapshot_roles.cancel()
         self.track_voice_together.cancel()
+        self.daily_cleanup.cancel()
 
 
 async def setup(bot: commands.Bot) -> None:

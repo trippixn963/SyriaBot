@@ -152,19 +152,14 @@ async def require_auth(
         return int(payload["sub"])
 
     except ExpiredSignatureError:
-        logger.tree("Auth Failed", [
-            ("Reason", "Token expired"),
-        ], emoji="🔐")
+        # Don't log - expired tokens are normal (user left dashboard open)
         raise APIError(
             ErrorCode.AUTH_INVALID_KEY,
             message="Token expired",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    except (InvalidTokenError, ValueError, TypeError, KeyError) as e:
-        logger.tree("Auth Failed", [
-            ("Reason", "Invalid token"),
-            ("Error", str(e)[:50]),
-        ], emoji="🔐")
+    except (InvalidTokenError, ValueError, TypeError, KeyError):
+        # Don't log - invalid tokens are common from bots/scanners
         raise APIError(
             ErrorCode.AUTH_INVALID_KEY,
             message="Invalid token",

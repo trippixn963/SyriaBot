@@ -1,19 +1,19 @@
-"""SyriaBot - Backup Service Package."""
+"""SyriaBot - R2 Backup Package."""
 
 from src.services.backup.service import (
     BackupScheduler,
-    create_backup_system,
-    BACKUP_DIR,
+    send_backup_notification,
     DATABASE_PATH,
-    BACKUP_PREFIX,
-    DEFAULT_RETENTION_DAYS,
+    BOT_NAME,
+    R2_BUCKET,
+    RETENTION_HOURS,
 )
 
 __all__ = [
     "BackupScheduler",
-    "create_backup_system",
-    "BACKUP_DIR",
+    "send_backup_notification",
     "DATABASE_PATH",
-    "BACKUP_PREFIX",
-    "DEFAULT_RETENTION_DAYS",
+    "BOT_NAME",
+    "R2_BUCKET",
+    "RETENTION_HOURS",
 ]

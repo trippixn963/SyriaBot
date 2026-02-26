@@ -91,10 +91,11 @@ class LoggingMiddleware(BaseHTTPMiddleware):
 
         if status >= 500:
             logger.error("API Response", log_data)
-        elif status in (401, 403, 429):
+        elif status in (403, 429):
             logger.warning("API Response", log_data)
         elif status >= 400:
-            logger.debug("API Response", log_data)
+            # 401s and other 4xx errors are debug level (expected behavior)
+            pass
         else:
             # Success responses - only log if slow (>500ms)
             if duration_ms > 500:

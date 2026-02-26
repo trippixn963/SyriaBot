@@ -138,11 +138,13 @@ def create_app(bot: Optional[Any] = None) -> FastAPI:
     @app.exception_handler(APIError)
     async def api_error_handler(request: Request, exc: APIError):
         """Handle APIError exceptions with structured response."""
-        logger.tree("API Error", [
-            ("Path", str(request.url.path)[:50]),
-            ("Code", exc.error_code.value),
-            ("Status", str(exc.status_code)),
-        ], emoji="⚠️")
+        # Skip logging for auth failures (expected behavior - expired tokens, etc.)
+        if exc.status_code != 401:
+            logger.tree("API Error", [
+                ("Path", str(request.url.path)[:50]),
+                ("Code", exc.error_code.value),
+                ("Status", str(exc.status_code)),
+            ], emoji="⚠️")
 
         return JSONResponse(
             status_code=exc.status_code,

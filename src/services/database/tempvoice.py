@@ -326,34 +326,35 @@ class TempVoiceMixin:
             return (trusted, blocked)
 
     def cleanup_stale_users(self, owner_id: int, valid_user_ids: set) -> int:
-        """Remove trusted/blocked users who are no longer in the guild."""
+        """Remove trusted/blocked users who are no longer in the guild.
+
+        Uses SQL NOT IN for O(n) instead of Python filtering which was O(n²).
+        """
         if not valid_user_ids:
             return 0
 
         removed = 0
         try:
+            # Convert set to list for SQL placeholders
+            valid_ids_list = list(valid_user_ids)
+            placeholders = ",".join("?" * len(valid_ids_list))
+
             with self._get_conn() as conn:
                 cur = conn.cursor()
 
-                cur.execute("SELECT trusted_id FROM trusted_users WHERE owner_id = ?", (owner_id,))
-                stale_trusted = [row["trusted_id"] for row in cur.fetchall() if row["trusted_id"] not in valid_user_ids]
-                if stale_trusted:
-                    placeholders = ",".join("?" * len(stale_trusted))
-                    cur.execute(
-                        f"DELETE FROM trusted_users WHERE owner_id = ? AND trusted_id IN ({placeholders})",
-                        [owner_id] + stale_trusted
-                    )
-                    removed += len(stale_trusted)
+                # Delete trusted users NOT in valid_user_ids (single SQL query)
+                cur.execute(
+                    f"DELETE FROM trusted_users WHERE owner_id = ? AND trusted_id NOT IN ({placeholders})",
+                    [owner_id] + valid_ids_list
+                )
+                removed += cur.rowcount
 
-                cur.execute("SELECT blocked_id FROM blocked_users WHERE owner_id = ?", (owner_id,))
-                stale_blocked = [row["blocked_id"] for row in cur.fetchall() if row["blocked_id"] not in valid_user_ids]
-                if stale_blocked:
-                    placeholders = ",".join("?" * len(stale_blocked))
-                    cur.execute(
-                        f"DELETE FROM blocked_users WHERE owner_id = ? AND blocked_id IN ({placeholders})",
-                        [owner_id] + stale_blocked
-                    )
-                    removed += len(stale_blocked)
+                # Delete blocked users NOT in valid_user_ids (single SQL query)
+                cur.execute(
+                    f"DELETE FROM blocked_users WHERE owner_id = ? AND blocked_id NOT IN ({placeholders})",
+                    [owner_id] + valid_ids_list
+                )
+                removed += cur.rowcount
 
             if removed > 0:
                 logger.tree("DB: Stale Users Cleaned", [

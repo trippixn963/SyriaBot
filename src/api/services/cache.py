@@ -27,8 +27,9 @@ class CacheService:
     def __init__(self) -> None:
         config = get_api_config()
 
-        # Response cache: {key: (data, timestamp)}
-        self._response_cache: dict[str, Tuple[dict, float]] = {}
+        # Response cache: OrderedDict for O(1) LRU eviction
+        # {key: (data, timestamp)}
+        self._response_cache: OrderedDict[str, Tuple[dict, float]] = OrderedDict()
         self._response_cache_lock = asyncio.Lock()
         self._response_cache_max_size = config.cache_max_size
 
@@ -55,18 +56,22 @@ class CacheService:
         cache_ttl = ttl or self._stats_cache_ttl
 
         if time.time() - cached_time < cache_ttl:
+            # Move to end for LRU ordering (most recently accessed)
+            self._response_cache.move_to_end(key)
             return data
 
         return None
 
     async def set_response(self, key: str, data: dict) -> None:
         """Cache a response."""
+        # If key exists, move to end; otherwise add new entry
+        if key in self._response_cache:
+            self._response_cache.move_to_end(key)
         self._response_cache[key] = (data, time.time())
 
-        # Evict oldest entries if cache exceeds limit
+        # O(1) LRU eviction - pop oldest entries (at front of OrderedDict)
         while len(self._response_cache) > self._response_cache_max_size:
-            oldest_key = min(self._response_cache, key=lambda k: self._response_cache[k][1])
-            del self._response_cache[oldest_key]
+            self._response_cache.popitem(last=False)
 
     async def clear_responses(self) -> None:
         """Clear all cached responses."""

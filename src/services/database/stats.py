@@ -854,4 +854,131 @@ class StatsMixin:
 
         return deleted
 
+    # =========================================================================
+    # Data Cleanup Methods (prevent unbounded growth)
+    # =========================================================================
+
+    def cleanup_old_member_events(self, days_to_keep: int = 90, guild_id: int = None) -> int:
+        """
+        Delete member events older than specified days.
+
+        The member_events table grows unbounded without cleanup.
+        Keep 90 days by default for monthly growth charts.
+
+        Args:
+            days_to_keep: Number of days of history to retain (default 90)
+            guild_id: Guild ID (defaults to config.GUILD_ID)
+
+        Returns:
+            Number of rows deleted
+        """
+        from src.core.config import config
+
+        gid = guild_id or config.GUILD_ID
+        cutoff_timestamp = int(time.time()) - (days_to_keep * 86400)
+
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                DELETE FROM member_events
+                WHERE guild_id = ? AND timestamp < ?
+            """, (gid, cutoff_timestamp))
+
+            deleted = cur.rowcount
+
+        if deleted > 0:
+            logger.tree("Member Events Cleanup", [
+                ("Deleted", str(deleted)),
+                ("Days Kept", str(days_to_keep)),
+            ], emoji="🧹")
+
+        return deleted
+
+    def cleanup_old_channel_daily_stats(self, days_to_keep: int = 90, guild_id: int = None) -> int:
+        """
+        Delete channel daily stats older than specified days.
+
+        The channel_daily_stats table grows unbounded without cleanup.
+        Keep 90 days by default for channel trend charts.
+
+        Args:
+            days_to_keep: Number of days of history to retain (default 90)
+            guild_id: Guild ID (defaults to config.GUILD_ID)
+
+        Returns:
+            Number of rows deleted
+        """
+        from src.core.config import config
+        from datetime import datetime, timezone, timedelta
+
+        gid = guild_id or config.GUILD_ID
+        cutoff_date = (datetime.now(timezone.utc) - timedelta(days=days_to_keep)).strftime("%Y-%m-%d")
+
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                DELETE FROM channel_daily_stats
+                WHERE guild_id = ? AND date < ?
+            """, (gid, cutoff_date))
+
+            deleted = cur.rowcount
+
+        if deleted > 0:
+            logger.tree("Channel Daily Stats Cleanup", [
+                ("Deleted", str(deleted)),
+                ("Cutoff", cutoff_date),
+            ], emoji="🧹")
+
+        return deleted
+
+    def run_all_cleanups(self, guild_id: int = None) -> Dict[str, int]:
+        """
+        Run all cleanup methods for unbounded tables.
+
+        Should be called daily (e.g., at midnight via scheduled task).
+
+        Returns:
+            Dict with cleanup results per table
+        """
+        results = {
+            "xp_snapshots": 0,
+            "role_snapshots": 0,
+            "member_events": 0,
+            "channel_daily_stats": 0,
+        }
+
+        try:
+            # cleanup_old_snapshots is in XPMixin, call via self
+            if hasattr(self, 'cleanup_old_snapshots'):
+                results["xp_snapshots"] = self.cleanup_old_snapshots(35, guild_id)
+        except Exception as e:
+            logger.error_tree("XP Snapshots Cleanup Error", e)
+
+        try:
+            results["role_snapshots"] = self.cleanup_old_role_snapshots(90, guild_id)
+        except Exception as e:
+            logger.error_tree("Role Snapshots Cleanup Error", e)
+
+        try:
+            results["member_events"] = self.cleanup_old_member_events(90, guild_id)
+        except Exception as e:
+            logger.error_tree("Member Events Cleanup Error", e)
+
+        try:
+            results["channel_daily_stats"] = self.cleanup_old_channel_daily_stats(90, guild_id)
+        except Exception as e:
+            logger.error_tree("Channel Daily Stats Cleanup Error", e)
+
+        total_deleted = sum(results.values())
+        if total_deleted > 0:
+            logger.tree("All Cleanups Complete", [
+                ("Total Deleted", str(total_deleted)),
+                ("XP Snapshots", str(results["xp_snapshots"])),
+                ("Role Snapshots", str(results["role_snapshots"])),
+                ("Member Events", str(results["member_events"])),
+                ("Channel Daily", str(results["channel_daily_stats"])),
+            ], emoji="🧹")
+
+        return results
+
     # Alias for backwards compatibility

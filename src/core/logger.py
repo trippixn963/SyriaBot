@@ -42,6 +42,7 @@ import shutil
 import uuid
 import traceback
 import asyncio
+import inspect
 import aiohttp
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -170,6 +171,9 @@ class Logger:
         self._webhook_session: Optional[aiohttp.ClientSession] = None
         self._session_lock: Optional[asyncio.Lock] = None  # Lazy init to avoid event loop issues
 
+        # Log callbacks for API log storage
+        self._log_callbacks: List[Any] = []
+
         # Base logs directory
         self.logs_base_dir = Path(__file__).parent.parent.parent / "logs"
         self.logs_base_dir.mkdir(exist_ok=True)
@@ -190,6 +194,80 @@ class Logger:
 
         # Write session header
         self._write_session_header()
+
+    # =========================================================================
+    # Log Callbacks (for API log storage)
+    # =========================================================================
+
+    def on_log(self, callback: Any) -> None:
+        """
+        Register a callback to receive log entries.
+
+        Callback signature: callback(level: str, message: str, module: str, formatted: str)
+        Used by the API log storage to capture logs for the dashboard.
+        """
+        self._log_callbacks.append(callback)
+
+    def _get_caller_module(self) -> str:
+        """
+        Detect the calling module from the stack.
+
+        Returns a short module name like "xp", "tempvoice", "api".
+        """
+        for frame_info in inspect.stack():
+            module = frame_info.frame.f_globals.get("__name__", "")
+
+            # Skip logger module itself
+            if "logger" in module:
+                continue
+
+            # Extract meaningful module name
+            if "src.commands." in module:
+                parts = module.split(".")
+                if len(parts) >= 3:
+                    return parts[2]
+            elif "src.handlers." in module:
+                parts = module.split(".")
+                if len(parts) >= 3:
+                    return parts[2]
+            elif "src.services." in module:
+                parts = module.split(".")
+                if len(parts) >= 3:
+                    return parts[2]
+            elif "src.api." in module:
+                return "api"
+            elif "src.core." in module:
+                return "core"
+            elif module.startswith("src."):
+                parts = module.split(".")
+                if len(parts) >= 2:
+                    return parts[1]
+
+        return "bot"
+
+    def _notify_log_callbacks(
+        self,
+        level: str,
+        message: str,
+        formatted: Optional[str] = None,
+    ) -> None:
+        """
+        Notify all registered log callbacks.
+
+        Args:
+            level: Log level (INFO, WARNING, ERROR)
+            message: Log message/title
+            formatted: Optional formatted tree string for display
+        """
+        if not self._log_callbacks:
+            return
+
+        module = self._get_caller_module()
+        for callback in self._log_callbacks:
+            try:
+                callback(level, message, module, formatted)
+            except (TypeError, RuntimeError, AttributeError):
+                pass  # Don't let callback errors break logging
 
     # =========================================================================
     # Private Methods - Setup
@@ -565,6 +643,9 @@ class Logger:
         # Also send to dedicated error webhook
         self._send_error_webhook(title, items, emoji)
 
+        # Notify log callbacks for API storage
+        self._notify_log_callbacks("ERROR", title, formatted)
+
     # =========================================================================
     # Public Methods - Log Levels
     # =========================================================================
@@ -684,6 +765,9 @@ class Logger:
         # Send to live logs Discord webhook
         formatted = self._format_tree_for_live(title, items, emoji)
         self._send_live_log(formatted)
+
+        # Notify log callbacks for API storage
+        self._notify_log_callbacks("INFO", title, formatted)
 
     def tree_nested(
         self,

@@ -22,6 +22,7 @@ import asyncio
 import hashlib
 import random
 import time
+from collections import OrderedDict
 from datetime import time as dt_time
 from typing import TYPE_CHECKING, Dict, Optional
 
@@ -83,11 +84,12 @@ class XPService:
         self._voice_sessions_lock: asyncio.Lock = asyncio.Lock()
 
         # In-memory message cooldown cache: {(user_id, guild_id): timestamp}
+        # Uses OrderedDict for O(1) LRU eviction instead of O(n log n) sorting
         # Avoids DB query on every message - most will fail cooldown check
-        self._message_cooldowns: Dict[tuple, int] = {}
+        self._message_cooldowns: OrderedDict[tuple, int] = OrderedDict()
 
         # Track last message content per user to prevent duplicate spam
-        self._last_messages: Dict[tuple, str] = {}  # {(user_id, guild_id): content}
+        self._last_messages: Dict[tuple, str] = {}  # {(user_id, guild_id): content_hash}
 
         # Track daily unique users to avoid duplicate DAU counts
         self._dau_cache: set = set()  # {(user_id, guild_id, date)}
@@ -241,48 +243,24 @@ class XPService:
             # Update last message tracker with hash (not full content)
             self._last_messages[cache_key] = content_hash
 
-            # Update cache with current timestamp
+            # Update cache - move to end for LRU ordering
+            if cache_key in self._message_cooldowns:
+                self._message_cooldowns.move_to_end(cache_key)
             self._message_cooldowns[cache_key] = now
 
-            # Periodically clean old entries inside the lock to prevent race conditions
-            if len(self._message_cooldowns) > XP_COOLDOWN_CACHE_THRESHOLD:
-                old_count = len(self._message_cooldowns)
-                cutoff = now - config.XP_MESSAGE_COOLDOWN
-                # Build new dicts first, then swap atomically with tuple assignment
-                new_cooldowns = {
-                    k: v for k, v in self._message_cooldowns.items()
-                    if v > cutoff
-                }
-                new_messages = {
-                    k: v for k, v in self._last_messages.items()
-                    if k in new_cooldowns
-                }
-                # Atomic swap to keep both caches in sync
-                self._message_cooldowns, self._last_messages = new_cooldowns, new_messages
-                logger.tree("XP Cache Cleanup", [
-                    ("Before", str(old_count)),
-                    ("After", str(len(self._message_cooldowns))),
-                    ("Removed", str(old_count - len(self._message_cooldowns))),
-                ], emoji="🧹")
+            # Hard limit enforcement - O(1) eviction using OrderedDict
+            # Evict oldest entries (front of OrderedDict) when over limit
+            evicted = 0
+            while len(self._message_cooldowns) > XP_COOLDOWN_CACHE_MAX_SIZE:
+                oldest_key, _ = self._message_cooldowns.popitem(last=False)  # O(1)
+                self._last_messages.pop(oldest_key, None)
+                evicted += 1
 
-            # Hard limit enforcement - evict oldest entries if still too large
-            if len(self._message_cooldowns) > XP_COOLDOWN_CACHE_MAX_SIZE:
-                # Sort by timestamp and keep only the newest entries
-                sorted_items = sorted(
-                    self._message_cooldowns.items(),
-                    key=lambda x: x[1],
-                    reverse=True
-                )[:XP_COOLDOWN_CACHE_MAX_SIZE]
-                new_cooldowns = dict(sorted_items)
-                new_messages = {
-                    k: v for k, v in self._last_messages.items()
-                    if k in new_cooldowns
-                }
-                # Atomic swap to keep both caches in sync
-                self._message_cooldowns, self._last_messages = new_cooldowns, new_messages
-                logger.tree("XP Cache Hard Limit Enforced", [
-                    ("Max Size", str(XP_COOLDOWN_CACHE_MAX_SIZE)),
-                ], emoji="⚠️")
+            if evicted > 0:
+                logger.tree("XP Cache LRU Eviction", [
+                    ("Evicted", str(evicted)),
+                    ("Size", str(len(self._message_cooldowns))),
+                ], emoji="🧹")
 
         # Calculate XP with potential multipliers
         base_xp = random.randint(config.XP_MESSAGE_MIN, config.XP_MESSAGE_MAX)
@@ -397,18 +375,16 @@ class XPService:
         guild_id = member.guild.id
         user_id = member.id
 
-        # Ensure guild dict exists (with lock to prevent race condition)
-        async with self._voice_sessions_lock:
-            if guild_id not in self._voice_sessions:
-                self._voice_sessions[guild_id] = {}
-
         # Determine actual channel changes
         left_voice = before.channel and (not after.channel or before.channel.id != after.channel.id)
         joined_voice = after.channel and (not before.channel or after.channel.id != before.channel.id)
 
         if joined_voice and after.channel:
-            # User joined a voice channel - start tracking
-            self._voice_sessions[guild_id][user_id] = time.time()
+            # User joined a voice channel - start tracking (with lock)
+            async with self._voice_sessions_lock:
+                if guild_id not in self._voice_sessions:
+                    self._voice_sessions[guild_id] = {}
+                self._voice_sessions[guild_id][user_id] = time.time()
 
             # If user joined already muted, start mute tracking
             if after.self_mute or after.mute:
@@ -432,16 +408,18 @@ class XPService:
             ], emoji="🎤")
 
         elif left_voice:
-            # Calculate session duration for longest session tracking
-            join_time = self._voice_sessions[guild_id].get(user_id)
+            # Calculate session duration for longest session tracking (with lock)
+            async with self._voice_sessions_lock:
+                guild_sessions = self._voice_sessions.get(guild_id, {})
+                join_time = guild_sessions.get(user_id)
+                # Remove from tracking (XP already awarded by loop)
+                guild_sessions.pop(user_id, None)
+
             session_minutes = 0
             if join_time:
                 session_minutes = int((time.time() - join_time) / 60)
                 if session_minutes > 0:
                     db.update_longest_voice_session(user_id, guild_id, session_minutes)
-
-            # User left voice - remove from tracking (XP already awarded by loop)
-            self._voice_sessions[guild_id].pop(user_id, None)
             # Clear mute tracking
             self._mute_timestamps.pop(user_id, None)
 
@@ -505,110 +483,146 @@ class XPService:
         """Background task that awards voice XP every minute."""
         await self.bot.wait_until_ready()
 
+        consecutive_errors = 0
+        MAX_CONSECUTIVE_ERRORS = 5
+
         while not self.bot.is_closed():
             try:
                 await asyncio.sleep(60)  # Wait 1 minute
 
-                for guild_id, sessions in list(self._voice_sessions.items()):
-                    guild = self.bot.get_guild(guild_id)
-                    if not guild:
-                        # Guild no longer accessible, clear sessions
-                        self._voice_sessions.pop(guild_id, None)
-                        continue
+                # Snapshot sessions with lock to prevent race conditions
+                async with self._voice_sessions_lock:
+                    sessions_snapshot = {k: dict(v) for k, v in self._voice_sessions.items()}
 
-                    # Get users who have been in voice for at least 1 minute
-                    now = time.time()
-                    users_to_reward = []
-                    stale_users = []
-
-                    for user_id, join_time in list(sessions.items()):
-                        member = guild.get_member(user_id)
-
-                        # Check member exists first before any attribute access
-                        if not member:
-                            stale_users.append((user_id, "Unknown"))
-                            continue
-
-                        # Capture voice state once to avoid race conditions
-                        voice = member.voice
-                        channel = voice.channel if voice else None
-
-                        if not channel:
-                            stale_users.append((user_id, member.name))
-                            continue
-
-                        # Skip AFK channel
-                        if guild.afk_channel and channel.id == guild.afk_channel.id:
-                            continue
-
-                        # Skip ignored channels (bot-managed VCs like Quran)
-                        if channel.id in config.VC_IGNORED_CHANNELS:
-                            continue
-
-                        # Anti-abuse: Require at least 2 non-bot users in channel
-                        human_count = sum(1 for m in channel.members if not m.bot)
-                        if human_count < 2:
-                            continue
-
-                        # Anti-abuse: No XP if server deafened (not participating)
-                        if voice.deaf:
-                            continue
-
-                        # Anti-abuse: No XP if muted for > 1 hour (AFK farming prevention)
-                        is_muted = voice.self_mute or voice.mute
-                        if is_muted:
-                            mute_start = self._mute_timestamps.get(user_id)
-                            if mute_start:
-                                mute_duration = now - mute_start
-                                if mute_duration > 3600:  # 1 hour
-                                    logger.tree("Voice XP Blocked (AFK Mute)", [
-                                        ("User", f"{member.name} ({member.display_name})"),
-                                        ("ID", str(member.id)),
-                                        ("Channel", channel.name),
-                                        ("Muted For", f"{int(mute_duration / 60)} min"),
-                                    ], emoji="🚫")
-                                    continue
-
-                        if now - join_time >= 60:
-                            users_to_reward.append(member)
-
-                    # Remove stale entries (users who left but event was missed)
-                    if stale_users:
-                        for user_id, user_name in stale_users:
-                            sessions.pop(user_id, None)
-                        logger.tree("Stale Voice Sessions Cleaned", [
-                            ("Count", str(len(stale_users))),
-                            ("Users", ", ".join(name for _, name in stale_users[:5]) + ("..." if len(stale_users) > 5 else "")),
-                            ("Guild", guild.name),
-                        ], emoji="🧹")
-
-                    # Award XP
-                    for member in users_to_reward:
-                        xp_amount = config.XP_VOICE_PER_MIN
-
-                        # Birthday bonus (3x) takes priority
-                        if has_birthday_bonus(member.id):
-                            xp_amount = int(xp_amount * BIRTHDAY_XP_MULTIPLIER)
-                        elif member.premium_since is not None:
-                            xp_amount = int(xp_amount * config.XP_BOOSTER_MULTIPLIER)
-
-                        await self._grant_xp(member, xp_amount, "voice")
-
-                    # Broadcast voice minutes update (1 minute per user)
-                    if users_to_reward:
-                        try:
-                            from src.api.services.websocket import get_ws_manager
-                            ws = get_ws_manager()
-                            if ws.connection_count > 0:
-                                await ws.increment_voice_minutes(len(users_to_reward))
-                        except Exception:
-                            pass
+                for guild_id, sessions in sessions_snapshot.items():
+                    try:
+                        await self._process_guild_voice_xp(guild_id, sessions)
+                        consecutive_errors = 0  # Reset on success
+                    except Exception as e:
+                        consecutive_errors += 1
+                        logger.error_tree("Voice XP Guild Error", e, [
+                            ("Guild", str(guild_id)),
+                            ("Consecutive Errors", str(consecutive_errors)),
+                        ])
+                        if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
+                            logger.tree("Voice XP Loop - Too Many Errors", [
+                                ("Errors", str(consecutive_errors)),
+                                ("Action", "Waiting 5 minutes before retry"),
+                            ], emoji="⚠️")
+                            await asyncio.sleep(300)  # 5 min cooldown
+                            consecutive_errors = 0
 
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error_tree("Voice XP Loop Error", e)
-                await asyncio.sleep(60)  # Wait before retrying
+                consecutive_errors += 1
+                logger.error_tree("Voice XP Loop Error", e, [
+                    ("Consecutive Errors", str(consecutive_errors)),
+                ])
+                # Brief pause (5s) instead of 60s to recover faster
+                await asyncio.sleep(5)
+
+    async def _process_guild_voice_xp(self, guild_id: int, sessions: Dict[int, float]) -> None:
+        """Process voice XP for a single guild. Separated for better error isolation."""
+        guild = self.bot.get_guild(guild_id)
+        if not guild:
+            # Guild no longer accessible, clear sessions (with lock)
+            async with self._voice_sessions_lock:
+                self._voice_sessions.pop(guild_id, None)
+            return
+
+        # Get users who have been in voice for at least 1 minute
+        now = time.time()
+        users_to_reward = []
+        stale_users = []
+
+        for user_id, join_time in list(sessions.items()):
+            member = guild.get_member(user_id)
+
+            # Check member exists first before any attribute access
+            if not member:
+                stale_users.append((user_id, "Unknown"))
+                continue
+
+            # Capture voice state once to avoid race conditions
+            voice = member.voice
+            channel = voice.channel if voice else None
+
+            if not channel:
+                stale_users.append((user_id, member.name))
+                continue
+
+            # Skip AFK channel
+            if guild.afk_channel and channel.id == guild.afk_channel.id:
+                continue
+
+            # Skip ignored channels (bot-managed VCs like Quran)
+            if channel.id in config.VC_IGNORED_CHANNELS:
+                continue
+
+            # Anti-abuse: Require at least 2 non-bot users in channel
+            human_count = sum(1 for m in channel.members if not m.bot)
+            if human_count < 2:
+                continue
+
+            # Anti-abuse: No XP if server deafened (not participating)
+            if voice.deaf:
+                continue
+
+            # Anti-abuse: No XP if muted for > 1 hour (AFK farming prevention)
+            is_muted = voice.self_mute or voice.mute
+            if is_muted:
+                mute_start = self._mute_timestamps.get(user_id)
+                if mute_start:
+                    mute_duration = now - mute_start
+                    if mute_duration > 3600:  # 1 hour
+                        logger.tree("Voice XP Blocked (AFK Mute)", [
+                            ("User", f"{member.name} ({member.display_name})"),
+                            ("ID", str(member.id)),
+                            ("Channel", channel.name),
+                            ("Muted For", f"{int(mute_duration / 60)} min"),
+                        ], emoji="🚫")
+                        continue
+
+            if now - join_time >= 60:
+                users_to_reward.append(member)
+
+        # Remove stale entries (users who left but event was missed)
+        if stale_users:
+            async with self._voice_sessions_lock:
+                guild_sessions = self._voice_sessions.get(guild_id, {})
+                for user_id, user_name in stale_users:
+                    guild_sessions.pop(user_id, None)
+            logger.tree("Stale Voice Sessions Cleaned", [
+                ("Count", str(len(stale_users))),
+                ("Users", ", ".join(name for _, name in stale_users[:5]) + ("..." if len(stale_users) > 5 else "")),
+                ("Guild", guild.name),
+            ], emoji="🧹")
+
+        # Award XP
+        for member in users_to_reward:
+            xp_amount = config.XP_VOICE_PER_MIN
+
+            # Birthday bonus (3x) takes priority
+            if has_birthday_bonus(member.id):
+                xp_amount = int(xp_amount * BIRTHDAY_XP_MULTIPLIER)
+            elif member.premium_since is not None:
+                xp_amount = int(xp_amount * config.XP_BOOSTER_MULTIPLIER)
+
+            await self._grant_xp(member, xp_amount, "voice")
+
+        # Broadcast voice minutes update (1 minute per user)
+        if users_to_reward:
+            try:
+                from src.api.services.websocket import get_ws_manager
+                ws = get_ws_manager()
+                if ws.connection_count > 0:
+                    await ws.increment_voice_minutes(len(users_to_reward))
+            except Exception as e:
+                logger.tree("WebSocket Broadcast Failed", [
+                    ("Users", str(len(users_to_reward))),
+                    ("Error", str(e)[:50]),
+                ], emoji="⚠️")
 
     async def _cache_cleanup_loop(self) -> None:
         """Background task that cleans stale cache entries every hour."""
@@ -619,7 +633,7 @@ class XPService:
                 await asyncio.sleep(3600)  # Wait 1 hour
 
                 now = time.time()
-                cleaned = {"mute": 0, "messages": 0, "cooldowns": 0, "dau": 0}
+                cleaned = {"mute": 0, "cooldowns": 0, "dau": 0}
 
                 # Clean stale mute timestamps (> 2 hours old)
                 # These can accumulate if voice events are missed
@@ -633,21 +647,17 @@ class XPService:
                     cleaned["mute"] += 1
 
                 # Clean old cooldown entries (> cooldown period)
+                # Remove from front of OrderedDict (oldest first) until we hit valid entries
                 cooldown_cutoff = now - config.XP_MESSAGE_COOLDOWN
-                old_cooldowns = {
-                    k: v for k, v in self._message_cooldowns.items()
-                    if v > cooldown_cutoff
-                }
-                cleaned["cooldowns"] = len(self._message_cooldowns) - len(old_cooldowns)
-                self._message_cooldowns = old_cooldowns
-
-                # Clean last messages to match cooldowns
-                old_messages = {
-                    k: v for k, v in self._last_messages.items()
-                    if k in self._message_cooldowns
-                }
-                cleaned["messages"] = len(self._last_messages) - len(old_messages)
-                self._last_messages = old_messages
+                while self._message_cooldowns:
+                    # Peek at oldest entry (first item)
+                    oldest_key = next(iter(self._message_cooldowns))
+                    if self._message_cooldowns[oldest_key] <= cooldown_cutoff:
+                        self._message_cooldowns.popitem(last=False)  # O(1)
+                        self._last_messages.pop(oldest_key, None)
+                        cleaned["cooldowns"] += 1
+                    else:
+                        break  # All remaining entries are valid
 
                 # Clean DAU cache - remove old dates (keep only today)
                 from datetime import datetime
@@ -663,8 +673,7 @@ class XPService:
                 if any(v > 0 for v in cleaned.values()):
                     logger.tree("XP Cache Cleanup (Hourly)", [
                         ("Mute Timestamps", str(cleaned["mute"])),
-                        ("Cooldowns", str(cleaned["cooldowns"])),
-                        ("Last Messages", str(cleaned["messages"])),
+                        ("Cooldowns + Messages", str(cleaned["cooldowns"])),
                         ("DAU Entries", str(cleaned["dau"])),
                         ("Remaining", f"{len(self._message_cooldowns)} cooldowns, {len(self._mute_timestamps)} mutes, {len(self._dau_cache)} dau"),
                     ], emoji="🧹")

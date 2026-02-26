@@ -8,6 +8,7 @@ Author: حَـــــنَّـــــا
 Server: discord.gg/syria
 """
 
+import math
 import time
 from datetime import datetime
 from typing import Any
@@ -52,7 +53,7 @@ async def health_check(
 
     # Get bot status
     is_ready = bot.is_ready() if bot else False
-    latency_ms = round(bot.latency * 1000) if is_ready and bot.latency else None
+    latency_ms = round(bot.latency * 1000) if is_ready and bot.latency and math.isfinite(bot.latency) else None
 
     discord_status = DiscordStatus(
         connected=is_ready,

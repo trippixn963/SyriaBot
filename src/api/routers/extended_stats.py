@@ -381,6 +381,7 @@ async def get_voice_channel_breakdown(
 async def get_reaction_stats(
     request: Request,
     limit: int = Query(50, ge=1, le=100, description="Max users to return"),
+    bot=Depends(get_bot),
 ) -> JSONResponse:
     """
     Get reaction statistics.
@@ -399,9 +400,42 @@ async def get_reaction_stats(
 
         reaction_stats = db.get_reaction_stats(config.GUILD_ID, limit=limit)
 
+        # Enrich with user info
+        enriched_users = []
+        guild = bot.get_guild(config.GUILD_ID)
+        for user_data in reaction_stats:
+            user_id = user_data["user_id"]
+            try:
+                member = guild.get_member(user_id) if guild else None
+                if member:
+                    enriched_users.append({
+                        **user_data,
+                        "user_id": str(user_id),
+                        "display_name": member.display_name,
+                        "username": member.name,
+                        "avatar": member.display_avatar.url if member.display_avatar else None,
+                    })
+                else:
+                    # Fallback for users not in guild
+                    enriched_users.append({
+                        **user_data,
+                        "user_id": str(user_id),
+                        "display_name": f"User {str(user_id)[-4:]}",
+                        "username": None,
+                        "avatar": None,
+                    })
+            except Exception:
+                enriched_users.append({
+                    **user_data,
+                    "user_id": str(user_id),
+                    "display_name": f"User {str(user_id)[-4:]}",
+                    "username": None,
+                    "avatar": None,
+                })
+
         response_data = {
-            "users": reaction_stats,
-            "count": len(reaction_stats),
+            "users": enriched_users,
+            "count": len(enriched_users),
         }
 
         await cache.set_response(cache_key, response_data)
@@ -409,7 +443,7 @@ async def get_reaction_stats(
         elapsed_ms = round((time.time() - start_time) * 1000)
         logger.tree("Reaction Stats API", [
             ("Client IP", client_ip),
-            ("Users", str(len(reaction_stats))),
+            ("Users", str(len(enriched_users))),
             ("Response Time", f"{elapsed_ms}ms"),
         ], emoji="💜")
 
@@ -423,6 +457,7 @@ async def get_reaction_stats(
 async def get_engagement_leaderboard(
     request: Request,
     limit: int = Query(50, ge=1, le=100, description="Max users to return"),
+    bot=Depends(get_bot),
 ) -> JSONResponse:
     """
     Get engagement score leaderboard.
@@ -441,9 +476,41 @@ async def get_engagement_leaderboard(
 
         engagement_stats = db.get_engagement_leaderboard(config.GUILD_ID, limit=limit)
 
+        # Enrich with user info
+        enriched_users = []
+        guild = bot.get_guild(config.GUILD_ID)
+        for user_data in engagement_stats:
+            user_id = user_data["user_id"]
+            try:
+                member = guild.get_member(user_id) if guild else None
+                if member:
+                    enriched_users.append({
+                        **user_data,
+                        "user_id": str(user_id),
+                        "display_name": member.display_name,
+                        "username": member.name,
+                        "avatar": member.display_avatar.url if member.display_avatar else None,
+                    })
+                else:
+                    enriched_users.append({
+                        **user_data,
+                        "user_id": str(user_id),
+                        "display_name": f"User {str(user_id)[-4:]}",
+                        "username": None,
+                        "avatar": None,
+                    })
+            except Exception:
+                enriched_users.append({
+                    **user_data,
+                    "user_id": str(user_id),
+                    "display_name": f"User {str(user_id)[-4:]}",
+                    "username": None,
+                    "avatar": None,
+                })
+
         response_data = {
-            "leaderboard": engagement_stats,
-            "count": len(engagement_stats),
+            "leaderboard": enriched_users,
+            "count": len(enriched_users),
         }
 
         await cache.set_response(cache_key, response_data)
@@ -451,7 +518,7 @@ async def get_engagement_leaderboard(
         elapsed_ms = round((time.time() - start_time) * 1000)
         logger.tree("Engagement Stats API", [
             ("Client IP", client_ip),
-            ("Users", str(len(engagement_stats))),
+            ("Users", str(len(enriched_users))),
             ("Response Time", f"{elapsed_ms}ms"),
         ], emoji="🏆")
 
