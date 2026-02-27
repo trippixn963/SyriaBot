@@ -1,5 +1,13 @@
-"""SyriaBot - Presence Service Package."""
+"""
+SyriaBot - Presence Package
+============================
 
-from src.services.presence.service import PresenceHandler, BasePresenceHandler
+Bot presence with rotating status and hourly promo.
 
-__all__ = ["PresenceHandler", "BasePresenceHandler"]
+Author: حَـــــنَّـــــا
+Server: discord.gg/syria
+"""
+
+from .service import PresenceService, BasePresenceHandler
+
+__all__ = ["PresenceService", "BasePresenceHandler"]

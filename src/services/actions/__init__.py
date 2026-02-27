@@ -1,6 +1,14 @@
-"""SyriaBot - Actions Service Package."""
+"""
+SyriaBot - Actions Package
+==========================
 
-from src.services.actions.service import (
+Fun action commands with GIF responses.
+
+Author: حَـــــنَّـــــا
+Server: discord.gg/syria
+"""
+
+from .service import (
     ActionService,
     action_service,
     ACTIONS,

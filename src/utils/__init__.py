@@ -1,4 +1,12 @@
-"""SyriaBot - Utils Package."""
+"""
+SyriaBot - Utils Package
+========================
+
+Shared utilities for HTTP, footers, and text processing.
+
+Author: حَـــــنَّـــــا
+Server: discord.gg/syria
+"""
 
 from src.utils.http import http_session, DOWNLOAD_TIMEOUT
 from src.utils.footer import (

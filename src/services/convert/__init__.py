@@ -8,7 +8,7 @@ Author: حَـــــنَّـــــا
 Server: discord.gg/syria
 """
 
-from src.services.convert.service import (
+from .service import (
     ConvertService,
     ConvertResult,
     VideoInfo,
@@ -17,7 +17,7 @@ from src.services.convert.service import (
     TEXT_COLOR,
     WAND_AVAILABLE,
 )
-from src.services.convert.views import ConvertView, VideoConvertView, start_convert_editor
+from .views import ConvertView, VideoConvertView, start_convert_editor
 
 __all__ = [
     "ConvertService",

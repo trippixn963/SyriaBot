@@ -1,6 +1,14 @@
-"""SyriaBot - R2 Backup Package."""
+"""
+SyriaBot - Backup Package
+=========================
 
-from src.services.backup.service import (
+R2 cloud backup scheduler.
+
+Author: حَـــــنَّـــــا
+Server: discord.gg/syria
+"""
+
+from .service import (
     BackupScheduler,
     send_backup_notification,
     DATABASE_PATH,

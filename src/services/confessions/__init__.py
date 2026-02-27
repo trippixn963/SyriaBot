@@ -8,7 +8,7 @@ Author: حَـــــنَّـــــا
 Server: discord.gg/syria
 """
 
-from src.services.confessions.service import ConfessionService
+from .service import ConfessionService
 
 __all__ = [
     "ConfessionService",

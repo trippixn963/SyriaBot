@@ -1,5 +1,13 @@
-"""SyriaBot - Sync Profile Service Package."""
+"""
+SyriaBot - Sync Profile Package
+================================
 
-from src.services.sync_profile.service import ProfileSyncService
+Profile synchronization service.
+
+Author: حَـــــنَّـــــا
+Server: discord.gg/syria
+"""
+
+from .service import ProfileSyncService
 
 __all__ = ["ProfileSyncService"]

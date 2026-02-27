@@ -8,13 +8,13 @@ Author: حَـــــنَّـــــا
 Server: discord.gg/syria
 """
 
-from src.services.image.service import (
+from .service import (
     ImageService,
     ImageResult,
     ImageSearchResult,
     image_service,
 )
-from src.services.image.views import ImageView
+from .views import ImageView
 
 __all__ = [
     "ImageService",

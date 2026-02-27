@@ -292,7 +292,7 @@ class BasePresenceHandler(ABC):
 # SyriaBot Presence Handler
 # =============================================================================
 
-class PresenceHandler(BasePresenceHandler):
+class PresenceService(BasePresenceHandler):
     """
     SyriaBot presence handler with XP/leveling stats.
 
@@ -436,6 +436,6 @@ class PresenceHandler(BasePresenceHandler):
 # =============================================================================
 
 __all__ = [
-    "PresenceHandler",
+    "PresenceService",
     "BasePresenceHandler",
 ]

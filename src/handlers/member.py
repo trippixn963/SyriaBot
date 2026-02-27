@@ -23,7 +23,7 @@ from src.api.services.event_logger import event_logger
 from src.utils.footer import set_footer
 
 
-class MembersHandler(commands.Cog):
+class MemberHandler(commands.Cog):
     """
     Handler for member join/leave/update events.
 
@@ -595,7 +595,7 @@ class MembersHandler(commands.Cog):
 
 async def setup(bot: commands.Bot) -> None:
     """Register the members handler cog with the bot."""
-    await bot.add_cog(MembersHandler(bot))
+    await bot.add_cog(MemberHandler(bot))
     logger.tree("Handler Loaded", [
-        ("Name", "MembersHandler"),
+        ("Name", "MemberHandler"),
     ], emoji="✅")

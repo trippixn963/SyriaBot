@@ -1,6 +1,14 @@
-"""SyriaBot - Currency Service Package."""
+"""
+SyriaBot - Currency Package
+===========================
 
-from src.services.currency.service import CurrencyService
+JawdatBot casino currency integration.
+
+Author: حَـــــنَّـــــا
+Server: discord.gg/syria
+"""
+
+from .service import CurrencyService
 
 __all__ = [
     "CurrencyService",

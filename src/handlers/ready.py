@@ -99,7 +99,7 @@ class ReadyHandler(commands.Cog):
         except Exception as e:
             logger.error_tree("Command Sync Failed", e)
 
-        # Initialize services (includes PresenceHandler which manages rotating presence)
+        # Initialize services (includes PresenceService which manages rotating presence)
         try:
             await self.bot._init_services()
         except Exception as e:

@@ -1,6 +1,14 @@
-"""SyriaBot - Birthday Service Package."""
+"""
+SyriaBot - Birthday Package
+============================
 
-from src.services.birthday.service import (
+Birthday tracking and celebration system.
+
+Author: حَـــــنَّـــــا
+Server: discord.gg/syria
+"""
+
+from .service import (
     BirthdayService,
     get_birthday_service,
     has_birthday_bonus,

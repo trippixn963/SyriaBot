@@ -1,4 +1,12 @@
-"""Gallery Service - Instagram-style media channel."""
+"""
+SyriaBot - Gallery Package
+==========================
+
+Instagram-style media channel service.
+
+Author: حَـــــنَّـــــا
+Server: discord.gg/syria
+"""
 
 from .service import GalleryService
 

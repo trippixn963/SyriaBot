@@ -44,7 +44,7 @@ from src.api import APIService
 from src.services.backup import BackupScheduler
 from src.services.afk import AFKService
 from src.services.gallery import GalleryService
-from src.services.presence import PresenceHandler
+from src.services.presence import PresenceService
 from src.services.bump import bump_service
 from src.services.confessions import ConfessionService
 from src.services.currency import CurrencyService
@@ -84,7 +84,7 @@ class SyriaBot(commands.Bot):
         self.stats_api: Optional[APIService] = None
         self.afk_service: Optional[AFKService] = None
         self.gallery_service: Optional[GalleryService] = None
-        self.presence_handler: Optional[PresenceHandler] = None
+        self.presence_handler: Optional[PresenceService] = None
         self.confession_service: Optional[ConfessionService] = None
         self.currency_service: Optional[CurrencyService] = None
         self.birthday_service: Optional[BirthdayService] = None
@@ -335,7 +335,7 @@ class SyriaBot(commands.Bot):
 
         # Presence Handler
         try:
-            self.presence_handler = PresenceHandler(self)
+            self.presence_handler = PresenceService(self)
             await self.presence_handler.setup()
             initialized.append("Presence")
         except Exception as e:

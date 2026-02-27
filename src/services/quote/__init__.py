@@ -8,12 +8,12 @@ Author: حَـــــنَّـــــا
 Server: discord.gg/syria
 """
 
-from src.services.quote.service import (
+from .service import (
     QuoteService,
     QuoteResult,
     quote_service,
 )
-from src.services.quote.views import QuoteView
+from .views import QuoteView
 
 __all__ = [
     "QuoteService",
