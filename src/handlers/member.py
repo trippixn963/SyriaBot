@@ -354,7 +354,7 @@ class MembersHandler(commands.Cog):
                     ("Error", str(e)[:50]),
                 ], emoji="⚠️")
             # Invalidate API cache for this user
-            self._invalidate_api_cache(after.id)
+            await self._invalidate_api_cache(after.id)
             await self._handle_new_boost(after)
 
             # Broadcast updated boost count via WebSocket
@@ -379,7 +379,7 @@ class MembersHandler(commands.Cog):
                     ("Error", str(e)[:50]),
                 ], emoji="⚠️")
             # Invalidate API cache for this user
-            self._invalidate_api_cache(after.id)
+            await self._invalidate_api_cache(after.id)
 
             # Broadcast updated boost count via WebSocket
             try:
@@ -390,15 +390,14 @@ class MembersHandler(commands.Cog):
             except Exception as e:
                 logger.error_tree("WS Boost Broadcast Error", e)
 
-    def _invalidate_api_cache(self, user_id: int) -> None:
+    async def _invalidate_api_cache(self, user_id: int) -> None:
         """Invalidate API caches when user's boost status changes."""
         try:
-            from src.services import stats_api
-            # Remove from avatar cache (contains booster status)
-            if user_id in stats_api._avatar_cache:
-                del stats_api._avatar_cache[user_id]
-            # Clear response cache (leaderboard/stats contain booster info)
-            stats_api._response_cache.clear()
+            if not self.bot.stats_api:
+                return
+            cache = self.bot.stats_api.cache
+            await cache.remove_avatar(user_id)
+            await cache.clear_responses()
             logger.tree("API Cache Invalidated", [
                 ("ID", str(user_id)),
                 ("Reason", "Boost status changed"),
