@@ -15,6 +15,7 @@ from discord.ext import commands
 from typing import Optional
 
 from src.core.config import config, validate_config
+from src.core.constants import HEALTH_CHECK_INTERVAL, HEALTH_MAX_FAILURES
 
 
 # =============================================================================
@@ -91,6 +92,8 @@ class SyriaBot(commands.Bot):
         self.backup_scheduler: Optional[BackupScheduler] = None
         self.actions_panel: Optional[ActionsPanelService] = None
         self.roulette_service: Optional[RouletteService] = None
+        self._health_task: Optional[asyncio.Task] = None
+        self._health_failures: int = 0
 
     async def setup_hook(self) -> None:
         """Called when the bot is starting up."""
@@ -104,7 +107,6 @@ class SyriaBot(commands.Bot):
             "src.handlers.voice",
             "src.handlers.member",
             "src.handlers.message",
-            "src.handlers.giveaway",
             "src.handlers.presence",
         ]
         loaded_handlers = []
@@ -398,16 +400,67 @@ class SyriaBot(commands.Bot):
         except Exception as e:
             logger.error_tree("Roulette Service Init Failed", e)
 
+        # Start connection health monitor
+        self._health_task = asyncio.create_task(self._health_check_loop())
+
         logger.tree("Services Init Complete", [
             ("Services", ", ".join(initialized)),
             ("Count", f"{len(initialized)}/17"),
         ], emoji="✅")
+
+    async def _health_check_loop(self) -> None:
+        """Monitor Discord connection health. Exit if connection is dead."""
+        logger.tree("Health Monitor Started", [
+            ("Interval", f"{HEALTH_CHECK_INTERVAL}s"),
+            ("Max Failures", str(HEALTH_MAX_FAILURES)),
+        ], emoji="💓")
+
+        await asyncio.sleep(HEALTH_CHECK_INTERVAL)
+
+        while not self.is_closed():
+            try:
+                ws_alive: bool = self.ws is not None and not self.ws.socket.closed
+                latency_valid: bool = self.latency is not None and self.latency > 0
+
+                if ws_alive and latency_valid:
+                    self._health_failures = 0
+                else:
+                    self._health_failures += 1
+                    logger.tree("Health Check Failed", [
+                        ("Failures", f"{self._health_failures}/{HEALTH_MAX_FAILURES}"),
+                        ("WS Alive", str(ws_alive)),
+                        ("Latency", str(self.latency)),
+                    ], emoji="⚠️")
+
+                    if self._health_failures >= HEALTH_MAX_FAILURES:
+                        logger.tree("Connection Dead - Restarting", [
+                            ("Failures", str(self._health_failures)),
+                            ("Action", "Closing bot for systemd restart"),
+                        ], emoji="💀")
+                        await self.close()
+                        return
+
+            except Exception as e:
+                self._health_failures += 1
+                logger.error_tree("Health Check Error", e, [
+                    ("Failures", f"{self._health_failures}/{HEALTH_MAX_FAILURES}"),
+                ])
+
+            await asyncio.sleep(HEALTH_CHECK_INTERVAL)
 
     async def close(self) -> None:
         """Clean up when bot is shutting down."""
         logger.tree("Bot Shutdown", [
             ("Status", "Starting cleanup"),
         ], emoji="🛑")
+
+        # Cancel health check first to prevent restart loop
+        if self._health_task and not self._health_task.done():
+            self._health_task.cancel()
+            try:
+                await self._health_task
+            except asyncio.CancelledError:
+                pass
 
         stopped = []
 

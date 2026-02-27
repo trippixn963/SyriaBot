@@ -778,24 +778,24 @@ async def cleanup() -> None:
                 pass
         _page_pool.clear()
 
-    # Close browser and playwright
+    # Close browser and playwright with timeouts to prevent hanging
     if _context:
         try:
-            await _context.close()
+            await asyncio.wait_for(_context.close(), timeout=5.0)
         except Exception:
             pass
         _context = None
 
     if _browser:
         try:
-            await _browser.close()
+            await asyncio.wait_for(_browser.close(), timeout=5.0)
         except Exception:
             pass
         _browser = None
 
     if _playwright:
         try:
-            await _playwright.stop()
+            await asyncio.wait_for(_playwright.stop(), timeout=5.0)
         except Exception:
             pass
         _playwright = None

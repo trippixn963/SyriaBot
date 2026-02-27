@@ -151,62 +151,6 @@ class CurrencyService:
             ], emoji="❌")
             return False, "Unexpected error"
 
-    async def get_balance(self, user_id: int) -> Optional[int]:
-        """
-        Get a user's casino balance.
-
-        Args:
-            user_id: Discord user ID
-
-        Returns:
-            Balance or None if failed
-        """
-        if not self._enabled or not self._session:
-            logger.tree("Currency Balance Check Skipped", [
-                ("ID", str(user_id)),
-                ("Reason", "Service not enabled"),
-            ], emoji="ℹ️")
-            return None
-
-        try:
-            async with self._session.get(
-                f"{config.JAWDAT_API_URL}/api/jawdat/user/{user_id}",
-            ) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    balance = data.get("wallet", 0) + data.get("bank", 0)
-                    logger.tree("Currency Balance Fetched", [
-                        ("ID", str(user_id)),
-                        ("Wallet", f"{data.get('wallet', 0):,}"),
-                        ("Bank", f"{data.get('bank', 0):,}"),
-                        ("Total", f"{balance:,}"),
-                    ], emoji="💰")
-                    return balance
-                elif resp.status == 404:
-                    logger.tree("Currency Balance Not Found", [
-                        ("ID", str(user_id)),
-                        ("Reason", "User has no economy data"),
-                    ], emoji="ℹ️")
-                    return None
-                else:
-                    logger.tree("Currency Balance Fetch Failed", [
-                        ("ID", str(user_id)),
-                        ("Status", str(resp.status)),
-                    ], emoji="⚠️")
-                    return None
-        except aiohttp.ClientError as e:
-            logger.tree("Currency Balance Error", [
-                ("ID", str(user_id)),
-                ("Error", str(e)[:50]),
-            ], emoji="❌")
-            return None
-        except Exception as e:
-            logger.tree("Currency Balance Error", [
-                ("ID", str(user_id)),
-                ("Error", str(e)[:50]),
-            ], emoji="❌")
-            return None
-
     async def stop(self) -> None:
         """Stop the currency service."""
         if self._session:

@@ -308,7 +308,6 @@ http_session = HTTPSessionManager()
 __all__ = [
     # Session manager
     "http_session",
-    "HTTPSessionManager",
     # Timeouts
     "DEFAULT_TIMEOUT",
     "FAST_TIMEOUT",

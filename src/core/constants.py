@@ -21,6 +21,14 @@ TIMEZONE_DAMASCUS = ZoneInfo("Asia/Damascus")
 
 
 # =============================================================================
+# Health Check
+# =============================================================================
+
+HEALTH_CHECK_INTERVAL = 30      # Seconds between health checks
+HEALTH_MAX_FAILURES = 5         # Consecutive failures before forced restart
+
+
+# =============================================================================
 # Font Paths (System fonts, checked in order)
 # =============================================================================
 
@@ -137,13 +145,6 @@ RATE_LIMIT_ACTION_EMOJIS = {
 
 
 # =============================================================================
-# Logging
-# =============================================================================
-
-LOG_RETENTION_DAYS = 7
-
-
-# =============================================================================
 # Supported File Extensions
 # =============================================================================
 
@@ -172,7 +173,6 @@ CLAIM_APPROVAL_TIMEOUT = 300    # 5 minutes for claim approval
 # =============================================================================
 
 XP_BASE_MULTIPLIER = 100        # Base for XP formula: 100 * level^1.5
-XP_COOLDOWN_CACHE_THRESHOLD = 500   # Clean cache when exceeding this size
 XP_COOLDOWN_CACHE_MAX_SIZE = 2000   # Hard limit - evict oldest entries beyond this
 
 

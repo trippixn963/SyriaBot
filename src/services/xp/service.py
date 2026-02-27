@@ -31,7 +31,7 @@ from discord.ext import tasks
 
 from src.core.config import config
 from src.core.colors import COLOR_GOLD
-from src.core.constants import XP_COOLDOWN_CACHE_THRESHOLD, XP_COOLDOWN_CACHE_MAX_SIZE
+from src.core.constants import XP_COOLDOWN_CACHE_MAX_SIZE
 from src.core.logger import logger
 from src.services.database import db
 from src.services.birthday import has_birthday_bonus, BIRTHDAY_XP_MULTIPLIER

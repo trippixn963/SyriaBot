@@ -25,6 +25,10 @@ from src.core.colors import (
 )
 from src.core.config import config
 from src.core.logger import logger
+from src.core.constants import (
+    BAR_HEIGHT_RATIO, FONT_SIZE_RATIO, LINE_SPACING_RATIO,
+    BAR_PADDING_RATIO, TEXT_PADDING_RATIO,
+)
 from src.services.convert.service import convert_service
 from src.utils.footer import set_footer
 from src.utils.text import wrap_text, find_font, get_font
@@ -228,12 +232,6 @@ def add_text_bar_to_image(
     Returns:
         PNG bytes of processed image
     """
-    BAR_HEIGHT_RATIO = 0.20
-    FONT_SIZE_RATIO = 0.70
-    LINE_SPACING_RATIO = 0.25
-    BAR_PADDING_RATIO = 0.10
-    TEXT_PADDING_RATIO = 0.05
-
     img = Image.open(io.BytesIO(image_data))
 
     # Convert to RGB

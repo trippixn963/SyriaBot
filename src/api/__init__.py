@@ -31,6 +31,7 @@ Standalone (for development):
 """
 
 import asyncio
+import socket
 from typing import Any, Optional
 
 import uvicorn
@@ -70,6 +71,7 @@ class APIService:
         self._config = get_api_config()
         self._app = create_app(bot)
         self._server: Optional[uvicorn.Server] = None
+        self._server_socket: Optional[socket.socket] = None
         self._task: Optional[asyncio.Task] = None
         self._background_service = init_background_service(bot)
 
@@ -94,6 +96,11 @@ class APIService:
             logger.warning("API Already Running", [])
             return
 
+        # Create socket with SO_REUSEADDR so port can rebind immediately after restart
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind((self._config.host, self._config.port))
+
         # Configure uvicorn
         config = uvicorn.Config(
             app=self._app,
@@ -104,6 +111,7 @@ class APIService:
         )
 
         self._server = uvicorn.Server(config)
+        self._server_socket = sock
 
         # Run in background
         self._task = asyncio.create_task(self._run_server())
@@ -123,7 +131,7 @@ class APIService:
     async def _run_server(self) -> None:
         """Run the uvicorn server."""
         try:
-            await self._server.serve()
+            await self._server.serve(sockets=[self._server_socket])
         except asyncio.CancelledError:
             logger.debug("API Server Cancelled", [])
         except Exception as e:
@@ -156,6 +164,13 @@ class APIService:
                     await self._task
                 except asyncio.CancelledError:
                     pass
+
+        if self._server_socket:
+            try:
+                self._server_socket.close()
+            except Exception:
+                pass
+            self._server_socket = None
 
         self._server = None
         self._task = None

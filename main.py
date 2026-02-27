@@ -9,6 +9,7 @@ Author: حَـــــنَّـــــا
 
 import asyncio
 import os
+import signal
 import sys
 
 # Add src to path for imports
@@ -23,7 +24,7 @@ from src.core.config import config
 from src.core.logger import log
 
 
-async def main():
+async def main() -> None:
     """Main entry point."""
     if not config.TOKEN:
         log.tree("Startup Failed", [
@@ -33,14 +34,26 @@ async def main():
 
     bot = SyriaBot()
 
+    # Handle SIGTERM (systemctl stop/restart) gracefully
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        loop.add_signal_handler(sig, lambda s=sig: asyncio.create_task(_shutdown(bot, s)))
+
     try:
         await bot.start(config.TOKEN)
     except KeyboardInterrupt:
-        log.tree("Shutdown", [
-            ("Reason", "Keyboard interrupt"),
-        ], emoji="🛑")
+        pass
     finally:
-        await bot.close()
+        if not bot.is_closed():
+            await bot.close()
+
+
+async def _shutdown(bot: SyriaBot, sig: signal.Signals) -> None:
+    """Handle shutdown signal from systemd."""
+    log.tree("Shutdown Signal", [
+        ("Signal", sig.name),
+    ], emoji="🛑")
+    await bot.close()
 
 
 if __name__ == "__main__":
