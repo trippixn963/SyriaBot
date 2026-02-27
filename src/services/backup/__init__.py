@@ -1,24 +1,29 @@
 """
-SyriaBot - Backup Package
-=========================
+SyriaBot - R2 Backup Package
+=============================
 
-R2 cloud backup scheduler.
+Hourly backups directly to Cloudflare R2.
 
 Author: حَـــــنَّـــــا
 Server: discord.gg/syria
 """
 
-from .service import (
+from .scheduler import (
     BackupScheduler,
-    send_backup_notification,
     DATABASE_PATH,
     BOT_NAME,
     R2_BUCKET,
     RETENTION_HOURS,
 )
 
+from .base import (
+    R2BackupScheduler,
+    send_backup_notification,
+)
+
 __all__ = [
     "BackupScheduler",
+    "R2BackupScheduler",
     "send_backup_notification",
     "DATABASE_PATH",
     "BOT_NAME",

@@ -10,7 +10,6 @@ Server: discord.gg/syria
 """
 
 import asyncio
-import os
 import shutil
 import sqlite3
 import subprocess
@@ -23,6 +22,7 @@ from zoneinfo import ZoneInfo
 import aiohttp
 
 from src.core.logger import logger
+from src.utils.async_utils import create_safe_task
 
 
 # =============================================================================
@@ -32,12 +32,6 @@ from src.core.logger import logger
 DEFAULT_TIMEZONE = "America/New_York"
 DEFAULT_RETENTION_HOURS = 48  # Keep 48 hourly backups (2 days)
 SECONDS_PER_HOUR = 3600
-
-# SyriaBot-Specific Configuration
-DATABASE_PATH = Path("data/syria.db")
-BOT_NAME = "syria"
-R2_BUCKET = "bot-backups"
-RETENTION_HOURS = 48
 
 # Size divisors
 KB_DIVISOR = 1024
@@ -67,25 +61,34 @@ def _get_timezone(timezone_name: Optional[str] = None) -> ZoneInfo:
         return ZoneInfo(DEFAULT_TIMEZONE)
 
 
-def _check_database_integrity(db_path: Path) -> tuple[bool, str]:
-    """Check SQLite database integrity before backup."""
-    try:
-        conn = sqlite3.connect(str(db_path), timeout=30)
-        cursor = conn.cursor()
-        cursor.execute("PRAGMA integrity_check;")
-        result = cursor.fetchone()[0]
-        conn.close()
-        return (True, "ok") if result == "ok" else (False, result)
-    except sqlite3.DatabaseError as e:
-        return False, f"Database error: {e}"
-    except Exception as e:
-        return False, f"Check failed: {e}"
+def _check_database_integrity(db_path: Path, max_retries: int = 3) -> tuple[bool, str]:
+    """Check SQLite database integrity before backup with retry for transient errors."""
+    import time as time_module
+    transient_errors = ("disk I/O error", "database is locked", "unable to open")
+
+    for attempt in range(max_retries):
+        try:
+            conn = sqlite3.connect(str(db_path), timeout=30)
+            cursor = conn.cursor()
+            cursor.execute("PRAGMA integrity_check;")
+            result = cursor.fetchone()[0]
+            conn.close()
+            return (True, "ok") if result == "ok" else (False, result)
+        except sqlite3.DatabaseError as e:
+            error_str = str(e).lower()
+            if any(te in error_str for te in transient_errors) and attempt < max_retries - 1:
+                time_module.sleep(2 ** attempt)
+                continue
+            return False, f"Database error: {e}"
+        except Exception as e:
+            return False, f"Check failed: {e}"
+    return False, "Max retries exceeded"
 
 
 def _format_tree_log(
     title: str,
     items: List[tuple[str, Any]],
-    emoji: str = "💾",
+    emoji: str = "\U0001f4be",
     tz: Optional[ZoneInfo] = None,
 ) -> str:
     """Format a tree log message for webhook."""
@@ -97,7 +100,7 @@ def _format_tree_log(
 
     for i, (key, value) in enumerate(items):
         is_last = i == len(items) - 1
-        prefix = "└─" if is_last else "├─"
+        prefix = "\u2514\u2500" if is_last else "\u251c\u2500"
         lines.append(f"  {prefix} {key}: {value}")
 
     return "\n".join(lines)
@@ -111,7 +114,7 @@ async def _send_backup_webhook(
     webhook_url: str,
     title: str,
     items: List[tuple[str, Any]],
-    emoji: str = "💾",
+    emoji: str = "\U0001f4be",
     tz: Optional[ZoneInfo] = None,
 ) -> None:
     """Send backup notification to Discord webhook."""
@@ -156,9 +159,9 @@ async def send_backup_notification(result: Optional[Dict[str, Any]]) -> None:
                 ("Bot", result["bot_name"]),
                 ("Size", result["size"]),
                 ("Retention", f"{result['retention_hours']} hours"),
-                ("Integrity", "Verified ✓"),
+                ("Integrity", "Verified \u2713"),
             ],
-            emoji="☁️",
+            emoji="\u2601\ufe0f",
             tz=tz,
         )
     elif result.get("error") == "corruption":
@@ -170,7 +173,7 @@ async def send_backup_notification(result: Optional[Dict[str, Any]]) -> None:
                 ("Integrity", result["integrity_msg"]),
                 ("Action", "Backup skipped"),
             ],
-            emoji="🚨",
+            emoji="\U0001f6a8",
             tz=tz,
         )
     elif result.get("error") == "upload_failed":
@@ -181,16 +184,16 @@ async def send_backup_notification(result: Optional[Dict[str, Any]]) -> None:
                 ("Bot", result["bot_name"]),
                 ("Error", result.get("error_msg", "Unknown")[:80]),
             ],
-            emoji="❌",
+            emoji="\u274c",
             tz=tz,
         )
 
 
 # =============================================================================
-# R2 Backup Scheduler
+# R2 Backup System
 # =============================================================================
 
-class BackupScheduler:
+class R2BackupScheduler:
     """
     Hourly backup scheduler with direct R2 upload.
 
@@ -199,26 +202,25 @@ class BackupScheduler:
 
     def __init__(
         self,
-        database_path: str = str(DATABASE_PATH),
-        bot_name: str = BOT_NAME,
-        r2_bucket: str = R2_BUCKET,
-        retention_hours: int = RETENTION_HOURS,
+        database_path: str,
+        bot_name: str,
+        r2_bucket: str = "bot-backups",
+        retention_hours: int = DEFAULT_RETENTION_HOURS,
         webhook_url: Optional[str] = None,
         timezone_name: str = DEFAULT_TIMEZONE,
     ) -> None:
-        """Initialize R2 backup scheduler."""
         self._db_path = Path(database_path)
         self._bot_name = bot_name.lower()
         self._bot_display = bot_name.capitalize()
         self._r2_bucket = r2_bucket
         self._retention_hours = retention_hours
-        self._webhook_url = webhook_url or os.getenv("BACKUP_WEBHOOK_URL")
+        self._webhook_url = webhook_url
         self._tz = _get_timezone(timezone_name)
         self._task: Optional[asyncio.Task] = None
         self._running = False
 
     def _create_backup_and_upload(self) -> Dict[str, Any]:
-        """Create backup and upload to R2."""
+        """Create backup and upload to R2. Returns dict with result info."""
         base_result = {
             "bot_name": self._bot_display,
             "webhook_url": self._webhook_url,
@@ -280,7 +282,7 @@ class BackupScheduler:
                     ("Bot", self._bot_display),
                     ("Path", f"{r2_folder}/{backup_filename}"),
                     ("Size", size_str),
-                ], emoji="☁️")
+                ], emoji="\u2601\ufe0f")
 
                 return {**base_result, "success": True, "size": size_str, "filename": backup_filename, "r2_path": f"{r2_folder}/{backup_filename}"}
 
@@ -309,7 +311,7 @@ class BackupScheduler:
                 logger.tree("R2 Cleanup Complete", [
                     ("Bot", self._bot_display),
                     ("Retention", f"{self._retention_hours} hours"),
-                ], emoji="🧹")
+                ], emoji="\U0001f9f9")
             return 0
         except Exception as e:
             logger.warning("R2 Cleanup Failed", [
@@ -340,14 +342,14 @@ class BackupScheduler:
             ])
 
         # Start scheduler loop
-        self._task = asyncio.create_task(self._scheduler_loop())
+        self._task = create_safe_task(self._scheduler_loop(), name=f"backup_{self._bot_name}")
 
         logger.tree("R2 Backup Scheduler Started", [
             ("Bot", self._bot_display),
             ("Schedule", "Every hour"),
             ("Retention", f"{self._retention_hours} hours"),
-            ("Bucket", f"{self._r2_bucket}/{self._bot_display}"),
-        ], emoji="☁️")
+            ("Bucket", f"{self._r2_bucket}/{self._bot_name}"),
+        ], emoji="\u2601\ufe0f")
 
     async def stop(self) -> None:
         """Stop the backup scheduler."""
@@ -391,10 +393,8 @@ class BackupScheduler:
 # =============================================================================
 
 __all__ = [
-    "BackupScheduler",
+    "R2BackupScheduler",
     "send_backup_notification",
-    "DATABASE_PATH",
-    "BOT_NAME",
-    "R2_BUCKET",
-    "RETENTION_HOURS",
+    "DEFAULT_RETENTION_HOURS",
+    "DEFAULT_TIMEZONE",
 ]
