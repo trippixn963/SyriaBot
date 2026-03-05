@@ -26,10 +26,7 @@ class UserData:
     username: Optional[str]
     joined_at: Optional[int]
     is_booster: bool
-
-    def to_tuple(self) -> tuple[Optional[str], str, Optional[str], Optional[int], bool]:
-        """Convert to tuple for backward compatibility."""
-        return (self.avatar_url, self.display_name, self.username, self.joined_at, self.is_booster)
+    banner_url: Optional[str] = None
 
 
 class DiscordService:
@@ -97,29 +94,41 @@ class DiscordService:
             else:
                 avatar_url = member.default_avatar.url
 
+            # Banner requires a separate fetch_user call (not available on Member)
+            banner_url = None
+            if member.premium_since is not None:
+                try:
+                    fetched_user = await asyncio.wait_for(
+                        self._bot.fetch_user(user_id),
+                        timeout=2.0
+                    )
+                    if fetched_user and fetched_user.banner:
+                        banner_url = fetched_user.banner.url
+                except Exception:
+                    pass
+
             joined_at = int(member.joined_at.timestamp()) if member.joined_at else None
             is_booster = member.premium_since is not None
 
             # Cache the result
-            await self._cache.set_avatar(user_id, avatar_url, display_name, username, joined_at, is_booster)
-            return UserData(avatar_url, display_name, username, joined_at, is_booster)
+            await self._cache.set_avatar(user_id, avatar_url, display_name, username, joined_at, is_booster, banner_url)
+            return UserData(avatar_url, display_name, username, joined_at, is_booster, banner_url)
 
-        # Fallback to user if not in guild
-        user = self._bot.get_user(user_id)
-        if not user:
-            user = await asyncio.wait_for(
-                self._bot.fetch_user(user_id),
-                timeout=2.0
-            )
+        # Fallback to user if not in guild (fetch_user includes banner)
+        user = await asyncio.wait_for(
+            self._bot.fetch_user(user_id),
+            timeout=2.0
+        )
 
         if user:
             display_name = user.global_name or user.display_name or user.name
             username = user.name
             avatar_url = user.avatar.url if user.avatar else user.default_avatar.url
+            banner_url = user.banner.url if user.banner else None
 
             # Cache with no guild-specific data
-            await self._cache.set_avatar(user_id, avatar_url, display_name, username, None, False)
-            return UserData(avatar_url, display_name, username, None, False)
+            await self._cache.set_avatar(user_id, avatar_url, display_name, username, None, False, banner_url)
+            return UserData(avatar_url, display_name, username, None, False, banner_url)
 
         return UserData(None, str(user_id), None, None, False)
 

@@ -171,6 +171,7 @@ async def get_stats(
             total_messages=stats.get("total_messages", 0),
             total_voice_minutes=stats.get("total_voice_minutes", 0),
             total_voice_formatted=format_voice_time(stats.get("total_voice_minutes", 0)),
+            total_reactions=stats.get("total_reactions", 0),
             highest_level=stats.get("highest_level", 0),
             top_3=top_3,
             daily_active_users=today_stats.get("unique_users", 0),

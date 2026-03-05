@@ -96,7 +96,7 @@ class CacheService:
     # Avatar Cache
     # =========================================================================
 
-    async def get_avatar(self, user_id: int) -> Optional[Tuple[Optional[str], str, Optional[str], Optional[int], bool]]:
+    async def get_avatar(self, user_id: int) -> Optional[Tuple[Optional[str], str, Optional[str], Optional[int], bool, Optional[str]]]:
         """Get cached avatar data for a user."""
         await self._check_avatar_cache_refresh()
 
@@ -104,7 +104,11 @@ class CacheService:
             if user_id in self._avatar_cache:
                 # Move to end for LRU
                 self._avatar_cache.move_to_end(user_id)
-                return self._avatar_cache[user_id]
+                entry = self._avatar_cache[user_id]
+                # Backwards compat: old 5-element tuples get None banner
+                if len(entry) == 5:
+                    return (*entry, None)
+                return entry
 
         return None
 
@@ -116,10 +120,11 @@ class CacheService:
         username: Optional[str],
         joined_at: Optional[int],
         is_booster: bool,
+        banner_url: Optional[str] = None,
     ) -> None:
         """Cache avatar data for a user."""
         async with self._avatar_cache_lock:
-            self._avatar_cache[user_id] = (avatar_url, display_name, username, joined_at, is_booster)
+            self._avatar_cache[user_id] = (avatar_url, display_name, username, joined_at, is_booster, banner_url)
 
             # Enforce cache size limit
             while len(self._avatar_cache) > self._avatar_cache_max_size:

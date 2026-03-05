@@ -98,6 +98,9 @@ class ConfessModal(discord.ui.Modal, title="Submit Confession"):
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
+        # Defer first — submit_confession() can take time (webhook, posting, thread creation)
+        await interaction.response.defer(ephemeral=True)
+
         # Submit to service
         success = await self.service.submit_confession(content, interaction.user)
 
@@ -126,10 +129,18 @@ class ConfessModal(discord.ui.Modal, title="Submit Confession"):
                 ("Reason", "Service returned False"),
             ], emoji="❌")
 
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.followup.send(embed=embed, ephemeral=True)
 
     async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
         """Handle modal errors."""
+        # Interaction expired — nothing we can do, just log it
+        if isinstance(error, discord.NotFound):
+            logger.tree("Confession Modal Expired", [
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("ID", str(interaction.user.id)),
+            ], emoji="⏳")
+            return
+
         logger.error_tree("Confession Modal Error", error, [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
@@ -142,9 +153,12 @@ class ConfessModal(discord.ui.Modal, title="Submit Confession"):
         set_footer(embed)
 
         try:
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-        except discord.InteractionResponded:
-            await interaction.followup.send(embed=embed, ephemeral=True)
+            if not interaction.response.is_done():
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+            else:
+                await interaction.followup.send(embed=embed, ephemeral=True)
+        except (discord.NotFound, discord.HTTPException):
+            pass
 
 
 class ReplyModal(discord.ui.Modal, title="Anonymous Reply"):
@@ -205,6 +219,9 @@ class ReplyModal(discord.ui.Modal, title="Anonymous Reply"):
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
+        # Defer first — post_anonymous_reply() can take time (webhook creation)
+        await interaction.response.defer(ephemeral=True)
+
         # Post the anonymous reply
         success = await self.service.post_anonymous_reply(
             self.thread,
@@ -240,10 +257,18 @@ class ReplyModal(discord.ui.Modal, title="Anonymous Reply"):
                 ("Reason", "Service returned False"),
             ], emoji="❌")
 
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.followup.send(embed=embed, ephemeral=True)
 
     async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
         """Handle modal errors."""
+        if isinstance(error, discord.NotFound):
+            logger.tree("Reply Modal Expired", [
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("ID", str(interaction.user.id)),
+                ("Confession", f"#{self.confession_number}"),
+            ], emoji="⏳")
+            return
+
         logger.error_tree("Reply Modal Error", error, [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
@@ -257,9 +282,12 @@ class ReplyModal(discord.ui.Modal, title="Anonymous Reply"):
         set_footer(embed)
 
         try:
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-        except discord.InteractionResponded:
-            await interaction.followup.send(embed=embed, ephemeral=True)
+            if not interaction.response.is_done():
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+            else:
+                await interaction.followup.send(embed=embed, ephemeral=True)
+        except (discord.NotFound, discord.HTTPException):
+            pass
 
 
 class ConfessCog(commands.Cog):

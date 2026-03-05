@@ -367,7 +367,8 @@ class XPMixin:
                     COUNT(*) as total_users,
                     COALESCE(SUM(xp), 0) as total_xp,
                     COALESCE(SUM(voice_minutes), 0) as total_voice_minutes,
-                    COALESCE(MAX(level), 0) as highest_level
+                    COALESCE(MAX(level), 0) as highest_level,
+                    COALESCE(SUM(reactions_given + reactions_received), 0) as total_reactions
                 FROM user_xp
                 WHERE guild_id = ? AND is_active = 1
             """, (gid,))
@@ -859,21 +860,17 @@ class XPMixin:
         self,
         user_ids: List[int] = None,
         guild_id: int = None,
-        snapshot_date: str = None
+        snapshot_date: str = None,
+        sort_by: str = "xp",
     ) -> Dict[int, int]:
         """
         Get user ranks from a previous snapshot date.
 
-        Calculates what each user's rank would have been based on their
-        XP at the snapshot date.
-
         Args:
             user_ids: Optional list of user IDs to fetch ranks for.
-                     If provided, only returns ranks for these users (efficient).
-                     If None, returns all ranks (expensive - avoid in production).
             guild_id: Guild ID (defaults to config.GUILD_ID)
-            snapshot_date: Date string (YYYY-MM-DD) to get ranks from.
-                          If None, uses yesterday.
+            snapshot_date: Date string (YYYY-MM-DD). Defaults to yesterday.
+            sort_by: Column to rank by - "xp", "voice", or "messages".
 
         Returns:
             Dict mapping user_id to their rank at that snapshot
@@ -886,18 +883,23 @@ class XPMixin:
         if not snapshot_date:
             snapshot_date = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
 
+        # Map sort_by to snapshot column
+        order_col = {
+            "xp": "xp_total",
+            "voice": "voice_minutes",
+            "messages": "total_messages",
+        }.get(sort_by, "xp_total")
+
         with self._get_conn() as conn:
             cur = conn.cursor()
 
             if user_ids:
-                # Efficient: Only calculate ranks for specific users
-                # Use a CTE to rank all users, then filter to the ones we need
                 placeholders = ",".join("?" * len(user_ids))
                 cur.execute(f"""
                     WITH ranked AS (
                         SELECT
                             user_id,
-                            ROW_NUMBER() OVER (ORDER BY xp_total DESC) as rank
+                            ROW_NUMBER() OVER (ORDER BY {order_col} DESC) as rank
                         FROM xp_snapshots
                         WHERE guild_id = ? AND date = ?
                     )
@@ -905,11 +907,10 @@ class XPMixin:
                     WHERE user_id IN ({placeholders})
                 """, (gid, snapshot_date, *user_ids))
             else:
-                # Fallback: Get all ranks (expensive, avoid in production)
-                cur.execute("""
+                cur.execute(f"""
                     SELECT
                         user_id,
-                        ROW_NUMBER() OVER (ORDER BY xp_total DESC) as rank
+                        ROW_NUMBER() OVER (ORDER BY {order_col} DESC) as rank
                     FROM xp_snapshots
                     WHERE guild_id = ? AND date = ?
                 """, (gid, snapshot_date))
@@ -918,6 +919,7 @@ class XPMixin:
 
         logger.tree("Previous Ranks Retrieved", [
             ("Date", snapshot_date),
+            ("Sort", sort_by),
             ("Requested", str(len(user_ids)) if user_ids else "All"),
             ("Found", str(len(ranks))),
         ], emoji="📈")

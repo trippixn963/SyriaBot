@@ -22,6 +22,7 @@ class LeaderboardEntry(BaseModel):
     display_name: str = Field(description="User's display name")
     username: Optional[str] = Field(None, description="Discord username")
     avatar: Optional[str] = Field(None, description="Avatar URL")
+    banner: Optional[str] = Field(None, description="Profile banner URL")
     level: int = Field(ge=0, description="Current level")
     xp: int = Field(ge=0, description="Total XP")
     xp_gained: Optional[int] = Field(None, description="XP gained in period (only for period leaderboards)")

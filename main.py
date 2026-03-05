@@ -33,27 +33,34 @@ async def main() -> None:
         sys.exit(1)
 
     bot = SyriaBot()
+    shutdown_task = None
 
-    # Handle SIGTERM (systemctl stop/restart) gracefully
+    def on_signal(sig: signal.Signals) -> None:
+        nonlocal shutdown_task
+        if shutdown_task is not None:
+            return  # Already shutting down
+        log.tree("Shutdown Signal", [
+            ("Signal", sig.name),
+        ], emoji="🛑")
+        shutdown_task = asyncio.create_task(bot.close())
+
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):
-        loop.add_signal_handler(sig, lambda s=sig: asyncio.create_task(_shutdown(bot, s)))
+        loop.add_signal_handler(sig, on_signal, sig)
 
     try:
         await bot.start(config.TOKEN)
     except KeyboardInterrupt:
         pass
     finally:
-        if not bot.is_closed():
+        # If signal triggered close(), wait for it to finish
+        if shutdown_task:
+            try:
+                await shutdown_task
+            except Exception:
+                pass
+        elif not bot.is_closed():
             await bot.close()
-
-
-async def _shutdown(bot: SyriaBot, sig: signal.Signals) -> None:
-    """Handle shutdown signal from systemd."""
-    log.tree("Shutdown Signal", [
-        ("Signal", sig.name),
-    ], emoji="🛑")
-    await bot.close()
 
 
 if __name__ == "__main__":

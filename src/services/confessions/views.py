@@ -81,6 +81,9 @@ class ReplyModal(ui.Modal, title="Anonymous Reply"):
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
+        # Defer first — post_anonymous_reply() can take time (webhook creation)
+        await interaction.response.defer(ephemeral=True)
+
         success = await self.service.post_anonymous_reply(
             self.thread,
             content,
@@ -100,7 +103,23 @@ class ReplyModal(ui.Modal, title="Anonymous Reply"):
             )
 
         set_footer(embed)
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
+    async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
+        """Handle modal errors — expired interactions are silently ignored."""
+        if isinstance(error, discord.NotFound):
+            logger.tree("Reply Button Modal Expired", [
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("ID", str(interaction.user.id)),
+                ("Confession", f"#{self.confession_number}"),
+            ], emoji="⏳")
+            return
+
+        logger.error_tree("Reply Button Modal Error", error, [
+            ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+            ("ID", str(interaction.user.id)),
+            ("Confession", f"#{self.confession_number}"),
+        ])
 
 
 class ConfessionReplyView(ui.View):

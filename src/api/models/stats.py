@@ -80,6 +80,7 @@ class ServerStats(BaseModel):
     total_messages: int = 0
     total_voice_minutes: int = 0
     total_voice_formatted: str = "0m"
+    total_reactions: int = 0
     highest_level: int = 0
 
     # Top 3 users

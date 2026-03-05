@@ -2,7 +2,7 @@
 SyriaBot - WebSocket Manager
 ============================
 
-Real-time server stats broadcasting.
+Real-time server stats and leaderboard broadcasting.
 
 Author: حَـــــنَّـــــا
 Server: discord.gg/syria
@@ -10,7 +10,7 @@ Server: discord.gg/syria
 
 import asyncio
 import json
-from typing import Set, Dict, Any, Optional
+from typing import Set, Dict, Any, Optional, List
 
 from fastapi import WebSocket
 from starlette.websockets import WebSocketState
@@ -34,6 +34,7 @@ class WebSocketManager:
             "ranked": 0,
             "xp": 0,
             "voice_minutes": 0,
+            "reactions": 0,
         }
 
         # Background task for periodic online count updates
@@ -64,6 +65,80 @@ class WebSocketManager:
                 pass
             self._online_task = None
 
+    async def _get_enriched_leaderboard(self) -> List[Dict[str, Any]]:
+        """Get enriched leaderboard using CacheService and DiscordService."""
+        from src.services.database import db
+        from src.api.services.discord import get_discord_service
+
+        try:
+            if not self._bot or not self._bot.is_ready():
+                return []
+
+            discord_service = get_discord_service(self._bot)
+
+            # Get top 100 from database (run in executor to avoid blocking)
+            loop = asyncio.get_event_loop()
+            raw = await loop.run_in_executor(
+                None, lambda: db.get_leaderboard(limit=100, offset=0)
+            )
+            if not raw:
+                return []
+
+            # Enrich via DiscordService (uses avatar cache internally)
+            user_ids = [entry["user_id"] for entry in raw]
+            user_data_map = await discord_service.fetch_users_batch(user_ids)
+
+            # Get previous ranks for rank_change calculation
+            previous_ranks = await loop.run_in_executor(
+                None, lambda: db.get_previous_ranks(user_ids=user_ids)
+            )
+
+            enriched = []
+            for entry in raw:
+                user_id = entry["user_id"]
+                user_data = user_data_map.get(user_id)
+
+                if user_data:
+                    display_name = user_data.display_name
+                    username = user_data.username
+                    avatar_url = user_data.avatar_url
+                    banner_url = user_data.banner_url
+                    is_booster = user_data.is_booster
+                else:
+                    display_name = str(user_id)
+                    username = None
+                    avatar_url = None
+                    banner_url = None
+                    is_booster = False
+
+                # Calculate rank change
+                current_rank = entry["rank"]
+                rank_change = None
+                if previous_ranks and user_id in previous_ranks:
+                    rank_change = previous_ranks[user_id] - current_rank
+
+                enriched.append({
+                    "user_id": str(user_id),
+                    "xp": entry["xp"],
+                    "level": entry["level"],
+                    "total_messages": entry["total_messages"],
+                    "voice_minutes": entry["voice_minutes"],
+                    "rank": current_rank,
+                    "rank_change": rank_change,
+                    "display_name": display_name,
+                    "username": username,
+                    "avatar": avatar_url,
+                    "banner": banner_url,
+                    "is_booster": is_booster,
+                    "last_active": entry.get("last_active_at") or None,
+                    "streak_days": entry.get("streak_days") or 0,
+                })
+
+            return enriched
+        except Exception as e:
+            logger.error_tree("Leaderboard Enrichment Error", e)
+            return []
+
     async def _online_update_loop(self) -> None:
         """Background task to update online count and XP stats every 30 seconds."""
         from src.core.config import config
@@ -92,7 +167,10 @@ class WebSocketManager:
 
                 # Update XP stats (ranked users and total XP)
                 try:
-                    xp_stats = db.get_xp_stats(config.GUILD_ID)
+                    loop = asyncio.get_event_loop()
+                    xp_stats = await loop.run_in_executor(
+                        None, lambda: db.get_xp_stats(config.GUILD_ID)
+                    )
                     ranked = xp_stats.get("total_users", 0)
                     total_xp = xp_stats.get("total_xp", 0)
 
@@ -101,7 +179,7 @@ class WebSocketManager:
                     if total_xp != self._stats["xp"]:
                         updates["xp"] = total_xp
                 except Exception:
-                    pass  # Don't fail online updates if XP stats fail
+                    pass
 
                 # Broadcast all changes at once
                 if updates:
@@ -122,17 +200,41 @@ class WebSocketManager:
         # Send current stats immediately
         await self._send_full_stats(websocket)
 
+        # Send leaderboard
+        if self._bot and self._bot.is_ready():
+            leaderboard = await self._get_enriched_leaderboard()
+            if leaderboard:
+                try:
+                    message = json.dumps({
+                        "type": "leaderboard",
+                        "data": leaderboard
+                    })
+                    await websocket.send_text(message)
+                except Exception:
+                    pass
+
     async def disconnect(self, websocket: WebSocket) -> None:
         """Remove a connection."""
         async with self._lock:
             self._connections.discard(websocket)
 
     async def _send_full_stats(self, websocket: WebSocket) -> None:
-        """Send all current stats to a single client."""
+        """Send all current stats to a single client (includes guild info)."""
         try:
+            data = self._stats.copy()
+
+            # Include guild info if bot is ready
+            if self._bot and self._bot.is_ready():
+                from src.core.config import config
+                guild = self._bot.get_guild(config.GUILD_ID)
+                if guild:
+                    data["guild_name"] = guild.name
+                    data["guild_icon"] = str(guild.icon.url) if guild.icon else None
+                    data["guild_banner"] = str(guild.banner.url) if guild.banner else None
+
             message = json.dumps({
                 "type": "stats",
-                "data": self._stats.copy()
+                "data": data
             })
             await websocket.send_text(message)
         except Exception:
@@ -146,7 +248,8 @@ class WebSocketManager:
         messages: int,
         ranked: int = 0,
         xp: int = 0,
-        voice_minutes: int = 0
+        voice_minutes: int = 0,
+        reactions: int = 0
     ) -> None:
         """Set all stats at once (used during initialization)."""
         self._stats["members"] = members
@@ -156,6 +259,7 @@ class WebSocketManager:
         self._stats["ranked"] = ranked
         self._stats["xp"] = xp
         self._stats["voice_minutes"] = voice_minutes
+        self._stats["reactions"] = reactions
 
     def set_stat(self, key: str, value: int) -> None:
         """Set a single stat without broadcasting."""
@@ -195,38 +299,67 @@ class WebSocketManager:
 
         await self._broadcast(message)
 
+    async def broadcast_leaderboard_update(self, updates: List[Dict[str, Any]]) -> None:
+        """Broadcast leaderboard changes to all clients."""
+        if not self._connections:
+            return
+
+        message = json.dumps({
+            "type": "leaderboard_update",
+            "data": {"updates": updates}
+        })
+
+        await self._broadcast(message)
+
     async def _broadcast(self, message: str) -> None:
-        """Broadcast a message to all connected clients."""
-        dead_connections = set()
-
+        """Broadcast a message to all connected clients in parallel."""
+        # Snapshot connections under lock, then release before sending
         async with self._lock:
-            for websocket in self._connections:
-                try:
-                    if websocket.client_state == WebSocketState.CONNECTED:
-                        await websocket.send_text(message)
-                except Exception:
-                    dead_connections.add(websocket)
+            if not self._connections:
+                return
+            connections = list(self._connections)
 
-            self._connections -= dead_connections
+        # Send to all connections in parallel
+        async def send_safe(ws: WebSocket) -> Optional[WebSocket]:
+            try:
+                if ws.client_state == WebSocketState.CONNECTED:
+                    await ws.send_text(message)
+                    return None
+                return ws  # Dead connection
+            except Exception:
+                return ws  # Failed connection
 
-    # Increment methods for real-time updates (no DB query needed)
+        results = await asyncio.gather(
+            *[send_safe(ws) for ws in connections],
+            return_exceptions=True
+        )
+
+        # Collect dead connections
+        dead = {r for r in results if isinstance(r, WebSocket)}
+        if dead:
+            async with self._lock:
+                self._connections -= dead
+
+    # Increment methods for real-time updates
     async def increment_xp(self, amount: int) -> None:
         """Increment total XP counter and broadcast."""
         self._stats["xp"] += amount
-        if self._connections:
-            await self.broadcast_stat("xp", self._stats["xp"])
+        await self.broadcast_stat("xp", self._stats["xp"])
 
     async def increment_ranked(self) -> None:
         """Increment ranked users counter and broadcast."""
         self._stats["ranked"] += 1
-        if self._connections:
-            await self.broadcast_stat("ranked", self._stats["ranked"])
+        await self.broadcast_stat("ranked", self._stats["ranked"])
+
+    async def increment_reactions(self) -> None:
+        """Increment reactions counter and broadcast."""
+        self._stats["reactions"] += 1
+        await self.broadcast_stat("reactions", self._stats["reactions"])
 
     async def increment_voice_minutes(self, amount: int = 1) -> None:
         """Increment voice minutes counter and broadcast."""
         self._stats["voice_minutes"] += amount
-        if self._connections:
-            await self.broadcast_stat("voice_minutes", self._stats["voice_minutes"])
+        await self.broadcast_stat("voice_minutes", self._stats["voice_minutes"])
 
     # Legacy methods for backwards compatibility
     def set_message_count(self, count: int) -> None:

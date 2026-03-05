@@ -28,6 +28,7 @@ class UserXPData(BaseModel):
     display_name: str = Field(description="User's display name")
     username: Optional[str] = Field(None, description="Discord username")
     avatar: Optional[str] = Field(None, description="Avatar URL")
+    banner: Optional[str] = Field(None, description="Profile banner URL")
     rank: int = Field(ge=1, description="Current rank position")
     rank_change: Optional[int] = Field(None, description="Rank change from previous day")
     level: int = Field(ge=0, description="Current level")
@@ -48,6 +49,7 @@ class UserResponse(BaseModel):
     display_name: str
     username: Optional[str] = None
     avatar: Optional[str] = None
+    banner: Optional[str] = None
 
     # Rank & XP
     rank: int

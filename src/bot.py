@@ -94,6 +94,7 @@ class SyriaBot(commands.Bot):
         self.roulette_service: Optional[RouletteService] = None
         self._health_task: Optional[asyncio.Task] = None
         self._health_failures: int = 0
+        self._closing: bool = False
 
     async def setup_hook(self) -> None:
         """Called when the bot is starting up."""
@@ -450,6 +451,10 @@ class SyriaBot(commands.Bot):
 
     async def close(self) -> None:
         """Clean up when bot is shutting down."""
+        if self._closing:
+            return
+        self._closing = True
+
         logger.tree("Bot Shutdown", [
             ("Status", "Starting cleanup"),
         ], emoji="🛑")
@@ -462,135 +467,78 @@ class SyriaBot(commands.Bot):
             except asyncio.CancelledError:
                 pass
 
-        stopped = []
+        # Disconnect from Discord FIRST so no new events flow during cleanup
+        try:
+            await asyncio.wait_for(super().close(), timeout=5)
+        except Exception:
+            pass
 
-        if self.backup_scheduler:
-            try:
-                await self.backup_scheduler.stop()
-                stopped.append("Backup")
-            except Exception as e:
-                logger.error_tree("Backup Scheduler Stop Error", e)
+        # Stop sync services (instant, no await)
+        sync_stopped = []
+        sync_services = [
+            (self.gallery_service, "Gallery", lambda s: s.stop()),
+            (self.confession_service, "Confessions", lambda s: s.stop()),
+            (self.birthday_service, "Birthdays", lambda s: s.stop()),
+            (self.social_monitor, "SocialMonitor", lambda s: s.stop()),
+            (self.roulette_service, "Roulette", lambda s: s.stop()),
+        ]
+        for svc, name, stop_fn in sync_services:
+            if svc:
+                try:
+                    stop_fn(svc)
+                    sync_stopped.append(name)
+                except Exception as e:
+                    logger.error_tree(f"{name} Stop Error", e)
 
-        if self.stats_api:
-            try:
-                await self.stats_api.stop()
-                stopped.append("StatsAPI")
-            except Exception as e:
-                logger.error_tree("Stats API Stop Error", e)
-
-        if self.tempvoice:
-            try:
-                await self.tempvoice.stop()
-                stopped.append("TempVoice")
-            except Exception as e:
-                logger.error_tree("TempVoice Stop Error", e)
-
-        if self.profile_sync:
-            try:
-                await self.profile_sync.stop()
-                stopped.append("ProfileSync")
-            except Exception as e:
-                logger.error_tree("Profile Sync Stop Error", e)
-
-        if self.xp_service:
-            try:
-                await self.xp_service.stop()
-                stopped.append("XP")
-            except Exception as e:
-                logger.error_tree("XP Service Stop Error", e)
-
-        if self.gallery_service:
-            try:
-                self.gallery_service.stop()
-                stopped.append("Gallery")
-            except Exception as e:
-                logger.error_tree("Gallery Service Stop Error", e)
-
-        if self.presence_handler:
-            try:
-                await self.presence_handler.stop()
-                stopped.append("Presence")
-            except Exception as e:
-                logger.error_tree("Presence Handler Stop Error", e)
-
-        # Bump Reminder
         if bump_service._running:
             try:
                 bump_service.stop()
-                stopped.append("BumpReminder")
+                sync_stopped.append("BumpReminder")
             except Exception as e:
                 logger.error_tree("Bump Reminder Stop Error", e)
 
-        # Confessions
-        if self.confession_service:
+        # Stop async services concurrently
+        async def _stop(name: str, coro) -> str:
             try:
-                self.confession_service.stop()
-                stopped.append("Confessions")
+                await coro
+                return name
             except Exception as e:
-                logger.error_tree("Confessions Stop Error", e)
+                logger.error_tree(f"{name} Stop Error", e)
+                return ""
 
-
-        # Currency
+        async_tasks = []
+        if self.backup_scheduler:
+            async_tasks.append(_stop("Backup", self.backup_scheduler.stop()))
+        if self.stats_api:
+            async_tasks.append(_stop("StatsAPI", self.stats_api.stop()))
+        if self.tempvoice:
+            async_tasks.append(_stop("TempVoice", self.tempvoice.stop()))
+        if self.profile_sync:
+            async_tasks.append(_stop("ProfileSync", self.profile_sync.stop()))
+        if self.xp_service:
+            async_tasks.append(_stop("XP", self.xp_service.stop()))
+        if self.presence_handler:
+            async_tasks.append(_stop("Presence", self.presence_handler.stop()))
         if self.currency_service:
-            try:
-                await self.currency_service.stop()
-                stopped.append("Currency")
-            except Exception as e:
-                logger.error_tree("Currency Service Stop Error", e)
+            async_tasks.append(_stop("Currency", self.currency_service.stop()))
+        async_tasks.append(_stop("QuoteService", quote_service.close()))
+        async_tasks.append(_stop("HTTP", http_session.close()))
+        async_tasks.append(_stop("RankCard", rank_card.cleanup()))
+        async_tasks.append(_stop("ActionService", action_service.close()))
 
-        # Birthdays
-        if self.birthday_service:
-            try:
-                self.birthday_service.stop()
-                stopped.append("Birthdays")
-            except Exception as e:
-                logger.error_tree("Birthday Service Stop Error", e)
-
-        # Social Media Monitor
-        if self.social_monitor:
-            try:
-                self.social_monitor.stop()
-                stopped.append("SocialMonitor")
-            except Exception as e:
-                logger.error_tree("Social Monitor Stop Error", e)
-
-        # Roulette
-        if self.roulette_service:
-            try:
-                self.roulette_service.stop()
-                stopped.append("Roulette")
-            except Exception as e:
-                logger.error_tree("Roulette Service Stop Error", e)
-
-        # Quote Service (close aiohttp session)
+        async_stopped = []
         try:
-            await quote_service.close()
-            stopped.append("QuoteService")
-        except Exception as e:
-            logger.error_tree("Quote Service Close Error", e)
+            results = await asyncio.wait_for(
+                asyncio.gather(*async_tasks, return_exceptions=True),
+                timeout=8,
+            )
+            async_stopped = [r for r in results if isinstance(r, str) and r]
+        except asyncio.TimeoutError:
+            logger.tree("Service Cleanup Timeout", [
+                ("Action", "Skipping remaining services"),
+            ], emoji="⚠️")
 
-        # Close HTTP session
-        try:
-            await http_session.close()
-            stopped.append("HTTP")
-        except Exception as e:
-            logger.error_tree("HTTP Session Close Error", e)
-
-        # Clean up rank card browser
-        try:
-            await rank_card.cleanup()
-            stopped.append("RankCard")
-        except Exception as e:
-            logger.error_tree("Rank Card Cleanup Error", e)
-
-        # Close action service session
-        try:
-            await action_service.close()
-            stopped.append("ActionService")
-        except Exception as e:
-            logger.error_tree("Action Service Close Error", e)
-
-        await super().close()
+        all_stopped = sync_stopped + async_stopped
         logger.tree("Bot Shutdown Complete", [
-            ("Services Stopped", ", ".join(stopped)),
+            ("Services Stopped", ", ".join(all_stopped)),
         ], emoji="✅")

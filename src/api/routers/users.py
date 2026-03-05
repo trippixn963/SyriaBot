@@ -116,6 +116,7 @@ async def get_user(
             display_name=user_data.display_name,
             username=user_data.username,
             avatar=user_data.avatar_url,
+            banner=user_data.banner_url,
             rank=rank,
             rank_change=rank_change,
             level=xp_data["level"],

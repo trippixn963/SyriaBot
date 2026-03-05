@@ -12,7 +12,7 @@ import time
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse
 
 from src.core.logger import logger
@@ -50,11 +50,12 @@ async def _enrich_leaderboard(
 
         if user_data:
             avatar_url = user_data.avatar_url
+            banner_url = user_data.banner_url
             display_name = user_data.display_name
             username = user_data.username
             is_booster = user_data.is_booster
         else:
-            avatar_url, display_name, username, is_booster = None, str(user_id), None, False
+            avatar_url, banner_url, display_name, username, is_booster = None, None, str(user_id), None, False
 
         last_active_at = entry.get("last_active_at", 0) or 0
         streak_days = entry.get("streak_days", 0) or 0
@@ -72,6 +73,7 @@ async def _enrich_leaderboard(
             display_name=display_name,
             username=username,
             avatar=avatar_url,
+            banner=banner_url,
             level=entry["level"],
             xp=entry["xp"],
             xp_gained=entry.get("xp_gained") if include_xp_gained else None,
@@ -92,6 +94,7 @@ async def get_leaderboard(
     request: Request,
     pagination: PaginationParams = Depends(get_pagination),
     period: str = Depends(get_period),
+    sort: str = Query("xp", description="Sort/rank by: xp, voice, messages"),
     bot: Any = Depends(get_bot),
 ) -> JSONResponse:
     """
@@ -101,14 +104,19 @@ async def get_leaderboard(
     - limit: Number of entries (1-100, default 50)
     - offset: Starting position (default 0)
     - period: Time filter (all, month, week, today)
+    - sort: Rank change context (xp, voice, messages)
     """
     client_ip = get_client_ip(request)
     start_time = time.time()
     cache = get_cache_service()
 
     try:
+        # Validate sort parameter
+        if sort not in ("xp", "voice", "messages"):
+            sort = "xp"
+
         # Check cache
-        cache_key = f"leaderboard:{pagination.limit}:{pagination.offset}:{period}"
+        cache_key = f"leaderboard:{pagination.limit}:{pagination.offset}:{period}:{sort}"
         cached_data = await cache.get_response(cache_key, cache.leaderboard_cache_ttl)
 
         if cached_data:
@@ -144,7 +152,7 @@ async def get_leaderboard(
 
         # Get previous ranks for rank change calculation
         user_ids = [entry["user_id"] for entry in raw_leaderboard]
-        previous_ranks = db.get_previous_ranks(user_ids=user_ids) if user_ids else {}
+        previous_ranks = db.get_previous_ranks(user_ids=user_ids, sort_by=sort) if user_ids else {}
 
         # Enrich with Discord data
         leaderboard = await _enrich_leaderboard(
