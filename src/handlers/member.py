@@ -248,6 +248,10 @@ class MemberHandler(commands.Cog):
         if member.guild.id != config.GUILD_ID:
             return
 
+        # Remove from roulette activity tracking
+        if self.bot.roulette_service:
+            self.bot.roulette_service._user_activity.pop(member.id, None)
+
         # Record member leave event for growth tracking
         try:
             db.record_member_event(member.guild.id, member.id, "leave")

@@ -23,7 +23,7 @@ from src.core.logger import logger
 from src.services.database import db
 from src.utils.footer import set_footer
 from .modals import NameModal, LimitModal
-from .selects import UserSelectView, ConfirmView
+from .selects import UserSelectView
 from .utils import is_booster, set_owner_permissions
 
 if TYPE_CHECKING:
@@ -725,41 +725,45 @@ class TempVoiceControlPanel(ui.View):
                 set_footer(embed)
                 await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @ui.button(label="Delete", emoji=EMOJI_DELETE, style=discord.ButtonStyle.secondary, custom_id="tv_delete", row=2)
-    async def delete_button(self, interaction: discord.Interaction, button: ui.Button) -> None:
-        """Delete channel."""
+    @ui.button(label="Clear", emoji=EMOJI_DELETE, style=discord.ButtonStyle.secondary, custom_id="tv_clear", row=2)
+    async def clear_button(self, interaction: discord.Interaction, button: ui.Button) -> None:
+        """Clear VC chat messages."""
         try:
-            channel = await self._get_user_channel(interaction, "Delete")
+            channel = await self._get_user_channel(interaction, "Clear")
             if not channel:
                 return
 
-            # Count members that will be disconnected (excluding self)
-            other_members = [m for m in channel.members if m.id != interaction.user.id]
-            member_count = len(other_members)
+            await interaction.response.defer(ephemeral=True)
+            await channel.purge(limit=500, reason="Chat cleared by owner")
 
-            if member_count > 0:
-                desc = f"🗑️ Delete **{channel.name}**?\n⚠️ {member_count} member{'s' if member_count != 1 else ''} will be disconnected"
-            else:
-                desc = f"🗑️ Delete **{channel.name}**?"
+            if self.service:
+                await self.service._resend_sticky_panel(channel)
 
-            embed = discord.Embed(
-                description=desc,
-                color=COLOR_ERROR,
-            )
+            embed = discord.Embed(description="🧹 Chat cleared", color=COLOR_SUCCESS)
             set_footer(embed)
-            await interaction.response.send_message(embed=embed, view=ConfirmView("delete", channel), ephemeral=True)
+            await interaction.followup.send(embed=embed, ephemeral=True)
+
+            logger.tree("Chat Cleared", [
+                ("Channel", channel.name),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("ID", str(interaction.user.id)),
+            ], emoji="🧹")
 
         except discord.HTTPException as e:
-            logger.error_tree("Delete Button Failed", e, [
+            logger.error_tree("Clear Button Failed", e, [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
             ])
             if not interaction.response.is_done():
-                embed = discord.Embed(description="❌ Failed to show confirmation", color=COLOR_ERROR)
+                embed = discord.Embed(description="❌ Failed to clear chat", color=COLOR_ERROR)
                 set_footer(embed)
                 await interaction.response.send_message(embed=embed, ephemeral=True)
+            else:
+                embed = discord.Embed(description="❌ Failed to clear chat", color=COLOR_ERROR)
+                set_footer(embed)
+                await interaction.followup.send(embed=embed, ephemeral=True)
         except Exception as e:
-            logger.error_tree("Delete Button Error", e, [
+            logger.error_tree("Clear Button Error", e, [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
             ])
@@ -767,3 +771,7 @@ class TempVoiceControlPanel(ui.View):
                 embed = discord.Embed(description="❌ An error occurred", color=COLOR_ERROR)
                 set_footer(embed)
                 await interaction.response.send_message(embed=embed, ephemeral=True)
+            else:
+                embed = discord.Embed(description="❌ An error occurred", color=COLOR_ERROR)
+                set_footer(embed)
+                await interaction.followup.send(embed=embed, ephemeral=True)

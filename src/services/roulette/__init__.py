@@ -2,8 +2,8 @@
 SyriaBot - Roulette Minigame
 ============================
 
-Random roulette minigame that spawns in general chat.
-Users join via button, wheel spins, winner gets XP.
+Automatic roulette that spawns in general chat.
+Participants selected from recent message activity, weighted by message count.
 
 Author: حَـــــنَّـــــا
 Server: discord.gg/syria

@@ -9,9 +9,8 @@ Author: حَـــــنَّـــــا
 Server: discord.gg/syria
 """
 
-import asyncio
 import math
-from typing import List, Tuple, Optional
+from typing import List, Optional
 from dataclasses import dataclass
 
 from src.core.logger import logger
@@ -25,17 +24,13 @@ from src.services.xp.card import (
 )
 
 
-# Wheel colors - Syria theme (gold and green)
-WHEEL_COLORS = [
-    "#E6B84A",  # Syria Gold
-    "#1F5E2E",  # Syria Green
-    "#D4A73A",  # Gold darker
-    "#2A7A3D",  # Green lighter
-    "#C9982F",  # Gold variant
-    "#245C32",  # Green variant
-    "#E0C060",  # Gold light
-    "#1A4D25",  # Green dark
-]
+# Wheel geometry
+WHEEL_SIZE = 396  # px — must match .wheel-base width/height in CSS
+WHEEL_CENTER = WHEEL_SIZE // 2  # 198
+
+# Strict alternating gold/green — never two similar colors adjacent
+WHEEL_COLOR_GOLD = "#D4A73A"
+WHEEL_COLOR_GREEN = "#1F5E2E"
 
 
 @dataclass
@@ -44,6 +39,13 @@ class RoulettePlayer:
     user_id: int
     display_name: str
     avatar_url: str
+    weight: float = 0.0  # Proportion of total (0.0-1.0)
+    message_count: int = 0
+
+
+def _get_segment_color(index: int) -> str:
+    """Alternate gold/green strictly by index."""
+    return WHEEL_COLOR_GOLD if index % 2 == 0 else WHEEL_COLOR_GREEN
 
 
 def _generate_wheel_html(
@@ -52,71 +54,86 @@ def _generate_wheel_html(
     spin_degrees: float = 0,
     is_spinning: bool = False,
     show_winner: bool = False,
+    guild_icon_url: Optional[str] = None,
 ) -> str:
     """
-    Generate HTML for the roulette wheel.
+    Generate HTML for the roulette wheel with weighted segments.
 
-    Args:
-        players: List of players in the game
-        winner_index: Index of winning player (for final reveal)
-        spin_degrees: Current rotation in degrees
-        is_spinning: Whether wheel is currently spinning
-        show_winner: Whether to highlight the winner
+    Each player's segment size is proportional to their weight.
     """
     num_players = len(players)
     if num_players == 0:
         return ""
 
-    slice_angle = 360 / num_players
+    # Build cumulative angles from weights
+    cumulative_angles = []
+    current_angle = 0.0
+    for player in players:
+        start = current_angle
+        extent = player.weight * 360
+        end = start + extent
+        cumulative_angles.append((start, end))
+        current_angle = end
 
-    # Generate conic gradient for wheel segments
+    # Generate conic gradient for wheel segments (strict alternating)
     gradient_stops = []
-    for i in range(num_players):
-        color = WHEEL_COLORS[i % len(WHEEL_COLORS)]
-        start_angle = i * slice_angle
-        end_angle = (i + 1) * slice_angle
-        gradient_stops.append(f"{color} {start_angle}deg {end_angle}deg")
+    for i, (start, end) in enumerate(cumulative_angles):
+        color = _get_segment_color(i)
+        gradient_stops.append(f"{color} {start:.2f}deg {end:.2f}deg")
 
     conic_gradient = f"conic-gradient(from 0deg, {', '.join(gradient_stops)})"
 
     # Generate divider lines between segments
     dividers_html = ""
-    for i in range(num_players):
-        rotation = i * slice_angle
+    for i, (start, _end) in enumerate(cumulative_angles):
         dividers_html += f'''
-            <div class="divider" style="transform: rotate({rotation}deg);"></div>
+            <div class="divider" style="transform: rotate({start:.2f}deg);"></div>
         '''
 
     # Generate player avatars positioned on the wheel
     avatars_html = ""
-    avatar_size = 36  # Smaller avatars
-    avatar_radius = 130  # Distance from center
+    avatar_size = 56
+    avatar_radius = 130
 
     for i, player in enumerate(players):
-        color = WHEEL_COLORS[i % len(WHEEL_COLORS)]
-        # Position avatar at center of slice
-        avatar_angle = i * slice_angle + (slice_angle / 2)
-        avatar_x = 192 + avatar_radius * math.sin(math.radians(avatar_angle))
-        avatar_y = 192 - avatar_radius * math.cos(math.radians(avatar_angle))
+        color = _get_segment_color(i)
+        start, end = cumulative_angles[i]
+        slice_angle = end - start
+
+        # Scale avatar size based on slice — smaller slices get slightly smaller avatars
+        # but never below 40px
+        scaled_size = avatar_size
+        if slice_angle < 25:
+            scaled_size = max(40, int(avatar_size * (slice_angle / 36)))
+
+        # Position avatar at center of this player's slice
+        avatar_angle = (start + end) / 2
+        avatar_x = WHEEL_CENTER + avatar_radius * math.sin(math.radians(avatar_angle))
+        avatar_y = WHEEL_CENTER - avatar_radius * math.cos(math.radians(avatar_angle))
 
         # Highlight winner
         is_winner = show_winner and winner_index == i
-        winner_glow = f"box-shadow: 0 0 20px #fff, 0 0 40px {color}, 0 0 60px {color};" if is_winner else ""
-        winner_scale = "transform: scale(1.3);" if is_winner else ""
-        winner_border = "4px solid #fff" if is_winner else f"3px solid rgba(0,0,0,0.4)"
+        if is_winner:
+            border = "4px solid #fff"
+            glow = "box-shadow: 0 0 15px #fff, 0 0 30px #E6B84A, 0 0 50px #E6B84A;"
+            scale = "transform: scale(1.35);"
+        else:
+            border = "3px solid rgba(255,255,255,0.25)"
+            glow = "box-shadow: 0 2px 8px rgba(0,0,0,0.6);"
+            scale = ""
 
         # Get first letter for fallback
         initial = player.display_name[0].upper() if player.display_name else "?"
 
         avatars_html += f'''
             <div class="player-avatar" style="
-                left: {avatar_x - avatar_size/2}px;
-                top: {avatar_y - avatar_size/2}px;
-                width: {avatar_size}px;
-                height: {avatar_size}px;
-                border: {winner_border};
-                {winner_glow}
-                {winner_scale}
+                left: {avatar_x - scaled_size/2}px;
+                top: {avatar_y - scaled_size/2}px;
+                width: {scaled_size}px;
+                height: {scaled_size}px;
+                border: {border};
+                {glow}
+                {scale}
             ">
                 <img src="{player.avatar_url}"
                      onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
@@ -143,6 +160,12 @@ def _generate_wheel_html(
             }}
         '''
 
+    # Center hub content (guild icon or fallback emoji)
+    if guild_icon_url:
+        center_hub_content = f'<img src="{guild_icon_url}" onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\'"><span style="display:none;">🎰</span>'
+    else:
+        center_hub_content = '<span>🎰</span>'
+
     # Winner announcement
     winner_html = ""
     if show_winner and winner_index is not None:
@@ -150,7 +173,7 @@ def _generate_wheel_html(
         winner_html = f'''
             <div class="winner-banner">
                 <span class="winner-icon">🎉</span>
-                <span class="winner-name">{winner.display_name[:12]}</span>
+                <span class="winner-name">{winner.display_name[:16]}</span>
                 <span class="winner-text">WINS!</span>
             </div>
         '''
@@ -195,8 +218,8 @@ def _generate_wheel_html(
         }}
 
         .card {{
-            width: 480px;
-            height: 540px;
+            width: 500px;
+            height: 570px;
             background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #0f0f1a 100%);
             border-radius: 20px;
             position: relative;
@@ -204,23 +227,23 @@ def _generate_wheel_html(
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: 20px;
+            padding: 16px 20px;
         }}
 
         .title {{
             font-size: 36px;
             font-weight: 900;
             letter-spacing: 4px;
-            background: linear-gradient(135deg, #E6B84A 0%, #1F5E2E 50%, #E6B84A 100%);
+            background: linear-gradient(135deg, #E6B84A 0%, #F0D080 50%, #E6B84A 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-            margin-bottom: 12px;
+            margin-bottom: 8px;
             text-transform: uppercase;
         }}
 
         .wheel-container {{
-            width: 420px;
-            height: 420px;
+            width: 440px;
+            height: 440px;
             position: relative;
             display: flex;
             justify-content: center;
@@ -230,8 +253,8 @@ def _generate_wheel_html(
         /* Outer ring glow */
         .wheel-glow {{
             position: absolute;
-            width: 400px;
-            height: 400px;
+            width: 420px;
+            height: 420px;
             border-radius: 50%;
             background: conic-gradient(from 0deg, #E6B84A66, #1F5E2E66, #E6B84A66, #1F5E2E66, #E6B84A66);
             filter: blur(15px);
@@ -246,20 +269,20 @@ def _generate_wheel_html(
         /* Outer decorative ring */
         .wheel-outer-ring {{
             position: absolute;
-            width: 396px;
-            height: 396px;
+            width: 410px;
+            height: 410px;
             border-radius: 50%;
             background: linear-gradient(145deg, #2a2a4a, #1a1a2e);
             box-shadow:
-                0 0 0 4px rgba(230, 184, 74, 0.4),
+                0 0 0 4px rgba(230, 184, 74, 0.5),
                 0 0 30px rgba(230, 184, 74, 0.2),
                 inset 0 0 30px rgba(0,0,0,0.5);
         }}
 
         /* The wheel itself */
         .wheel-base {{
-            width: 384px;
-            height: 384px;
+            width: 396px;
+            height: 396px;
             border-radius: 50%;
             position: relative;
             overflow: hidden;
@@ -286,15 +309,15 @@ def _generate_wheel_html(
             position: absolute;
             top: 0;
             left: 50%;
-            width: 3px;
+            width: 2px;
             height: 50%;
             background: linear-gradient(to bottom,
-                rgba(0,0,0,0.6) 0%,
-                rgba(0,0,0,0.4) 30%,
-                rgba(0,0,0,0.2) 60%,
+                rgba(255,255,255,0.5) 0%,
+                rgba(255,255,255,0.3) 30%,
+                rgba(255,255,255,0.1) 60%,
                 transparent 100%);
             transform-origin: bottom center;
-            margin-left: -1.5px;
+            margin-left: -1px;
         }}
 
         /* Inner shadow overlay for depth */
@@ -304,9 +327,9 @@ def _generate_wheel_html(
             border-radius: 50%;
             background: radial-gradient(circle at center,
                 transparent 0%,
-                transparent 40%,
-                rgba(0,0,0,0.1) 70%,
-                rgba(0,0,0,0.3) 100%);
+                transparent 35%,
+                rgba(0,0,0,0.08) 65%,
+                rgba(0,0,0,0.25) 100%);
             pointer-events: none;
         }}
 
@@ -317,7 +340,6 @@ def _generate_wheel_html(
             overflow: hidden;
             z-index: 10;
             background: linear-gradient(135deg, #3a3a4a, #2a2a3a);
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
         }}
 
         .player-avatar img {{
@@ -332,7 +354,7 @@ def _generate_wheel_html(
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 16px;
+            font-size: 22px;
             font-weight: 700;
             color: #fff;
         }}
@@ -343,8 +365,8 @@ def _generate_wheel_html(
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 70px;
-            height: 70px;
+            width: 64px;
+            height: 64px;
             background: linear-gradient(145deg, #1a1a2e, #0f0f1a);
             border-radius: 50%;
             border: 4px solid #E6B84A;
@@ -355,28 +377,36 @@ def _generate_wheel_html(
             display: flex;
             align-items: center;
             justify-content: center;
+            overflow: hidden;
+        }}
+
+        .center-hub img {{
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 50%;
         }}
 
         .center-hub span {{
-            font-size: 28px;
+            font-size: 26px;
         }}
 
         /* Pointer arrow */
         .pointer {{
             position: absolute;
-            top: 2px;
+            top: 0px;
             left: 50%;
             transform: translateX(-50%);
             z-index: 50;
-            filter: drop-shadow(0 4px 8px rgba(0,0,0,0.5));
+            filter: drop-shadow(0 4px 10px rgba(0,0,0,0.7));
         }}
 
         .pointer-outer {{
             width: 0;
             height: 0;
-            border-left: 18px solid transparent;
-            border-right: 18px solid transparent;
-            border-top: 35px solid #fff;
+            border-left: 20px solid transparent;
+            border-right: 20px solid transparent;
+            border-top: 38px solid #fff;
         }}
 
         .pointer-inner {{
@@ -386,46 +416,47 @@ def _generate_wheel_html(
             transform: translateX(-50%);
             width: 0;
             height: 0;
-            border-left: 12px solid transparent;
-            border-right: 12px solid transparent;
-            border-top: 24px solid #E6B84A;
+            border-left: 13px solid transparent;
+            border-right: 13px solid transparent;
+            border-top: 26px solid #E6B84A;
         }}
 
         /* Winner banner */
         .winner-banner {{
             position: absolute;
-            bottom: 15px;
+            bottom: 12px;
             left: 50%;
             transform: translateX(-50%);
             background: linear-gradient(145deg, #1F5E2E, #2A7A3D);
-            padding: 10px 28px;
+            padding: 12px 32px;
             border-radius: 25px;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
             box-shadow:
                 0 4px 20px rgba(31, 94, 46, 0.5),
                 0 0 40px rgba(31, 94, 46, 0.3);
             z-index: 100;
             border: 2px solid #E6B84A;
+            white-space: nowrap;
         }}
 
         .winner-icon {{
-            font-size: 24px;
+            font-size: 26px;
         }}
 
         .winner-name {{
-            font-size: 20px;
+            font-size: 22px;
             font-weight: 800;
             color: #fff;
-            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            text-shadow: 0 2px 4px rgba(0,0,0,0.4);
         }}
 
         .winner-text {{
-            font-size: 18px;
+            font-size: 20px;
             font-weight: 700;
             color: rgba(255,255,255,0.9);
-            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            text-shadow: 0 2px 4px rgba(0,0,0,0.4);
         }}
 
         {spin_css}
@@ -462,7 +493,7 @@ def _generate_wheel_html(
 
                 <!-- Center hub -->
                 <div class="center-hub">
-                    <span>🎰</span>
+                    {center_hub_content}
                 </div>
             </div>
 
@@ -478,19 +509,20 @@ def _generate_wheel_html(
 async def generate_wheel_static(
     players: List[RoulettePlayer],
     title_text: str = "JOIN THE ROULETTE!",
+    guild_icon_url: Optional[str] = None,
 ) -> bytes:
     """
     Generate a static wheel image showing all players.
-    Used for the initial "join" phase.
+    Used for the announcement phase.
     """
     async with get_render_semaphore():
         page = None
         try:
             page = await _get_page()
             await page.goto('about:blank')
-            await page.set_viewport_size({'width': 500, 'height': 560})
+            await page.set_viewport_size({'width': 520, 'height': 590})
 
-            html = _generate_wheel_html(players, is_spinning=False)
+            html = _generate_wheel_html(players, is_spinning=False, guild_icon_url=guild_icon_url)
             # Replace title
             html = html.replace(">Roulette<", f">{title_text}<")
 
@@ -530,23 +562,25 @@ async def generate_wheel_static(
 async def generate_wheel_result(
     players: List[RoulettePlayer],
     winner_index: int,
+    guild_icon_url: Optional[str] = None,
 ) -> bytes:
     """
     Generate the final wheel image with winner highlighted.
     The wheel is rotated so the winner is at the top (under pointer).
+    Uses weighted angles for segment sizes.
     """
     num_players = len(players)
     if num_players == 0:
         raise ValueError("No players")
 
-    slice_angle = 360 / num_players
+    # Calculate the center angle of the winner's weighted slice
+    cumulative = 0.0
+    for i in range(winner_index):
+        cumulative += players[i].weight * 360
+    winner_slice_angle = players[winner_index].weight * 360
+    winner_center_angle = cumulative + (winner_slice_angle / 2)
 
-    # Calculate rotation to put winner under pointer (top)
-    # Winner should be at 0 degrees (top), so we rotate to position them there
-    # Pointer is at top, so winner slice center should be at 0 degrees
-    winner_center_angle = winner_index * slice_angle + (slice_angle / 2)
-    # Rotate so winner is at top: we need to subtract winner's angle from 360
-    # Plus add some extra rotations for visual effect
+    # Rotate so winner is at top (under pointer)
     spin_degrees = (360 * 5) + (360 - winner_center_angle)
 
     async with get_render_semaphore():
@@ -554,7 +588,7 @@ async def generate_wheel_result(
         try:
             page = await _get_page()
             await page.goto('about:blank')
-            await page.set_viewport_size({'width': 500, 'height': 560})
+            await page.set_viewport_size({'width': 520, 'height': 590})
 
             html = _generate_wheel_html(
                 players,
@@ -562,6 +596,7 @@ async def generate_wheel_result(
                 spin_degrees=spin_degrees,
                 is_spinning=False,
                 show_winner=True,
+                guild_icon_url=guild_icon_url,
             )
 
             await page.set_content(html, wait_until='networkidle')
@@ -587,81 +622,6 @@ async def generate_wheel_result(
 
         except Exception as e:
             logger.tree("Roulette Result Failed", [
-                ("Error", str(e)[:100]),
-            ], emoji="❌")
-            if page:
-                try:
-                    await page.close()
-                except Exception:
-                    pass
-            raise
-
-
-async def generate_spin_frames(
-    players: List[RoulettePlayer],
-    winner_index: int,
-    num_frames: int = 8,
-) -> List[bytes]:
-    """
-    Generate multiple frames for animated spin effect.
-    Each frame shows progressive rotation.
-
-    Returns list of PNG bytes for each frame.
-    """
-    num_players = len(players)
-    if num_players == 0:
-        raise ValueError("No players")
-
-    slice_angle = 360 / num_players
-
-    # Calculate final rotation
-    winner_center_angle = winner_index * slice_angle + (slice_angle / 2)
-    final_degrees = (360 * 5) + (360 - winner_center_angle)
-
-    frames = []
-
-    async with get_render_semaphore():
-        page = None
-        try:
-            page = await _get_page()
-            await page.goto('about:blank')
-            await page.set_viewport_size({'width': 500, 'height': 560})
-
-            for i in range(num_frames):
-                # Easing function (deceleration)
-                progress = (i + 1) / num_frames
-                eased_progress = 1 - (1 - progress) ** 3  # Cubic ease-out
-                current_degrees = final_degrees * eased_progress
-
-                # Only show winner on last frame
-                show_winner = (i == num_frames - 1)
-
-                html = _generate_wheel_html(
-                    players,
-                    winner_index=winner_index if show_winner else None,
-                    spin_degrees=current_degrees,
-                    is_spinning=False,
-                    show_winner=show_winner,
-                )
-
-                await page.set_content(html, wait_until='domcontentloaded')
-
-                screenshot = await page.screenshot(type='png', omit_background=True)
-                frames.append(screenshot)
-
-            await _return_page(page)
-            page = None
-
-            logger.tree("Roulette Spin Frames Generated", [
-                ("Players", str(num_players)),
-                ("Frames", str(num_frames)),
-                ("Winner", players[winner_index].display_name),
-            ], emoji="🎬")
-
-            return frames
-
-        except Exception as e:
-            logger.tree("Roulette Frames Failed", [
                 ("Error", str(e)[:100]),
             ], emoji="❌")
             if page:

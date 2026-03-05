@@ -2,8 +2,9 @@
 SyriaBot - Roulette Service
 ===========================
 
-Main service for the roulette minigame.
-Handles random spawning, game state, and XP rewards.
+Automatic roulette minigame.
+Participants are selected from recent message activity — no join button.
+Users who sent more messages get a bigger wheel slice and higher win chance.
 
 Author: حَـــــنَّـــــا
 Server: discord.gg/syria
@@ -12,10 +13,8 @@ Server: discord.gg/syria
 import asyncio
 import io
 import random
-import time
 import uuid
-from collections import deque
-from typing import Dict, List, Optional, Set, TYPE_CHECKING
+from typing import Dict, List, Optional, TYPE_CHECKING
 
 import discord
 
@@ -25,8 +24,7 @@ from src.services.database import db
 
 from .graphics import RoulettePlayer, generate_wheel_result
 from .views import (
-    RouletteJoinView,
-    create_join_embed,
+    create_announcement_embed,
     create_spinning_embed,
     create_winner_embed,
     create_cancelled_embed,
@@ -38,341 +36,63 @@ if TYPE_CHECKING:
 
 # Configuration
 MIN_PLAYERS = 3
-JOIN_DURATION = 60  # seconds (increased for rare event)
+MAX_PLAYERS = 10
 XP_REWARD = 1000
 MIN_SPAWN_INTERVAL = 3 * 60 * 60  # 3 hours
 MAX_SPAWN_INTERVAL = 6 * 60 * 60  # 6 hours
+MIN_SEGMENT_WEIGHT = 0.05  # 5% minimum slice
 
 # Activity detection
-ACTIVITY_WINDOW = 15 * 60  # 15 minutes - how far back to check for activity
-ACTIVITY_MIN_MESSAGES = 5  # minimum messages in window to consider chat "active"
-ACTIVITY_RETRY_DELAY = 10 * 60  # 10 minutes - retry if chat is dead
-
-
-class RouletteGame:
-    """
-    Represents an active roulette game.
-
-    Tracks players, game state, and handles the spin/reveal flow.
-    """
-
-    def __init__(self, channel: discord.TextChannel, bot: "SyriaBot") -> None:
-        self.game_id: str = str(uuid.uuid4())[:8]
-        self.channel: discord.TextChannel = channel
-        self.bot: "SyriaBot" = bot
-
-        # Player tracking
-        self.player_ids: Set[int] = set()
-        self.players: List[Dict] = []  # [{user_id, display_name, avatar_url}]
-
-        # Game state
-        self.is_spinning: bool = False
-        self.is_finished: bool = False
-        self.winner_id: Optional[int] = None
-
-        # Message reference
-        self.message: Optional[discord.Message] = None
-        self.view: Optional[RouletteJoinView] = None
-
-    async def start(self) -> bool:
-        """
-        Start the join phase.
-
-        Returns True if game started successfully.
-        """
-        try:
-            # Create initial embed and view
-            embed = create_join_embed(
-                player_count=0,
-                time_remaining=JOIN_DURATION,
-                min_players=MIN_PLAYERS,
-                xp_reward=XP_REWARD,
-            )
-
-            self.view = RouletteJoinView(self)
-
-            # Send the join message
-            self.message = await self.channel.send(
-                embed=embed,
-                view=self.view,
-            )
-
-            logger.tree("Roulette Game Started", [
-                ("Game ID", self.game_id),
-                ("Channel", self.channel.name),
-                ("Channel ID", str(self.channel.id)),
-                ("Join Duration", f"{JOIN_DURATION}s"),
-            ], emoji="🎰")
-
-            # Start countdown
-            asyncio.create_task(self._run_join_phase())
-
-            return True
-
-        except discord.HTTPException as e:
-            logger.tree("Roulette Start Failed", [
-                ("Game ID", self.game_id),
-                ("Error", str(e)[:50]),
-            ], emoji="❌")
-            return False
-
-    async def _run_join_phase(self) -> None:
-        """Run the join phase with countdown updates."""
-        try:
-            # Update embed every 10 seconds
-            intervals = [20, 10, 5, 3, 2, 1]
-            elapsed = 0
-
-            for i, wait_time in enumerate([10, 10, 5, 2, 1, 1, 1]):
-                if elapsed >= JOIN_DURATION:
-                    break
-
-                await asyncio.sleep(wait_time)
-                elapsed += wait_time
-
-                if self.is_finished:
-                    return
-
-                # Update embed with new time
-                remaining = max(0, JOIN_DURATION - elapsed)
-                if self.message:
-                    try:
-                        embed = create_join_embed(
-                            player_count=len(self.players),
-                            time_remaining=remaining,
-                            min_players=MIN_PLAYERS,
-                            xp_reward=XP_REWARD,
-                        )
-                        await self.message.edit(embed=embed)
-                    except discord.HTTPException:
-                        pass
-
-            # Join phase ended - check if enough players
-            await self._end_join_phase()
-
-        except asyncio.CancelledError:
-            pass
-        except Exception as e:
-            logger.error_tree("Roulette Join Phase Error", e, [
-                ("Game ID", self.game_id),
-            ])
-
-    async def _end_join_phase(self) -> None:
-        """End the join phase and either spin or cancel."""
-        if self.is_finished:
-            return
-
-        logger.tree("Roulette Join Phase Ended", [
-            ("Game ID", self.game_id),
-            ("Total Players", str(len(self.players))),
-            ("Min Required", str(MIN_PLAYERS)),
-            ("Player Names", ", ".join(p["display_name"] for p in self.players) if self.players else "None"),
-        ], emoji="⏱️")
-
-        # Disable join button
-        if self.view:
-            for item in self.view.children:
-                if isinstance(item, discord.ui.Button):
-                    item.disabled = True
-
-            try:
-                if self.message:
-                    await self.message.edit(view=self.view)
-            except discord.HTTPException:
-                pass
-
-        # Check player count
-        if len(self.players) < MIN_PLAYERS:
-            await self._cancel(
-                f"Not enough players joined ({len(self.players)}/{MIN_PLAYERS} needed)"
-            )
-            return
-
-        # Start the spin!
-        await self._spin()
-
-    async def _spin(self) -> None:
-        """Execute the wheel spin and reveal winner."""
-        self.is_spinning = True
-
-        logger.tree("Roulette Spinning", [
-            ("Game ID", self.game_id),
-            ("Players", str(len(self.players))),
-            ("Player Names", ", ".join(p["display_name"] for p in self.players)),
-        ], emoji="🎯")
-
-        # Select random winner
-        winner_index = random.randint(0, len(self.players) - 1)
-        winner_data = self.players[winner_index]
-        self.winner_id = winner_data["user_id"]
-
-        try:
-            # Update message to spinning state
-            spinning_embed = create_spinning_embed()
-            if self.message:
-                await self.message.edit(embed=spinning_embed, view=None)
-
-            # Generate wheel result image
-            roulette_players = [
-                RoulettePlayer(
-                    user_id=p["user_id"],
-                    display_name=p["display_name"],
-                    avatar_url=p["avatar_url"],
-                )
-                for p in self.players
-            ]
-
-            result_image = await generate_wheel_result(roulette_players, winner_index)
-
-            # Add dramatic delay
-            await asyncio.sleep(2)
-
-            # Get winner member
-            winner = self.channel.guild.get_member(self.winner_id)
-            if not winner:
-                logger.tree("Roulette Winner Not Found", [
-                    ("Game ID", self.game_id),
-                    ("Winner ID", str(self.winner_id)),
-                ], emoji="⚠️")
-                await self._cancel("Winner left the server!")
-                return
-
-            # Award XP
-            try:
-                db.add_xp(self.winner_id, self.channel.guild.id, XP_REWARD, "roulette")
-                logger.tree("Roulette XP Awarded", [
-                    ("Game ID", self.game_id),
-                    ("Winner", f"{winner.name} ({winner.display_name})"),
-                    ("Winner ID", str(self.winner_id)),
-                    ("XP", str(XP_REWARD)),
-                ], emoji="⬆️")
-            except Exception as e:
-                logger.error_tree("Roulette XP Award Failed", e, [
-                    ("Game ID", self.game_id),
-                    ("Winner ID", str(self.winner_id)),
-                ])
-
-            # Create winner embed
-            winner_embed = create_winner_embed(
-                winner=winner,
-                xp_awarded=XP_REWARD,
-                player_count=len(self.players),
-            )
-
-            # Send result with image
-            file = discord.File(
-                io.BytesIO(result_image),
-                filename="roulette_result.png"
-            )
-            winner_embed.set_image(url="attachment://roulette_result.png")
-
-            if self.message:
-                await self.message.edit(
-                    content=f"Congratulations {winner.mention}!",
-                    embed=winner_embed,
-                    attachments=[file],
-                    view=None,
-                )
-
-            self.is_finished = True
-
-            logger.tree("Roulette Complete", [
-                ("Game ID", self.game_id),
-                ("Winner", f"{winner.name} ({winner.display_name})"),
-                ("Winner ID", str(self.winner_id)),
-                ("Players", str(len(self.players))),
-                ("XP Awarded", str(XP_REWARD)),
-            ], emoji="🎉")
-
-        except Exception as e:
-            logger.error_tree("Roulette Spin Failed", e, [
-                ("Game ID", self.game_id),
-            ])
-            self.is_finished = True
-
-    async def _cancel(self, reason: str) -> None:
-        """Cancel the game."""
-        self.is_finished = True
-
-        logger.tree("Roulette Cancelled", [
-            ("Game ID", self.game_id),
-            ("Reason", reason),
-            ("Players", str(len(self.players))),
-        ], emoji="🚫")
-
-        try:
-            embed = create_cancelled_embed(reason)
-            if self.message:
-                await self.message.edit(
-                    content=None,
-                    embed=embed,
-                    view=None,
-                )
-        except discord.HTTPException as e:
-            logger.tree("Roulette Cancel Edit Failed", [
-                ("Game ID", self.game_id),
-                ("Error", str(e)[:50]),
-            ], emoji="⚠️")
-
-    async def update_join_embed(self) -> None:
-        """Update the join embed with current player count."""
-        if self.is_finished or self.is_spinning:
-            return
-
-        try:
-            if self.message:
-                embed = create_join_embed(
-                    player_count=len(self.players),
-                    time_remaining=JOIN_DURATION,  # Approximate
-                    min_players=MIN_PLAYERS,
-                    xp_reward=XP_REWARD,
-                )
-                await self.message.edit(embed=embed)
-        except discord.HTTPException:
-            pass
+ACTIVITY_RETRY_DELAY = 10 * 60  # 10 minutes - retry if not enough users
 
 
 class RouletteService:
     """
-    Main roulette service.
+    Automatic roulette service.
 
-    Handles random spawn timing and game management.
-    Tracks chat activity to only spawn when chat is active.
+    Tracks per-user message counts in general chat since the last roulette.
+    When triggered, selects top 10 most active users, spins a weighted wheel.
     """
 
     def __init__(self, bot: "SyriaBot") -> None:
         self.bot = bot
         self._spawn_task: Optional[asyncio.Task] = None
         self._running: bool = False
-        self._current_game: Optional[RouletteGame] = None
-        # Activity tracking - stores timestamps of recent messages
-        self._message_timestamps: deque = deque(maxlen=100)
+        self._game_running: bool = False
+
+        # Per-user activity tracking since last roulette
+        # {user_id: {name: str, avatar_url: str, count: int}}
+        self._user_activity: Dict[int, Dict] = {}
 
     def on_message(self, message: discord.Message) -> None:
         """Track message activity in general channel."""
-        # Only track general channel messages
         if message.channel.id != config.GENERAL_CHANNEL_ID:
             return
-        # Ignore bot messages
         if message.author.bot:
             return
-        # Store timestamp
-        self._message_timestamps.append(time.time())
+
+        uid = message.author.id
+        if uid in self._user_activity:
+            self._user_activity[uid]["count"] += 1
+            # Update name/avatar in case they changed
+            self._user_activity[uid]["name"] = message.author.display_name
+            self._user_activity[uid]["avatar_url"] = message.author.display_avatar.url
+        else:
+            self._user_activity[uid] = {
+                "name": message.author.display_name,
+                "avatar_url": message.author.display_avatar.url,
+                "count": 1,
+            }
 
     def _is_chat_active(self) -> tuple[bool, int]:
         """
-        Check if chat is active enough to spawn a roulette.
+        Check if enough unique users have chatted since last roulette.
 
         Returns:
-            Tuple of (is_active, message_count_in_window)
+            Tuple of (has_enough_users, unique_user_count)
         """
-        now = time.time()
-        cutoff = now - ACTIVITY_WINDOW
-
-        # Count messages within the activity window
-        recent_count = sum(1 for ts in self._message_timestamps if ts > cutoff)
-
-        return recent_count >= ACTIVITY_MIN_MESSAGES, recent_count
+        unique_users = len(self._user_activity)
+        return unique_users >= MIN_PLAYERS, unique_users
 
     async def setup(self) -> None:
         """Start the roulette spawn timer."""
@@ -384,9 +104,8 @@ class RouletteService:
             ("Max Interval", f"{MAX_SPAWN_INTERVAL // 3600}h"),
             ("XP Reward", f"{XP_REWARD:,}"),
             ("Min Players", str(MIN_PLAYERS)),
-            ("Join Duration", f"{JOIN_DURATION}s"),
-            ("Activity Window", f"{ACTIVITY_WINDOW // 60}m"),
-            ("Activity Threshold", f"{ACTIVITY_MIN_MESSAGES} msgs"),
+            ("Max Players", str(MAX_PLAYERS)),
+            ("Mode", "Automatic (activity-based)"),
             ("Channel", str(config.GENERAL_CHANNEL_ID)),
         ], emoji="🎰")
 
@@ -402,20 +121,21 @@ class RouletteService:
         """Background loop that spawns roulette games at random intervals."""
         await self.bot.wait_until_ready()
 
-        # Initial delay before first game (5-10 minutes)
-        initial_delay = random.randint(5 * 60, 10 * 60)
+        # Initial delay before first game (same 3-6hr range)
+        initial_delay = random.randint(MIN_SPAWN_INTERVAL, MAX_SPAWN_INTERVAL)
+        hours = initial_delay // 3600
+        mins = (initial_delay % 3600) // 60
         logger.tree("Roulette First Spawn Scheduled", [
-            ("Delay", f"{initial_delay // 60} min"),
+            ("Delay", f"{hours}h {mins}m"),
         ], emoji="⏰")
         await asyncio.sleep(initial_delay)
 
         while self._running:
             try:
-                # Try to spawn a game
-                spawned = await self._spawn_game()
+                spawned = await self._try_spawn()
 
                 if spawned:
-                    # Game spawned (or skipped for valid reason) - wait full interval
+                    # Game ran — wait full interval before next
                     next_interval = random.randint(MIN_SPAWN_INTERVAL, MAX_SPAWN_INTERVAL)
                     hours = next_interval // 3600
                     mins = (next_interval % 3600) // 60
@@ -425,10 +145,10 @@ class RouletteService:
                     ], emoji="⏰")
                     await asyncio.sleep(next_interval)
                 else:
-                    # Chat was dead - retry after shorter delay
+                    # Not enough users — retry after shorter delay
                     logger.tree("Roulette Retry Scheduled", [
                         ("Delay", f"{ACTIVITY_RETRY_DELAY // 60}m"),
-                        ("Reason", "Waiting for chat activity"),
+                        ("Reason", "Waiting for more active users"),
                     ], emoji="🔄")
                     await asyncio.sleep(ACTIVITY_RETRY_DELAY)
 
@@ -436,34 +156,29 @@ class RouletteService:
                 break
             except Exception as e:
                 logger.error_tree("Roulette Spawn Loop Error", e)
-                await asyncio.sleep(60)  # Wait a minute before retrying
+                await asyncio.sleep(60)
 
-    async def _spawn_game(self) -> bool:
+    async def _try_spawn(self) -> bool:
         """
-        Spawn a new roulette game in general chat.
+        Try to spawn a roulette in general chat.
 
-        Returns:
-            True if game spawned, False if skipped (will retry later)
+        Returns True if game ran, False if not enough users.
         """
-        # Don't spawn if a game is already running
-        if self._current_game and not self._current_game.is_finished:
-            logger.tree("Roulette Spawn Skipped", [
-                ("Reason", "Game already active"),
-                ("Active Game ID", self._current_game.game_id),
-            ], emoji="⏭️")
-            return True  # Don't retry, game is running
+        if self._game_running:
+            return True  # Don't retry, game is active
 
-        # Check if chat is active
-        is_active, msg_count = self._is_chat_active()
+        # Check if enough unique users
+        is_active, user_count = self._is_chat_active()
         if not is_active:
+            total_msgs = sum(d["count"] for d in self._user_activity.values())
             logger.tree("Roulette Spawn Delayed", [
-                ("Reason", "Chat is dead"),
-                ("Messages in Window", str(msg_count)),
-                ("Required", str(ACTIVITY_MIN_MESSAGES)),
-                ("Window", f"{ACTIVITY_WINDOW // 60}m"),
+                ("Reason", "Not enough active users"),
+                ("Unique Users", str(user_count)),
+                ("Total Messages", str(total_msgs)),
+                ("Required", f"{MIN_PLAYERS} unique users"),
                 ("Retry In", f"{ACTIVITY_RETRY_DELAY // 60}m"),
             ], emoji="💤")
-            return False  # Signal to retry later
+            return False
 
         # Get general channel
         channel = self.bot.get_channel(config.GENERAL_CHANNEL_ID)
@@ -476,46 +191,285 @@ class RouletteService:
 
         logger.tree("Roulette Spawning", [
             ("Channel", channel.name),
-            ("Channel ID", str(channel.id)),
-            ("Guild", channel.guild.name),
+            ("Active Users", str(user_count)),
             ("XP Prize", f"{XP_REWARD:,}"),
-            ("Chat Activity", f"{msg_count} msgs in {ACTIVITY_WINDOW // 60}m"),
         ], emoji="🎲")
 
-        # Create and start game
-        game = RouletteGame(channel, self.bot)
-        self._current_game = game
+        await self._run_roulette(channel)
+        return True
 
-        success = await game.start()
-        if not success:
-            self._current_game = None
-            logger.tree("Roulette Spawn Failed", [
-                ("Reason", "Game start returned false"),
-                ("Game ID", game.game_id),
-            ], emoji="❌")
+    async def _run_roulette(
+        self,
+        channel: discord.TextChannel,
+        min_players: int = MIN_PLAYERS,
+    ) -> None:
+        """
+        Execute a full roulette game: announce → spin → reveal.
 
-        return True  # Game attempted, don't retry
+        Args:
+            channel: Channel to run the game in
+            min_players: Minimum players required (lowered for force_spawn)
+        """
+        self._game_running = True
+        game_id = str(uuid.uuid4())[:8]
 
-    async def force_spawn(self, channel: discord.TextChannel) -> Optional[RouletteGame]:
+        try:
+            # 1. Snapshot and reset activity immediately so messages
+            #    during the game count toward the next roulette
+            activity_snapshot = dict(self._user_activity)
+            self._user_activity.clear()
+
+            # 2. Filter out users who left the server
+            guild = channel.guild
+            activity_snapshot = {
+                uid: data for uid, data in activity_snapshot.items()
+                if guild.get_member(uid) is not None
+            }
+
+            # 3. Collect top players sorted by message count
+            sorted_users = sorted(
+                activity_snapshot.items(),
+                key=lambda x: x[1]["count"],
+                reverse=True,
+            )[:MAX_PLAYERS]
+
+            if len(sorted_users) < min_players:
+                logger.tree("Roulette Cancelled", [
+                    ("Game ID", game_id),
+                    ("Reason", f"Only {len(sorted_users)} users (need {min_players})"),
+                    ("Users", ", ".join(d["name"] for _, d in sorted_users) or "None"),
+                ], emoji="🚫")
+                return
+
+            # 3. Calculate weights
+            total_messages = sum(data["count"] for _, data in sorted_users)
+            raw_weights = [data["count"] / total_messages for _, data in sorted_users]
+
+            # Enforce 5% minimum segment
+            weights = self._enforce_min_weights(raw_weights)
+
+            # 4. Build player list
+            players: List[RoulettePlayer] = []
+            for i, (uid, data) in enumerate(sorted_users):
+                players.append(RoulettePlayer(
+                    user_id=uid,
+                    display_name=data["name"],
+                    avatar_url=data["avatar_url"],
+                    weight=weights[i],
+                    message_count=data["count"],
+                ))
+
+            logger.tree("Roulette Game Started", [
+                ("Game ID", game_id),
+                ("Channel", channel.name),
+                ("Players", str(len(players))),
+                ("Total Messages", str(total_messages)),
+                ("Player List", ", ".join(
+                    f"{p.display_name} ({p.message_count} msgs, {p.weight*100:.1f}%)"
+                    for p in players
+                )),
+            ], emoji="🎰")
+
+            # 5. Weighted random selection
+            winner_index = random.choices(
+                range(len(players)),
+                weights=[p.weight for p in players],
+            )[0]
+            winner_player = players[winner_index]
+
+            logger.tree("Roulette Winner Selected", [
+                ("Game ID", game_id),
+                ("Winner", winner_player.display_name),
+                ("Winner ID", str(winner_player.user_id)),
+                ("Messages", str(winner_player.message_count)),
+                ("Win Probability", f"{winner_player.weight * 100:.1f}%"),
+            ], emoji="🎯")
+
+            # 6. Send announcement embed
+            announcement_embed = create_announcement_embed(players, XP_REWARD)
+
+            try:
+                msg = await channel.send(embed=announcement_embed)
+            except discord.HTTPException as e:
+                logger.error_tree("Roulette Announcement Send Failed", e, [
+                    ("Game ID", game_id),
+                    ("Channel", channel.name),
+                    ("Channel ID", str(channel.id)),
+                ])
+                return
+
+            # 7. Generate wheel image (happens while users read announcement)
+            try:
+                guild_icon = channel.guild.icon.url if channel.guild.icon else None
+                result_image = await generate_wheel_result(players, winner_index, guild_icon_url=guild_icon)
+            except Exception as e:
+                logger.error_tree("Roulette Wheel Generation Failed", e, [
+                    ("Game ID", game_id),
+                    ("Players", str(len(players))),
+                ])
+                try:
+                    await msg.edit(embed=create_cancelled_embed("Wheel generation failed"))
+                except discord.HTTPException:
+                    pass
+                return
+
+            # 8. Transition to spinning state
+            try:
+                await msg.edit(embed=create_spinning_embed())
+            except discord.HTTPException as e:
+                logger.error_tree("Roulette Spinning Edit Failed", e, [
+                    ("Game ID", game_id),
+                ])
+
+            # 9. Dramatic delay
+            await asyncio.sleep(3)
+
+            # 10. Get winner member
+            winner = channel.guild.get_member(winner_player.user_id)
+            if not winner:
+                logger.tree("Roulette Winner Not Found", [
+                    ("Game ID", game_id),
+                    ("Winner", winner_player.display_name),
+                    ("Winner ID", str(winner_player.user_id)),
+                ], emoji="⚠️")
+                try:
+                    await msg.edit(embed=create_cancelled_embed("Winner left the server!"))
+                except discord.HTTPException:
+                    pass
+                return
+
+            # 11. Award XP
+            try:
+                await asyncio.to_thread(db.add_xp, winner_player.user_id, channel.guild.id, XP_REWARD, "roulette")
+                logger.tree("Roulette XP Awarded", [
+                    ("Game ID", game_id),
+                    ("Winner", f"{winner.name} ({winner.display_name})"),
+                    ("Winner ID", str(winner_player.user_id)),
+                    ("XP", str(XP_REWARD)),
+                ], emoji="⬆️")
+            except Exception as e:
+                logger.error_tree("Roulette XP Award Failed", e, [
+                    ("Game ID", game_id),
+                    ("Winner", winner_player.display_name),
+                    ("Winner ID", str(winner_player.user_id)),
+                    ("XP Amount", str(XP_REWARD)),
+                ])
+
+            # 12. Reveal winner with wheel image
+            winner_embed = create_winner_embed(
+                winner=winner,
+                xp_awarded=XP_REWARD,
+                player_count=len(players),
+                message_count=winner_player.message_count,
+                win_probability=winner_player.weight * 100,
+            )
+
+            file = discord.File(
+                io.BytesIO(result_image),
+                filename="roulette_result.png",
+            )
+            winner_embed.set_image(url="attachment://roulette_result.png")
+
+            try:
+                await msg.edit(
+                    content=f"Congratulations {winner.mention}!",
+                    embed=winner_embed,
+                    attachments=[file],
+                )
+            except discord.HTTPException as e:
+                logger.error_tree("Roulette Result Edit Failed", e, [
+                    ("Game ID", game_id),
+                    ("Winner", winner_player.display_name),
+                    ("Winner ID", str(winner_player.user_id)),
+                ])
+
+            logger.tree("Roulette Complete", [
+                ("Game ID", game_id),
+                ("Winner", f"{winner.name} ({winner.display_name})"),
+                ("Winner ID", str(winner_player.user_id)),
+                ("Winner Messages", str(winner_player.message_count)),
+                ("Win Probability", f"{winner_player.weight * 100:.1f}%"),
+                ("Players", str(len(players))),
+                ("Total Messages", str(total_messages)),
+                ("XP Awarded", str(XP_REWARD)),
+            ], emoji="🎉")
+
+        except Exception as e:
+            logger.error_tree("Roulette Game Error", e, [
+                ("Game ID", game_id),
+                ("Channel", channel.name),
+                ("Channel ID", str(channel.id)),
+            ])
+        finally:
+            self._game_running = False
+
+    @staticmethod
+    def _enforce_min_weights(weights: List[float]) -> List[float]:
+        """
+        Enforce minimum 5% segment for all players.
+        Redistributes excess proportionally from larger segments.
+        """
+        n = len(weights)
+        min_w = MIN_SEGMENT_WEIGHT
+
+        # If all equal or below min, just make equal
+        if n * min_w >= 1.0:
+            return [1.0 / n] * n
+
+        result = list(weights)
+        # Find segments below minimum and boost them
+        deficit = 0.0
+        above_min = []
+        for i, w in enumerate(result):
+            if w < min_w:
+                deficit += min_w - w
+                result[i] = min_w
+            else:
+                above_min.append(i)
+
+        # Redistribute deficit from segments above minimum
+        if above_min and deficit > 0:
+            total_above = sum(result[i] for i in above_min)
+            for i in above_min:
+                result[i] -= deficit * (result[i] / total_above)
+
+        # Normalize to exactly 1.0
+        total = sum(result)
+        if total > 0:
+            result = [w / total for w in result]
+
+        return result
+
+    async def force_spawn(self, channel: discord.TextChannel) -> bool:
         """
         Force spawn a roulette game in a specific channel.
-        Used for testing/admin commands.
+        Used for testing/admin commands. Bypasses MIN_PLAYERS (needs at least 1).
 
-        Returns the game if started successfully, None otherwise.
+        Returns True if game started, False if blocked.
         """
-        # Don't spawn if a game is already running
-        if self._current_game and not self._current_game.is_finished:
-            return None
+        if self._game_running:
+            logger.tree("Roulette Force Spawn Blocked", [
+                ("Reason", "Game already running"),
+                ("Channel", channel.name),
+            ], emoji="⚠️")
+            return False
 
-        game = RouletteGame(channel, self.bot)
-        self._current_game = game
+        if len(self._user_activity) == 0:
+            logger.tree("Roulette Force Spawn Failed", [
+                ("Reason", "No active users to select from"),
+                ("Channel", channel.name),
+            ], emoji="❌")
+            return False
 
-        success = await game.start()
-        if success:
-            return game
-        else:
-            self._current_game = None
-            return None
+        logger.tree("Roulette Force Spawn", [
+            ("Channel", channel.name),
+            ("Active Users", str(len(self._user_activity))),
+            ("Total Messages", str(sum(d["count"] for d in self._user_activity.values()))),
+        ], emoji="⚡")
+
+        # Use min_players=1 to bypass the normal minimum
+        await self._run_roulette(channel, min_players=1)
+        return True
 
 
 # Singleton instance

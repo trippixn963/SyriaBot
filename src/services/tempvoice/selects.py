@@ -80,25 +80,7 @@ class ConfirmView(ui.View):
                 ], emoji="❌")
                 return
 
-            if self.action == "delete":
-                channel_name = channel.name
-                guild = interaction.guild
-                db.delete_temp_channel(channel.id)
-                await channel.delete(reason="Deleted by owner")
-                embed = discord.Embed(description="🗑️ Channel deleted", color=COLOR_NEUTRAL)
-                set_footer(embed)
-                await interaction.response.edit_message(embed=embed, view=None)
-                logger.tree("Channel Deleted", [
-                    ("Channel", channel_name),
-                    ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                    ("ID", str(interaction.user.id)),
-                ], emoji="🗑️")
-
-                # Schedule reorder (debounced, non-blocking)
-                if hasattr(interaction.client, 'tempvoice') and interaction.client.tempvoice:
-                    interaction.client.tempvoice.schedule_reorder(guild)
-
-            elif self.action == "transfer" and self.target:
+            if self.action == "transfer" and self.target:
                 # Validate target still in guild
                 target = interaction.guild.get_member(self.target.id)
                 if not target:

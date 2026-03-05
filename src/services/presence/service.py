@@ -320,51 +320,29 @@ class PresenceService(BasePresenceHandler):
     # =========================================================================
 
     def get_status_messages(self) -> List[str]:
-        """Get dynamic stats for presence rotation (same data as dashboard)."""
+        """Get big dashboard-style stats for presence rotation."""
         messages = []
 
         try:
             stats = get_server_stats(self.bot)
 
-            # Guild stats (live from Discord)
             if stats.guild.member_count > 0:
                 messages.append(f"👥 {format_number(stats.guild.member_count)} members")
 
-            if stats.guild.online_count > 0:
-                messages.append(f"🟢 {format_number(stats.guild.online_count)} online")
-
-            if stats.guild.booster_count > 0:
-                messages.append(f"💎 {stats.guild.booster_count} boosters")
-
-            # XP stats (from database)
-            if stats.xp.total_users > 0:
-                messages.append(f"🏆 {format_number(stats.xp.total_users)} ranked")
+            if stats.xp.total_messages > 0:
+                messages.append(f"💬 {format_number(stats.xp.total_messages)} messages sent")
 
             if stats.xp.total_xp > 0:
-                messages.append(f"⭐ {format_number(stats.xp.total_xp)} XP earned")
-
-            if stats.xp.total_messages > 0:
-                messages.append(f"💬 {format_number(stats.xp.total_messages)} messages")
+                messages.append(f"⭐ {format_number(stats.xp.total_xp)} total XP")
 
             if stats.xp.voice_hours > 0:
-                messages.append(f"🎙️ {format_voice_hours(stats.xp.total_voice_minutes)} voice")
+                messages.append(f"🎙️ {format_voice_hours(stats.xp.total_voice_minutes)} in voice")
+
+            if stats.xp.total_users > 0:
+                messages.append(f"🏆 {format_number(stats.xp.total_users)} ranked users")
 
             if stats.xp.highest_level > 0:
-                messages.append(f"🎯 Level {stats.xp.highest_level} top rank")
-
-            # Daily activity
-            if stats.daily.active_users > 0:
-                messages.append(f"📊 {stats.daily.active_users} active today")
-
-            if stats.daily.voice_peak > 0:
-                messages.append(f"🔊 {stats.daily.voice_peak} peak in VC")
-
-            # Streaks
-            if stats.streaks.active_streaks > 0:
-                messages.append(f"🔥 {stats.streaks.active_streaks} active streaks")
-
-            if stats.streaks.longest_streak > 0:
-                messages.append(f"📅 {stats.streaks.longest_streak}d longest streak")
+                messages.append(f"🎯 Highest rank: Level {stats.xp.highest_level}")
 
         except Exception as e:
             logger.error_tree("Presence Stats Error", e)
