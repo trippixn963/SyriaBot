@@ -106,7 +106,7 @@ class APIService:
             app=self._app,
             host=self._config.host,
             port=self._config.port,
-            log_level="warning",  # Reduce uvicorn logging
+            log_level="error",  # Only show errors (suppresses port scanner noise)
             access_log=False,  # We have our own logging middleware
         )
 

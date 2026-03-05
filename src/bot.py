@@ -525,6 +525,7 @@ class SyriaBot(commands.Bot):
         async_tasks.append(_stop("HTTP", http_session.close()))
         async_tasks.append(_stop("RankCard", rank_card.cleanup()))
         async_tasks.append(_stop("ActionService", action_service.close()))
+        async_tasks.append(_stop("LoggerWebhook", logger.close_webhook_session()))
 
         async_stopped = []
         try:

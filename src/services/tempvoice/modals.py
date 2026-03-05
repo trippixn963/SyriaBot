@@ -70,6 +70,9 @@ class NameModal(ui.Modal, title="Rename Channel"):
         ], emoji="✏️")
         new_base_name = self.name_input.value.strip() if self.name_input.value else None
 
+        # Defer first — channel.edit() can be slow (Discord rate limits renames)
+        await interaction.response.defer(ephemeral=True)
+
         try:
             old_name = self.channel.name
             position = _get_channel_position(self.channel)
@@ -85,7 +88,7 @@ class NameModal(ui.Modal, title="Rename Channel"):
                     color=COLOR_SUCCESS
                 )
                 set_footer(embed)
-                await interaction.response.send_message(embed=embed, ephemeral=True)
+                await interaction.followup.send(embed=embed, ephemeral=True)
                 logger.tree("Channel Renamed", [
                     ("From", old_name),
                     ("To", full_name),
@@ -108,7 +111,7 @@ class NameModal(ui.Modal, title="Rename Channel"):
                     color=COLOR_SUCCESS
                 )
                 set_footer(embed)
-                await interaction.response.send_message(embed=embed, ephemeral=True)
+                await interaction.followup.send(embed=embed, ephemeral=True)
                 logger.tree("Channel Name Reset", [
                     ("From", old_name),
                     ("To", auto_name),
@@ -125,7 +128,23 @@ class NameModal(ui.Modal, title="Rename Channel"):
             ], emoji="❌")
             embed = discord.Embed(description="❌ Failed to rename channel", color=COLOR_ERROR)
             set_footer(embed)
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            await interaction.followup.send(embed=embed, ephemeral=True)
+
+    async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
+        """Handle modal errors — expired interactions are silently ignored."""
+        if isinstance(error, discord.NotFound):
+            logger.tree("Rename Modal Expired", [
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("ID", str(interaction.user.id)),
+                ("Channel", self.channel.name),
+            ], emoji="⏳")
+            return
+
+        logger.error_tree("Rename Modal Error", error, [
+            ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+            ("ID", str(interaction.user.id)),
+            ("Channel", self.channel.name),
+        ])
 
 
 class LimitModal(ui.Modal, title="Set User Limit"):
@@ -152,29 +171,10 @@ class LimitModal(ui.Modal, title="Set User Limit"):
             ("Channel", self.channel.name),
             ("Input", self.limit_input.value),
         ], emoji="👥")
+
+        # Validate input first (instant — can respond immediately)
         try:
             limit = int(self.limit_input.value)
-            if limit < 0 or limit > 99:
-                embed = discord.Embed(description="⚠️ Must be 0-99", color=COLOR_WARNING)
-                set_footer(embed)
-                await interaction.response.send_message(embed=embed, ephemeral=True)
-                return
-            await self.channel.edit(user_limit=limit)
-            db.update_temp_channel(self.channel.id, user_limit=limit)
-            db.save_user_settings(interaction.user.id, default_limit=limit)
-            limit_text = "unlimited" if limit == 0 else f"{limit} users"
-            embed = discord.Embed(
-                description=f"👥 Limit set to **{limit_text}**\n*Saved as default for future VCs*",
-                color=COLOR_SUCCESS
-            )
-            set_footer(embed)
-            await interaction.response.send_message(embed=embed, ephemeral=True)
-            logger.tree("Limit Changed", [
-                ("Channel", self.channel.name),
-                ("Limit", limit_text),
-                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                ("ID", str(interaction.user.id)),
-            ], emoji="👥")
         except ValueError:
             logger.tree("Limit Change Rejected", [
                 ("Channel", self.channel.name),
@@ -186,6 +186,34 @@ class LimitModal(ui.Modal, title="Set User Limit"):
             embed = discord.Embed(description="⚠️ Enter a valid number", color=COLOR_WARNING)
             set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+
+        if limit < 0 or limit > 99:
+            embed = discord.Embed(description="⚠️ Must be 0-99", color=COLOR_WARNING)
+            set_footer(embed)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+
+        # Defer before channel.edit() which can be slow
+        await interaction.response.defer(ephemeral=True)
+
+        try:
+            await self.channel.edit(user_limit=limit)
+            db.update_temp_channel(self.channel.id, user_limit=limit)
+            db.save_user_settings(interaction.user.id, default_limit=limit)
+            limit_text = "unlimited" if limit == 0 else f"{limit} users"
+            embed = discord.Embed(
+                description=f"👥 Limit set to **{limit_text}**\n*Saved as default for future VCs*",
+                color=COLOR_SUCCESS
+            )
+            set_footer(embed)
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            logger.tree("Limit Changed", [
+                ("Channel", self.channel.name),
+                ("Limit", limit_text),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("ID", str(interaction.user.id)),
+            ], emoji="👥")
         except discord.HTTPException as e:
             logger.tree("Limit Change Failed", [
                 ("Channel", self.channel.name),
@@ -195,4 +223,20 @@ class LimitModal(ui.Modal, title="Set User Limit"):
             ], emoji="❌")
             embed = discord.Embed(description="❌ Failed to set limit", color=COLOR_ERROR)
             set_footer(embed)
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            await interaction.followup.send(embed=embed, ephemeral=True)
+
+    async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
+        """Handle modal errors — expired interactions are silently ignored."""
+        if isinstance(error, discord.NotFound):
+            logger.tree("Limit Modal Expired", [
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("ID", str(interaction.user.id)),
+                ("Channel", self.channel.name),
+            ], emoji="⏳")
+            return
+
+        logger.error_tree("Limit Modal Error", error, [
+            ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+            ("ID", str(interaction.user.id)),
+            ("Channel", self.channel.name),
+        ])
