@@ -23,6 +23,7 @@ from src.services.database import db
 from src.api.services.websocket import get_ws_manager
 from src.handlers.fun import fun
 from src.handlers.action import action
+from src.handlers.family import family
 from src.handlers.reply import ReplyHandler
 from src.handlers.faq import faq
 from src.api.services.event_logger import event_logger
@@ -282,6 +283,17 @@ class MessageHandler(commands.Cog):
                     return  # Action was handled
             except Exception as e:
                 logger.error_tree("Action Handler Error", e, [
+                    ("User", f"{message.author.name} ({message.author.display_name})"),
+                    ("ID", str(message.author.id)),
+                ])
+
+        # Family commands (marry @user, divorce, adopt @user, etc.)
+        if message.guild:
+            try:
+                if await family.handle(message):
+                    return  # Family command was handled
+            except Exception as e:
+                logger.error_tree("Family Handler Error", e, [
                     ("User", f"{message.author.name} ({message.author.display_name})"),
                     ("ID", str(message.author.id)),
                 ])

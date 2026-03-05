@@ -790,6 +790,44 @@ class DatabaseCore:
             """)
 
             # =====================================================================
+            # Family System Tables
+            # =====================================================================
+
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS family_marriages (
+                    user_id INTEGER NOT NULL,
+                    spouse_id INTEGER NOT NULL,
+                    guild_id INTEGER NOT NULL,
+                    married_at INTEGER NOT NULL,
+                    PRIMARY KEY (user_id, guild_id)
+                )
+            """)
+
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS family_adoptions (
+                    parent_id INTEGER NOT NULL,
+                    child_id INTEGER NOT NULL,
+                    guild_id INTEGER NOT NULL,
+                    adopted_at INTEGER NOT NULL,
+                    PRIMARY KEY (child_id, guild_id)
+                )
+            """)
+
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_family_adoptions_parent
+                ON family_adoptions(parent_id, guild_id)
+            """)
+
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS family_divorce_cooldowns (
+                    user_id INTEGER NOT NULL,
+                    guild_id INTEGER NOT NULL,
+                    divorced_at INTEGER NOT NULL,
+                    PRIMARY KEY (user_id, guild_id)
+                )
+            """)
+
+            # =====================================================================
             # Migrations Table
             # =====================================================================
 

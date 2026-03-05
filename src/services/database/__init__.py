@@ -31,6 +31,7 @@ from .confessions import ConfessionsMixin
 from .actions import ActionsMixin
 from .birthdays import BirthdaysMixin
 from .actions_panel import ActionsPanelMixin
+from .family import FamilyMixin
 
 
 class Database(
@@ -44,6 +45,7 @@ class Database(
     ActionsMixin,
     BirthdaysMixin,
     ActionsPanelMixin,
+    FamilyMixin,
     DatabaseCore,
 ):
     """
