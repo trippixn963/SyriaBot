@@ -9,7 +9,7 @@ Server: discord.gg/syria
 """
 
 import time
-from typing import List, Dict, Any
+from typing import Any, Dict, List, Optional
 
 from src.core.logger import logger
 
@@ -945,6 +945,7 @@ class StatsMixin:
             "role_snapshots": 0,
             "member_events": 0,
             "channel_daily_stats": 0,
+            "user_daily_activity": 0,
         }
 
         try:
@@ -969,6 +970,11 @@ class StatsMixin:
         except Exception as e:
             logger.error_tree("Channel Daily Stats Cleanup Error", e)
 
+        try:
+            results["user_daily_activity"] = self.cleanup_old_user_daily_activity(90, guild_id)
+        except Exception as e:
+            logger.error_tree("User Daily Activity Cleanup Error", e)
+
         total_deleted = sum(results.values())
         if total_deleted > 0:
             logger.tree("All Cleanups Complete", [
@@ -977,8 +983,111 @@ class StatsMixin:
                 ("Role Snapshots", str(results["role_snapshots"])),
                 ("Member Events", str(results["member_events"])),
                 ("Channel Daily", str(results["channel_daily_stats"])),
+                ("User Daily", str(results["user_daily_activity"])),
             ], emoji="🧹")
 
         return results
+
+    # =========================================================================
+    # User Daily Activity (per-user daily message/voice tracking)
+    # =========================================================================
+
+    def increment_user_daily_messages(self, user_id: int, guild_id: int, date: str) -> None:
+        """Increment daily message count for a user."""
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO user_daily_activity (user_id, guild_id, date, messages)
+                VALUES (?, ?, ?, 1)
+                ON CONFLICT(user_id, guild_id, date) DO UPDATE SET
+                    messages = messages + 1
+            """, (user_id, guild_id, date))
+
+    def increment_user_daily_voice(self, user_id: int, guild_id: int, date: str) -> None:
+        """Increment daily voice minutes for a user."""
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO user_daily_activity (user_id, guild_id, date, voice_minutes)
+                VALUES (?, ?, ?, 1)
+                ON CONFLICT(user_id, guild_id, date) DO UPDATE SET
+                    voice_minutes = voice_minutes + 1
+            """, (user_id, guild_id, date))
+
+    def get_daily_top_chatter(self, guild_id: int, date: str) -> Optional[Dict[str, Any]]:
+        """Get the top message sender for a given day. Returns {user_id, messages} or None."""
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT user_id, messages FROM user_daily_activity
+                WHERE guild_id = ? AND date = ? AND messages > 0
+                ORDER BY messages DESC
+                LIMIT 1
+            """, (guild_id, date))
+            row = cur.fetchone()
+            return dict(row) if row else None
+
+    def get_daily_top_voice_user(self, guild_id: int, date: str) -> Optional[Dict[str, Any]]:
+        """Get the top voice user for a given day. Returns {user_id, voice_minutes} or None."""
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT user_id, voice_minutes FROM user_daily_activity
+                WHERE guild_id = ? AND date = ? AND voice_minutes > 0
+                ORDER BY voice_minutes DESC
+                LIMIT 1
+            """, (guild_id, date))
+            row = cur.fetchone()
+            return dict(row) if row else None
+
+    def get_daily_total_voice_minutes(self, guild_id: int, date: str) -> int:
+        """Get total voice minutes across all users for a given day."""
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT COALESCE(SUM(voice_minutes), 0) as total
+                FROM user_daily_activity
+                WHERE guild_id = ? AND date = ?
+            """, (guild_id, date))
+            return cur.fetchone()[0]
+
+    def get_member_event_counts(self, guild_id: int, start_ts: int, end_ts: int) -> Dict[str, int]:
+        """Count joins and leaves in a timestamp range. Returns {joins, leaves}."""
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT
+                    COALESCE(SUM(CASE WHEN event_type = 'join' THEN 1 ELSE 0 END), 0) as joins,
+                    COALESCE(SUM(CASE WHEN event_type = 'leave' THEN 1 ELSE 0 END), 0) as leaves
+                FROM member_events
+                WHERE guild_id = ? AND timestamp >= ? AND timestamp < ?
+            """, (guild_id, start_ts, end_ts))
+            row = cur.fetchone()
+            return {"joins": row[0], "leaves": row[1]}
+
+    def cleanup_old_user_daily_activity(self, days_to_keep: int = 90, guild_id: Optional[int] = None) -> int:
+        """Delete user daily activity rows older than specified days."""
+        from src.core.config import config
+        from datetime import datetime, timezone, timedelta
+
+        gid = guild_id or config.GUILD_ID
+        cutoff_date = (datetime.now(timezone.utc) - timedelta(days=days_to_keep)).strftime("%Y-%m-%d")
+
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                DELETE FROM user_daily_activity
+                WHERE guild_id = ? AND date < ?
+            """, (gid, cutoff_date))
+
+            deleted = cur.rowcount
+
+        if deleted > 0:
+            logger.tree("User Daily Activity Cleanup", [
+                ("Deleted", str(deleted)),
+                ("Cutoff", cutoff_date),
+            ], emoji="🧹")
+
+        return deleted
 
     # Alias for backwards compatibility

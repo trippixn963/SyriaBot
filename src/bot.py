@@ -376,6 +376,15 @@ class SyriaBot(commands.Bot):
         except Exception as e:
             logger.error_tree("Birthday Service Init Failed", e)
 
+        # Daily Stats (midnight EST summary)
+        try:
+            from src.services.daily_stats import DailyStatsService
+            self.daily_stats_service = DailyStatsService(self)
+            await self.daily_stats_service.setup()
+            initialized.append("DailyStats")
+        except Exception as e:
+            logger.error_tree("Daily Stats Init Failed", e)
+
         # Actions Panel (persistent actions list in fun channel)
         try:
             self.actions_panel = ActionsPanelService(self)
@@ -406,7 +415,7 @@ class SyriaBot(commands.Bot):
 
         logger.tree("Services Init Complete", [
             ("Services", ", ".join(initialized)),
-            ("Count", f"{len(initialized)}/17"),
+            ("Count", f"{len(initialized)}/18"),
         ], emoji="✅")
 
     async def _health_check_loop(self) -> None:
@@ -481,6 +490,7 @@ class SyriaBot(commands.Bot):
             (self.birthday_service, "Birthdays", lambda s: s.stop()),
             (self.social_monitor, "SocialMonitor", lambda s: s.stop()),
             (self.roulette_service, "Roulette", lambda s: s.stop()),
+            (getattr(self, 'daily_stats_service', None), "DailyStats", lambda s: s.stop()),
         ]
         for svc, name, stop_fn in sync_services:
             if svc:

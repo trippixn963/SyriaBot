@@ -108,6 +108,10 @@ class XPService:
         # Background task for cache cleanup
         self._cleanup_task: Optional[asyncio.Task] = None
 
+        # Timezone for daily tracking (reused every minute in voice loop)
+        from zoneinfo import ZoneInfo
+        self._est_tz = ZoneInfo("America/New_York")
+
     async def setup(self) -> None:
         """
         Initialize and start the XP service.
@@ -293,6 +297,7 @@ class XPService:
 
             # Server-level tracking
             db.increment_daily_messages(guild_id, today_date)
+            db.increment_user_daily_messages(user_id, guild_id, today_date)
             db.increment_server_hour_activity(guild_id, current_hour, "message")
             db.increment_channel_daily(guild_id, message.channel.id, today_date)
             db.increment_channel_messages(
@@ -531,6 +536,10 @@ class XPService:
                 self._voice_sessions.pop(guild_id, None)
             return
 
+        # Compute EST date for daily voice tracking
+        from datetime import datetime as _dt
+        today_date_est = _dt.now(self._est_tz).strftime("%Y-%m-%d")
+
         # Get users who have been in voice for at least 1 minute
         now = time.time()
         users_to_reward = []
@@ -610,6 +619,14 @@ class XPService:
                 xp_amount = int(xp_amount * config.XP_BOOSTER_MULTIPLIER)
 
             await self._grant_xp(member, xp_amount, "voice")
+            try:
+                db.increment_user_daily_voice(member.id, guild_id, today_date_est)
+            except Exception as e:
+                logger.tree("Daily Voice Track Failed", [
+                    ("User", f"{member.name} ({member.display_name})"),
+                    ("ID", str(member.id)),
+                    ("Error", str(e)[:50]),
+                ], emoji="⚠️")
 
         # Broadcast voice minutes update (1 minute per user)
         if users_to_reward:

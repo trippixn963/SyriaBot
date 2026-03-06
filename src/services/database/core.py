@@ -828,6 +828,26 @@ class DatabaseCore:
             """)
 
             # =====================================================================
+            # User Daily Activity Table (per-user daily message/voice tracking)
+            # =====================================================================
+
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS user_daily_activity (
+                    user_id INTEGER NOT NULL,
+                    guild_id INTEGER NOT NULL,
+                    date TEXT NOT NULL,
+                    messages INTEGER DEFAULT 0,
+                    voice_minutes INTEGER DEFAULT 0,
+                    PRIMARY KEY (user_id, guild_id, date)
+                )
+            """)
+
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_user_daily_guild_date
+                ON user_daily_activity (guild_id, date)
+            """)
+
+            # =====================================================================
             # Migrations Table
             # =====================================================================
 
