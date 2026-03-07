@@ -138,6 +138,7 @@ class ReadyHandler(commands.Cog):
             voice_minutes = xp_stats.get("total_voice_minutes", 0)
 
             # Set all stats
+            total_reactions = xp_stats.get("total_reactions", 0)
             ws_manager.set_stats(
                 members=members,
                 online=online,
@@ -145,7 +146,8 @@ class ReadyHandler(commands.Cog):
                 messages=total_messages,
                 ranked=ranked_users,
                 xp=total_xp,
-                voice_minutes=voice_minutes
+                voice_minutes=voice_minutes,
+                reactions=total_reactions
             )
 
             # Start periodic online updates

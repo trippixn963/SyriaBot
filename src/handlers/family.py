@@ -11,6 +11,7 @@ Server: discord.gg/syria
 """
 
 import asyncio
+import io
 import time
 from collections import OrderedDict
 from typing import Optional
@@ -20,12 +21,15 @@ import discord
 from src.core.logger import logger
 from src.core.config import config
 from src.core.colors import COLOR_GOLD, COLOR_ERROR, COLOR_WARNING
-from src.core.constants import DELETE_DELAY_SHORT
+from src.core.constants import DELETE_DELAY_SHORT, MAX_CHILDREN
 from src.services.database import db
 from src.utils.footer import set_footer
 from src.utils.permissions import is_cooldown_exempt
 from src.handlers.family_views import (
-    ProposalView, AdoptView, DivorceView, DisownView, fetch_family_gif,
+    ProposalView, AdoptView, DivorceView, DisownView, RunawayView, fetch_family_gif,
+)
+from src.services.family_card import (
+    generate_family_card, resolve_family_member, FamilyData,
 )
 
 
@@ -35,7 +39,6 @@ from src.handlers.family_views import (
 
 FAMILY_COMMANDS = {"marry", "divorce", "adopt", "disown", "runaway", "family"}
 COOLDOWN_24H: int = 86400
-MAX_CHILDREN: int = 10
 FAMILY_COOLDOWN: int = 10  # seconds between family commands per user
 MAX_COOLDOWN_CACHE_SIZE: int = 100
 
@@ -66,14 +69,25 @@ class FamilyHandler:
     def __init__(self) -> None:
         self._cooldowns: OrderedDict[int, float] = OrderedDict()
         self._cooldown_lock = asyncio.Lock()
+        # Track active outgoing proposals/adopt requests per user
+        self._active_proposals: dict[int, float] = {}
 
     async def _cleanup_cooldowns(self) -> None:
-        """Remove expired cooldowns to prevent unbounded growth."""
+        """Remove expired cooldowns and stale proposals to prevent unbounded growth."""
+        now = time.time()
+
+        # Clean expired proposals (60s lifetime)
+        expired_proposals = [
+            uid for uid, ts in list(self._active_proposals.items())
+            if now - ts > 120  # 2x timeout for safety margin
+        ]
+        for uid in expired_proposals:
+            self._active_proposals.pop(uid, None)
+
         if len(self._cooldowns) <= MAX_COOLDOWN_CACHE_SIZE:
             return
 
         async with self._cooldown_lock:
-            now = time.time()
             expired = [
                 uid for uid, ts in list(self._cooldowns.items())
                 if now - ts > FAMILY_COOLDOWN
@@ -94,31 +108,38 @@ class FamilyHandler:
         if is_cooldown_exempt(message.author):
             return False
 
+        # Check cooldown under lock, but release before Discord API calls
+        on_cooldown = False
+        cooldown_ends = 0
+
         async with self._cooldown_lock:
             last_use = self._cooldowns.get(user_id, 0)
             time_since = time.time() - last_use
             if time_since < FAMILY_COOLDOWN:
                 remaining = FAMILY_COOLDOWN - time_since
                 cooldown_ends = int(time.time() + remaining)
+                on_cooldown = True
+            else:
+                self._cooldowns[user_id] = time.time()
 
-                cooldown_msg = await message.reply(
-                    f"You're on cooldown. Try again <t:{cooldown_ends}:R>",
-                    mention_author=False,
-                )
-                await asyncio.gather(
-                    message.delete(delay=DELETE_DELAY_SHORT),
-                    cooldown_msg.delete(delay=DELETE_DELAY_SHORT),
-                    return_exceptions=True,
-                )
-                logger.tree("Family Cooldown", [
-                    ("User", f"{message.author.name}"),
-                    ("ID", str(user_id)),
-                    ("Ends", f"<t:{cooldown_ends}:R>"),
-                ], emoji="⏳")
-                return True
+        if on_cooldown:
+            cooldown_msg = await message.reply(
+                f"You're on cooldown. Try again <t:{cooldown_ends}:R>",
+                mention_author=False,
+            )
+            await asyncio.gather(
+                message.delete(delay=DELETE_DELAY_SHORT),
+                cooldown_msg.delete(delay=DELETE_DELAY_SHORT),
+                return_exceptions=True,
+            )
+            logger.tree("Family Cooldown", [
+                ("User", f"{message.author.name}"),
+                ("ID", str(user_id)),
+                ("Ends", f"<t:{cooldown_ends}:R>"),
+            ], emoji="⏳")
+            return True
 
-            self._cooldowns[user_id] = time.time()
-            return False
+        return False
 
     async def _remove_cooldown(self, user_id: int) -> None:
         """Remove cooldown for a user (when command didn't actually execute)."""
@@ -214,6 +235,22 @@ class FamilyHandler:
                 pass
 
         return True
+
+    # =========================================================================
+    # Helpers
+    # =========================================================================
+
+    def _is_ancestor(self, target_id: int, user_id: int, guild_id: int) -> bool:
+        """Check if target_id is an ancestor of user_id by walking the parent chain."""
+        current = user_id
+        for _ in range(20):
+            parent: Optional[int] = db.get_parent(current, guild_id)
+            if parent is None:
+                break
+            if parent == target_id:
+                return True
+            current = parent
+        return False
 
     # =========================================================================
     # marry @user
@@ -315,6 +352,15 @@ class FamilyHandler:
             embed.set_image(url=gif_url)
         set_footer(embed)
 
+        # Check for active outgoing proposal
+        last_proposal = self._active_proposals.get(user.id, 0)
+        if time.time() - last_proposal < 60:
+            await self._remove_cooldown(user.id)
+            await self._send_error(message, "❌ You already have a pending proposal. Wait for it to expire.")
+            return
+
+        self._active_proposals[user.id] = time.time()
+
         view = ProposalView(user, target)
         msg = await message.channel.send(embed=embed, view=view)
         view.message = msg
@@ -401,14 +447,37 @@ class FamilyHandler:
             ], emoji="⚠️")
             return
 
+        # Validation: must be married to adopt
+        spouse_id: Optional[int] = db.get_spouse(user.id, guild_id)
+        if not spouse_id:
+            await self._remove_cooldown(user.id)
+            await self._send_error(message, "❌ You must be married before you can adopt.")
+            logger.tree("Adopt Rejected", [
+                ("User", f"{user.name} ({user.id})"),
+                ("Reason", "Not married"),
+            ], emoji="⚠️")
+            return
+
         # Validation: can't adopt your spouse
-        if db.get_spouse(user.id, guild_id) == target.id:
+        if spouse_id == target.id:
             await self._remove_cooldown(user.id)
             await self._send_error(message, "❌ You can't adopt your spouse.")
             logger.tree("Adopt Rejected", [
                 ("User", f"{user.name} ({user.id})"),
                 ("Target", f"{target.name} ({target.id})"),
                 ("Reason", "Target is spouse"),
+            ], emoji="⚠️")
+            return
+
+        # Validation: already your child through marriage (spouse_id always set — marriage required)
+        spouse_children = db.get_children(spouse_id, guild_id)
+        if target.id in spouse_children:
+            await self._remove_cooldown(user.id)
+            await self._send_error(message, "❌ This user is already your child through marriage.")
+            logger.tree("Adopt Rejected", [
+                ("User", f"{user.name} ({user.id})"),
+                ("Target", f"{target.name} ({target.id})"),
+                ("Reason", "Already child through spouse"),
             ], emoji="⚠️")
             return
 
@@ -423,15 +492,15 @@ class FamilyHandler:
             ], emoji="⚠️")
             return
 
-        # Validation: max children
-        children_count: int = db.get_children_count(user.id, guild_id)
-        if children_count >= MAX_CHILDREN:
+        # Validation: max household children
+        household_count: int = db.get_household_children_count(user.id, guild_id)
+        if household_count >= MAX_CHILDREN:
             await self._remove_cooldown(user.id)
-            await self._send_error(message, f"❌ You already have {MAX_CHILDREN} children (max).")
+            await self._send_error(message, f"❌ Your household already has {MAX_CHILDREN} children (max).")
             logger.tree("Adopt Rejected", [
                 ("User", f"{user.name} ({user.id})"),
-                ("Children", str(children_count)),
-                ("Reason", "Max children reached"),
+                ("Children", str(household_count)),
+                ("Reason", "Max household children reached"),
             ], emoji="⚠️")
             return
 
@@ -446,22 +515,26 @@ class FamilyHandler:
             ], emoji="⚠️")
             return
 
-        # Validation: circular — can't adopt your ancestor
-        current: int = user.id
-        for _ in range(20):
-            parent: Optional[int] = db.get_parent(current, guild_id)
-            if parent is None:
-                break
-            if parent == target.id:
-                await self._remove_cooldown(user.id)
-                await self._send_error(message, "❌ You can't adopt your ancestor.")
-                logger.tree("Adopt Rejected", [
-                    ("User", f"{user.name} ({user.id})"),
-                    ("Target", f"{target.name} ({target.id})"),
-                    ("Reason", "Circular adoption"),
-                ], emoji="⚠️")
-                return
-            current = parent
+        # Validation: circular — can't adopt your ancestor (check both user and spouse)
+        if self._is_ancestor(target.id, user.id, guild_id):
+            await self._remove_cooldown(user.id)
+            await self._send_error(message, "❌ You can't adopt your ancestor.")
+            logger.tree("Adopt Rejected", [
+                ("User", f"{user.name} ({user.id})"),
+                ("Target", f"{target.name} ({target.id})"),
+                ("Reason", "Circular adoption"),
+            ], emoji="⚠️")
+            return
+
+        if self._is_ancestor(target.id, spouse_id, guild_id):
+            await self._remove_cooldown(user.id)
+            await self._send_error(message, "❌ You can't adopt your ancestor.")
+            logger.tree("Adopt Rejected", [
+                ("User", f"{user.name} ({user.id})"),
+                ("Target", f"{target.name} ({target.id})"),
+                ("Reason", "Circular adoption via spouse"),
+            ], emoji="⚠️")
+            return
 
         # Send adoption request with GIF
         embed = discord.Embed(
@@ -472,6 +545,15 @@ class FamilyHandler:
         if gif_url:
             embed.set_image(url=gif_url)
         set_footer(embed)
+
+        # Check for active outgoing proposal/adopt
+        last_proposal = self._active_proposals.get(user.id, 0)
+        if time.time() - last_proposal < 60:
+            await self._remove_cooldown(user.id)
+            await self._send_error(message, "❌ You already have a pending request. Wait for it to expire.")
+            return
+
+        self._active_proposals[user.id] = time.time()
 
         view = AdoptView(user, target)
         msg = await message.channel.send(embed=embed, view=view)
@@ -503,16 +585,34 @@ class FamilyHandler:
             )
             return
 
+        # Check user's own children first, then spouse's
         children = db.get_children(user.id, guild_id)
+        actual_parent_id = user.id
+
         if target.id not in children:
-            await self._remove_cooldown(user.id)
-            await self._send_error(message, f"❌ {target.mention} is not your child.")
-            logger.tree("Disown Rejected", [
-                ("User", f"{user.name} ({user.id})"),
-                ("Target", f"{target.name} ({target.id})"),
-                ("Reason", "Not a child"),
-            ], emoji="⚠️")
-            return
+            spouse_id = db.get_spouse(user.id, guild_id)
+            if spouse_id:
+                spouse_children = db.get_children(spouse_id, guild_id)
+                if target.id in spouse_children:
+                    actual_parent_id = spouse_id
+                else:
+                    await self._remove_cooldown(user.id)
+                    await self._send_error(message, f"❌ {target.mention} is not your child.")
+                    logger.tree("Disown Rejected", [
+                        ("User", f"{user.name} ({user.id})"),
+                        ("Target", f"{target.name} ({target.id})"),
+                        ("Reason", "Not a child"),
+                    ], emoji="⚠️")
+                    return
+            else:
+                await self._remove_cooldown(user.id)
+                await self._send_error(message, f"❌ {target.mention} is not your child.")
+                logger.tree("Disown Rejected", [
+                    ("User", f"{user.name} ({user.id})"),
+                    ("Target", f"{target.name} ({target.id})"),
+                    ("Reason", "Not a child"),
+                ], emoji="⚠️")
+                return
 
         embed = discord.Embed(
             description=f"⚠️ {user.mention}, are you sure you want to disown {target.mention}?",
@@ -520,7 +620,7 @@ class FamilyHandler:
         )
         set_footer(embed)
 
-        view = DisownView(user, target)
+        view = DisownView(user, target, actual_parent_id)
         msg = await message.channel.send(embed=embed, view=view)
         view.message = msg
 
@@ -539,7 +639,7 @@ class FamilyHandler:
         user = message.author
         guild_id = message.guild.id
 
-        parent_id: Optional[int] = db.runaway(user.id, guild_id)
+        parent_id: Optional[int] = db.get_parent(user.id, guild_id)
         if not parent_id:
             await self._remove_cooldown(user.id)
             await self._send_error(message, "❌ You don't have a parent.")
@@ -549,17 +649,21 @@ class FamilyHandler:
             ], emoji="⚠️")
             return
 
-        embed = discord.Embed(
-            description=f"🏃 {user.mention} ran away from <@{parent_id}>!",
-            color=COLOR_WARNING,
-        )
-        gif_url = await self._fetch_gif("runaway")
-        if gif_url:
-            embed.set_image(url=gif_url)
-        set_footer(embed)
-        await message.channel.send(embed=embed)
+        # Show confirmation with both parents
+        parent_spouse_id: Optional[int] = db.get_spouse(parent_id, guild_id)
+        if parent_spouse_id:
+            description = f"⚠️ {user.mention}, are you sure you want to run away from <@{parent_id}> & <@{parent_spouse_id}>?"
+        else:
+            description = f"⚠️ {user.mention}, are you sure you want to run away from <@{parent_id}>?"
 
-        logger.tree("Runaway Complete", [
+        embed = discord.Embed(description=description, color=COLOR_WARNING)
+        set_footer(embed)
+
+        view = RunawayView(user, parent_id)
+        msg = await message.channel.send(embed=embed, view=view)
+        view.message = msg
+
+        logger.tree("Runaway Initiated", [
             ("Child", f"{user.name} ({user.id})"),
             ("Parent", str(parent_id)),
             ("Guild", str(guild_id)),
@@ -570,43 +674,87 @@ class FamilyHandler:
     # =========================================================================
 
     async def _handle_family(self, message: discord.Message) -> None:
-        """Handle the family command."""
+        """Handle the family command — generates a graphical family tree card."""
         user = message.author
-        guild_id = message.guild.id
+        guild = message.guild
+        guild_id = guild.id
 
         # Optional target — mention, reply, or default to self
         target = self._get_target_or_self(message)
 
+        # Gather family data from DB
         spouse_id: Optional[int] = db.get_spouse(target.id, guild_id)
         parent_id: Optional[int] = db.get_parent(target.id, guild_id)
-        children: list[int] = db.get_children(target.id, guild_id)
+        children: list[int] = db.get_household_children(target.id, guild_id)
+        siblings: list[int] = db.get_siblings(target.id, guild_id)
 
-        lines: list[str] = []
-
-        if spouse_id:
-            lines.append(f"💍 **Spouse:** <@{spouse_id}>")
-        else:
-            lines.append("💍 **Spouse:** —")
-
-        if parent_id:
-            lines.append(f"👨‍👧 **Parent:** <@{parent_id}>")
-        else:
-            lines.append("👨‍👧 **Parent:** —")
-
-        if children:
-            children_str = ", ".join(f"<@{c}>" for c in children)
-            lines.append(f"👶 **Children ({len(children)}/{MAX_CHILDREN}):** {children_str}")
-        else:
-            lines.append(f"👶 **Children (0/{MAX_CHILDREN}):** —")
-
-        embed = discord.Embed(
-            title=f"👪 {target.display_name}'s Family",
-            description="\n".join(lines),
-            color=COLOR_GOLD,
+        # Build FamilyData with resolved members
+        data = FamilyData(
+            display_name=target.display_name,
+            username=target.name,
+            avatar_url=str(target.display_avatar.replace(size=128, format="png")),
+            max_children=MAX_CHILDREN,
         )
-        embed.set_thumbnail(url=target.display_avatar.url)
-        set_footer(embed)
-        await message.channel.send(embed=embed)
+
+        # Resolve spouse
+        if spouse_id:
+            data.spouse = await resolve_family_member(guild, spouse_id)
+            data.married_at = db.get_marriage_timestamp(target.id, guild_id)
+
+        # Resolve parents
+        if parent_id:
+            data.adopted_at = db.get_adoption_timestamp(target.id, guild_id)
+            parent_member = await resolve_family_member(guild, parent_id)
+            data.parents.append(parent_member)
+            # Check if parent has a spouse (second parent)
+            parent_spouse_id: Optional[int] = db.get_spouse(parent_id, guild_id)
+            if parent_spouse_id:
+                parent_spouse_member = await resolve_family_member(guild, parent_spouse_id)
+                data.parents.append(parent_spouse_member)
+
+        # Resolve children
+        for child_id in children[:5]:
+            child_member = await resolve_family_member(guild, child_id)
+            data.children.append(child_member)
+
+        # Resolve siblings
+        for sib_id in siblings[:8]:
+            sib_member = await resolve_family_member(guild, sib_id)
+            data.siblings.append(sib_member)
+
+        # Generate the card image
+        try:
+            card_bytes = await generate_family_card(data)
+            file = discord.File(io.BytesIO(card_bytes), filename="family.png")
+            await message.channel.send(file=file)
+        except Exception as e:
+            # Fallback to text embed if card generation fails
+            logger.error_tree("Family Card Fallback", e, [
+                ("Target", f"{target.name} ({target.id})"),
+            ])
+            lines: list[str] = []
+            if spouse_id:
+                lines.append(f"💍 **Spouse:** <@{spouse_id}>")
+            else:
+                lines.append("💍 **Spouse:** —")
+            if parent_id:
+                lines.append(f"👨‍👧 **Parent:** <@{parent_id}>")
+            else:
+                lines.append("👨‍👧 **Parent:** —")
+            if children:
+                children_str = ", ".join(f"<@{c}>" for c in children)
+                lines.append(f"👶 **Children ({len(children)}/{MAX_CHILDREN}):** {children_str}")
+            else:
+                lines.append(f"👶 **Children (0/{MAX_CHILDREN}):** —")
+
+            embed = discord.Embed(
+                title=f"👪 {target.display_name}'s Family",
+                description="\n".join(lines),
+                color=COLOR_GOLD,
+            )
+            embed.set_thumbnail(url=target.display_avatar.url)
+            set_footer(embed)
+            await message.channel.send(embed=embed)
 
         logger.tree("Family Viewed", [
             ("Target", f"{target.name} ({target.id})"),
@@ -615,6 +763,7 @@ class FamilyHandler:
             ("Spouse", str(spouse_id) if spouse_id else "None"),
             ("Parent", str(parent_id) if parent_id else "None"),
             ("Children", str(len(children))),
+            ("Siblings", str(len(siblings))),
         ], emoji="👪")
 
     # =========================================================================
@@ -675,6 +824,8 @@ class FamilyHandler:
             return None
         elapsed = int(time.time()) - cooldown_ts
         if elapsed >= COOLDOWN_24H:
+            # Clean up expired cooldown
+            db.delete_divorce_cooldown(user_id, guild_id)
             return None
         remaining = COOLDOWN_24H - elapsed
         return (remaining // 3600, (remaining % 3600) // 60)

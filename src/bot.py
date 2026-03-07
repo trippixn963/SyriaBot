@@ -50,6 +50,7 @@ from src.services.confessions import ConfessionService
 from src.services.currency import CurrencyService
 from src.services.actions import action_service
 from src.services.actions.panel import ActionsPanelService
+from src.services.family_panel import FamilyPanelService
 from src.services.quote import quote_service
 from src.services.birthday import get_birthday_service, BirthdayService
 from src.services.faq import setup_persistent_views
@@ -91,10 +92,12 @@ class SyriaBot(commands.Bot):
         self.social_monitor: Optional[SocialMonitorService] = None
         self.backup_scheduler: Optional[BackupScheduler] = None
         self.actions_panel: Optional[ActionsPanelService] = None
+        self.family_panel: Optional[FamilyPanelService] = None
         self.roulette_service: Optional[RouletteService] = None
         self._health_task: Optional[asyncio.Task] = None
         self._health_failures: int = 0
         self._closing: bool = False
+        self._services_initialized: bool = False
 
     async def setup_hook(self) -> None:
         """Called when the bot is starting up."""
@@ -250,7 +253,15 @@ class SyriaBot(commands.Bot):
                 ])
 
     async def _init_services(self) -> None:
-        """Initialize bot services."""
+        """Initialize bot services. Only runs once (guards against on_ready reconnects)."""
+        if self._services_initialized:
+            logger.tree("Services Init Skipped", [
+                ("Reason", "Already initialized (reconnect)"),
+            ], emoji="ℹ️")
+            return
+
+        self._services_initialized = True
+
         logger.tree("Services Init", [
             ("Status", "Starting"),
         ], emoji="🔧")
@@ -392,6 +403,14 @@ class SyriaBot(commands.Bot):
             initialized.append("ActionsPanel")
         except Exception as e:
             logger.error_tree("Actions Panel Init Failed", e)
+
+        # Family Panel (persistent family commands panel in cmds channel)
+        try:
+            self.family_panel = FamilyPanelService(self)
+            await self.family_panel.setup()
+            initialized.append("FamilyPanel")
+        except Exception as e:
+            logger.error_tree("Family Panel Init Failed", e)
 
         # Social Media Monitor
         if config.SOCIAL_MONITOR_CH:

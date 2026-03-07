@@ -14,7 +14,8 @@ from typing import Optional
 import discord
 from discord import ui
 
-from src.core.colors import COLOR_SUCCESS, COLOR_ERROR, COLOR_NEUTRAL, EMOJI_ALLOW, EMOJI_BLOCK
+from src.core.colors import COLOR_SUCCESS, COLOR_ERROR, COLOR_NEUTRAL, COLOR_WARNING, EMOJI_ALLOW, EMOJI_BLOCK
+from src.core.constants import MAX_CHILDREN
 from src.core.logger import logger
 from src.services.database import db
 from src.services.actions import action_service
@@ -208,7 +209,9 @@ class AdoptView(ui.View):
                 return
 
             # Re-validate
-            if db.get_parent(self.target.id, interaction.guild.id):
+            guild_id = interaction.guild.id
+
+            if db.get_parent(self.target.id, guild_id):
                 embed = discord.Embed(
                     description=f"❌ {self.target.mention} already has a parent.",
                     color=COLOR_ERROR,
@@ -218,9 +221,9 @@ class AdoptView(ui.View):
                 self.stop()
                 return
 
-            if db.get_children_count(self.requester.id, interaction.guild.id) >= 10:
+            if db.get_household_children_count(self.requester.id, guild_id) >= MAX_CHILDREN:
                 embed = discord.Embed(
-                    description=f"❌ {self.requester.mention} already has 10 children (max).",
+                    description=f"❌ {self.requester.mention}'s household already has {MAX_CHILDREN} children (max).",
                     color=COLOR_ERROR,
                 )
                 set_footer(embed)
@@ -228,24 +231,92 @@ class AdoptView(ui.View):
                 self.stop()
                 return
 
-            db.adopt(self.requester.id, self.target.id, interaction.guild.id)
+            if db.get_spouse(self.requester.id, guild_id) == self.target.id:
+                embed = discord.Embed(
+                    description=f"❌ {self.target.mention} is now your spouse — can't adopt your spouse.",
+                    color=COLOR_ERROR,
+                )
+                set_footer(embed)
+                await interaction.response.edit_message(embed=embed, view=None)
+                self.stop()
+                return
 
-            embed = discord.Embed(
-                title="👨‍👧 Adopted!",
-                description=f"🎉 {self.requester.mention} adopted {self.target.mention}!",
-                color=COLOR_SUCCESS,
-            )
-            gif_url = await fetch_family_gif("pat")
-            if gif_url:
-                embed.set_image(url=gif_url)
-            set_footer(embed)
-            await interaction.response.edit_message(embed=embed, view=None)
+            # Re-validate circular ancestry
+            req_spouse_id = db.get_spouse(self.requester.id, guild_id)
 
-            logger.tree("Adoption Accepted", [
-                ("Parent", f"{self.requester.name} ({self.requester.id})"),
-                ("Child", f"{self.target.name} ({self.target.id})"),
-                ("Guild", str(interaction.guild.id)),
-            ], emoji="👨‍👧")
+            def _is_ancestor(target_id: int, check_id: int) -> bool:
+                current = check_id
+                for _ in range(20):
+                    p = db.get_parent(current, guild_id)
+                    if p is None:
+                        break
+                    if p == target_id:
+                        return True
+                    current = p
+                return False
+
+            if _is_ancestor(self.target.id, self.requester.id):
+                embed = discord.Embed(
+                    description="❌ Can't adopt — circular family relationship detected.",
+                    color=COLOR_ERROR,
+                )
+                set_footer(embed)
+                await interaction.response.edit_message(embed=embed, view=None)
+                self.stop()
+                return
+
+            if req_spouse_id and _is_ancestor(self.target.id, req_spouse_id):
+                embed = discord.Embed(
+                    description="❌ Can't adopt — circular family relationship detected.",
+                    color=COLOR_ERROR,
+                )
+                set_footer(embed)
+                await interaction.response.edit_message(embed=embed, view=None)
+                self.stop()
+                return
+
+            # Spouse approval required (marriage is required to adopt)
+            if req_spouse_id:
+                embed = discord.Embed(
+                    description=f"👨‍👧 {self.target.mention} accepted! Waiting for <@{req_spouse_id}> to approve the adoption.",
+                    color=COLOR_WARNING,
+                )
+                set_footer(embed)
+                view = SpouseApprovalView(
+                    action="adopt",
+                    initiator=self.requester,
+                    spouse_id=req_spouse_id,
+                    target=self.target,
+                    guild_id=guild_id,
+                )
+                await interaction.response.edit_message(embed=embed, view=view)
+                view.message = self.message
+                logger.tree("Adoption Awaiting Spouse", [
+                    ("Parent", f"{self.requester.name} ({self.requester.id})"),
+                    ("Spouse", str(req_spouse_id)),
+                    ("Child", f"{self.target.name} ({self.target.id})"),
+                    ("Guild", str(guild_id)),
+                ], emoji="⏳")
+            else:
+                # Safety fallback — should not reach here since marriage is required
+                db.adopt(self.requester.id, self.target.id, guild_id)
+
+                embed = discord.Embed(
+                    title="👨‍👧 Adopted!",
+                    description=f"🎉 {self.requester.mention} adopted {self.target.mention}!",
+                    color=COLOR_SUCCESS,
+                )
+                gif_url = await fetch_family_gif("pat")
+                if gif_url:
+                    embed.set_image(url=gif_url)
+                set_footer(embed)
+                await interaction.response.edit_message(embed=embed, view=None)
+
+                logger.tree("Adoption Accepted (No Spouse Fallback)", [
+                    ("Parent", f"{self.requester.name} ({self.requester.id})"),
+                    ("Child", f"{self.target.name} ({self.target.id})"),
+                    ("Guild", str(guild_id)),
+                ], emoji="👨‍👧")
 
         except discord.HTTPException as e:
             logger.error_tree("Adoption Accept Failed", e, [
@@ -420,10 +491,11 @@ class DivorceView(ui.View):
 class DisownView(ui.View):
     """Confirm/Cancel buttons for disowning a child. Only the parent can click."""
 
-    def __init__(self, parent: discord.Member, child: discord.Member) -> None:
+    def __init__(self, parent: discord.Member, child: discord.Member, actual_parent_id: int = 0) -> None:
         super().__init__(timeout=30)
         self.parent = parent
         self.child = child
+        self.actual_parent_id = actual_parent_id or parent.id
 
     async def on_timeout(self) -> None:
         try:
@@ -451,34 +523,61 @@ class DisownView(ui.View):
                 await interaction.response.send_message("❌ Only the parent can confirm.", ephemeral=True)
                 return
 
-            deleted = db.disown(self.parent.id, self.child.id, interaction.guild.id)
+            guild_id = interaction.guild.id
 
-            if not deleted:
+            # Check if parent has a spouse — need spouse approval
+            spouse_id = db.get_spouse(self.parent.id, guild_id)
+            if spouse_id:
                 embed = discord.Embed(
-                    description=f"❌ {self.child.mention} is no longer your child.",
-                    color=COLOR_ERROR,
+                    description=f"⚠️ {self.parent.mention} wants to disown {self.child.mention}. Waiting for <@{spouse_id}> to approve.",
+                    color=COLOR_WARNING,
                 )
                 set_footer(embed)
+                view = SpouseApprovalView(
+                    action="disown",
+                    initiator=self.parent,
+                    spouse_id=spouse_id,
+                    target=self.child,
+                    guild_id=guild_id,
+                    actual_parent_id=self.actual_parent_id,
+                )
+                await interaction.response.edit_message(embed=embed, view=view)
+                view.message = self.message
+                logger.tree("Disown Awaiting Spouse", [
+                    ("Parent", f"{self.parent.name} ({self.parent.id})"),
+                    ("Spouse", str(spouse_id)),
+                    ("Child", f"{self.child.name} ({self.child.id})"),
+                    ("Guild", str(guild_id)),
+                ], emoji="⏳")
+            else:
+                deleted = db.disown(self.actual_parent_id, self.child.id, guild_id)
+
+                if not deleted:
+                    embed = discord.Embed(
+                        description=f"❌ {self.child.mention} is no longer your child.",
+                        color=COLOR_ERROR,
+                    )
+                    set_footer(embed)
+                    await interaction.response.edit_message(embed=embed, view=None)
+                    self.stop()
+                    return
+
+                embed = discord.Embed(
+                    title="👋 Disowned",
+                    description=f"{self.parent.mention} disowned {self.child.mention}.",
+                    color=COLOR_ERROR,
+                )
+                gif_url = await fetch_family_gif("wave")
+                if gif_url:
+                    embed.set_image(url=gif_url)
+                set_footer(embed)
                 await interaction.response.edit_message(embed=embed, view=None)
-                self.stop()
-                return
 
-            embed = discord.Embed(
-                title="👋 Disowned",
-                description=f"{self.parent.mention} disowned {self.child.mention}.",
-                color=COLOR_ERROR,
-            )
-            gif_url = await fetch_family_gif("wave")
-            if gif_url:
-                embed.set_image(url=gif_url)
-            set_footer(embed)
-            await interaction.response.edit_message(embed=embed, view=None)
-
-            logger.tree("Disown Confirmed", [
-                ("Parent", f"{self.parent.name} ({self.parent.id})"),
-                ("Child", f"{self.child.name} ({self.child.id})"),
-                ("Guild", str(interaction.guild.id)),
-            ], emoji="👋")
+                logger.tree("Disown Confirmed", [
+                    ("Parent", f"{self.parent.name} ({self.parent.id})"),
+                    ("Child", f"{self.child.name} ({self.child.id})"),
+                    ("Guild", str(interaction.guild.id)),
+                ], emoji="👋")
 
         except discord.HTTPException as e:
             logger.error_tree("Disown Confirm Failed", e, [
@@ -524,6 +623,313 @@ class DisownView(ui.View):
         except Exception as e:
             logger.error_tree("Disown Cancel Error", e, [
                 ("Parent", str(self.parent.id)),
+                ("Child", str(self.child.id)),
+            ])
+
+        self.stop()
+
+
+# =============================================================================
+# Spouse Approval View (Adopt / Disown)
+# =============================================================================
+
+class SpouseApprovalView(ui.View):
+    """Approve/Reject buttons for a spouse to confirm adopt or disown. Only the spouse can respond."""
+
+    def __init__(
+        self,
+        action: str,  # "adopt" or "disown"
+        initiator: discord.Member,
+        spouse_id: int,
+        target: discord.Member,
+        guild_id: int,
+        actual_parent_id: int = 0,  # for disown
+    ) -> None:
+        super().__init__(timeout=60)
+        self.action = action
+        self.initiator = initiator
+        self.spouse_id = spouse_id
+        self.target = target
+        self.guild_id = guild_id
+        self.actual_parent_id = actual_parent_id or initiator.id
+
+    async def on_timeout(self) -> None:
+        try:
+            action_name = "Adoption" if self.action == "adopt" else "Disown"
+            embed = discord.Embed(
+                description=f"⏳ {action_name} cancelled — <@{self.spouse_id}> didn't respond in time.",
+                color=COLOR_NEUTRAL,
+            )
+            set_footer(embed)
+            if self.message:
+                await self.message.edit(embed=embed, view=None)
+            logger.tree(f"Spouse Approval Expired ({self.action})", [
+                ("Initiator", f"{self.initiator.name} ({self.initiator.id})"),
+                ("Spouse", str(self.spouse_id)),
+                ("Target", f"{self.target.name} ({self.target.id})"),
+            ], emoji="⏳")
+        except discord.HTTPException as e:
+            logger.error_tree("Spouse Approval Timeout Failed", e, [
+                ("Initiator", str(self.initiator.id)),
+                ("Spouse", str(self.spouse_id)),
+            ])
+
+    @ui.button(label="Approve", style=discord.ButtonStyle.secondary, emoji=EMOJI_ALLOW)
+    async def approve(self, interaction: discord.Interaction, button: ui.Button) -> None:
+        try:
+            if interaction.user.id != self.spouse_id:
+                await interaction.response.send_message("❌ Only the spouse can approve.", ephemeral=True)
+                return
+
+            # Re-validate: still married?
+            if db.get_spouse(self.initiator.id, self.guild_id) != self.spouse_id:
+                embed = discord.Embed(
+                    description="❌ You are no longer married — action cancelled.",
+                    color=COLOR_ERROR,
+                )
+                set_footer(embed)
+                await interaction.response.edit_message(embed=embed, view=None)
+                self.stop()
+                return
+
+            if self.action == "adopt":
+                # Re-validate before completing
+                if db.get_parent(self.target.id, self.guild_id):
+                    embed = discord.Embed(
+                        description=f"❌ {self.target.mention} already has a parent.",
+                        color=COLOR_ERROR,
+                    )
+                    set_footer(embed)
+                    await interaction.response.edit_message(embed=embed, view=None)
+                    self.stop()
+                    return
+
+                if db.get_household_children_count(self.initiator.id, self.guild_id) >= MAX_CHILDREN:
+                    embed = discord.Embed(
+                        description=f"❌ Your household already has {MAX_CHILDREN} children (max).",
+                        color=COLOR_ERROR,
+                    )
+                    set_footer(embed)
+                    await interaction.response.edit_message(embed=embed, view=None)
+                    self.stop()
+                    return
+
+                db.adopt(self.initiator.id, self.target.id, self.guild_id)
+
+                embed = discord.Embed(
+                    title="👨‍👧 Adopted!",
+                    description=f"🎉 {self.initiator.mention} & <@{self.spouse_id}> adopted {self.target.mention}!",
+                    color=COLOR_SUCCESS,
+                )
+                gif_url = await fetch_family_gif("pat")
+                if gif_url:
+                    embed.set_image(url=gif_url)
+                set_footer(embed)
+                await interaction.response.edit_message(embed=embed, view=None)
+
+                logger.tree("Adoption Spouse Approved", [
+                    ("Parent", f"{self.initiator.name} ({self.initiator.id})"),
+                    ("Spouse", str(self.spouse_id)),
+                    ("Child", f"{self.target.name} ({self.target.id})"),
+                    ("Guild", str(self.guild_id)),
+                ], emoji="👨‍👧")
+
+            elif self.action == "disown":
+                deleted = db.disown(self.actual_parent_id, self.target.id, self.guild_id)
+
+                if not deleted:
+                    embed = discord.Embed(
+                        description=f"❌ {self.target.mention} is no longer your child.",
+                        color=COLOR_ERROR,
+                    )
+                    set_footer(embed)
+                    await interaction.response.edit_message(embed=embed, view=None)
+                    self.stop()
+                    return
+
+                embed = discord.Embed(
+                    title="👋 Disowned",
+                    description=f"{self.initiator.mention} & <@{self.spouse_id}> disowned {self.target.mention}.",
+                    color=COLOR_ERROR,
+                )
+                gif_url = await fetch_family_gif("wave")
+                if gif_url:
+                    embed.set_image(url=gif_url)
+                set_footer(embed)
+                await interaction.response.edit_message(embed=embed, view=None)
+
+                logger.tree("Disown Spouse Approved", [
+                    ("Parent", f"{self.initiator.name} ({self.initiator.id})"),
+                    ("Spouse", str(self.spouse_id)),
+                    ("Child", f"{self.target.name} ({self.target.id})"),
+                    ("Guild", str(self.guild_id)),
+                ], emoji="👋")
+
+        except discord.HTTPException as e:
+            logger.error_tree("Spouse Approval Failed", e, [
+                ("Initiator", str(self.initiator.id)),
+                ("Spouse", str(self.spouse_id)),
+                ("Action", self.action),
+            ])
+            if not interaction.response.is_done():
+                await interaction.response.send_message("❌ Something went wrong.", ephemeral=True)
+        except Exception as e:
+            logger.error_tree("Spouse Approval Error", e, [
+                ("Initiator", str(self.initiator.id)),
+                ("Spouse", str(self.spouse_id)),
+                ("Action", self.action),
+            ])
+            if not interaction.response.is_done():
+                await interaction.response.send_message("❌ An error occurred.", ephemeral=True)
+
+        self.stop()
+
+    @ui.button(label="Reject", style=discord.ButtonStyle.secondary, emoji=EMOJI_BLOCK)
+    async def reject(self, interaction: discord.Interaction, button: ui.Button) -> None:
+        try:
+            if interaction.user.id != self.spouse_id:
+                await interaction.response.send_message("❌ Only the spouse can reject.", ephemeral=True)
+                return
+
+            action_name = "adoption" if self.action == "adopt" else "disown"
+            embed = discord.Embed(
+                description=f"❌ <@{self.spouse_id}> rejected the {action_name} of {self.target.mention}.",
+                color=COLOR_NEUTRAL,
+            )
+            set_footer(embed)
+            await interaction.response.edit_message(embed=embed, view=None)
+
+            logger.tree(f"Spouse Rejected ({self.action})", [
+                ("Initiator", f"{self.initiator.name} ({self.initiator.id})"),
+                ("Spouse", str(self.spouse_id)),
+                ("Target", f"{self.target.name} ({self.target.id})"),
+            ], emoji="✋")
+
+        except discord.HTTPException as e:
+            logger.error_tree("Spouse Reject Failed", e, [
+                ("Initiator", str(self.initiator.id)),
+                ("Spouse", str(self.spouse_id)),
+            ])
+        except Exception as e:
+            logger.error_tree("Spouse Reject Error", e, [
+                ("Initiator", str(self.initiator.id)),
+                ("Spouse", str(self.spouse_id)),
+            ])
+
+        self.stop()
+
+
+# =============================================================================
+# Runaway Confirmation View
+# =============================================================================
+
+class RunawayView(ui.View):
+    """Confirm/Cancel buttons for running away. Only the child can click."""
+
+    def __init__(self, child: discord.Member, parent_id: int) -> None:
+        super().__init__(timeout=30)
+        self.child = child
+        self.parent_id = parent_id
+
+    async def on_timeout(self) -> None:
+        try:
+            embed = discord.Embed(
+                description="⏳ Runaway confirmation expired.",
+                color=COLOR_NEUTRAL,
+            )
+            set_footer(embed)
+            if self.message:
+                await self.message.edit(embed=embed, view=None)
+            logger.tree("Runaway Confirmation Expired", [
+                ("Child", f"{self.child.name} ({self.child.id})"),
+                ("Parent", str(self.parent_id)),
+            ], emoji="⏳")
+        except discord.HTTPException as e:
+            logger.error_tree("Runaway Timeout Update Failed", e, [
+                ("Child", str(self.child.id)),
+            ])
+
+    @ui.button(label="Confirm Runaway", style=discord.ButtonStyle.secondary, emoji=EMOJI_ALLOW)
+    async def confirm(self, interaction: discord.Interaction, button: ui.Button) -> None:
+        try:
+            if interaction.user.id != self.child.id:
+                await interaction.response.send_message("❌ Only the child can confirm.", ephemeral=True)
+                return
+
+            parent_id = db.runaway(self.child.id, interaction.guild.id)
+
+            if not parent_id:
+                embed = discord.Embed(
+                    description="❌ You no longer have a parent.",
+                    color=COLOR_ERROR,
+                )
+                set_footer(embed)
+                await interaction.response.edit_message(embed=embed, view=None)
+                self.stop()
+                return
+
+            parent_spouse_id = db.get_spouse(parent_id, interaction.guild.id)
+            if parent_spouse_id:
+                description = f"🏃 {self.child.mention} ran away from <@{parent_id}> & <@{parent_spouse_id}>!"
+            else:
+                description = f"🏃 {self.child.mention} ran away from <@{parent_id}>!"
+
+            embed = discord.Embed(description=description, color=COLOR_WARNING)
+            gif_url = await fetch_family_gif("run")
+            if gif_url:
+                embed.set_image(url=gif_url)
+            set_footer(embed)
+            await interaction.response.edit_message(embed=embed, view=None)
+
+            logger.tree("Runaway Confirmed", [
+                ("Child", f"{self.child.name} ({self.child.id})"),
+                ("Parent", str(parent_id)),
+                ("Parent Spouse", str(parent_spouse_id) if parent_spouse_id else "None"),
+                ("Guild", str(interaction.guild.id)),
+            ], emoji="🏃")
+
+        except discord.HTTPException as e:
+            logger.error_tree("Runaway Confirm Failed", e, [
+                ("Child", str(self.child.id)),
+                ("Parent", str(self.parent_id)),
+            ])
+            if not interaction.response.is_done():
+                await interaction.response.send_message("❌ Something went wrong.", ephemeral=True)
+        except Exception as e:
+            logger.error_tree("Runaway Confirm Error", e, [
+                ("Child", str(self.child.id)),
+                ("Parent", str(self.parent_id)),
+            ])
+            if not interaction.response.is_done():
+                await interaction.response.send_message("❌ An error occurred.", ephemeral=True)
+
+        self.stop()
+
+    @ui.button(label="Cancel", style=discord.ButtonStyle.secondary, emoji=EMOJI_BLOCK)
+    async def cancel(self, interaction: discord.Interaction, button: ui.Button) -> None:
+        try:
+            if interaction.user.id != self.child.id:
+                await interaction.response.send_message("❌ Only the child can cancel.", ephemeral=True)
+                return
+
+            embed = discord.Embed(
+                description="↩️ Runaway cancelled.",
+                color=COLOR_NEUTRAL,
+            )
+            set_footer(embed)
+            await interaction.response.edit_message(embed=embed, view=None)
+
+            logger.tree("Runaway Cancelled", [
+                ("Child", f"{self.child.name} ({self.child.id})"),
+                ("Parent", str(self.parent_id)),
+            ], emoji="↩️")
+
+        except discord.HTTPException as e:
+            logger.error_tree("Runaway Cancel Failed", e, [
+                ("Child", str(self.child.id)),
+            ])
+        except Exception as e:
+            logger.error_tree("Runaway Cancel Error", e, [
                 ("Child", str(self.child.id)),
             ])
 

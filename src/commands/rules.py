@@ -2,11 +2,13 @@
 SyriaBot - Rules Command
 ========================
 
-Post formatted server rules to the rules channel.
+Post formatted server rules with image banners per category.
 
 Author: حَـــــنَّـــــا
 Server: discord.gg/syria
 """
+
+from pathlib import Path
 
 import discord
 from discord import app_commands
@@ -15,176 +17,58 @@ from discord.ext import commands
 from src.core.config import config
 from src.core.logger import logger
 
+ASSETS_DIR = Path(__file__).resolve().parent.parent.parent / "assets" / "rules"
 
 # =============================================================================
-# Rules Data
+# Rules Data — compact one-liner per rule
 # =============================================================================
 
-TABLE_OF_CONTENTS = """## 📋 Table of Contents
-
-```
-FOUNDATION           →  1-2
-PRESENTATION         →  3-4
-BEHAVIOR             →  5-7
-SENSITIVE TOPICS     →  8-10
-SAFETY               →  11-12
-AUTHORITY            →  13-14
-```
-══════════════════════"""
-
-RULES_SECTIONS = [
+RULES_CATEGORIES = [
     {
-        "category": "FOUNDATION",
+        "banner": "foundation.png",
         "rules": [
-            {
-                "title": "1. Mutual Respect",
-                "bullets": [
-                    "Respect all members — Insults, mockery, harassment, and bullying are strictly prohibited.",
-                    "No racism or sectarianism — Hate speech targeting race, religion, sect, or nationality is forbidden.",
-                    "Accept differences — Discuss politely and respectfully without personal attacks or insults.",
-                ],
-            },
-            {
-                "title": "2. Language",
-                "bullets": [
-                    "English is the primary language — Use English in public channels so everyone can participate.",
-                    "Arabic is also welcome — Feel free to chat in Arabic, but don't exclude others from conversations.",
-                    "No language discrimination — Do not mock or belittle someone for their language skills or accent.",
-                ],
-            },
+            ("1. Mutual Respect", "No insults, harassment, racism, or sectarianism. Discuss politely without personal attacks."),
+            ("2. Language", "English is primary; Arabic is welcome. Don't exclude others or mock language skills."),
         ],
     },
     {
-        "category": "PRESENTATION",
+        "banner": "presentation.png",
         "rules": [
-            {
-                "title": "3. Appropriate Content",
-                "bullets": [
-                    "No NSFW content — Pornographic or suggestive images, videos, or text is prohibited. This includes avatars.",
-                    "No extreme violence — Do not post images or videos containing graphic violence, torture, or death.",
-                    "No illegal content — Content involving drugs, weapons, hacking, or fraud is completely forbidden.",
-                ],
-            },
-            {
-                "title": "4. Usernames & Avatars",
-                "bullets": [
-                    "Keep it appropriate — Usernames and avatars must not contain NSFW, offensive, or hateful content.",
-                    "Must be pingable — Avoid excessive symbols or unicode that makes your name impossible to type or mention.",
-                    "No impersonation — Do not pretend to be staff, other members, or public figures.",
-                ],
-            },
+            ("3. Appropriate Content", "No NSFW, graphic violence, or illegal content (drugs, weapons, hacking)."),
+            ("4. Usernames & Avatars", "Keep names/avatars appropriate and pingable. No impersonation."),
         ],
     },
     {
-        "category": "BEHAVIOR",
+        "banner": "behavior.png",
         "rules": [
-            {
-                "title": "5. Spam & Disruption",
-                "bullets": [
-                    "No spamming — Repetitive messages, random characters, or excessive emojis are prohibited.",
-                    "No random mentions — Do not mention members, roles, or @everyone without a valid reason.",
-                    "Use correct channels — Each channel has a purpose. Post content in the appropriate channel.",
-                ],
-            },
-            {
-                "title": "6. No Drama",
-                "bullets": [
-                    "Keep it out of public channels — Do not bring personal beef, arguments, or drama into the server.",
-                    "No callout posts — Do not publicly accuse, expose, or start witch hunts against other members.",
-                    "Handle disputes privately — If you have issues with someone, open a ticket or handle it in DMs.",
-                ],
-            },
-            {
-                "title": "7. Advertising & Links",
-                "bullets": [
-                    "No advertising — Promoting servers, YouTube channels, or social media without permission is forbidden.",
-                    "No suspicious links — Shortened URLs or potentially harmful links will be deleted immediately.",
-                    "No DM advertising — Sending ads in private messages to members results in an immediate ban.",
-                ],
-            },
+            ("5. Spam & Disruption", "No spam, random mentions, or off-topic posts. Use the correct channels."),
+            ("6. No Drama", "Keep arguments out of public channels. No callout posts. Handle disputes via ticket or DMs."),
+            ("7. Advertising & Links", "No advertising or suspicious links. DM advertising = instant ban."),
         ],
     },
     {
-        "category": "SENSITIVE TOPICS",
+        "banner": "sensitive_topics.png",
         "rules": [
-            {
-                "title": "8. No Terrorism & Extremism",
-                "bullets": [
-                    "No extremist content — Promoting, glorifying, or supporting terrorist organizations or ideologies is banned.",
-                    "No propaganda — Spreading extremist propaganda, recruitment material, or radical content is forbidden.",
-                    "No incitement of violence — Encouraging violence, war crimes, or attacks against any group is prohibited.",
-                ],
-            },
-            {
-                "title": "9. No Religious Discussions",
-                "bullets": [
-                    "Religious debates are banned — To maintain peace, all religious arguments and debates are prohibited.",
-                    "No preaching or proselytizing — Do not attempt to convert others or push religious beliefs on members.",
-                    "Respect all beliefs — You may mention your faith, but do not attack or mock others' religions.",
-                ],
-            },
-            {
-                "title": "10. AI Misuse",
-                "bullets": [
-                    "No deepfakes — Using AI to manipulate someone's face onto inappropriate or offensive content is banned.",
-                    "No AI harassment — Creating AI-generated content to mock, harass, or defame any member is prohibited.",
-                    "Respect consent — Do not use AI tools on someone's photos or likeness without their permission.",
-                ],
-            },
+            ("8. No Terrorism & Extremism", "No extremist content, propaganda, or incitement of violence."),
+            ("9. No Religious Discussions", "Religious debates and preaching are prohibited. Respect all beliefs."),
+            ("10. AI Misuse", "No deepfakes or AI harassment. Don't use AI on someone's likeness without consent."),
         ],
     },
     {
-        "category": "SAFETY",
+        "banner": "safety.png",
         "rules": [
-            {
-                "title": "11. Privacy & Safety",
-                "bullets": [
-                    "Don't share personal info — Do not post your phone number, address, or sensitive information.",
-                    "No doxxing — Publishing personal information about others results in a permanent ban.",
-                    "Report harassment — If you experience harassment, open a ticket. Staff will handle it confidentially.",
-                ],
-            },
-            {
-                "title": "12. Voice Channels",
-                "bullets": [
-                    "Channels are self-moderated — The VC owner can kick and block users. Handle issues yourself first.",
-                    "No recording calls — Recording or streaming voice conversations without consent is not allowed.",
-                    "Only report serious issues — Contact staff only for nudity or extremism displayed on stream.",
-                ],
-            },
+            ("11. Privacy & Safety", "Don't share personal info. No doxxing. Report harassment via ticket."),
+            ("12. Voice Channels", "VCs are self-moderated by owner. No recording. Only report nudity or extremism."),
         ],
     },
     {
-        "category": "AUTHORITY",
+        "banner": "authority.png",
         "rules": [
-            {
-                "title": "13. Respecting Staff",
-                "bullets": [
-                    "Follow moderator instructions — If a mod asks you to stop, stop immediately. Appeal via ticket.",
-                    "Don't act as a moderator — If you see a violation, report it. Don't handle it yourself.",
-                    "No ban evasion — Creating new accounts to evade punishment results in a permanent ban.",
-                ],
-            },
-            {
-                "title": "14. Discord Guidelines",
-                "bullets": [
-                    "Follow Discord TOS — You must be 13+ and comply with all official Discord rules.",
-                    "No alt accounts — Only one account per person is allowed. Multiple accounts are not permitted.",
-                    "Report serious violations — Issues like child exploitation must be reported to Discord directly.",
-                ],
-            },
+            ("13. Respecting Staff", "Follow mod instructions. Don't mini-mod. No ban evasion."),
+            ("14. Discord Guidelines", "Follow Discord TOS. No alt accounts. Report serious violations to Discord."),
         ],
     },
 ]
-
-def get_rules_footer() -> str:
-    """Build rules footer with config channel ID."""
-    return f"""══════════════════════
-
-Staff reserves the right to take any action deemed appropriate.
-
-🎫 **Questions?** Open a ticket in <#{config.TICKET_CHANNEL_ID}>
-🔗 **Invite:** discord.gg/syria"""
 
 
 # =============================================================================
@@ -228,26 +112,30 @@ class RulesCog(commands.Cog):
                 ("Deleted", str(len(deleted))),
             ], emoji="🗑️")
 
-            # Table of Contents
-            await channel.send(TABLE_OF_CONTENTS)
+            # Post each category: banner image + plain-text rules
+            for i, category in enumerate(RULES_CATEGORIES):
+                banner_path = ASSETS_DIR / category["banner"]
+                await channel.send(file=discord.File(banner_path))
 
-            # Each section with category header and rules
-            for i, section in enumerate(RULES_SECTIONS):
-                # Build the section message
-                section_text = f"# {section['category']}\n"
+                lines = []
+                for name, value in category["rules"]:
+                    lines.append(f"◈ **{name}** — {value}")
+                await channel.send("\n".join(lines))
 
-                for rule in section["rules"]:
-                    bullets_text = "\n".join(f"• {bullet}" for bullet in rule["bullets"])
-                    section_text += f"\n## {rule['title']}\n```\n{bullets_text}\n```"
+                # Spacer between categories (not after the last one)
+                if i < len(RULES_CATEGORIES) - 1:
+                    await channel.send("\u200b")
 
-                # Add separator except for the last section
-                if i < len(RULES_SECTIONS) - 1:
-                    section_text += "\n\n══════════════════════"
+            # Spacer before footer
+            await channel.send("\u200b")
 
-                await channel.send(section_text)
-
-            # Footer
-            await channel.send(get_rules_footer())
+            # Footer banner + message
+            await channel.send(file=discord.File(ASSETS_DIR / "need_help.png"))
+            await channel.send(
+                f"Staff reserves the right to take any action deemed appropriate.\n"
+                f"<:ticket:1459987754942337024> **Questions?** Open a ticket in <#{config.TICKET_CHANNEL_ID}>\n"
+                f"<:link:1479498358208069743> **Invite:** discord.gg/syria"
+            )
 
             await interaction.edit_original_response(
                 content=f"✅ Rules posted to {channel.mention} ({len(deleted)} messages purged)",

@@ -20,20 +20,32 @@ from src.core.logger import logger
 # API endpoints
 NEKOS_BEST_API = "https://nekos.best/api/v2"
 WAIFU_PICS_API = "https://api.waifu.pics/sfw"
+PURRBOT_API = "https://api.purrbot.site/v2/img/sfw"
+OTAKUGIFS_API = "https://api.otakugifs.xyz/gif"
 
 # Actions available on nekos.best (better curated anime content)
 NEKOS_BEST_ACTIONS = {
     "slap", "hug", "kiss", "pat", "poke", "bite", "cuddle", "kick",
-    "wave", "highfive", "wink", "punch", "yeet", "handhold",
+    "wave", "highfive", "wink", "punch", "yeet", "handhold", "bonk",
     "cry", "smile", "dance", "blush", "happy", "smug", "tickle",
     "feed", "shoot", "shrug", "stare", "think", "thumbsup", "pout",
     "laugh", "nod", "nom", "nope", "peck", "run", "sleep", "yawn",
     "facepalm", "bored", "angry", "baka", "handshake",
+    # Added actions
+    "bleh", "blowkiss", "carry", "clap", "confused", "kabedon",
+    "lappillow", "lurk", "nya", "salute", "shake", "shocked",
+    "sip", "spin", "tableflip", "teehee", "wag",
 }
+
+# Actions available on purrbot.site (second fallback)
+PURRBOT_ACTIONS = {"lick", "comfy", "tail"}
+
+# Actions available on otakugifs.xyz (third fallback)
+OTAKUGIFS_ACTIONS = {"airkiss", "nervous", "pinch", "sad", "scared", "smack"}
 
 # Violent actions that shouldn't allow self-targeting
 VIOLENT_ACTIONS = {
-    "kill", "shoot", "punch", "slap", "kick", "stab",
+    "kill", "shoot", "punch", "slap", "kick", "stab", "smack", "pinch",
 }
 
 # Available actions (target required)
@@ -95,7 +107,7 @@ ACTIONS: Dict[str, Dict] = {
         ]
     },
     "bonk": {
-        "endpoint": "bonk",  # waifu.pics only
+        "endpoint": "bonk",
         "messages": [
             "{user} bonked {target}",
             "{user} bonks {target} on the head",
@@ -135,7 +147,7 @@ ACTIONS: Dict[str, Dict] = {
         ]
     },
     "kill": {
-        "endpoint": "kill",  # waifu.pics only
+        "endpoint": "shoot",
         "messages": [
             "{user} killed {target}",
             "{user} ends {target}",
@@ -167,7 +179,7 @@ ACTIONS: Dict[str, Dict] = {
         ]
     },
     "bully": {
-        "endpoint": "bully",  # waifu.pics only
+        "endpoint": "punch",
         "messages": [
             "{user} bullied {target}",
             "{user} bullies {target}",
@@ -244,6 +256,70 @@ ACTIONS: Dict[str, Dict] = {
             "{user} shakes hands with {target}",
             "{user} and {target} shake hands",
             "{target} shook hands with {user}",
+        ]
+    },
+    "blowkiss": {
+        "endpoint": "blowkiss",
+        "messages": [
+            "{user} blows a kiss at {target}",
+            "{user} sends {target} a kiss",
+            "{target} caught a kiss from {user}",
+        ]
+    },
+    "carry": {
+        "endpoint": "carry",
+        "messages": [
+            "{user} carries {target}",
+            "{user} picks up {target}",
+            "{target} is being carried by {user}",
+        ]
+    },
+    "kabedon": {
+        "endpoint": "kabedon",
+        "messages": [
+            "{user} kabedons {target}",
+            "{user} pins {target} against the wall",
+            "{target} got kabedonned by {user}",
+        ]
+    },
+    "lappillow": {
+        "endpoint": "lappillow",
+        "messages": [
+            "{user} lays on {target}'s lap",
+            "{user} uses {target}'s lap as a pillow",
+            "{target} is giving {user} a lap pillow",
+        ]
+    },
+    "shake": {
+        "endpoint": "shake",
+        "messages": [
+            "{user} shakes {target}",
+            "{user} is shaking {target}",
+            "{target} got shaken by {user}",
+        ]
+    },
+    "airkiss": {
+        "endpoint": "airkiss",
+        "messages": [
+            "{user} blows an air kiss to {target}",
+            "{user} sends {target} an air kiss",
+            "{target} received an air kiss from {user}",
+        ]
+    },
+    "pinch": {
+        "endpoint": "pinch",
+        "messages": [
+            "{user} pinches {target}",
+            "{user} pinched {target}",
+            "{target} got pinched by {user}",
+        ]
+    },
+    "smack": {
+        "endpoint": "smack",
+        "messages": [
+            "{user} smacks {target}",
+            "{user} smacked {target}",
+            "{target} got smacked by {user}",
         ]
     },
 }
@@ -402,6 +478,142 @@ SELF_ACTIONS: Dict[str, Dict] = {
             "{user} likes it",
         ]
     },
+    "bleh": {
+        "endpoint": "bleh",
+        "messages": [
+            "{user} sticks their tongue out",
+            "{user} goes bleh",
+            "{user} is being silly",
+        ]
+    },
+    "clap": {
+        "endpoint": "clap",
+        "messages": [
+            "{user} is clapping",
+            "{user} claps",
+            "{user} gives a round of applause",
+        ]
+    },
+    "confused": {
+        "endpoint": "confused",
+        "messages": [
+            "{user} is confused",
+            "{user} looks confused",
+            "{user} has no idea what's going on",
+        ]
+    },
+    "lurk": {
+        "endpoint": "lurk",
+        "messages": [
+            "{user} is lurking",
+            "{user} lurks in the shadows",
+            "{user} is watching silently",
+        ]
+    },
+    "nya": {
+        "endpoint": "nya",
+        "messages": [
+            "{user} goes nya~",
+            "{user} nya~",
+            "{user} is being a cat",
+        ]
+    },
+    "salute": {
+        "endpoint": "salute",
+        "messages": [
+            "{user} salutes",
+            "{user} gives a salute",
+            "{user} stands at attention",
+        ]
+    },
+    "shocked": {
+        "endpoint": "shocked",
+        "messages": [
+            "{user} is shocked",
+            "{user} looks shocked",
+            "{user} can't believe what they saw",
+        ]
+    },
+    "sip": {
+        "endpoint": "sip",
+        "messages": [
+            "{user} sips their drink",
+            "{user} takes a sip",
+            "{user} is sipping tea",
+        ]
+    },
+    "spin": {
+        "endpoint": "spin",
+        "messages": [
+            "{user} is spinning",
+            "{user} spins around",
+            "{user} goes for a spin",
+        ]
+    },
+    "tableflip": {
+        "endpoint": "tableflip",
+        "messages": [
+            "{user} flips the table",
+            "{user} (╯°□°)╯︵ ┻━┻",
+            "{user} is done with everything",
+        ]
+    },
+    "teehee": {
+        "endpoint": "teehee",
+        "messages": [
+            "{user} teehees",
+            "{user} giggles mischievously",
+            "{user} is up to something",
+        ]
+    },
+    "wag": {
+        "endpoint": "wag",
+        "messages": [
+            "{user} wags their tail",
+            "{user} is wagging happily",
+            "{user} is excited",
+        ]
+    },
+    "comfy": {
+        "endpoint": "comfy",
+        "messages": [
+            "{user} is getting comfy",
+            "{user} looks cozy",
+            "{user} is all snuggled up",
+        ]
+    },
+    "nervous": {
+        "endpoint": "nervous",
+        "messages": [
+            "{user} is nervous",
+            "{user} looks anxious",
+            "{user} is sweating",
+        ]
+    },
+    "sad": {
+        "endpoint": "sad",
+        "messages": [
+            "{user} is sad",
+            "{user} looks sad",
+            "{user} is feeling down",
+        ]
+    },
+    "scared": {
+        "endpoint": "scared",
+        "messages": [
+            "{user} is scared",
+            "{user} looks terrified",
+            "{user} is shaking with fear",
+        ]
+    },
+    "tail": {
+        "endpoint": "tail",
+        "messages": [
+            "{user} wags their tail",
+            "{user} swishes their tail",
+            "{user} is showing off their tail",
+        ]
+    },
 }
 
 
@@ -489,6 +701,47 @@ class ActionService:
             ])
         return None
 
+    async def _fetch_from_otakugifs(self, endpoint: str) -> Optional[str]:
+        """Fetch GIF from otakugifs.xyz API."""
+        url = f"{OTAKUGIFS_API}?reaction={endpoint}"
+        try:
+            session = await self._get_session()
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return data.get("url")
+        except asyncio.TimeoutError:
+            logger.tree("OtakuGifs API Timeout", [
+                ("Endpoint", endpoint),
+                ("URL", url),
+            ], emoji="⏳")
+        except Exception as e:
+            logger.error_tree("OtakuGifs API Error", e, [
+                ("Endpoint", endpoint),
+            ])
+        return None
+
+    async def _fetch_from_purrbot(self, endpoint: str) -> Optional[str]:
+        """Fetch GIF from purrbot.site API."""
+        url = f"{PURRBOT_API}/{endpoint}/gif"
+        try:
+            session = await self._get_session()
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if not data.get("error") and data.get("link"):
+                        return data["link"]
+        except asyncio.TimeoutError:
+            logger.tree("Purrbot API Timeout", [
+                ("Endpoint", endpoint),
+                ("URL", url),
+            ], emoji="⏳")
+        except Exception as e:
+            logger.error_tree("Purrbot API Error", e, [
+                ("Endpoint", endpoint),
+            ])
+        return None
+
     async def get_action_gif(self, action: str) -> Optional[str]:
         """
         Fetch a random GIF URL for the given action.
@@ -518,6 +771,18 @@ class ActionService:
             gif_url = await self._fetch_from_nekos_best(endpoint)
             if gif_url:
                 source = "nekos.best"
+
+        # Try purrbot.site as second option
+        if not gif_url and endpoint in PURRBOT_ACTIONS:
+            gif_url = await self._fetch_from_purrbot(endpoint)
+            if gif_url:
+                source = "purrbot.site"
+
+        # Try otakugifs.xyz as third option
+        if not gif_url and endpoint in OTAKUGIFS_ACTIONS:
+            gif_url = await self._fetch_from_otakugifs(endpoint)
+            if gif_url:
+                source = "otakugifs.xyz"
 
         # Fallback to waifu.pics
         if not gif_url:

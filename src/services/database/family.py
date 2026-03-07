@@ -129,7 +129,7 @@ class FamilyMixin:
         with self._get_conn() as conn:
             cur = conn.cursor()
             cur.execute("""
-                INSERT INTO family_adoptions (parent_id, child_id, guild_id, adopted_at)
+                INSERT OR IGNORE INTO family_adoptions (parent_id, child_id, guild_id, adopted_at)
                 VALUES (?, ?, ?, ?)
             """, (parent_id, child_id, guild_id, now))
 
@@ -217,3 +217,126 @@ class FamilyMixin:
                 WHERE parent_id = ? AND guild_id = ?
             """, (user_id, guild_id))
             return cur.fetchone()["cnt"]
+
+    def get_household_children(self, user_id: int, guild_id: int) -> List[int]:
+        """Get merged, deduplicated children for user + spouse."""
+        children = self.get_children(user_id, guild_id)
+        spouse_id = self.get_spouse(user_id, guild_id)
+        if spouse_id:
+            spouse_children = self.get_children(spouse_id, guild_id)
+            children = list(dict.fromkeys(children + spouse_children))
+        return children
+
+    def get_household_children_count(self, user_id: int, guild_id: int) -> int:
+        """Get total children count for user + spouse (deduplicated)."""
+        return len(self.get_household_children(user_id, guild_id))
+
+    # =========================================================================
+    # Cleanup (member leave)
+    # =========================================================================
+
+    def cleanup_family_on_leave(self, user_id: int, guild_id: int) -> dict:
+        """
+        Clean up all family data for a user who left the server.
+
+        Returns dict with counts of cleaned records.
+        """
+        result = {"divorces": 0, "orphaned_children": 0, "removed_from_parent": 0}
+
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+
+            # Divorce if married
+            cur.execute("""
+                SELECT spouse_id FROM family_marriages
+                WHERE user_id = ? AND guild_id = ?
+            """, (user_id, guild_id))
+            row = cur.fetchone()
+            if row:
+                spouse_id = row["spouse_id"]
+                cur.execute("""
+                    DELETE FROM family_marriages
+                    WHERE guild_id = ? AND (
+                        (user_id = ? AND spouse_id = ?) OR
+                        (user_id = ? AND spouse_id = ?)
+                    )
+                """, (guild_id, user_id, spouse_id, spouse_id, user_id))
+                result["divorces"] = 1
+
+            # Free children (remove parent link)
+            cur.execute("""
+                DELETE FROM family_adoptions
+                WHERE parent_id = ? AND guild_id = ?
+            """, (user_id, guild_id))
+            result["orphaned_children"] = cur.rowcount
+
+            # Remove from own parent
+            cur.execute("""
+                DELETE FROM family_adoptions
+                WHERE child_id = ? AND guild_id = ?
+            """, (user_id, guild_id))
+            result["removed_from_parent"] = cur.rowcount
+
+            # Clean divorce cooldowns
+            cur.execute("""
+                DELETE FROM family_divorce_cooldowns
+                WHERE user_id = ? AND guild_id = ?
+            """, (user_id, guild_id))
+
+        return result
+
+    # =========================================================================
+    # Date-aware queries
+    # =========================================================================
+
+    def get_marriage_timestamp(self, user_id: int, guild_id: int) -> Optional[int]:
+        """Get the married_at timestamp for a user, or None."""
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT married_at FROM family_marriages
+                WHERE user_id = ? AND guild_id = ?
+            """, (user_id, guild_id))
+            row = cur.fetchone()
+            return row["married_at"] if row else None
+
+    def get_adoption_timestamp(self, child_id: int, guild_id: int) -> Optional[int]:
+        """Get the adopted_at timestamp for a child, or None."""
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT adopted_at FROM family_adoptions
+                WHERE child_id = ? AND guild_id = ?
+            """, (child_id, guild_id))
+            row = cur.fetchone()
+            return row["adopted_at"] if row else None
+
+    # =========================================================================
+    # Cooldown cleanup
+    # =========================================================================
+
+    def delete_divorce_cooldown(self, user_id: int, guild_id: int) -> None:
+        """Delete a specific user's divorce cooldown."""
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                DELETE FROM family_divorce_cooldowns
+                WHERE user_id = ? AND guild_id = ?
+            """, (user_id, guild_id))
+
+    # =========================================================================
+    # Siblings
+    # =========================================================================
+
+    def get_siblings(self, user_id: int, guild_id: int) -> List[int]:
+        """Get sibling IDs (other children of the same parent, excluding self)."""
+        parent_id = self.get_parent(user_id, guild_id)
+        if not parent_id:
+            return []
+        children = self.get_children(parent_id, guild_id)
+        # Also include spouse's children
+        spouse_id = self.get_spouse(parent_id, guild_id)
+        if spouse_id:
+            spouse_children = self.get_children(spouse_id, guild_id)
+            children = list(dict.fromkeys(children + spouse_children))
+        return [c for c in children if c != user_id]
