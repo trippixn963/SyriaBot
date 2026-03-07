@@ -84,13 +84,11 @@ class BackgroundTaskService:
             try:
                 expired = await self._cache.cleanup_expired_responses()
                 if expired > 0:
-                    logger.debug("Cache Cleanup", [
+                    logger.tree("Cache Cleanup", [
                         ("Expired Entries", str(expired)),
-                    ])
+                    ], emoji="🧹")
             except Exception as e:
-                logger.error("Cache Cleanup Error", [
-                    ("Error", str(e)[:50]),
-                ])
+                logger.error_tree("Cache Cleanup Error", e)
 
     # =========================================================================
     # Midnight Booster Refresh
@@ -123,9 +121,7 @@ class BackgroundTaskService:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error("Midnight Refresh Error", [
-                    ("Error", str(e)[:50]),
-                ])
+                logger.error_tree("Midnight Refresh Error", e)
                 # Wait an hour before retrying on error
                 await asyncio.sleep(3600)
 
@@ -249,9 +245,7 @@ class BackgroundTaskService:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error("XP Snapshot Error", [
-                    ("Error", str(e)[:50]),
-                ])
+                logger.error_tree("XP Snapshot Error", e)
                 # Wait an hour before retrying
                 await asyncio.sleep(3600)
 
@@ -297,9 +291,7 @@ class BackgroundTaskService:
                 ], emoji="📸")
 
         except Exception as e:
-            logger.error("XP Snapshot Bootstrap Error", [
-                ("Error", str(e)[:50]),
-            ])
+            logger.error_tree("XP Snapshot Bootstrap Error", e)
 
 
 # =============================================================================

@@ -63,11 +63,10 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         except Exception as e:
             # Log error
             duration_ms = (time.time() - start_time) * 1000
-            logger.error("API Error", [
+            logger.error_tree("API Error", e, [
                 ("ID", request_id),
                 ("Method", method),
                 ("Path", path[:50]),
-                ("Error", str(e)[:50]),
                 ("Duration", f"{duration_ms:.0f}ms"),
             ])
             raise
@@ -90,16 +89,16 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         ]
 
         if status >= 500:
-            logger.error("API Response", log_data)
+            logger.tree("API Response", log_data, emoji="🔴")
         elif status in (403, 429):
-            logger.warning("API Response", log_data)
+            logger.tree("API Response", log_data, emoji="⚠️")
         elif status >= 400:
             # 401s and other 4xx errors are debug level (expected behavior)
             pass
         else:
             # Success responses - only log if slow (>500ms)
             if duration_ms > 500:
-                logger.debug("API Response (Slow)", log_data)
+                logger.tree("API Response (Slow)", log_data, emoji="🐢")
 
         return response
 

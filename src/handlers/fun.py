@@ -102,7 +102,10 @@ class FunHandler:
                 "**⚠️ This channel does not earn XP.**\n\n"
                 "`ship @user @user` — Compatibility %\n"
                 "`howgay` `howsimp` `howsmart` `howfat` — Meters\n"
-                "`hug` `kiss` `slap` `kick` etc — Actions"
+                "`hug` `kiss` `slap` `kick` etc — Actions\n\n"
+                "`marry @user` · `divorce` · `adopt @user`\n"
+                "`disown @user` · `runaway` · `family [@user]`\n\n"
+                "📌 Check pinned messages for more info."
             ),
             color=COLOR_SYRIA_GREEN
         )

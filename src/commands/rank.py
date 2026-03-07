@@ -178,11 +178,10 @@ class RankCog(commands.Cog):
 
         except Exception as e:
             # Fallback to embed if image generation fails
-            logger.tree("Rank Card Generation Failed", [
+            logger.error_tree("Rank Card Generation Failed", e, [
                 ("User", f"{member.name} ({member.display_name})"),
                 ("ID", str(member.id)),
-                ("Error", str(e)),
-            ], emoji="⚠️")
+            ])
 
             await self._send_embed_rank(interaction, member, xp_data, rank)
 

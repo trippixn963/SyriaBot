@@ -108,11 +108,11 @@ async def get_bot_status(
     if latency_ms > 0:
         health_tracker.record_latency(latency_ms)
 
-    logger.debug("Bot Status Fetched", [
+    logger.tree("Bot Status Fetched", [
         ("Online", str(bot_online)),
         ("Uptime", f"{uptime_seconds}s"),
         ("Latency", f"{latency_ms}ms"),
-    ])
+    ], emoji="ℹ️")
 
     return BotStatusResponse(
         data=BotStatusData(
@@ -171,11 +171,11 @@ async def get_bot_logs(
         module=module,
     )
 
-    logger.debug("Bot Logs Fetched", [
+    logger.tree("Bot Logs Fetched", [
         ("Count", str(len(logs))),
         ("Level", level),
         ("Limit", str(limit)),
-    ])
+    ], emoji="ℹ️")
 
     return BotLogsResponse(
         data=BotLogsData(

@@ -166,8 +166,13 @@ class ActionHandler:
                         elif reply_author.id != message.author.id:
                             targets.append(reply_author)
                             seen.add(reply_author.id)
-                except Exception:
-                    pass  # Couldn't get reply author, continue with mentions
+                except Exception as e:
+                    logger.error_tree("Action Reply Target Fetch Failed", e, [
+                        ("User", f"{message.author.name} ({message.author.display_name})"),
+                        ("ID", str(message.author.id)),
+                        ("Action", action),
+                        ("Reference", str(message.reference.message_id)),
+                    ])
 
             # Also check explicit mentions
             if message.mentions:

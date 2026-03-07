@@ -141,10 +141,7 @@ class DatabaseCore:
                 # (e.g., blocking already-blocked users) - re-raise for handlers
                 raise
             else:
-                logger.tree("Database Error", [
-                    ("Type", type(e).__name__),
-                    ("Message", str(e)[:100]),
-                ], emoji="⚠️")
+                logger.error_tree("Database Error", e)
         finally:
             if conn:
                 try:

@@ -123,8 +123,11 @@ class AFKCog(commands.Cog):
                 gif_url = await action_service.get_action_gif("yawn")
             if gif_url:
                 embed.set_image(url=gif_url)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error_tree("AFK GIF Fetch Failed", e, [
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("ID", str(interaction.user.id)),
+            ])
 
         set_footer(embed)
 

@@ -120,12 +120,11 @@ class NameModal(ui.Modal, title="Rename Channel"):
                     ("ID", str(interaction.user.id)),
                 ], emoji="🔄")
         except discord.HTTPException as e:
-            logger.tree("Channel Rename Failed", [
+            logger.error_tree("Channel Rename Failed", e, [
                 ("Channel", self.channel.name),
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
-                ("Error", str(e)),
-            ], emoji="❌")
+            ])
             embed = discord.Embed(description="❌ Failed to rename channel", color=COLOR_ERROR)
             set_footer(embed)
             await interaction.followup.send(embed=embed, ephemeral=True)
@@ -215,12 +214,11 @@ class LimitModal(ui.Modal, title="Set User Limit"):
                 ("ID", str(interaction.user.id)),
             ], emoji="👥")
         except discord.HTTPException as e:
-            logger.tree("Limit Change Failed", [
+            logger.error_tree("Limit Change Failed", e, [
                 ("Channel", self.channel.name),
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
-                ("Error", str(e)),
-            ], emoji="❌")
+            ])
             embed = discord.Embed(description="❌ Failed to set limit", color=COLOR_ERROR)
             set_footer(embed)
             await interaction.followup.send(embed=embed, ephemeral=True)

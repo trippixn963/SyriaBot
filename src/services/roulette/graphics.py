@@ -547,10 +547,10 @@ async def generate_wheel_static(
             return screenshot
 
         except Exception as e:
-            logger.tree("Roulette Wheel Failed", [
+            logger.error_tree("Roulette Wheel Failed", e, [
                 ("Players", str(len(players))),
-                ("Error", str(e)[:100]),
-            ], emoji="❌")
+                ("Type", "Static"),
+            ])
             if page:
                 try:
                     await page.close()
@@ -621,9 +621,11 @@ async def generate_wheel_result(
             return screenshot
 
         except Exception as e:
-            logger.tree("Roulette Result Failed", [
-                ("Error", str(e)[:100]),
-            ], emoji="❌")
+            logger.error_tree("Roulette Result Failed", e, [
+                ("Players", str(num_players)),
+                ("Winner Index", str(winner_index)),
+                ("Rotation", f"{spin_degrees:.0f}"),
+            ])
             if page:
                 try:
                     await page.close()

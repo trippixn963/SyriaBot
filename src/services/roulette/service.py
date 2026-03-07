@@ -155,7 +155,12 @@ class RouletteService:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error_tree("Roulette Spawn Loop Error", e)
+                logger.error_tree("Roulette Spawn Loop Error", e, [
+                    ("Active Users", str(len(self._user_activity))),
+                    ("Game Running", str(self._game_running)),
+                    ("Channel", str(config.GENERAL_CHANNEL_ID)),
+                    ("Recovery", "Retrying in 60s"),
+                ])
                 await asyncio.sleep(60)
 
     async def _try_spawn(self) -> bool:

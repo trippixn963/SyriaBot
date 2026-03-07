@@ -131,12 +131,13 @@ async def _send_backup_webhook(
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
             async with session.post(webhook_url, json=payload) as response:
                 if response.status >= 400:
-                    logger.warning("Backup Webhook Failed", [
+                    logger.tree("Backup Webhook Failed", [
                         ("Status", str(response.status)),
-                    ])
+                        ("URL", webhook_url[:50] if webhook_url else "None"),
+                    ], emoji="⚠️")
     except Exception as e:
-        logger.warning("Backup Webhook Error", [
-            ("Error", f"{type(e).__name__}: {str(e)[:50]}"),
+        logger.error_tree("Backup Webhook Error", e, [
+            ("URL", webhook_url[:50] if webhook_url else "None"),
         ])
 
 
@@ -230,18 +231,20 @@ class R2BackupScheduler:
 
         # Check database exists
         if not self._db_path.exists():
-            logger.warning("Backup Skipped - DB Not Found", [
+            logger.tree("Backup Skipped - DB Not Found", [
+                ("Bot", self._bot_display),
                 ("Path", str(self._db_path)),
-            ])
+            ], emoji="⚠️")
             return None
 
         # Check integrity
         is_healthy, integrity_msg = _check_database_integrity(self._db_path)
         if not is_healthy:
-            logger.error("Backup ABORTED - Corruption", [
+            logger.tree("Backup ABORTED - Corruption", [
                 ("Bot", self._bot_display),
                 ("Integrity", integrity_msg[:100]),
-            ])
+                ("Path", str(self._db_path)),
+            ], emoji="🚨")
             return {**base_result, "success": False, "error": "corruption", "integrity_msg": integrity_msg[:100]}
 
         # Create temp backup file with clean path structure
@@ -272,10 +275,11 @@ class R2BackupScheduler:
 
                 if result.returncode != 0:
                     error_msg = result.stderr.strip() or "Upload failed"
-                    logger.error("R2 Upload Failed", [
+                    logger.tree("R2 Upload Failed", [
                         ("Bot", self._bot_display),
+                        ("Path", r2_path),
                         ("Error", error_msg[:100]),
-                    ])
+                    ], emoji="❌")
                     return {**base_result, "success": False, "error": "upload_failed", "error_msg": error_msg}
 
                 logger.tree("R2 Backup Uploaded", [
@@ -286,13 +290,15 @@ class R2BackupScheduler:
 
                 return {**base_result, "success": True, "size": size_str, "filename": backup_filename, "r2_path": f"{r2_folder}/{backup_filename}"}
 
-            except subprocess.TimeoutExpired:
-                logger.error("R2 Upload Timeout", [("Bot", self._bot_display)])
+            except subprocess.TimeoutExpired as e:
+                logger.error_tree("R2 Upload Timeout", e, [
+                    ("Bot", self._bot_display),
+                    ("Path", r2_path),
+                ])
                 return {**base_result, "success": False, "error": "upload_failed", "error_msg": "Timeout"}
             except Exception as e:
-                logger.error("Backup Failed", [
+                logger.error_tree("Backup Failed", e, [
                     ("Bot", self._bot_display),
-                    ("Error", str(e)[:100]),
                 ])
                 return {**base_result, "success": False, "error": "upload_failed", "error_msg": str(e)}
 
@@ -314,8 +320,9 @@ class R2BackupScheduler:
                 ], emoji="\U0001f9f9")
             return 0
         except Exception as e:
-            logger.warning("R2 Cleanup Failed", [
-                ("Error", str(e)[:50]),
+            logger.error_tree("R2 Cleanup Failed", e, [
+                ("Bot", self._bot_display),
+                ("Retention", f"{self._retention_hours} hours"),
             ])
             return 0
 
@@ -337,8 +344,8 @@ class R2BackupScheduler:
             result = await asyncio.to_thread(self._create_backup_and_upload)
             await send_backup_notification(result)
         except Exception as e:
-            logger.warning("Initial Backup Failed", [
-                ("Error", str(e)),
+            logger.error_tree("Initial Backup Failed", e, [
+                ("Bot", self._bot_display),
             ])
 
         # Start scheduler loop
@@ -381,9 +388,8 @@ class R2BackupScheduler:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error("Backup Scheduler Error", [
+                logger.error_tree("Backup Scheduler Error", e, [
                     ("Bot", self._bot_display),
-                    ("Error", str(e)),
                 ])
                 await asyncio.sleep(SECONDS_PER_HOUR)
 

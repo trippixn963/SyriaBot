@@ -181,12 +181,11 @@ class SyriaBot(commands.Bot):
                 interaction.guild.id
             )
         except Exception as e:
-            logger.tree("Command Usage Track Failed", [
+            logger.error_tree("Command Usage Track Failed", e, [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Command", command.name if command else "Unknown"),
-                ("Error", str(e)[:50]),
-            ], emoji="⚠️")
+            ])
 
     async def _on_app_command_error(
         self,
@@ -498,8 +497,11 @@ class SyriaBot(commands.Bot):
         # Disconnect from Discord FIRST so no new events flow during cleanup
         try:
             await asyncio.wait_for(super().close(), timeout=5)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error_tree("Discord Disconnect Failed", e, [
+                ("Phase", "shutdown"),
+                ("Timeout", "5s"),
+            ])
 
         # Stop sync services (instant, no await)
         sync_stopped = []
@@ -564,10 +566,10 @@ class SyriaBot(commands.Bot):
                 timeout=8,
             )
             async_stopped = [r for r in results if isinstance(r, str) and r]
-        except asyncio.TimeoutError:
-            logger.tree("Service Cleanup Timeout", [
+        except asyncio.TimeoutError as e:
+            logger.error_tree("Service Cleanup Timeout", e, [
                 ("Action", "Skipping remaining services"),
-            ], emoji="⚠️")
+            ])
 
         all_stopped = sync_stopped + async_stopped
         logger.tree("Bot Shutdown Complete", [

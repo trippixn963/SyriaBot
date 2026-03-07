@@ -64,8 +64,10 @@ async def lifespan(app: FastAPI):
             loop = asyncio.get_event_loop()
             if loop.is_running():
                 asyncio.create_task(ws_manager.broadcast_discord_event(event_data))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error_tree("Event Broadcast Failed", e, [
+                ("Event Type", str(event_data.get("type", "unknown"))),
+            ])
 
     event_storage = get_event_storage()
     event_storage.set_on_event(broadcast_event)
@@ -160,9 +162,8 @@ def create_app(bot: Optional[Any] = None) -> FastAPI:
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception):
         """Handle uncaught exceptions."""
-        logger.error("Unhandled API Error", [
+        logger.error_tree("Unhandled API Error", exc, [
             ("Path", str(request.url.path)[:50]),
-            ("Error", str(exc)[:100]),
         ])
 
         return error_response(ErrorCode.SERVER_ERROR)

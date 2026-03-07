@@ -142,11 +142,10 @@ class TranslateCog(commands.Cog):
         error: app_commands.AppCommandError
     ) -> None:
         """Handle translate command errors."""
-        logger.tree("Translate Command Error", [
+        logger.error_tree("Translate Command Error", error, [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
-            ("Error", str(error)[:100]),
-        ], emoji="❌")
+        ])
 
         try:
             embed = discord.Embed(
@@ -160,10 +159,9 @@ class TranslateCog(commands.Cog):
             else:
                 await interaction.followup.send(embed=embed, ephemeral=True)
         except discord.HTTPException as e:
-            logger.tree("Translate Error Response Failed", [
+            logger.error_tree("Translate Error Response Failed", e, [
                 ("User", f"{interaction.user.name}"),
-                ("Error", str(e)[:50]),
-            ], emoji="⚠️")
+            ])
 
 
 async def setup(bot: commands.Bot) -> None:

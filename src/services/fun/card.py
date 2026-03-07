@@ -539,9 +539,10 @@ async def generate_ship_card(
             return screenshot
 
         except Exception as e:
-            logger.tree("Ship Card Failed", [
-                ("Error", str(e)[:100]),
-            ], emoji="❌")
+            logger.error_tree("Ship Card Failed", e, [
+                ("Users", f"{user1_name} + {user2_name}"),
+                ("Result", f"{percentage}%"),
+            ])
             if page:
                 try:
                     await page.close()
@@ -604,9 +605,11 @@ async def generate_meter_card(
             return screenshot
 
         except Exception as e:
-            logger.tree(f"{meter_type.title()} Card Failed", [
-                ("Error", str(e)[:100]),
-            ], emoji="❌")
+            logger.error_tree(f"{meter_type.title()} Card Failed", e, [
+                ("User", user_name),
+                ("Type", meter_type),
+                ("Result", f"{percentage}%"),
+            ])
             if page:
                 try:
                     await page.close()

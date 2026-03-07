@@ -52,10 +52,9 @@ class ConfirmView(ui.View):
                 set_footer(embed)
                 await self.message.edit(embed=embed, view=None)
             except discord.HTTPException as e:
-                logger.tree("Confirm View Timeout Edit Failed", [
+                logger.error_tree("Confirm View Timeout Edit Failed", e, [
                     ("Action", self.action),
-                    ("Error", str(e)[:50]),
-                ], emoji="⚠️")
+                ])
         logger.tree("Confirm View Expired", [
             ("Action", self.action),
             ("Channel", self.channel.name if self.channel else "Unknown"),
@@ -134,23 +133,21 @@ class ConfirmView(ui.View):
                 ], emoji="🔄")
 
         except discord.HTTPException as e:
-            logger.tree("Confirm Action Failed", [
+            logger.error_tree("Confirm Action Failed", e, [
                 ("Action", self.action),
                 ("Channel", self.channel.name if self.channel else "Unknown"),
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
-                ("Error", str(e)),
-            ], emoji="❌")
+            ])
             if not interaction.response.is_done():
                 embed = discord.Embed(description=f"❌ Failed: {e}", color=COLOR_ERROR)
                 set_footer(embed)
                 await interaction.response.edit_message(embed=embed, view=None)
         except Exception as e:
-            logger.tree("Confirm Action Error", [
+            logger.error_tree("Confirm Action Error", e, [
                 ("Action", self.action),
                 ("Channel", self.channel.name if self.channel else "Unknown"),
-                ("Error", str(e)),
-            ], emoji="❌")
+            ])
             if not interaction.response.is_done():
                 embed = discord.Embed(description="❌ An error occurred", color=COLOR_ERROR)
                 set_footer(embed)
@@ -191,10 +188,9 @@ class UserSelectView(ui.View):
                 set_footer(embed)
                 await self.message.edit(embed=embed, view=None)
             except discord.HTTPException as e:
-                logger.tree("User Select Timeout Edit Failed", [
+                logger.error_tree("User Select Timeout Edit Failed", e, [
                     ("Action", self.action),
-                    ("Error", str(e)[:50]),
-                ], emoji="⚠️")
+                ])
         logger.tree("User Select Expired", [
             ("Action", self.action),
             ("Channel", self.channel.name if self.channel else "Unknown"),
@@ -257,23 +253,21 @@ class UserSelect(ui.UserSelect):
                 await self._handle_transfer(interaction, channel, user, owner_id)
 
         except discord.HTTPException as e:
-            logger.tree("User Select Failed", [
+            logger.error_tree("User Select Failed", e, [
                 ("Action", self.action),
                 ("User", f"{user.name} ({user.display_name})"),
                 ("ID", str(user.id)),
-                ("Error", str(e)),
-            ], emoji="❌")
+            ])
             if not interaction.response.is_done():
                 embed = discord.Embed(description="❌ Failed to complete action", color=COLOR_ERROR)
                 set_footer(embed)
                 await interaction.response.send_message(embed=embed, ephemeral=True)
         except Exception as e:
-            logger.tree("User Select Error", [
+            logger.error_tree("User Select Error", e, [
                 ("Action", self.action),
                 ("User", f"{user.name} ({user.display_name})"),
                 ("ID", str(user.id)),
-                ("Error", str(e)),
-            ], emoji="❌")
+            ])
             if not interaction.response.is_done():
                 embed = discord.Embed(description="❌ An error occurred", color=COLOR_ERROR)
                 set_footer(embed)
@@ -419,11 +413,10 @@ class UserSelect(ui.UserSelect):
             try:
                 await self.service._update_panel(channel)
             except Exception as e:
-                logger.tree("Panel Update Failed", [
+                logger.error_tree("Panel Update Failed", e, [
                     ("Channel", channel.name),
                     ("Context", "After permit"),
-                    ("Error", str(e)),
-                ], emoji="⚠️")
+                ])
 
     async def _handle_block(self, interaction: discord.Interaction, channel: discord.VoiceChannel, user: discord.Member, owner_id: int) -> None:
         """Handle block/unblock action."""
@@ -478,12 +471,11 @@ class UserSelect(ui.UserSelect):
                     await user.move_to(None)
                     was_kicked = True
                 except discord.HTTPException as e:
-                    logger.tree("Blocked User Kick Failed", [
+                    logger.error_tree("Blocked User Kick Failed", e, [
                         ("Channel", channel.name),
                         ("User", f"{user.name} ({user.display_name})"),
                         ("ID", str(user.id)),
-                        ("Error", str(e)[:50]),
-                    ], emoji="❌")
+                    ])
 
             total_blocked = len(db.get_blocked_list(owner_id))
             if was_kicked:
@@ -532,11 +524,10 @@ class UserSelect(ui.UserSelect):
             try:
                 await self.service._update_panel(channel)
             except Exception as e:
-                logger.tree("Panel Update Failed", [
+                logger.error_tree("Panel Update Failed", e, [
                     ("Channel", channel.name),
                     ("Context", "After block"),
-                    ("Error", str(e)),
-                ], emoji="⚠️")
+                ])
 
     async def _handle_kick(self, interaction: discord.Interaction, channel: discord.VoiceChannel, user: discord.Member, owner_id: int) -> None:
         """Handle kick action."""

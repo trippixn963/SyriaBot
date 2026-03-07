@@ -62,10 +62,10 @@ class TempVoiceMixin:
                 ("Name", name),
             ], emoji="💾")
         except Exception as e:
-            logger.tree("DB: Create Channel Error", [
+            logger.error_tree("DB: Create Channel Error", e, [
                 ("Channel ID", str(channel_id)),
-                ("Error", str(e)),
-            ], emoji="❌")
+                ("Owner ID", str(owner_id)),
+            ])
 
     def delete_temp_channel(self, channel_id: int) -> None:
         """Delete a temp channel record."""
@@ -79,10 +79,9 @@ class TempVoiceMixin:
                 ("Channel ID", str(channel_id)),
             ], emoji="🗑️")
         except Exception as e:
-            logger.tree("DB: Delete Channel Error", [
+            logger.error_tree("DB: Delete Channel Error", e, [
                 ("Channel ID", str(channel_id)),
-                ("Error", str(e)),
-            ], emoji="❌")
+            ])
 
     def get_temp_channel(self, channel_id: int) -> Optional[Dict[str, Any]]:
         """Get temp channel info."""
@@ -118,11 +117,10 @@ class TempVoiceMixin:
                 values = list(kwargs.values()) + [channel_id]
                 cur.execute(f"UPDATE temp_channels SET {sets} WHERE channel_id = ?", values)
         except Exception as e:
-            logger.tree("DB: Update Channel Error", [
+            logger.error_tree("DB: Update Channel Error", e, [
                 ("Channel ID", str(channel_id)),
                 ("Fields", ", ".join(kwargs.keys())),
-                ("Error", str(e)[:50]),
-            ], emoji="❌")
+            ])
 
     def transfer_ownership(self, channel_id: int, new_owner_id: int) -> None:
         """Transfer channel ownership."""
@@ -137,10 +135,10 @@ class TempVoiceMixin:
                 ("New Owner", str(new_owner_id)),
             ], emoji="👑")
         except Exception as e:
-            logger.tree("DB: Transfer Error", [
+            logger.error_tree("DB: Transfer Error", e, [
                 ("Channel ID", str(channel_id)),
-                ("Error", str(e)),
-            ], emoji="❌")
+                ("New Owner", str(new_owner_id)),
+            ])
 
     def get_all_temp_channels(self, guild_id: int = None) -> List[Dict[str, Any]]:
         """Get all temp channels, optionally filtered by guild."""
@@ -178,10 +176,9 @@ class TempVoiceMixin:
                     values = list(kwargs.values()) + [user_id]
                     cur.execute(f"UPDATE user_settings SET {sets} WHERE user_id = ?", values)
         except Exception as e:
-            logger.tree("DB: Save User Settings Error", [
+            logger.error_tree("DB: Save User Settings Error", e, [
                 ("ID", str(user_id)),
-                ("Error", str(e)[:50]),
-            ], emoji="❌")
+            ])
 
     # =========================================================================
     # Trusted Users
@@ -203,11 +200,10 @@ class TempVoiceMixin:
         except sqlite3.IntegrityError:
             return False
         except Exception as e:
-            logger.tree("DB: Add Trusted Error", [
+            logger.error_tree("DB: Add Trusted Error", e, [
                 ("Owner ID", str(owner_id)),
                 ("Trusted ID", str(trusted_id)),
-                ("Error", str(e)[:50]),
-            ], emoji="❌")
+            ])
             return False
 
     def remove_trusted(self, owner_id: int, trusted_id: int) -> bool:
@@ -226,11 +222,10 @@ class TempVoiceMixin:
                     ], emoji="🗑️")
                 return removed
         except Exception as e:
-            logger.tree("DB: Remove Trusted Error", [
+            logger.error_tree("DB: Remove Trusted Error", e, [
                 ("Owner ID", str(owner_id)),
                 ("Trusted ID", str(trusted_id)),
-                ("Error", str(e)[:50]),
-            ], emoji="❌")
+            ])
             return False
 
     def is_trusted(self, owner_id: int, user_id: int) -> bool:
@@ -269,11 +264,10 @@ class TempVoiceMixin:
         except sqlite3.IntegrityError:
             return False
         except Exception as e:
-            logger.tree("DB: Add Blocked Error", [
+            logger.error_tree("DB: Add Blocked Error", e, [
                 ("Owner ID", str(owner_id)),
                 ("Blocked ID", str(blocked_id)),
-                ("Error", str(e)[:50]),
-            ], emoji="❌")
+            ])
             return False
 
     def remove_blocked(self, owner_id: int, blocked_id: int) -> bool:
@@ -292,11 +286,10 @@ class TempVoiceMixin:
                     ], emoji="✅")
                 return removed
         except Exception as e:
-            logger.tree("DB: Remove Blocked Error", [
+            logger.error_tree("DB: Remove Blocked Error", e, [
                 ("Owner ID", str(owner_id)),
                 ("Blocked ID", str(blocked_id)),
-                ("Error", str(e)[:50]),
-            ], emoji="❌")
+            ])
             return False
 
     def is_blocked(self, owner_id: int, user_id: int) -> bool:
@@ -362,10 +355,9 @@ class TempVoiceMixin:
                     ("Removed", str(removed)),
                 ], emoji="🧹")
         except Exception as e:
-            logger.tree("DB: Cleanup Stale Error", [
+            logger.error_tree("DB: Cleanup Stale Error", e, [
                 ("Owner ID", str(owner_id)),
-                ("Error", str(e)[:50]),
-            ], emoji="❌")
+            ])
 
         return removed
 
@@ -387,10 +379,9 @@ class TempVoiceMixin:
                 ("Waiting ID", str(waiting_channel_id)),
             ], emoji="⏳")
         except Exception as e:
-            logger.tree("DB: Set Waiting Room Error", [
+            logger.error_tree("DB: Set Waiting Room Error", e, [
                 ("Channel ID", str(channel_id)),
-                ("Error", str(e)[:50]),
-            ], emoji="❌")
+            ])
 
     def get_waiting_room(self, channel_id: int) -> Optional[int]:
         """Get waiting room channel ID."""
@@ -410,10 +401,9 @@ class TempVoiceMixin:
                 ("Channel ID", str(channel_id)),
             ], emoji="🗑️")
         except Exception as e:
-            logger.tree("DB: Remove Waiting Room Error", [
+            logger.error_tree("DB: Remove Waiting Room Error", e, [
                 ("Channel ID", str(channel_id)),
-                ("Error", str(e)[:50]),
-            ], emoji="❌")
+            ])
 
     # =========================================================================
     # Text Channels
@@ -433,10 +423,9 @@ class TempVoiceMixin:
                 ("Text ID", str(text_channel_id)),
             ], emoji="💬")
         except Exception as e:
-            logger.tree("DB: Set Text Channel Error", [
+            logger.error_tree("DB: Set Text Channel Error", e, [
                 ("Channel ID", str(channel_id)),
-                ("Error", str(e)[:50]),
-            ], emoji="❌")
+            ])
 
     def get_text_channel(self, channel_id: int) -> Optional[int]:
         """Get text channel ID."""
@@ -456,7 +445,6 @@ class TempVoiceMixin:
                 ("Channel ID", str(channel_id)),
             ], emoji="🗑️")
         except Exception as e:
-            logger.tree("DB: Remove Text Channel Error", [
+            logger.error_tree("DB: Remove Text Channel Error", e, [
                 ("Channel ID", str(channel_id)),
-                ("Error", str(e)[:50]),
-            ], emoji="❌")
+            ])

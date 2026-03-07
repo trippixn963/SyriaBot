@@ -122,10 +122,10 @@ class RateLimiter:
             del self._buckets[key]
 
         if stale_keys:
-            logger.debug("Rate Limit Cleanup", [
+            logger.tree("Rate Limit Cleanup", [
                 ("Removed", str(len(stale_keys))),
                 ("Remaining", str(len(self._buckets))),
-            ])
+            ], emoji="🧹")
 
     def _evict_if_needed(self) -> None:
         """Evict oldest entries if we exceed max tracked IPs."""

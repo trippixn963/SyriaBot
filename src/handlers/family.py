@@ -29,7 +29,8 @@ from src.services.database import db
 from src.utils.footer import set_footer
 from src.utils.permissions import is_cooldown_exempt
 from src.handlers.family_views import (
-    ProposalView, AdoptView, DivorceView, DisownView, RunawayView, fetch_family_gif,
+    ProposalView, AdoptApprovalView, DivorceView, DisownView, RunawayView,
+    SpouseApprovalView, fetch_family_gif,
 )
 from src.services.family_card import (
     generate_family_card, resolve_family_member, FamilyData,
@@ -352,7 +353,7 @@ class FamilyHandler:
         self._active_proposals[user.id] = time.time()
 
         view = ProposalView(user, target)
-        msg = await message.channel.send(embed=embed, view=view)
+        msg = await message.channel.send(content=target.mention, embed=embed, view=view)
         view.message = msg
 
         logger.tree("Marriage Proposal Sent", [
@@ -527,11 +528,12 @@ class FamilyHandler:
             return
 
         # Send adoption request with GIF
+        gif_url = await self._fetch_gif("adopt_request")
+
         embed = discord.Embed(
-            description=f"👨‍👧 {user.mention} wants to adopt {target.mention}!",
+            description=f"👨‍👧 {user.mention} wants to adopt {target.mention}!\n\n⏳ {target.mention}  ·  ⏳ <@{spouse_id}>",
             color=COLOR_GOLD,
         )
-        gif_url = await self._fetch_gif("adopt_request")
         if gif_url:
             embed.set_image(url=gif_url)
         set_footer(embed)
@@ -545,13 +547,17 @@ class FamilyHandler:
 
         self._active_proposals[user.id] = time.time()
 
-        view = AdoptView(user, target)
-        msg = await message.channel.send(embed=embed, view=view)
+        view = AdoptApprovalView(user, target, spouse_id, gif_url)
+        msg = await message.channel.send(
+            content=f"{target.mention} <@{spouse_id}>",
+            embed=embed, view=view,
+        )
         view.message = msg
 
         logger.tree("Adoption Request Sent", [
             ("Requester", f"{user.name} ({user.display_name})"),
             ("Target", f"{target.name} ({target.display_name})"),
+            ("Spouse", str(spouse_id)),
             ("Guild", str(guild_id)),
         ], emoji="👨‍👧")
 
@@ -604,21 +610,47 @@ class FamilyHandler:
                 ], emoji="⚠️")
                 return
 
-        embed = discord.Embed(
-            description=f"⚠️ {user.mention}, are you sure you want to disown {target.mention}?",
-            color=COLOR_WARNING,
-        )
-        set_footer(embed)
+        # Check if married — skip user confirm, go straight to spouse approval
+        spouse_id = db.get_spouse(user.id, guild_id)
+        if spouse_id:
+            embed = discord.Embed(
+                description=f"⚠️ {user.mention} wants to disown {target.mention}. Waiting for <@{spouse_id}> to approve.",
+                color=COLOR_WARNING,
+            )
+            set_footer(embed)
+            view = SpouseApprovalView(
+                action="disown",
+                initiator=user,
+                spouse_id=spouse_id,
+                target=target,
+                guild_id=guild_id,
+                actual_parent_id=actual_parent_id,
+            )
+            msg = await message.channel.send(content=f"<@{spouse_id}>", embed=embed, view=view)
+            view.message = msg
 
-        view = DisownView(user, target, actual_parent_id)
-        msg = await message.channel.send(embed=embed, view=view)
-        view.message = msg
+            logger.tree("Disown Awaiting Spouse", [
+                ("Parent", f"{user.name} ({user.display_name})"),
+                ("Spouse", str(spouse_id)),
+                ("Child", f"{target.name} ({target.display_name})"),
+                ("Guild", str(guild_id)),
+            ], emoji="⚠️")
+        else:
+            # No spouse — use DisownView for user confirmation
+            embed = discord.Embed(
+                description=f"⚠️ {user.mention}, are you sure you want to disown {target.mention}?",
+                color=COLOR_WARNING,
+            )
+            set_footer(embed)
+            view = DisownView(user, target, actual_parent_id)
+            msg = await message.channel.send(embed=embed, view=view)
+            view.message = msg
 
-        logger.tree("Disown Initiated", [
-            ("Parent", f"{user.name} ({user.display_name})"),
-            ("Child", f"{target.name} ({target.display_name})"),
-            ("Guild", str(guild_id)),
-        ], emoji="⚠️")
+            logger.tree("Disown Initiated", [
+                ("Parent", f"{user.name} ({user.display_name})"),
+                ("Child", f"{target.name} ({target.display_name})"),
+                ("Guild", str(guild_id)),
+            ], emoji="⚠️")
 
     # =========================================================================
     # runaway
@@ -751,8 +783,12 @@ class FamilyHandler:
                     reply_author = replied_msg.author
                     if not reply_author.bot and reply_author.id != message.author.id:
                         return reply_author
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error_tree("Family Reply Target Fetch Failed", e, [
+                    ("User", f"{message.author.name} ({message.author.display_name})"),
+                    ("ID", str(message.author.id)),
+                    ("Reference", str(message.reference.message_id)),
+                ])
 
         # Check explicit mentions
         for mention in message.mentions:
@@ -774,8 +810,12 @@ class FamilyHandler:
                     reply_author = replied_msg.author
                     if not reply_author.bot:
                         return reply_author
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error_tree("Family Reply Lookup Failed", e, [
+                    ("User", f"{message.author.name} ({message.author.display_name})"),
+                    ("ID", str(message.author.id)),
+                    ("Reference", str(message.reference.message_id)),
+                ])
 
         # Check mentions (allow self-mention for family lookup)
         for mention in message.mentions:

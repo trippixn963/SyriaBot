@@ -151,7 +151,12 @@ class RulesCog(commands.Cog):
                 content="❌ I don't have permission to manage messages in the rules channel.",
             )
         except Exception as e:
-            logger.error_tree("Rules Post Failed", e)
+            logger.error_tree("Rules Post Failed", e, [
+                ("Channel", channel.name),
+                ("Channel ID", str(channel.id)),
+                ("By", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("User ID", str(interaction.user.id)),
+            ])
             await interaction.edit_original_response(
                 content=f"❌ An error occurred: {str(e)[:100]}",
             )

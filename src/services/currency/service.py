@@ -139,16 +139,14 @@ class CurrencyService:
                     return False, "Failed to grant currency"
 
         except aiohttp.ClientError as e:
-            logger.tree("Currency Grant Error", [
+            logger.error_tree("Currency Grant Error", e, [
                 ("ID", str(user_id)),
-                ("Error", str(e)[:50]),
-            ], emoji="❌")
+            ])
             return False, "Connection error"
         except Exception as e:
-            logger.tree("Currency Grant Error", [
+            logger.error_tree("Currency Grant Error", e, [
                 ("ID", str(user_id)),
-                ("Error", str(e)[:50]),
-            ], emoji="❌")
+            ])
             return False, "Unexpected error"
 
     async def stop(self) -> None:

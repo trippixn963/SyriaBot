@@ -236,16 +236,14 @@ class BirthdayService:
                 # DM user with rewards and grant coins
                 await self._send_birthday_rewards(member, age)
 
-            except discord.Forbidden:
-                logger.tree("Birthday Role Grant Failed", [
+            except discord.Forbidden as e:
+                logger.error_tree("Birthday Role Grant Failed", e, [
                     ("User", f"{member.name} ({member.display_name})"),
-                    ("Reason", "Missing permissions"),
-                ], emoji="⚠️")
+                ])
             except discord.HTTPException as e:
-                logger.tree("Birthday Role Grant Failed", [
+                logger.error_tree("Birthday Role Grant Failed", e, [
                     ("User", f"{member.name} ({member.display_name})"),
-                    ("Error", str(e)[:50]),
-                ], emoji="❌")
+                ])
 
         logger.tree("Birthday Check Complete", [
             ("Birthdays Today", str(len(birthday_user_ids))),
@@ -311,16 +309,14 @@ class BirthdayService:
                     ("Duration", "24 hours"),
                 ], emoji="🎂")
 
-            except discord.Forbidden:
-                logger.tree("Birthday Role Remove Failed", [
+            except discord.Forbidden as e:
+                logger.error_tree("Birthday Role Remove Failed", e, [
                     ("User", f"{member.name} ({member.display_name})"),
-                    ("Reason", "Missing permissions"),
-                ], emoji="⚠️")
+                ])
             except discord.HTTPException as e:
-                logger.tree("Birthday Role Remove Failed", [
+                logger.error_tree("Birthday Role Remove Failed", e, [
                     ("User", f"{member.name} ({member.display_name})"),
-                    ("Error", str(e)[:50]),
-                ], emoji="❌")
+                ])
 
         if removed_count > 0:
             logger.tree("Birthday Role Expiry Check", [
@@ -496,16 +492,14 @@ class BirthdayService:
                 ("Channel", channel.name),
             ], emoji="📢")
 
-        except discord.Forbidden:
-            logger.tree("Birthday Announce Failed", [
+        except discord.Forbidden as e:
+            logger.error_tree("Birthday Announce Failed", e, [
                 ("User", f"{member.name} ({member.display_name})"),
-                ("Reason", "Missing permissions"),
-            ], emoji="⚠️")
+            ])
         except discord.HTTPException as e:
-            logger.tree("Birthday Announce Failed", [
+            logger.error_tree("Birthday Announce Failed", e, [
                 ("User", f"{member.name} ({member.display_name})"),
-                ("Error", str(e)[:50]),
-            ], emoji="❌")
+            ])
 
     async def _send_birthday_rewards(self, member: discord.Member, age: int = None) -> None:
         """DM user with birthday rewards and grant coins to bank."""
@@ -548,17 +542,15 @@ class BirthdayService:
                 ("Coins Granted", f"{BIRTHDAY_COINS:,}" if coins_granted else "Failed"),
                 ("XP Boost", "3x for 24h"),
             ], emoji="🎁")
-        except discord.Forbidden:
-            logger.tree("Birthday DM Failed", [
+        except discord.Forbidden as e:
+            logger.error_tree("Birthday DM Failed", e, [
                 ("User", f"{member.name} ({member.display_name})"),
-                ("Reason", "DMs disabled"),
                 ("Coins Granted", f"{BIRTHDAY_COINS:,}" if coins_granted else "Failed"),
-            ], emoji="⚠️")
+            ])
         except discord.HTTPException as e:
-            logger.tree("Birthday DM Failed", [
+            logger.error_tree("Birthday DM Failed", e, [
                 ("User", f"{member.name} ({member.display_name})"),
-                ("Error", str(e)[:50]),
-            ], emoji="❌")
+            ])
 
 
 def has_birthday_bonus(user_id: int) -> bool:

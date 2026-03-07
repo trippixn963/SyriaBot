@@ -567,8 +567,11 @@ async def resolve_family_member(guild: discord.Guild, user_id: int) -> FamilyMem
             display_name=user.display_name,
             avatar_url=str(user.display_avatar.replace(size=128, format="png")),
         )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error_tree("Family Member Fetch Failed", e, [
+            ("User ID", str(user_id)),
+            ("Guild", guild.name),
+        ])
 
     # Last resort: default avatar
     return FamilyMember(

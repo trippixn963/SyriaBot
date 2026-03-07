@@ -94,7 +94,9 @@ class ConfessionsMixin:
                 """)
                 return [dict(row) for row in cur.fetchall()]
         except Exception as e:
-            logger.error_tree("Pending Confessions Get Failed", e)
+            logger.error_tree("Pending Confessions Get Failed", e, [
+                ("Query", "status = pending, ORDER BY submitted_at ASC"),
+            ])
             return []
 
     def get_next_confession_number(self) -> int:
@@ -112,7 +114,10 @@ class ConfessionsMixin:
                 row = cur.fetchone()
                 return row["next_num"] if row else 1
         except Exception as e:
-            logger.error_tree("Next Confession Number Failed", e)
+            logger.error_tree("Next Confession Number Failed", e, [
+                ("Query", "MAX(confession_number) WHERE status = approved"),
+                ("Fallback", "Returning 1"),
+            ])
             return 1
 
     def approve_confession(self, confession_id: int, mod_id: int) -> Optional[int]:
@@ -284,5 +289,8 @@ class ConfessionsMixin:
                     "rejected": row["rejected"] or 0,
                 }
         except Exception as e:
-            logger.error_tree("Confession Stats Failed", e)
+            logger.error_tree("Confession Stats Failed", e, [
+                ("Query", "COUNT/SUM aggregation on confessions"),
+                ("Fallback", "Returning zeroes"),
+            ])
             return {"total": 0, "pending": 0, "approved": 0, "rejected": 0}

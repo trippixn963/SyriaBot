@@ -37,28 +37,34 @@ class ActionsMixin:
         # Use 0 for self-actions to have a consistent key
         target_key = target_id if target_id is not None else 0
 
-        with self._get_conn() as conn:
-            if conn is None:
-                logger.tree("Action Record Skipped", [
-                    ("Reason", "Database unavailable"),
-                ], emoji="⚠️")
-                return
+        try:
+            with self._get_conn() as conn:
+                if conn is None:
+                    logger.tree("Action Record Skipped", [
+                        ("Reason", "Database unavailable"),
+                    ], emoji="⚠️")
+                    return
 
-            cur = conn.cursor()
-            cur.execute("""
-                INSERT INTO action_stats (user_id, target_id, guild_id, action, count, last_used_at)
-                VALUES (?, ?, ?, ?, 1, ?)
-                ON CONFLICT(user_id, target_id, guild_id, action) DO UPDATE SET
-                    count = count + 1,
-                    last_used_at = ?
-            """, (user_id, target_key, guild_id, action.lower(), now, now))
+                cur = conn.cursor()
+                cur.execute("""
+                    INSERT INTO action_stats (user_id, target_id, guild_id, action, count, last_used_at)
+                    VALUES (?, ?, ?, ?, 1, ?)
+                    ON CONFLICT(user_id, target_id, guild_id, action) DO UPDATE SET
+                        count = count + 1,
+                        last_used_at = ?
+                """, (user_id, target_key, guild_id, action.lower(), now, now))
 
-        logger.tree("Action Recorded", [
-            ("ID", str(user_id)),
-            ("Target ID", str(target_id) if target_id else "Self"),
-            ("Action", action),
-            ("Guild ID", str(guild_id)),
-        ], emoji="📊")
+            logger.tree("Action Recorded", [
+                ("ID", str(user_id)),
+                ("Target ID", str(target_id) if target_id else "Self"),
+                ("Action", action),
+                ("Guild ID", str(guild_id)),
+            ], emoji="📊")
+        except Exception as e:
+            logger.error_tree("DB: Record Action Error", e, [
+                ("ID", str(user_id)),
+                ("Action", action),
+            ])
 
     def get_user_action_stats(self, user_id: int, guild_id: int) -> Dict[str, Any]:
         """
@@ -67,41 +73,48 @@ class ActionsMixin:
         Returns:
             Dict with total_actions, actions_given, actions_received
         """
-        with self._get_conn() as conn:
-            if conn is None:
-                return {"total_given": 0, "total_received": 0, "given": {}, "received": {}}
+        try:
+            with self._get_conn() as conn:
+                if conn is None:
+                    return {"total_given": 0, "total_received": 0, "given": {}, "received": {}}
 
-            cur = conn.cursor()
+                cur = conn.cursor()
 
-            # Actions given by this user
-            cur.execute("""
-                SELECT action, SUM(count) as total
-                FROM action_stats
-                WHERE user_id = ? AND guild_id = ?
-                GROUP BY action
-                ORDER BY total DESC
-            """, (user_id, guild_id))
-            given_rows = cur.fetchall()
+                # Actions given by this user
+                cur.execute("""
+                    SELECT action, SUM(count) as total
+                    FROM action_stats
+                    WHERE user_id = ? AND guild_id = ?
+                    GROUP BY action
+                    ORDER BY total DESC
+                """, (user_id, guild_id))
+                given_rows = cur.fetchall()
 
-            # Actions received by this user
-            cur.execute("""
-                SELECT action, SUM(count) as total
-                FROM action_stats
-                WHERE target_id = ? AND guild_id = ? AND target_id != 0
-                GROUP BY action
-                ORDER BY total DESC
-            """, (user_id, guild_id))
-            received_rows = cur.fetchall()
+                # Actions received by this user
+                cur.execute("""
+                    SELECT action, SUM(count) as total
+                    FROM action_stats
+                    WHERE target_id = ? AND guild_id = ? AND target_id != 0
+                    GROUP BY action
+                    ORDER BY total DESC
+                """, (user_id, guild_id))
+                received_rows = cur.fetchall()
 
-            given = {row["action"]: row["total"] for row in given_rows}
-            received = {row["action"]: row["total"] for row in received_rows}
+                given = {row["action"]: row["total"] for row in given_rows}
+                received = {row["action"]: row["total"] for row in received_rows}
 
-            return {
-                "total_given": sum(given.values()),
-                "total_received": sum(received.values()),
-                "given": given,
-                "received": received,
-            }
+                return {
+                    "total_given": sum(given.values()),
+                    "total_received": sum(received.values()),
+                    "given": given,
+                    "received": received,
+                }
+        except Exception as e:
+            logger.error_tree("DB: Get Action Stats Error", e, [
+                ("ID", str(user_id)),
+                ("Guild ID", str(guild_id)),
+            ])
+            return {"total_given": 0, "total_received": 0, "given": {}, "received": {}}
 
     def get_action_pair_count(
         self,
@@ -116,17 +129,25 @@ class ActionsMixin:
         Returns:
             Count of times user did action to target
         """
-        with self._get_conn() as conn:
-            if conn is None:
-                return 0
+        try:
+            with self._get_conn() as conn:
+                if conn is None:
+                    return 0
 
-            cur = conn.cursor()
-            cur.execute("""
-                SELECT count FROM action_stats
-                WHERE user_id = ? AND target_id = ? AND guild_id = ? AND action = ?
-            """, (user_id, target_id, guild_id, action.lower()))
-            row = cur.fetchone()
-            return row["count"] if row else 0
+                cur = conn.cursor()
+                cur.execute("""
+                    SELECT count FROM action_stats
+                    WHERE user_id = ? AND target_id = ? AND guild_id = ? AND action = ?
+                """, (user_id, target_id, guild_id, action.lower()))
+                row = cur.fetchone()
+                return row["count"] if row else 0
+        except Exception as e:
+            logger.error_tree("DB: Get Action Pair Error", e, [
+                ("ID", str(user_id)),
+                ("Target ID", str(target_id)),
+                ("Action", action),
+            ])
+            return 0
 
     def get_action_leaderboard(
         self,
@@ -140,20 +161,27 @@ class ActionsMixin:
         Returns:
             List of dicts with user_id and total count
         """
-        with self._get_conn() as conn:
-            if conn is None:
-                return []
+        try:
+            with self._get_conn() as conn:
+                if conn is None:
+                    return []
 
-            cur = conn.cursor()
-            cur.execute("""
-                SELECT user_id, SUM(count) as total
-                FROM action_stats
-                WHERE guild_id = ? AND action = ?
-                GROUP BY user_id
-                ORDER BY total DESC
-                LIMIT ?
-            """, (guild_id, action.lower(), limit))
-            return [dict(row) for row in cur.fetchall()]
+                cur = conn.cursor()
+                cur.execute("""
+                    SELECT user_id, SUM(count) as total
+                    FROM action_stats
+                    WHERE guild_id = ? AND action = ?
+                    GROUP BY user_id
+                    ORDER BY total DESC
+                    LIMIT ?
+                """, (guild_id, action.lower(), limit))
+                return [dict(row) for row in cur.fetchall()]
+        except Exception as e:
+            logger.error_tree("DB: Get Action Leaderboard Error", e, [
+                ("Guild ID", str(guild_id)),
+                ("Action", action),
+            ])
+            return []
 
     def get_most_targeted_user(
         self,
@@ -167,20 +195,27 @@ class ActionsMixin:
         Returns:
             List of dicts with target_id and total count
         """
-        with self._get_conn() as conn:
-            if conn is None:
-                return []
+        try:
+            with self._get_conn() as conn:
+                if conn is None:
+                    return []
 
-            cur = conn.cursor()
-            cur.execute("""
-                SELECT target_id, SUM(count) as total
-                FROM action_stats
-                WHERE guild_id = ? AND action = ? AND target_id != 0
-                GROUP BY target_id
-                ORDER BY total DESC
-                LIMIT ?
-            """, (guild_id, action.lower(), limit))
-            return [dict(row) for row in cur.fetchall()]
+                cur = conn.cursor()
+                cur.execute("""
+                    SELECT target_id, SUM(count) as total
+                    FROM action_stats
+                    WHERE guild_id = ? AND action = ? AND target_id != 0
+                    GROUP BY target_id
+                    ORDER BY total DESC
+                    LIMIT ?
+                """, (guild_id, action.lower(), limit))
+                return [dict(row) for row in cur.fetchall()]
+        except Exception as e:
+            logger.error_tree("DB: Get Most Targeted Error", e, [
+                ("Guild ID", str(guild_id)),
+                ("Action", action),
+            ])
+            return []
 
     def get_top_action_pairs(
         self,
@@ -194,19 +229,26 @@ class ActionsMixin:
         Returns:
             List of dicts with user_id, target_id, count
         """
-        with self._get_conn() as conn:
-            if conn is None:
-                return []
+        try:
+            with self._get_conn() as conn:
+                if conn is None:
+                    return []
 
-            cur = conn.cursor()
-            cur.execute("""
-                SELECT user_id, target_id, count
-                FROM action_stats
-                WHERE guild_id = ? AND action = ? AND target_id != 0
-                ORDER BY count DESC
-                LIMIT ?
-            """, (guild_id, action.lower(), limit))
-            return [dict(row) for row in cur.fetchall()]
+                cur = conn.cursor()
+                cur.execute("""
+                    SELECT user_id, target_id, count
+                    FROM action_stats
+                    WHERE guild_id = ? AND action = ? AND target_id != 0
+                    ORDER BY count DESC
+                    LIMIT ?
+                """, (guild_id, action.lower(), limit))
+                return [dict(row) for row in cur.fetchall()]
+        except Exception as e:
+            logger.error_tree("DB: Get Top Pairs Error", e, [
+                ("Guild ID", str(guild_id)),
+                ("Action", action),
+            ])
+            return []
 
     def get_global_action_stats(self, guild_id: int) -> Dict[str, int]:
         """
@@ -215,16 +257,22 @@ class ActionsMixin:
         Returns:
             Dict mapping action name to total count
         """
-        with self._get_conn() as conn:
-            if conn is None:
-                return {}
+        try:
+            with self._get_conn() as conn:
+                if conn is None:
+                    return {}
 
-            cur = conn.cursor()
-            cur.execute("""
-                SELECT action, SUM(count) as total
-                FROM action_stats
-                WHERE guild_id = ?
-                GROUP BY action
-                ORDER BY total DESC
-            """, (guild_id,))
-            return {row["action"]: row["total"] for row in cur.fetchall()}
+                cur = conn.cursor()
+                cur.execute("""
+                    SELECT action, SUM(count) as total
+                    FROM action_stats
+                    WHERE guild_id = ?
+                    GROUP BY action
+                    ORDER BY total DESC
+                """, (guild_id,))
+                return {row["action"]: row["total"] for row in cur.fetchall()}
+        except Exception as e:
+            logger.error_tree("DB: Get Global Action Stats Error", e, [
+                ("Guild ID", str(guild_id)),
+            ])
+            return {}

@@ -28,22 +28,28 @@ class DownloadsMixin:
         """
         now = int(time.time())
 
-        with self._get_conn() as conn:
-            cur = conn.cursor()
-            cur.execute("""
-                INSERT INTO download_stats (user_id, platform, total_downloads, total_files, last_download_at)
-                VALUES (?, ?, 1, ?, ?)
-                ON CONFLICT(user_id, platform) DO UPDATE SET
-                    total_downloads = total_downloads + 1,
-                    total_files = total_files + ?,
-                    last_download_at = ?
-            """, (user_id, platform.lower(), file_count, now, file_count, now))
+        try:
+            with self._get_conn() as conn:
+                cur = conn.cursor()
+                cur.execute("""
+                    INSERT INTO download_stats (user_id, platform, total_downloads, total_files, last_download_at)
+                    VALUES (?, ?, 1, ?, ?)
+                    ON CONFLICT(user_id, platform) DO UPDATE SET
+                        total_downloads = total_downloads + 1,
+                        total_files = total_files + ?,
+                        last_download_at = ?
+                """, (user_id, platform.lower(), file_count, now, file_count, now))
 
-        logger.tree("Download Stats Recorded", [
-            ("ID", str(user_id)),
-            ("Platform", platform.title()),
-            ("Files", str(file_count)),
-        ], emoji="📊")
+            logger.tree("Download Stats Recorded", [
+                ("ID", str(user_id)),
+                ("Platform", platform.title()),
+                ("Files", str(file_count)),
+            ], emoji="📊")
+        except Exception as e:
+            logger.error_tree("DB: Record Download Stats Error", e, [
+                ("ID", str(user_id)),
+                ("Platform", platform),
+            ])
 
     def get_user_download_stats(self, user_id: int) -> Dict[str, Any]:
         """
@@ -52,42 +58,48 @@ class DownloadsMixin:
         Returns:
             Dict with total_downloads, total_files, and per-platform breakdown
         """
-        with self._get_conn() as conn:
-            cur = conn.cursor()
-            cur.execute("""
-                SELECT platform, total_downloads, total_files, last_download_at
-                FROM download_stats
-                WHERE user_id = ?
-                ORDER BY total_downloads DESC
-            """, (user_id,))
-            rows = cur.fetchall()
+        try:
+            with self._get_conn() as conn:
+                cur = conn.cursor()
+                cur.execute("""
+                    SELECT platform, total_downloads, total_files, last_download_at
+                    FROM download_stats
+                    WHERE user_id = ?
+                    ORDER BY total_downloads DESC
+                """, (user_id,))
+                rows = cur.fetchall()
 
-            if not rows:
+                if not rows:
+                    return {
+                        "total_downloads": 0,
+                        "total_files": 0,
+                        "platforms": {},
+                    }
+
+                platforms = {}
+                total_downloads = 0
+                total_files = 0
+
+                for row in rows:
+                    platform = row["platform"]
+                    platforms[platform] = {
+                        "downloads": row["total_downloads"],
+                        "files": row["total_files"],
+                        "last_at": row["last_download_at"],
+                    }
+                    total_downloads += row["total_downloads"]
+                    total_files += row["total_files"]
+
                 return {
-                    "total_downloads": 0,
-                    "total_files": 0,
-                    "platforms": {},
+                    "total_downloads": total_downloads,
+                    "total_files": total_files,
+                    "platforms": platforms,
                 }
-
-            platforms = {}
-            total_downloads = 0
-            total_files = 0
-
-            for row in rows:
-                platform = row["platform"]
-                platforms[platform] = {
-                    "downloads": row["total_downloads"],
-                    "files": row["total_files"],
-                    "last_at": row["last_download_at"],
-                }
-                total_downloads += row["total_downloads"]
-                total_files += row["total_files"]
-
-            return {
-                "total_downloads": total_downloads,
-                "total_files": total_files,
-                "platforms": platforms,
-            }
+        except Exception as e:
+            logger.error_tree("DB: Get Download Stats Error", e, [
+                ("ID", str(user_id)),
+            ])
+            return {"total_downloads": 0, "total_files": 0, "platforms": {}}
 
     def get_download_leaderboard(self, limit: int = 10) -> List[Dict[str, Any]]:
         """
@@ -96,15 +108,21 @@ class DownloadsMixin:
         Returns:
             List of dicts with user_id, total_downloads, total_files
         """
-        with self._get_conn() as conn:
-            cur = conn.cursor()
-            cur.execute("""
-                SELECT user_id,
-                       SUM(total_downloads) as total_downloads,
-                       SUM(total_files) as total_files
-                FROM download_stats
-                GROUP BY user_id
-                ORDER BY total_downloads DESC
-                LIMIT ?
-            """, (limit,))
-            return [dict(row) for row in cur.fetchall()]
+        try:
+            with self._get_conn() as conn:
+                cur = conn.cursor()
+                cur.execute("""
+                    SELECT user_id,
+                           SUM(total_downloads) as total_downloads,
+                           SUM(total_files) as total_files
+                    FROM download_stats
+                    GROUP BY user_id
+                    ORDER BY total_downloads DESC
+                    LIMIT ?
+                """, (limit,))
+                return [dict(row) for row in cur.fetchall()]
+        except Exception as e:
+            logger.error_tree("DB: Get Download Leaderboard Error", e, [
+                ("Limit", str(limit)),
+            ])
+            return []

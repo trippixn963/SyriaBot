@@ -120,17 +120,13 @@ class ProfileSyncService:
                 changes.append(("Avatar", "Synced from server icon"))
             except discord.HTTPException as e:
                 if "rate" in str(e).lower():
-                    logger.tree("Avatar Update Rate Limited", [
+                    logger.error_tree("Avatar Update Rate Limited", e, [
                         ("Action", "Will retry next sync"),
-                    ], emoji="⏳")
+                    ])
                 else:
-                    logger.tree("Avatar Sync Failed", [
-                        ("Error", str(e)[:100]),
-                    ], emoji="❌")
+                    logger.error_tree("Avatar Sync Failed", e)
             except Exception as e:
-                logger.tree("Avatar Sync Failed", [
-                    ("Error", str(e)[:100]),
-                ], emoji="❌")
+                logger.error_tree("Avatar Sync Failed", e)
 
         if changes:
             logger.tree("Bot Profile Synced", changes, emoji="🔄")

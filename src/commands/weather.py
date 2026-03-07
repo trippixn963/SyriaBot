@@ -371,10 +371,9 @@ class WeatherCog(commands.Cog):
             return None
 
         except Exception as e:
-            logger.tree("Weather Fetch Error", [
+            logger.error_tree("Weather Fetch Error", e, [
                 ("City", city),
-                ("Error", str(e)[:100]),
-            ], emoji="❌")
+            ])
             return None
 
     @app_commands.command(name="weather", description="Get current weather for any city")
@@ -491,10 +490,9 @@ class WeatherCog(commands.Cog):
                     ephemeral=True,
                 )
             except discord.HTTPException as e:
-                logger.tree("Weather Cooldown Response Failed", [
+                logger.error_tree("Weather Cooldown Response Failed", e, [
                     ("User", f"{interaction.user.name}"),
-                    ("Error", str(e)[:50]),
-                ], emoji="⚠️")
+                ])
 
             logger.tree("Weather Cooldown", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
@@ -503,11 +501,10 @@ class WeatherCog(commands.Cog):
             ], emoji="⏳")
             return
 
-        logger.tree("Weather Command Error", [
+        logger.error_tree("Weather Command Error", error, [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
-            ("Error", str(error)[:100]),
-        ], emoji="❌")
+        ])
 
         try:
             if not interaction.response.is_done():
@@ -521,10 +518,9 @@ class WeatherCog(commands.Cog):
                     ephemeral=True,
                 )
         except discord.HTTPException as e:
-            logger.tree("Weather Error Response Failed", [
+            logger.error_tree("Weather Error Response Failed", e, [
                 ("User", f"{interaction.user.name}"),
-                ("Error", str(e)[:50]),
-            ], emoji="⚠️")
+            ])
 
 
 async def setup(bot: commands.Bot) -> None:

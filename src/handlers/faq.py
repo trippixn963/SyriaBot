@@ -374,16 +374,16 @@ class FAQAutoResponder:
 
             return True
 
-        except discord.Forbidden:
-            logger.tree("FAQ Send Failed", [
+        except discord.Forbidden as e:
+            logger.error_tree("FAQ Send Failed", e, [
                 ("Reason", "Missing permissions"),
                 ("Channel", str(message.channel.id)),
-            ], emoji="❌")
+            ])
             return False
         except Exception as e:
-            logger.tree("FAQ Send Error", [
-                ("Error", str(e)[:50]),
-            ], emoji="❌")
+            logger.error_tree("FAQ Send Error", e, [
+                ("Channel", str(message.channel.id)),
+            ])
             return False
 
 

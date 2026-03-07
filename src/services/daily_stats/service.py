@@ -212,11 +212,11 @@ class DailyStatsService:
 
         try:
             await channel.send(embed=embed)
-        except discord.Forbidden:
-            logger.tree("Daily Summary Send Failed", [
+        except discord.Forbidden as e:
+            logger.error_tree("Daily Summary Send Failed", e, [
                 ("Channel", str(config.DAILY_STATS_CHANNEL_ID)),
                 ("Reason", "Missing permissions"),
-            ], emoji="🚫")
+            ])
             return
         except discord.HTTPException as e:
             logger.error_tree("Daily Summary Send Failed", e, [

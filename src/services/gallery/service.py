@@ -102,10 +102,9 @@ class GalleryService:
                                 ("Age", f"{int(thread_age // 3600)}h"),
                             ], emoji="🗑️")
                         except discord.HTTPException as e:
-                            logger.tree(f"{channel_name} Thread Delete Failed", [
+                            logger.error_tree(f"{channel_name} Thread Delete Failed", e, [
                                 ("Thread", thread.name),
-                                ("Error", str(e)[:50]),
-                            ], emoji="⚠️")
+                            ])
 
                 if deleted_count > 0:
                     logger.tree(f"{channel_name} Cleanup Complete", [
@@ -113,9 +112,7 @@ class GalleryService:
                     ], emoji="🧹")
 
             except Exception as e:
-                logger.tree(f"{channel_name} Cleanup Error", [
-                    ("Error", str(e)[:50]),
-                ], emoji="⚠️")
+                logger.error_tree(f"{channel_name} Cleanup Error", e, [])
 
     @cleanup_task.before_loop
     async def before_cleanup(self) -> None:
@@ -192,10 +189,9 @@ class GalleryService:
                 ("Content", message.content[:50] if message.content else "None"),
             ], emoji="🗑️")
         except discord.HTTPException as e:
-            logger.tree(f"{channel_name} Delete Failed", [
+            logger.error_tree(f"{channel_name} Delete Failed", e, [
                 ("User", f"{message.author.name}"),
-                ("Error", str(e)[:50]),
-            ], emoji="⚠️")
+            ])
 
     async def _handle_valid_post(self, message: discord.Message, channel_type: str) -> None:
         """Handle a valid media post - add heart and create thread."""
@@ -224,10 +220,9 @@ class GalleryService:
                 ("Message ID", str(message.id)),
             ], emoji="❤️")
         except discord.HTTPException as e:
-            logger.tree(f"{channel_name} Heart Failed", [
+            logger.error_tree(f"{channel_name} Heart Failed", e, [
                 ("User", f"{message.author.name}"),
-                ("Error", str(e)[:50]),
-            ], emoji="⚠️")
+            ])
 
         # Create comment thread
         thread = None
@@ -245,10 +240,9 @@ class GalleryService:
                 ("Thread ID", str(thread.id)),
             ], emoji="💬")
         except discord.HTTPException as e:
-            logger.tree(f"{channel_name} Thread Failed", [
+            logger.error_tree(f"{channel_name} Thread Failed", e, [
                 ("User", f"{message.author.name}"),
-                ("Error", str(e)[:50]),
-            ], emoji="⚠️")
+            ])
 
         # Send notification to general chat
         await self._send_notification(message, thread, is_video, thumbnail_url, channel_type)
@@ -311,15 +305,12 @@ class GalleryService:
                 ("Media Type", "Video" if is_video else "Image"),
                 ("Thread", thread.name if thread else "None"),
             ], emoji="📢")
-        except discord.Forbidden:
-            logger.tree(f"{channel_name} Notification Failed", [
-                ("Reason", "Missing permissions"),
+        except discord.Forbidden as e:
+            logger.error_tree(f"{channel_name} Notification Failed", e, [
                 ("Channel", str(config.GENERAL_CHANNEL_ID)),
-            ], emoji="⚠️")
+            ])
         except discord.HTTPException as e:
-            logger.tree(f"{channel_name} Notification Failed", [
-                ("Error", str(e)[:50]),
-            ], emoji="⚠️")
+            logger.error_tree(f"{channel_name} Notification Failed", e, [])
 
     async def on_reaction_add(self, reaction: discord.Reaction, user: discord.User) -> bool:
         """
@@ -345,10 +336,9 @@ class GalleryService:
                     ("Message ID", str(reaction.message.id)),
                 ], emoji="🚫")
             except discord.HTTPException as e:
-                logger.tree(f"{channel_name} Reaction Remove Failed", [
+                logger.error_tree(f"{channel_name} Reaction Remove Failed", e, [
                     ("User", f"{user.name}"),
-                    ("Error", str(e)[:50]),
-                ], emoji="⚠️")
+                ])
         else:
             logger.tree(f"{channel_name} Heart Reaction", [
                 ("User", f"{user.name}"),

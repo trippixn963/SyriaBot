@@ -156,9 +156,7 @@ class QuoteService:
                     data = await resp.read()
                     return Image.open(io.BytesIO(data))
         except Exception as e:
-            logger.tree("Image Fetch Failed", [
-                ("Error", str(e)[:50]),
-            ], emoji="❌")
+            logger.error_tree("Image Fetch Failed", e)
         return None
 
     def _get_today_est(self) -> str:
@@ -512,9 +510,7 @@ class QuoteService:
             return QuoteResult(success=True, image_bytes=output.getvalue())
 
         except Exception as e:
-            logger.tree("Quote Generation Failed", [
-                ("Error", str(e)),
-            ], emoji="❌")
+            logger.error_tree("Quote Generation Failed", e)
             return QuoteResult(success=False, error=str(e))
 
 

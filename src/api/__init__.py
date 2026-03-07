@@ -93,7 +93,7 @@ class APIService:
     async def start(self) -> None:
         """Start the API server in a background task."""
         if self.is_running:
-            logger.warning("API Already Running", [])
+            logger.tree("API Already Running", [], emoji="⚠️")
             return
 
         # Create socket with SO_REUSEADDR so port can rebind immediately after restart
@@ -133,11 +133,10 @@ class APIService:
         try:
             await self._server.serve(sockets=[self._server_socket])
         except asyncio.CancelledError:
-            logger.debug("API Server Cancelled", [])
+            logger.tree("API Server Cancelled", [], emoji="ℹ️")
         except Exception as e:
-            logger.error("API Server Error", [
+            logger.error_tree("API Server Error", e, [
                 ("Error Type", type(e).__name__),
-                ("Error", str(e)[:100]),
             ])
 
     async def stop(self) -> None:

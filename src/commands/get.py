@@ -109,11 +109,11 @@ async def _download_and_save_image(
         if message:
             try:
                 await message.delete()
-            except discord.NotFound:
-                logger.tree(f"{label} Delete Skipped", [
+            except discord.NotFound as e:
+                logger.error_tree(f"{label} Delete Skipped", e, [
                     ("User", f"{interaction.user.name}"),
                     ("Reason", "Message already deleted"),
-                ], emoji="⚠️")
+                ])
 
         log_entries = [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
@@ -128,11 +128,10 @@ async def _download_and_save_image(
         logger.tree(f"{label} Saved", log_entries, emoji="✅")
 
     except Exception as e:
-        logger.tree(f"{label} Save Failed", [
+        logger.error_tree(f"{label} Save Failed", e, [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
-            ("Error", str(e)[:50]),
-        ], emoji="❌")
+        ])
         await interaction.followup.send(f"Failed to save {label.lower()}.", ephemeral=True)
 
 
@@ -162,10 +161,9 @@ class DownloadView(ui.View):
             try:
                 await self.message.edit(view=self)
             except discord.HTTPException as e:
-                logger.tree("View Timeout Edit Failed", [
+                logger.error_tree("View Timeout Edit Failed", e, [
                     ("Type", self.label),
-                    ("Error", str(e)[:50]),
-                ], emoji="⚠️")
+                ])
 
     @ui.button(label="Save", style=discord.ButtonStyle.secondary, emoji=EMOJI_SAVE)
     async def save(self, interaction: discord.Interaction, button: ui.Button) -> None:
@@ -237,10 +235,9 @@ class AvatarToggleView(ui.View):
             try:
                 await self.message.edit(view=self)
             except discord.HTTPException as e:
-                logger.tree("Avatar View Timeout Edit Failed", [
+                logger.error_tree("Avatar View Timeout Edit Failed", e, [
                     ("Target", f"{self.target.name}"),
-                    ("Error", str(e)[:50]),
-                ], emoji="⚠️")
+                ])
 
     @ui.button(label="Save", style=discord.ButtonStyle.secondary, emoji=EMOJI_SAVE, row=0)
     async def save(self, interaction: discord.Interaction, button: ui.Button) -> None:
@@ -346,10 +343,9 @@ class BannerToggleView(ui.View):
             try:
                 await self.message.edit(view=self)
             except discord.HTTPException as e:
-                logger.tree("Banner View Timeout Edit Failed", [
+                logger.error_tree("Banner View Timeout Edit Failed", e, [
                     ("Target", f"{self.target.name}"),
-                    ("Error", str(e)[:50]),
-                ], emoji="⚠️")
+                ])
 
     @ui.button(label="Save", style=discord.ButtonStyle.secondary, emoji=EMOJI_SAVE, row=0)
     async def save(self, interaction: discord.Interaction, button: ui.Button) -> None:
@@ -488,12 +484,11 @@ class GetCog(commands.Cog):
                 await self._handle_server_banner(interaction)
 
         except discord.HTTPException as e:
-            logger.tree("Get Command Failed", [
+            logger.error_tree("Get Command Failed", e, [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Option", option.value),
-                ("Error", str(e)[:100]),
-            ], emoji="❌")
+            ])
             embed = discord.Embed(
                 description="❌ Failed to fetch data.",
                 color=COLOR_ERROR
@@ -501,12 +496,11 @@ class GetCog(commands.Cog):
             set_footer(embed)
             await interaction.followup.send(embed=embed, ephemeral=True)
         except Exception as e:
-            logger.tree("Get Command Error", [
+            logger.error_tree("Get Command Error", e, [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
                 ("Option", option.value),
-                ("Error", str(e)[:100]),
-            ], emoji="❌")
+            ])
             embed = discord.Embed(
                 description="❌ An error occurred.",
                 color=COLOR_ERROR
@@ -591,12 +585,12 @@ class GetCog(commands.Cog):
         # Need to fetch user to get global banner (not cached by default)
         try:
             fetched_user = await self.bot.fetch_user(target.id)
-        except discord.NotFound:
-            logger.tree("Get Banner Failed", [
+        except discord.NotFound as e:
+            logger.error_tree("Get Banner Failed", e, [
                 ("Target", f"{target.name} ({target.display_name})"),
                 ("Target ID", str(target.id)),
                 ("Reason", "User not found"),
-            ], emoji="❌")
+            ])
             embed = discord.Embed(
                 description="❌ Could not find that user.",
                 color=COLOR_ERROR
@@ -824,10 +818,9 @@ class GetCog(commands.Cog):
                     ephemeral=True,
                 )
             except discord.HTTPException as e:
-                logger.tree("Get Cooldown Response Failed", [
+                logger.error_tree("Get Cooldown Response Failed", e, [
                     ("User", f"{interaction.user.name}"),
-                    ("Error", str(e)[:50]),
-                ], emoji="⚠️")
+                ])
 
             logger.tree("Get Cooldown", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
@@ -836,11 +829,10 @@ class GetCog(commands.Cog):
             ], emoji="⏳")
             return
 
-        logger.tree("Get Command Error", [
+        logger.error_tree("Get Command Error", error, [
             ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
             ("ID", str(interaction.user.id)),
-            ("Error", str(error)[:100]),
-        ], emoji="❌")
+        ])
 
         try:
             if not interaction.response.is_done():
@@ -854,10 +846,9 @@ class GetCog(commands.Cog):
                     ephemeral=True,
                 )
         except discord.HTTPException as e:
-            logger.tree("Get Error Response Failed", [
+            logger.error_tree("Get Error Response Failed", e, [
                 ("User", f"{interaction.user.name}"),
-                ("Error", str(e)[:50]),
-            ], emoji="⚠️")
+            ])
 
 
 async def setup(bot: commands.Bot) -> None:
