@@ -21,7 +21,10 @@ import discord
 from src.core.logger import logger
 from src.core.config import config
 from src.core.colors import COLOR_GOLD, COLOR_ERROR, COLOR_WARNING
-from src.core.constants import DELETE_DELAY_SHORT, MAX_CHILDREN
+from src.core.constants import (
+    DELETE_DELAY_SHORT, MAX_CHILDREN, ANCESTOR_MAX_DEPTH,
+    FAMILY_VIEW_TIMEOUT, FAMILY_CONFIRM_TIMEOUT,
+)
 from src.services.database import db
 from src.utils.footer import set_footer
 from src.utils.permissions import is_cooldown_exempt
@@ -189,6 +192,9 @@ class FamilyHandler:
         if not message.guild or message.guild.id != config.GUILD_ID:
             return False
 
+        if message.channel.id != config.CMDS_CHANNEL_ID:
+            return False
+
         content = message.content.strip().lower()
         words = content.split()
         if not words:
@@ -237,22 +243,6 @@ class FamilyHandler:
         return True
 
     # =========================================================================
-    # Helpers
-    # =========================================================================
-
-    def _is_ancestor(self, target_id: int, user_id: int, guild_id: int) -> bool:
-        """Check if target_id is an ancestor of user_id by walking the parent chain."""
-        current = user_id
-        for _ in range(20):
-            parent: Optional[int] = db.get_parent(current, guild_id)
-            if parent is None:
-                break
-            if parent == target_id:
-                return True
-            current = parent
-        return False
-
-    # =========================================================================
     # marry @user
     # =========================================================================
 
@@ -278,7 +268,7 @@ class FamilyHandler:
             await self._remove_cooldown(user.id)
             await self._send_error(message, "❌ You can't marry yourself.")
             logger.tree("Marry Rejected", [
-                ("User", f"{user.name} ({user.id})"),
+                ("User", f"{user.name} ({user.display_name})"),
                 ("Reason", "Self-marriage"),
             ], emoji="⚠️")
             return
@@ -288,8 +278,8 @@ class FamilyHandler:
             await self._remove_cooldown(user.id)
             await self._send_error(message, "❌ You can't marry a bot.")
             logger.tree("Marry Rejected", [
-                ("User", f"{user.name} ({user.id})"),
-                ("Target", f"{target.name} ({target.id})"),
+                ("User", f"{user.name} ({user.display_name})"),
+                ("Target", f"{target.name} ({target.display_name})"),
                 ("Reason", "Target is bot"),
             ], emoji="⚠️")
             return
@@ -299,7 +289,7 @@ class FamilyHandler:
             await self._remove_cooldown(user.id)
             await self._send_error(message, "❌ You're already married. Divorce first.")
             logger.tree("Marry Rejected", [
-                ("User", f"{user.name} ({user.id})"),
+                ("User", f"{user.name} ({user.display_name})"),
                 ("Reason", "Already married"),
             ], emoji="⚠️")
             return
@@ -309,8 +299,8 @@ class FamilyHandler:
             await self._remove_cooldown(user.id)
             await self._send_error(message, f"❌ {target.mention} is already married.")
             logger.tree("Marry Rejected", [
-                ("User", f"{user.name} ({user.id})"),
-                ("Target", f"{target.name} ({target.id})"),
+                ("User", f"{user.name} ({user.display_name})"),
+                ("Target", f"{target.name} ({target.display_name})"),
                 ("Reason", "Target already married"),
             ], emoji="⚠️")
             return
@@ -322,7 +312,7 @@ class FamilyHandler:
             hours, minutes = remaining
             await self._send_warning(message, f"❌ You must wait **{hours}h {minutes}m** after your divorce before remarrying.")
             logger.tree("Marry Rejected", [
-                ("User", f"{user.name} ({user.id})"),
+                ("User", f"{user.name} ({user.display_name})"),
                 ("Reason", "Divorce cooldown"),
                 ("Remaining", f"{hours}h {minutes}m"),
             ], emoji="⏳")
@@ -335,8 +325,8 @@ class FamilyHandler:
             hours, minutes = remaining
             await self._send_warning(message, f"❌ {target.mention} must wait **{hours}h {minutes}m** after their divorce before remarrying.")
             logger.tree("Marry Rejected", [
-                ("User", f"{user.name} ({user.id})"),
-                ("Target", f"{target.name} ({target.id})"),
+                ("User", f"{user.name} ({user.display_name})"),
+                ("Target", f"{target.name} ({target.display_name})"),
                 ("Reason", "Target divorce cooldown"),
                 ("Remaining", f"{hours}h {minutes}m"),
             ], emoji="⏳")
@@ -366,8 +356,8 @@ class FamilyHandler:
         view.message = msg
 
         logger.tree("Marriage Proposal Sent", [
-            ("Proposer", f"{user.name} ({user.id})"),
-            ("Target", f"{target.name} ({target.id})"),
+            ("Proposer", f"{user.name} ({user.display_name})"),
+            ("Target", f"{target.name} ({target.display_name})"),
             ("Guild", str(guild_id)),
         ], emoji="💍")
 
@@ -385,7 +375,7 @@ class FamilyHandler:
             await self._remove_cooldown(user.id)
             await self._send_error(message, "❌ You're not married.")
             logger.tree("Divorce Rejected", [
-                ("User", f"{user.name} ({user.id})"),
+                ("User", f"{user.name} ({user.display_name})"),
                 ("Reason", "Not married"),
             ], emoji="⚠️")
             return
@@ -401,7 +391,7 @@ class FamilyHandler:
         view.message = msg
 
         logger.tree("Divorce Initiated", [
-            ("User", f"{user.name} ({user.id})"),
+            ("User", f"{user.name} ({user.display_name})"),
             ("Spouse", str(spouse_id)),
             ("Guild", str(guild_id)),
         ], emoji="⚠️")
@@ -431,7 +421,7 @@ class FamilyHandler:
             await self._remove_cooldown(user.id)
             await self._send_error(message, "❌ You can't adopt yourself.")
             logger.tree("Adopt Rejected", [
-                ("User", f"{user.name} ({user.id})"),
+                ("User", f"{user.name} ({user.display_name})"),
                 ("Reason", "Self-adoption"),
             ], emoji="⚠️")
             return
@@ -441,8 +431,8 @@ class FamilyHandler:
             await self._remove_cooldown(user.id)
             await self._send_error(message, "❌ You can't adopt a bot.")
             logger.tree("Adopt Rejected", [
-                ("User", f"{user.name} ({user.id})"),
-                ("Target", f"{target.name} ({target.id})"),
+                ("User", f"{user.name} ({user.display_name})"),
+                ("Target", f"{target.name} ({target.display_name})"),
                 ("Reason", "Target is bot"),
             ], emoji="⚠️")
             return
@@ -453,7 +443,7 @@ class FamilyHandler:
             await self._remove_cooldown(user.id)
             await self._send_error(message, "❌ You must be married before you can adopt.")
             logger.tree("Adopt Rejected", [
-                ("User", f"{user.name} ({user.id})"),
+                ("User", f"{user.name} ({user.display_name})"),
                 ("Reason", "Not married"),
             ], emoji="⚠️")
             return
@@ -463,8 +453,8 @@ class FamilyHandler:
             await self._remove_cooldown(user.id)
             await self._send_error(message, "❌ You can't adopt your spouse.")
             logger.tree("Adopt Rejected", [
-                ("User", f"{user.name} ({user.id})"),
-                ("Target", f"{target.name} ({target.id})"),
+                ("User", f"{user.name} ({user.display_name})"),
+                ("Target", f"{target.name} ({target.display_name})"),
                 ("Reason", "Target is spouse"),
             ], emoji="⚠️")
             return
@@ -475,8 +465,8 @@ class FamilyHandler:
             await self._remove_cooldown(user.id)
             await self._send_error(message, "❌ This user is already your child through marriage.")
             logger.tree("Adopt Rejected", [
-                ("User", f"{user.name} ({user.id})"),
-                ("Target", f"{target.name} ({target.id})"),
+                ("User", f"{user.name} ({user.display_name})"),
+                ("Target", f"{target.name} ({target.display_name})"),
                 ("Reason", "Already child through spouse"),
             ], emoji="⚠️")
             return
@@ -486,8 +476,8 @@ class FamilyHandler:
             await self._remove_cooldown(user.id)
             await self._send_error(message, "❌ You can't adopt your own parent.")
             logger.tree("Adopt Rejected", [
-                ("User", f"{user.name} ({user.id})"),
-                ("Target", f"{target.name} ({target.id})"),
+                ("User", f"{user.name} ({user.display_name})"),
+                ("Target", f"{target.name} ({target.display_name})"),
                 ("Reason", "Target is parent"),
             ], emoji="⚠️")
             return
@@ -498,7 +488,7 @@ class FamilyHandler:
             await self._remove_cooldown(user.id)
             await self._send_error(message, f"❌ Your household already has {MAX_CHILDREN} children (max).")
             logger.tree("Adopt Rejected", [
-                ("User", f"{user.name} ({user.id})"),
+                ("User", f"{user.name} ({user.display_name})"),
                 ("Children", str(household_count)),
                 ("Reason", "Max household children reached"),
             ], emoji="⚠️")
@@ -509,29 +499,29 @@ class FamilyHandler:
             await self._remove_cooldown(user.id)
             await self._send_error(message, f"❌ {target.mention} already has a parent.")
             logger.tree("Adopt Rejected", [
-                ("User", f"{user.name} ({user.id})"),
-                ("Target", f"{target.name} ({target.id})"),
+                ("User", f"{user.name} ({user.display_name})"),
+                ("Target", f"{target.name} ({target.display_name})"),
                 ("Reason", "Target has parent"),
             ], emoji="⚠️")
             return
 
         # Validation: circular — can't adopt your ancestor (check both user and spouse)
-        if self._is_ancestor(target.id, user.id, guild_id):
+        if db.is_ancestor(target.id, user.id, guild_id, ANCESTOR_MAX_DEPTH):
             await self._remove_cooldown(user.id)
             await self._send_error(message, "❌ You can't adopt your ancestor.")
             logger.tree("Adopt Rejected", [
-                ("User", f"{user.name} ({user.id})"),
-                ("Target", f"{target.name} ({target.id})"),
+                ("User", f"{user.name} ({user.display_name})"),
+                ("Target", f"{target.name} ({target.display_name})"),
                 ("Reason", "Circular adoption"),
             ], emoji="⚠️")
             return
 
-        if self._is_ancestor(target.id, spouse_id, guild_id):
+        if db.is_ancestor(target.id, spouse_id, guild_id, ANCESTOR_MAX_DEPTH):
             await self._remove_cooldown(user.id)
             await self._send_error(message, "❌ You can't adopt your ancestor.")
             logger.tree("Adopt Rejected", [
-                ("User", f"{user.name} ({user.id})"),
-                ("Target", f"{target.name} ({target.id})"),
+                ("User", f"{user.name} ({user.display_name})"),
+                ("Target", f"{target.name} ({target.display_name})"),
                 ("Reason", "Circular adoption via spouse"),
             ], emoji="⚠️")
             return
@@ -560,8 +550,8 @@ class FamilyHandler:
         view.message = msg
 
         logger.tree("Adoption Request Sent", [
-            ("Requester", f"{user.name} ({user.id})"),
-            ("Target", f"{target.name} ({target.id})"),
+            ("Requester", f"{user.name} ({user.display_name})"),
+            ("Target", f"{target.name} ({target.display_name})"),
             ("Guild", str(guild_id)),
         ], emoji="👨‍👧")
 
@@ -599,8 +589,8 @@ class FamilyHandler:
                     await self._remove_cooldown(user.id)
                     await self._send_error(message, f"❌ {target.mention} is not your child.")
                     logger.tree("Disown Rejected", [
-                        ("User", f"{user.name} ({user.id})"),
-                        ("Target", f"{target.name} ({target.id})"),
+                        ("User", f"{user.name} ({user.display_name})"),
+                        ("Target", f"{target.name} ({target.display_name})"),
                         ("Reason", "Not a child"),
                     ], emoji="⚠️")
                     return
@@ -608,8 +598,8 @@ class FamilyHandler:
                 await self._remove_cooldown(user.id)
                 await self._send_error(message, f"❌ {target.mention} is not your child.")
                 logger.tree("Disown Rejected", [
-                    ("User", f"{user.name} ({user.id})"),
-                    ("Target", f"{target.name} ({target.id})"),
+                    ("User", f"{user.name} ({user.display_name})"),
+                    ("Target", f"{target.name} ({target.display_name})"),
                     ("Reason", "Not a child"),
                 ], emoji="⚠️")
                 return
@@ -625,8 +615,8 @@ class FamilyHandler:
         view.message = msg
 
         logger.tree("Disown Initiated", [
-            ("Parent", f"{user.name} ({user.id})"),
-            ("Child", f"{target.name} ({target.id})"),
+            ("Parent", f"{user.name} ({user.display_name})"),
+            ("Child", f"{target.name} ({target.display_name})"),
             ("Guild", str(guild_id)),
         ], emoji="⚠️")
 
@@ -644,7 +634,7 @@ class FamilyHandler:
             await self._remove_cooldown(user.id)
             await self._send_error(message, "❌ You don't have a parent.")
             logger.tree("Runaway Rejected", [
-                ("User", f"{user.name} ({user.id})"),
+                ("User", f"{user.name} ({user.display_name})"),
                 ("Reason", "No parent"),
             ], emoji="⚠️")
             return
@@ -664,7 +654,7 @@ class FamilyHandler:
         view.message = msg
 
         logger.tree("Runaway Initiated", [
-            ("Child", f"{user.name} ({user.id})"),
+            ("Child", f"{user.name} ({user.display_name})"),
             ("Parent", str(parent_id)),
             ("Guild", str(guild_id)),
         ], emoji="🏃")
@@ -728,37 +718,14 @@ class FamilyHandler:
             file = discord.File(io.BytesIO(card_bytes), filename="family.png")
             await message.channel.send(file=file)
         except Exception as e:
-            # Fallback to text embed if card generation fails
-            logger.error_tree("Family Card Fallback", e, [
-                ("Target", f"{target.name} ({target.id})"),
+            logger.error_tree("Family Card Failed", e, [
+                ("Target", f"{target.name} ({target.display_name})"),
             ])
-            lines: list[str] = []
-            if spouse_id:
-                lines.append(f"💍 **Spouse:** <@{spouse_id}>")
-            else:
-                lines.append("💍 **Spouse:** —")
-            if parent_id:
-                lines.append(f"👨‍👧 **Parent:** <@{parent_id}>")
-            else:
-                lines.append("👨‍👧 **Parent:** —")
-            if children:
-                children_str = ", ".join(f"<@{c}>" for c in children)
-                lines.append(f"👶 **Children ({len(children)}/{MAX_CHILDREN}):** {children_str}")
-            else:
-                lines.append(f"👶 **Children (0/{MAX_CHILDREN}):** —")
-
-            embed = discord.Embed(
-                title=f"👪 {target.display_name}'s Family",
-                description="\n".join(lines),
-                color=COLOR_GOLD,
-            )
-            embed.set_thumbnail(url=target.display_avatar.url)
-            set_footer(embed)
-            await message.channel.send(embed=embed)
+            await self._send_error(message, "❌ Failed to generate family card.")
 
         logger.tree("Family Viewed", [
-            ("Target", f"{target.name} ({target.id})"),
-            ("Viewer", f"{user.name} ({user.id})"),
+            ("Target", f"{target.name} ({target.display_name})"),
+            ("Viewer", f"{user.name} ({user.display_name})"),
             ("Guild", str(guild_id)),
             ("Spouse", str(spouse_id) if spouse_id else "None"),
             ("Parent", str(parent_id) if parent_id else "None"),

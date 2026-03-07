@@ -538,10 +538,9 @@ async def generate_family_card(data: FamilyData) -> bytes:
             return screenshot
 
         except Exception as e:
-            logger.tree("Family Card Failed", [
+            logger.error_tree("Family Card Failed", e, [
                 ("User", data.display_name),
-                ("Error", str(e)[:100]),
-            ], emoji="❌")
+            ])
             if page:
                 try:
                     await page.close()

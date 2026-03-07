@@ -204,4 +204,7 @@ DISBOARD_BOT_ID = 302050872383242240  # Disboard bump bot
 # Family System
 # =============================================================================
 
-MAX_CHILDREN = 5  # Max children per household
+MAX_CHILDREN = 5                # Max children per household
+ANCESTOR_MAX_DEPTH = 20         # Max depth for circular ancestry checks
+FAMILY_VIEW_TIMEOUT = 60        # Timeout for proposal/adoption views (seconds)
+FAMILY_CONFIRM_TIMEOUT = 30     # Timeout for confirmation views (seconds)

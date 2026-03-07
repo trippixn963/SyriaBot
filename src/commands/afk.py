@@ -19,6 +19,7 @@ from discord.ext import commands
 from src.core.config import config
 from src.core.logger import logger
 from src.core.colors import COLOR_SYRIA_GREEN
+from src.services.actions import action_service
 from src.utils.footer import set_footer
 from src.services.database import db
 
@@ -115,6 +116,16 @@ class AFKCog(commands.Cog):
             embed.description = f"💤 {interaction.user.mention} is now AFK"
 
         embed.add_field(name="", value=f"-# Set <t:{now}:R>", inline=False)
+
+        try:
+            gif_url = await action_service.get_action_gif("sleep")
+            if not gif_url:
+                gif_url = await action_service.get_action_gif("yawn")
+            if gif_url:
+                embed.set_image(url=gif_url)
+        except Exception:
+            pass
+
         set_footer(embed)
 
         try:

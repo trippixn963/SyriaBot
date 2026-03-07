@@ -11,12 +11,16 @@ Server: discord.gg/syria
 
 import re
 import time
+from typing import Optional
 
 import discord
 from discord.ext import commands
 
+from src.core.colors import COLOR_GOLD, COLOR_NEUTRAL
 from src.core.logger import logger
+from src.services.actions import action_service
 from src.services.database import db
+from src.utils.footer import set_footer
 
 # Constants
 EMOJI_ZZZ = "💤"
@@ -45,6 +49,21 @@ class AFKService:
     async def setup(self) -> None:
         """Initialize the AFK service."""
         logger.tree("AFK Service Ready", [], emoji="💤")
+
+    async def _fetch_gif(self, endpoint: str, fallback: str = None) -> Optional[str]:
+        """Fetch an anime GIF for AFK embeds. Returns URL or None."""
+        try:
+            url = await action_service.get_action_gif(endpoint)
+            if url:
+                return url
+            if fallback:
+                return await action_service.get_action_gif(fallback)
+        except Exception as e:
+            logger.error_tree("AFK GIF Fetch Failed", e, [
+                ("Endpoint", endpoint),
+                ("Fallback", fallback or "None"),
+            ])
+        return None
 
     def convert_emoji_shortcodes(self, text: str, guild: discord.Guild) -> str:
         """
@@ -213,25 +232,33 @@ class AFKService:
                     ("Error", str(e)[:50]),
                 ], emoji="⚠️")
 
-        # Build welcome back message - clean design
-        welcome_msg = f"Welcome back {message.author.mention}! Your AFK has been removed."
-        welcome_msg += f"\n-# You were away for {duration_str}"
+        # Build welcome back embed
+        subtitle = f"-# You were away for {duration_str}"
 
         if mention_count > 0:
             if pinger_names:
-                # Show who mentioned them as plain usernames (no ping)
                 mentions_str = ", ".join(f"**{name}**" for name in pinger_names)
                 if mention_count > len(pinger_names):
-                    # More mentions than unique pingers shown
-                    welcome_msg += f" · Mentioned by {mentions_str} (+{mention_count - len(pinger_names)} more)"
+                    subtitle += f" · Mentioned by {mentions_str} (+{mention_count - len(pinger_names)} more)"
                 else:
-                    welcome_msg += f" · Mentioned by {mentions_str}"
+                    subtitle += f" · Mentioned by {mentions_str}"
             else:
-                welcome_msg += f" · {mention_count} mention{'s' if mention_count != 1 else ''}"
+                subtitle += f" · {mention_count} mention{'s' if mention_count != 1 else ''}"
+
+        embed = discord.Embed(
+            description=f"👋 Welcome back {message.author.mention}! Your AFK has been removed.\n{subtitle}",
+            color=COLOR_GOLD,
+        )
+
+        gif_url = await self._fetch_gif("wave", fallback="happy")
+        if gif_url:
+            embed.set_image(url=gif_url)
+
+        set_footer(embed)
 
         try:
             await message.reply(
-                welcome_msg,
+                embed=embed,
                 mention_author=False,
                 delete_after=10 if mention_count > 0 else 5
             )
@@ -285,8 +312,8 @@ class AFKService:
         if not afk_users:
             return
 
-        # Build notification message
-        afk_messages = []
+        # Build notification lines and track mentions
+        afk_lines = []
         for afk_data in afk_users:
             user_id = afk_data["user_id"]
             reason = afk_data["reason"]
@@ -301,33 +328,47 @@ class AFKService:
                 ], emoji="⚠️")
                 continue
 
-            # Use Discord's relative timestamp format
             if reason:
-                afk_messages.append(f"{EMOJI_ZZZ} **{member.display_name}** is AFK: {reason} (<t:{timestamp}:R>)")
+                afk_lines.append(f"{EMOJI_ZZZ} **{member.display_name}** is AFK: {reason} (<t:{timestamp}:R>)")
             else:
-                afk_messages.append(f"{EMOJI_ZZZ} **{member.display_name}** is AFK (<t:{timestamp}:R>)")
+                afk_lines.append(f"{EMOJI_ZZZ} **{member.display_name}** is AFK (<t:{timestamp}:R>)")
 
-            # Track this mention for the AFK user (with pinger info)
             db.increment_afk_mentions(
                 user_id,
                 guild_id,
                 pinger_id=message.author.id,
-                pinger_name=message.author.display_name  # Store display name (no ping)
+                pinger_name=message.author.display_name
             )
 
-        if afk_messages:
-            try:
-                await message.reply(
-                    "\n".join(afk_messages),
-                    mention_author=False,
-                    delete_after=10
-                )
-                logger.tree("AFK Mention Notification", [
-                    ("Pinger", f"{message.author.name}"),
-                    ("AFK Users", str(len(afk_messages))),
-                    ("Guild", message.guild.name),
-                ], emoji="💤")
-            except discord.HTTPException as e:
-                logger.tree("AFK Notification Failed", [
-                    ("Error", str(e)[:50]),
-                ], emoji="⚠️")
+        if not afk_lines:
+            return
+
+        # Single AFK user: embed with poke GIF
+        # Multiple AFK users: embed with text list, no GIF
+        embed = discord.Embed(
+            description="\n".join(afk_lines),
+            color=COLOR_NEUTRAL,
+        )
+
+        if len(afk_lines) == 1:
+            gif_url = await self._fetch_gif("poke", fallback="pat")
+            if gif_url:
+                embed.set_image(url=gif_url)
+
+        set_footer(embed)
+
+        try:
+            await message.reply(
+                embed=embed,
+                mention_author=False,
+                delete_after=10
+            )
+            logger.tree("AFK Mention Notification", [
+                ("Pinger", f"{message.author.name}"),
+                ("AFK Users", str(len(afk_lines))),
+                ("Guild", message.guild.name),
+            ], emoji="💤")
+        except discord.HTTPException as e:
+            logger.tree("AFK Notification Failed", [
+                ("Error", str(e)[:50]),
+            ], emoji="⚠️")

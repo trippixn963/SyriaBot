@@ -328,6 +328,22 @@ class FamilyMixin:
     # Siblings
     # =========================================================================
 
+    def is_ancestor(self, target_id: int, user_id: int, guild_id: int, max_depth: int = 20) -> bool:
+        """Check if target_id is an ancestor of user_id by walking the parent chain."""
+        current = user_id
+        for _ in range(max_depth):
+            parent: Optional[int] = self.get_parent(current, guild_id)
+            if parent is None:
+                break
+            if parent == target_id:
+                return True
+            current = parent
+        return False
+
+    # =========================================================================
+    # Siblings
+    # =========================================================================
+
     def get_siblings(self, user_id: int, guild_id: int) -> List[int]:
         """Get sibling IDs (other children of the same parent, excluding self)."""
         parent_id = self.get_parent(user_id, guild_id)

@@ -252,6 +252,24 @@ class MemberHandler(commands.Cog):
         if self.bot.roulette_service:
             self.bot.roulette_service._user_activity.pop(member.id, None)
 
+        # Clean up family data (divorce, orphan children, remove from parent)
+        try:
+            result = db.cleanup_family_on_leave(member.id, member.guild.id)
+            total = result["divorces"] + result["orphaned_children"] + result["removed_from_parent"]
+            if total > 0:
+                logger.tree("Family Cleanup on Leave", [
+                    ("User", f"{member.name} ({member.display_name})"),
+                    ("ID", str(member.id)),
+                    ("Divorces", str(result["divorces"])),
+                    ("Orphaned Children", str(result["orphaned_children"])),
+                    ("Removed from Parent", str(result["removed_from_parent"])),
+                ], emoji="👪")
+        except Exception as e:
+            logger.error_tree("Family Cleanup Failed", e, [
+                ("User", f"{member.name} ({member.display_name})"),
+                ("ID", str(member.id)),
+            ])
+
         # Record member leave event for growth tracking
         try:
             db.record_member_event(member.guild.id, member.id, "leave")
