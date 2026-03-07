@@ -510,6 +510,7 @@ class SyriaBot(commands.Bot):
             (self.social_monitor, "SocialMonitor", lambda s: s.stop()),
             (self.roulette_service, "Roulette", lambda s: s.stop()),
             (getattr(self, 'daily_stats_service', None), "DailyStats", lambda s: s.stop()),
+            (self.afk_service, "AFK", lambda s: s.stop()),
         ]
         for svc, name, stop_fn in sync_services:
             if svc:

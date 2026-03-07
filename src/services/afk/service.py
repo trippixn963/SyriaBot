@@ -14,7 +14,7 @@ import time
 from typing import Optional
 
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 
 from src.core.colors import COLOR_GOLD, COLOR_NEUTRAL
 from src.core.logger import logger
@@ -24,6 +24,7 @@ from src.utils.footer import set_footer
 
 # Constants
 EMOJI_ZZZ = "💤"
+AFK_EXPIRY_SECONDS = 7 * 24 * 60 * 60  # 7 days
 
 
 class AFKService:
@@ -48,7 +49,54 @@ class AFKService:
 
     async def setup(self) -> None:
         """Initialize the AFK service."""
-        logger.tree("AFK Service Ready", [], emoji="💤")
+        self._expiry_task.start()
+        logger.tree("AFK Service Ready", [
+            ("Expiry", "7 days"),
+        ], emoji="💤")
+
+    def stop(self) -> None:
+        """Stop background tasks."""
+        if self._expiry_task.is_running():
+            self._expiry_task.cancel()
+
+    @tasks.loop(hours=1)
+    async def _expiry_task(self) -> None:
+        """Clear AFK entries older than 7 days and restore nicknames."""
+        expired = db.get_expired_afk_users(AFK_EXPIRY_SECONDS)
+        if not expired:
+            return
+
+        for entry in expired:
+            user_id = entry["user_id"]
+            guild_id = entry["guild_id"]
+
+            # Remove from database
+            db.remove_afk(user_id, guild_id)
+            db.get_and_clear_afk_mentions(user_id, guild_id)
+
+            # Try to restore nickname
+            try:
+                guild = self.bot.get_guild(guild_id)
+                if not guild:
+                    continue
+                member = guild.get_member(user_id)
+                if not member:
+                    continue
+                if member.nick and member.nick.startswith("[AFK] "):
+                    new_nick = member.nick[6:]
+                    if new_nick == member.name:
+                        new_nick = None
+                    await member.edit(nick=new_nick)
+            except (discord.Forbidden, discord.HTTPException):
+                pass
+
+        logger.tree("AFK Expiry Cleanup", [
+            ("Expired", str(len(expired))),
+        ], emoji="🧹")
+
+    @_expiry_task.before_loop
+    async def _before_expiry(self) -> None:
+        await self.bot.wait_until_ready()
 
     async def _fetch_gif(self, endpoint: str, fallback: str = None) -> Optional[str]:
         """Fetch an anime GIF for AFK embeds. Returns URL or None."""
@@ -249,6 +297,7 @@ class AFKService:
             description=f"👋 Welcome back {message.author.mention}! Your AFK has been removed.\n{subtitle}",
             color=COLOR_GOLD,
         )
+        embed.set_thumbnail(url=message.author.display_avatar.url)
 
         gif_url = await self._fetch_gif("wave", fallback="happy")
         if gif_url:
@@ -314,6 +363,7 @@ class AFKService:
 
         # Build notification lines and track mentions
         afk_lines = []
+        afk_members = []
         for afk_data in afk_users:
             user_id = afk_data["user_id"]
             reason = afk_data["reason"]
@@ -327,6 +377,8 @@ class AFKService:
                     ("Reason", "Member left or not found"),
                 ], emoji="⚠️")
                 continue
+
+            afk_members.append(member)
 
             if reason:
                 afk_lines.append(f"{EMOJI_ZZZ} **{member.display_name}** is AFK: {reason} (<t:{timestamp}:R>)")
@@ -351,6 +403,7 @@ class AFKService:
         )
 
         if len(afk_lines) == 1:
+            embed.set_thumbnail(url=afk_members[0].display_avatar.url)
             gif_url = await self._fetch_gif("poke", fallback="pat")
             if gif_url:
                 embed.set_image(url=gif_url)

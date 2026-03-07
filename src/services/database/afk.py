@@ -92,6 +92,17 @@ class AFKMixin:
             """, user_ids + [guild_id])
             return [dict(row) for row in cur.fetchall()]
 
+    def get_expired_afk_users(self, max_age_seconds: int) -> List[Dict[str, Any]]:
+        """Get all AFK users whose AFK has expired (older than max_age_seconds)."""
+        cutoff = int(time.time()) - max_age_seconds
+
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT * FROM afk_users WHERE timestamp < ?
+            """, (cutoff,))
+            return [dict(row) for row in cur.fetchall()]
+
     def increment_afk_mentions(self, user_id: int, guild_id: int, pinger_id: int = None, pinger_name: str = None) -> None:
         """Increment mention count for an AFK user and track who pinged."""
         with self._get_conn() as conn:
