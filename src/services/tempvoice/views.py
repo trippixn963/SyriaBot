@@ -39,25 +39,46 @@ class ClaimApprovalView(ui.View):
         self.requester = requester
         self.owner = owner
         self.service = service
+        self.message: Optional[discord.Message] = None
+
+    async def on_error(self, interaction: discord.Interaction, error: Exception, item: ui.Item) -> None:
+        """Handle unexpected errors in claim approval callbacks."""
+        custom_id = getattr(item, "custom_id", "unknown")
+        logger.error_tree("Claim Approval Error", error, [
+            ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+            ("User ID", str(interaction.user.id)),
+            ("Button", custom_id),
+        ])
+        try:
+            if not interaction.response.is_done():
+                embed = discord.Embed(description="❌ An error occurred", color=COLOR_ERROR)
+                set_footer(embed)
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+            else:
+                embed = discord.Embed(description="❌ An error occurred", color=COLOR_ERROR)
+                set_footer(embed)
+                await interaction.followup.send(embed=embed, ephemeral=True)
+        except discord.HTTPException:
+            pass
 
     async def on_timeout(self) -> None:
         """Handle timeout - deny by default."""
+        # Remove from pending claims
+        if self.service:
+            self.service._pending_claims.discard(self.channel.id)
+
         try:
-            # Find and update the message
-            async for message in self.channel.history(limit=20):
-                if message.author.id == self.channel.guild.me.id and message.embeds:
-                    embed = message.embeds[0]
-                    if embed.title and "Claim Request" in embed.title:
-                        embed.color = 0x95a5a6  # Gray
-                        await message.edit(embed=embed, view=None)
-                        logger.tree("Claim Request Expired", [
-                            ("Channel", self.channel.name),
-                            ("Requester", f"{self.requester.name} ({self.requester.display_name})"),
-                            ("Requester ID", str(self.requester.id)),
-                            ("Owner", f"{self.owner.name} ({self.owner.display_name})"),
-                            ("Owner ID", str(self.owner.id)),
-                        ], emoji="⏳")
-                        break
+            if self.message:
+                embed = self.message.embeds[0]
+                embed.color = 0x95a5a6  # Gray
+                await self.message.edit(embed=embed, view=None)
+                logger.tree("Claim Request Expired", [
+                    ("Channel", self.channel.name),
+                    ("Requester", f"{self.requester.name} ({self.requester.display_name})"),
+                    ("Requester ID", str(self.requester.id)),
+                    ("Owner", f"{self.owner.name} ({self.owner.display_name})"),
+                    ("Owner ID", str(self.owner.id)),
+                ], emoji="⏳")
         except discord.HTTPException as e:
             logger.error_tree("Claim Timeout Update Failed", e, [
                 ("Channel", self.channel.name),
@@ -69,6 +90,10 @@ class ClaimApprovalView(ui.View):
 
     @ui.button(label="Approve", style=discord.ButtonStyle.secondary, emoji=EMOJI_ALLOW)
     async def approve(self, interaction: discord.Interaction, button: ui.Button) -> None:
+        # Remove from pending claims
+        if self.service:
+            self.service._pending_claims.discard(self.channel.id)
+
         try:
             # Only owner can approve
             if interaction.user.id != self.owner.id:
@@ -202,6 +227,10 @@ class ClaimApprovalView(ui.View):
 
     @ui.button(label="Deny", style=discord.ButtonStyle.secondary, emoji=EMOJI_BLOCK)
     async def deny(self, interaction: discord.Interaction, button: ui.Button) -> None:
+        # Remove from pending claims
+        if self.service:
+            self.service._pending_claims.discard(self.channel.id)
+
         try:
             # Only owner can deny
             if interaction.user.id != self.owner.id:
@@ -249,6 +278,26 @@ class TempVoiceControlPanel(ui.View):
     def __init__(self, service: "TempVoiceService") -> None:
         super().__init__(timeout=None)
         self.service = service
+
+    async def on_error(self, interaction: discord.Interaction, error: Exception, item: ui.Item) -> None:
+        """Handle unexpected errors in control panel callbacks."""
+        custom_id = getattr(item, "custom_id", "unknown")
+        logger.error_tree("Control Panel Error", error, [
+            ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+            ("User ID", str(interaction.user.id)),
+            ("Button", custom_id),
+        ])
+        try:
+            if not interaction.response.is_done():
+                embed = discord.Embed(description="❌ An error occurred", color=COLOR_ERROR)
+                set_footer(embed)
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+            else:
+                embed = discord.Embed(description="❌ An error occurred", color=COLOR_ERROR)
+                set_footer(embed)
+                await interaction.followup.send(embed=embed, ephemeral=True)
+        except discord.HTTPException:
+            pass
 
     async def _get_user_channel(self, interaction: discord.Interaction, log_context: str = "Action") -> Optional[discord.VoiceChannel]:
         """Get the user's temp voice channel."""
@@ -485,7 +534,9 @@ class TempVoiceControlPanel(ui.View):
             if channel:
                 embed = discord.Embed(description="👤 Select user to allow (select again to remove)", color=COLOR_NEUTRAL)
                 set_footer(embed)
-                await interaction.response.send_message(embed=embed, view=UserSelectView(channel, "permit", self.service), ephemeral=True)
+                view = UserSelectView(channel, "permit", self.service)
+                await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+                view.message = await interaction.original_response()
         except discord.HTTPException as e:
             logger.error_tree("Allow Button Failed", e, [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
@@ -513,7 +564,9 @@ class TempVoiceControlPanel(ui.View):
             if channel:
                 embed = discord.Embed(description="🚫 Select user to block (select again to unblock)", color=COLOR_NEUTRAL)
                 set_footer(embed)
-                await interaction.response.send_message(embed=embed, view=UserSelectView(channel, "block", self.service), ephemeral=True)
+                view = UserSelectView(channel, "block", self.service)
+                await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+                view.message = await interaction.original_response()
         except discord.HTTPException as e:
             logger.error_tree("Block Button Failed", e, [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
@@ -541,7 +594,9 @@ class TempVoiceControlPanel(ui.View):
             if channel:
                 embed = discord.Embed(description="👢 Select user to kick from channel", color=COLOR_NEUTRAL)
                 set_footer(embed)
-                await interaction.response.send_message(embed=embed, view=UserSelectView(channel, "kick"), ephemeral=True)
+                view = UserSelectView(channel, "kick")
+                await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+                view.message = await interaction.original_response()
         except discord.HTTPException as e:
             logger.error_tree("Kick Button Failed", e, [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
@@ -592,6 +647,19 @@ class TempVoiceControlPanel(ui.View):
                 ], emoji="⚠️")
                 return
 
+            # Check if a claim is already pending for this channel
+            if self.service and channel.id in self.service._pending_claims:
+                embed = discord.Embed(description="⚠️ A claim is already pending for this channel", color=COLOR_WARNING)
+                set_footer(embed)
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                logger.tree("Claim Rejected", [
+                    ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                    ("ID", str(interaction.user.id)),
+                    ("Channel", channel.name),
+                    ("Reason", "Claim already pending"),
+                ], emoji="⚠️")
+                return
+
             owner_id = channel_info["owner_id"]
             owner = interaction.guild.get_member(owner_id)
 
@@ -623,29 +691,35 @@ class TempVoiceControlPanel(ui.View):
 
             # If owner left the server, allow instant claim
             if not owner:
-                await set_owner_permissions(channel, interaction.user)
-                db.transfer_ownership(channel.id, interaction.user.id)
-                embed = discord.Embed(
-                    description=f"👑 You now own **{channel.name}**\nPrevious owner left the server",
-                    color=COLOR_SUCCESS
-                )
-                set_footer(embed)
-                await interaction.response.send_message(embed=embed, ephemeral=True)
-                logger.tree("Channel Claimed", [
-                    ("Channel", channel.name),
-                    ("New Owner", f"{interaction.user.name}"),
-                    ("New Owner ID", str(interaction.user.id)),
-                    ("Previous Owner", f"ID {owner_id} (left server)"),
-                ], emoji="👑")
-
                 if self.service:
-                    try:
-                        await self.service._update_panel(channel)
-                    except Exception as e:
-                        logger.error_tree("Panel Update Failed", e, [
-                            ("Channel", channel.name),
-                            ("Context", "After instant claim"),
-                        ])
+                    self.service._pending_claims.add(channel.id)
+                try:
+                    await set_owner_permissions(channel, interaction.user)
+                    db.transfer_ownership(channel.id, interaction.user.id)
+                    embed = discord.Embed(
+                        description=f"👑 You now own **{channel.name}**\nPrevious owner left the server",
+                        color=COLOR_SUCCESS
+                    )
+                    set_footer(embed)
+                    await interaction.response.send_message(embed=embed, ephemeral=True)
+                    logger.tree("Channel Claimed", [
+                        ("Channel", channel.name),
+                        ("New Owner", f"{interaction.user.name}"),
+                        ("New Owner ID", str(interaction.user.id)),
+                        ("Previous Owner", f"ID {owner_id} (left server)"),
+                    ], emoji="👑")
+
+                    if self.service:
+                        try:
+                            await self.service._update_panel(channel)
+                        except Exception as e:
+                            logger.error_tree("Panel Update Failed", e, [
+                                ("Channel", channel.name),
+                                ("Context", "After instant claim"),
+                            ])
+                finally:
+                    if self.service:
+                        self.service._pending_claims.discard(channel.id)
                 return
 
             # Owner still exists - send approval request
@@ -660,8 +734,11 @@ class TempVoiceControlPanel(ui.View):
             set_footer(embed)
 
             # Send approval request to channel, pinging owner
+            if self.service:
+                self.service._pending_claims.add(channel.id)
             view = ClaimApprovalView(channel, interaction.user, owner, self.service)
-            await channel.send(content=owner.mention, embed=embed, view=view)
+            msg = await channel.send(content=owner.mention, embed=embed, view=view)
+            view.message = msg
 
             response_embed = discord.Embed(
                 description=f"📨 Claim request sent!\nWaiting for **{owner.display_name}** to approve...",
@@ -705,7 +782,9 @@ class TempVoiceControlPanel(ui.View):
             if channel:
                 embed = discord.Embed(description="🔄 Select new owner to transfer channel", color=COLOR_NEUTRAL)
                 set_footer(embed)
-                await interaction.response.send_message(embed=embed, view=UserSelectView(channel, "transfer"), ephemeral=True)
+                view = UserSelectView(channel, "transfer")
+                await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+                view.message = await interaction.original_response()
         except discord.HTTPException as e:
             logger.error_tree("Transfer Button Failed", e, [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),

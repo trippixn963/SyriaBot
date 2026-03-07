@@ -208,6 +208,14 @@ class DatabaseCore:
                 cur.execute("ALTER TABLE temp_channels ADD COLUMN base_name TEXT")
             except sqlite3.OperationalError:
                 pass  # Column already exists
+            try:
+                cur.execute("ALTER TABLE temp_channels ADD COLUMN guide_message_id INTEGER")
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+            try:
+                cur.execute("ALTER TABLE temp_channels ADD COLUMN music_guide_message_id INTEGER")
+            except sqlite3.OperationalError:
+                pass  # Column already exists
 
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS user_settings (

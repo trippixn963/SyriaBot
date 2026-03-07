@@ -42,6 +42,27 @@ class ConfirmView(ui.View):
         self.confirmed = False
         self.message: discord.Message = None
 
+    async def on_error(self, interaction: discord.Interaction, error: Exception, item: ui.Item) -> None:
+        """Handle unexpected errors in confirm view callbacks."""
+        custom_id = getattr(item, "custom_id", "unknown")
+        logger.error_tree("Confirm View Error", error, [
+            ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+            ("User ID", str(interaction.user.id)),
+            ("Button", custom_id),
+            ("Action", self.action),
+        ])
+        try:
+            if not interaction.response.is_done():
+                embed = discord.Embed(description="❌ An error occurred", color=COLOR_ERROR)
+                set_footer(embed)
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+            else:
+                embed = discord.Embed(description="❌ An error occurred", color=COLOR_ERROR)
+                set_footer(embed)
+                await interaction.followup.send(embed=embed, ephemeral=True)
+        except discord.HTTPException:
+            pass
+
     async def on_timeout(self) -> None:
         """Handle timeout - disable buttons and update message."""
         for item in self.children:
@@ -94,14 +115,17 @@ class ConfirmView(ui.View):
                     ], emoji="❌")
                     return
 
+                # Validate user still owns the channel
                 channel_info = db.get_temp_channel(channel.id)
-                if not channel_info:
-                    embed = discord.Embed(description="❌ Channel data not found", color=COLOR_ERROR)
+                if not channel_info or channel_info["owner_id"] != interaction.user.id:
+                    embed = discord.Embed(description="❌ You no longer own this channel", color=COLOR_ERROR)
                     set_footer(embed)
                     await interaction.response.edit_message(embed=embed, view=None)
                     logger.tree("Transfer Failed", [
                         ("Channel", channel.name),
-                        ("Reason", "No DB record"),
+                        ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                        ("User ID", str(interaction.user.id)),
+                        ("Reason", "No longer owner"),
                     ], emoji="❌")
                     return
 
@@ -155,16 +179,27 @@ class ConfirmView(ui.View):
 
     @ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
     async def cancel(self, interaction: discord.Interaction, button: ui.Button) -> None:
-        self.stop()
-        embed = discord.Embed(description="↩️ Cancelled", color=COLOR_NEUTRAL)
-        set_footer(embed)
-        await interaction.response.edit_message(embed=embed, view=None)
-        logger.tree("Action Cancelled", [
-            ("Action", self.action),
-            ("Channel", self.channel.name if self.channel else "Unknown"),
-            ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-            ("ID", str(interaction.user.id)),
-        ], emoji="↩️")
+        try:
+            embed = discord.Embed(description="↩️ Cancelled", color=COLOR_NEUTRAL)
+            set_footer(embed)
+            await interaction.response.edit_message(embed=embed, view=None)
+            logger.tree("Action Cancelled", [
+                ("Action", self.action),
+                ("Channel", self.channel.name if self.channel else "Unknown"),
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("ID", str(interaction.user.id)),
+            ], emoji="↩️")
+        except discord.HTTPException as e:
+            logger.error_tree("Cancel Edit Failed", e, [
+                ("Action", self.action),
+                ("Channel", self.channel.name if self.channel else "Unknown"),
+            ])
+        except Exception as e:
+            logger.error_tree("Cancel Error", e, [
+                ("Action", self.action),
+            ])
+        finally:
+            self.stop()
 
 
 class UserSelectView(ui.View):
@@ -177,6 +212,25 @@ class UserSelectView(ui.View):
         self.service = service
         self.message: discord.Message = None
         self.add_item(UserSelect(channel, action, service))
+
+    async def on_error(self, interaction: discord.Interaction, error: Exception, item: ui.Item) -> None:
+        """Handle unexpected errors in user select view callbacks."""
+        logger.error_tree("User Select View Error", error, [
+            ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+            ("User ID", str(interaction.user.id)),
+            ("Action", self.action),
+        ])
+        try:
+            if not interaction.response.is_done():
+                embed = discord.Embed(description="❌ An error occurred", color=COLOR_ERROR)
+                set_footer(embed)
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+            else:
+                embed = discord.Embed(description="❌ An error occurred", color=COLOR_ERROR)
+                set_footer(embed)
+                await interaction.followup.send(embed=embed, ephemeral=True)
+        except discord.HTTPException:
+            pass
 
     async def on_timeout(self) -> None:
         """Handle timeout - disable dropdown and update message."""
@@ -621,7 +675,9 @@ class UserSelect(ui.UserSelect):
         )
         embed.set_thumbnail(url=user.display_avatar.url)
         set_footer(embed)
-        await interaction.response.send_message(embed=embed, view=ConfirmView("transfer", channel, user), ephemeral=True)
+        view = ConfirmView("transfer", channel, user)
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+        view.message = await interaction.original_response()
         logger.tree("Transfer Confirmation Shown", [
             ("Channel", channel.name),
             ("Target", f"{user.name} ({user.display_name})"),
