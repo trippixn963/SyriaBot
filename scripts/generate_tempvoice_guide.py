@@ -30,7 +30,7 @@ ACCENT_W = 3                  # Gold left-border accent width
 VOICE_BUTTONS = [
     [("Lock", "Lock / unlock your channel"),
      ("Limit", "Set user limit"),
-     ("Rename", "Rename channel")],
+     ("Rename", "Rename channel (boosters only)")],
     [("Allow", "Add trusted users"),
      ("Block", "Block users"),
      ("Kick", "Kick from channel")],

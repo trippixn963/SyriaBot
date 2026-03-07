@@ -90,12 +90,8 @@ class ClaimApprovalView(ui.View):
 
     @ui.button(label="Approve", style=discord.ButtonStyle.secondary, emoji=EMOJI_ALLOW)
     async def approve(self, interaction: discord.Interaction, button: ui.Button) -> None:
-        # Remove from pending claims
-        if self.service:
-            self.service._pending_claims.discard(self.channel.id)
-
         try:
-            # Only owner can approve
+            # Only owner can approve — don't clear pending flag for non-owner clicks
             if interaction.user.id != self.owner.id:
                 embed = discord.Embed(description="⚠️ Only the owner can respond to this request", color=COLOR_WARNING)
                 set_footer(embed)
@@ -107,6 +103,10 @@ class ClaimApprovalView(ui.View):
                     ("Reason", "Not owner"),
                 ], emoji="⚠️")
                 return
+
+            # Owner confirmed — clear pending flag
+            if self.service:
+                self.service._pending_claims.discard(self.channel.id)
 
             # Validate channel still exists
             channel = interaction.guild.get_channel(self.channel.id)
@@ -227,12 +227,8 @@ class ClaimApprovalView(ui.View):
 
     @ui.button(label="Deny", style=discord.ButtonStyle.secondary, emoji=EMOJI_BLOCK)
     async def deny(self, interaction: discord.Interaction, button: ui.Button) -> None:
-        # Remove from pending claims
-        if self.service:
-            self.service._pending_claims.discard(self.channel.id)
-
         try:
-            # Only owner can deny
+            # Only owner can deny — don't clear pending flag for non-owner clicks
             if interaction.user.id != self.owner.id:
                 embed = discord.Embed(description="⚠️ Only the owner can respond to this request", color=COLOR_WARNING)
                 set_footer(embed)
@@ -244,6 +240,10 @@ class ClaimApprovalView(ui.View):
                     ("Reason", "Not owner"),
                 ], emoji="⚠️")
                 return
+
+            # Owner confirmed — clear pending flag
+            if self.service:
+                self.service._pending_claims.discard(self.channel.id)
 
             embed = discord.Embed(
                 description=f"❌ Claim request from **{self.requester.display_name}** denied",
@@ -264,10 +264,18 @@ class ClaimApprovalView(ui.View):
             logger.error_tree("Claim Deny Failed", e, [
                 ("Channel", self.channel.name),
             ])
+            if not interaction.response.is_done():
+                embed = discord.Embed(description="❌ Failed to process denial", color=COLOR_ERROR)
+                set_footer(embed)
+                await interaction.response.send_message(embed=embed, ephemeral=True)
         except Exception as e:
             logger.error_tree("Claim Deny Error", e, [
                 ("Channel", self.channel.name),
             ])
+            if not interaction.response.is_done():
+                embed = discord.Embed(description="❌ An error occurred", color=COLOR_ERROR)
+                set_footer(embed)
+                await interaction.response.send_message(embed=embed, ephemeral=True)
 
         self.stop()
 
@@ -378,25 +386,29 @@ class TempVoiceControlPanel(ui.View):
             new_locked = 0 if is_locked else 1
             everyone = interaction.guild.default_role
 
-            # Send response first, then do the work
+            # Defer first — set_permissions can be slow
+            await interaction.response.defer(ephemeral=True)
+
+            if new_locked:
+                await channel.set_permissions(everyone, connect=False, send_messages=False, read_message_history=False)
+            else:
+                await channel.set_permissions(everyone, connect=True, send_messages=False, read_message_history=False)
+
+            db.update_temp_channel(channel.id, is_locked=new_locked)
+
+            # Respond with actual result after success
             if new_locked:
                 embed = discord.Embed(
                     description=f"{EMOJI_LOCK} Channel is now **locked**",
                     color=COLOR_ERROR
                 )
-                set_footer(embed)
-                await interaction.response.send_message(embed=embed, ephemeral=True)
-                await channel.set_permissions(everyone, connect=False, send_messages=False, read_message_history=False)
             else:
                 embed = discord.Embed(
                     description=f"{EMOJI_UNLOCK} Channel is now **unlocked**",
                     color=COLOR_SUCCESS
                 )
-                set_footer(embed)
-                await interaction.response.send_message(embed=embed, ephemeral=True)
-                await channel.set_permissions(everyone, connect=True, send_messages=False, read_message_history=False)
-
-            db.update_temp_channel(channel.id, is_locked=new_locked)
+            set_footer(embed)
+            await interaction.followup.send(embed=embed, ephemeral=True)
             logger.tree("Lock Toggled", [
                 ("Channel", channel.name),
                 ("Status", "Locked" if new_locked else "Unlocked"),
@@ -418,18 +430,22 @@ class TempVoiceControlPanel(ui.View):
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
             ])
-            if not interaction.response.is_done():
-                embed = discord.Embed(description="❌ Failed to update channel", color=COLOR_ERROR)
-                set_footer(embed)
+            embed = discord.Embed(description="❌ Failed to update channel", color=COLOR_ERROR)
+            set_footer(embed)
+            if interaction.response.is_done():
+                await interaction.followup.send(embed=embed, ephemeral=True)
+            else:
                 await interaction.response.send_message(embed=embed, ephemeral=True)
         except Exception as e:
             logger.error_tree("Lock Toggle Error", e, [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
             ])
-            if not interaction.response.is_done():
-                embed = discord.Embed(description="❌ An error occurred", color=COLOR_ERROR)
-                set_footer(embed)
+            embed = discord.Embed(description="❌ An error occurred", color=COLOR_ERROR)
+            set_footer(embed)
+            if interaction.response.is_done():
+                await interaction.followup.send(embed=embed, ephemeral=True)
+            else:
                 await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @ui.button(label="Limit", emoji=EMOJI_LIMIT, style=discord.ButtonStyle.secondary, custom_id="tv_limit", row=0)
@@ -693,6 +709,8 @@ class TempVoiceControlPanel(ui.View):
             if not owner:
                 if self.service:
                     self.service._pending_claims.add(channel.id)
+                # Defer first — set_owner_permissions calls Discord API which can be slow
+                await interaction.response.defer(ephemeral=True)
                 try:
                     await set_owner_permissions(channel, interaction.user)
                     db.transfer_ownership(channel.id, interaction.user.id)
@@ -701,7 +719,7 @@ class TempVoiceControlPanel(ui.View):
                         color=COLOR_SUCCESS
                     )
                     set_footer(embed)
-                    await interaction.response.send_message(embed=embed, ephemeral=True)
+                    await interaction.followup.send(embed=embed, ephemeral=True)
                     logger.tree("Channel Claimed", [
                         ("Channel", channel.name),
                         ("New Owner", f"{interaction.user.name}"),
@@ -736,9 +754,15 @@ class TempVoiceControlPanel(ui.View):
             # Send approval request to channel, pinging owner
             if self.service:
                 self.service._pending_claims.add(channel.id)
-            view = ClaimApprovalView(channel, interaction.user, owner, self.service)
-            msg = await channel.send(content=owner.mention, embed=embed, view=view)
-            view.message = msg
+            try:
+                view = ClaimApprovalView(channel, interaction.user, owner, self.service)
+                msg = await channel.send(content=owner.mention, embed=embed, view=view)
+                view.message = msg
+            except Exception:
+                # Clean up pending flag if sending the approval message fails
+                if self.service:
+                    self.service._pending_claims.discard(channel.id)
+                raise
 
             response_embed = discord.Embed(
                 description=f"📨 Claim request sent!\nWaiting for **{owner.display_name}** to approve...",
@@ -782,7 +806,7 @@ class TempVoiceControlPanel(ui.View):
             if channel:
                 embed = discord.Embed(description="🔄 Select new owner to transfer channel", color=COLOR_NEUTRAL)
                 set_footer(embed)
-                view = UserSelectView(channel, "transfer")
+                view = UserSelectView(channel, "transfer", self.service)
                 await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
                 view.message = await interaction.original_response()
         except discord.HTTPException as e:

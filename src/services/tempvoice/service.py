@@ -445,28 +445,17 @@ class TempVoiceService:
 
         return embed
 
-    def _build_panel_view(self, is_locked: bool = True) -> ui.View:
-        """Build control panel view with correct button states."""
-        view = ui.View(timeout=None)
+    def _build_panel_view(self, is_locked: bool = True) -> TempVoiceControlPanel:
+        """Build a fresh control panel view with correct lock button state.
 
-        # Row 1
-        lock_emoji = EMOJI_LOCK if is_locked else EMOJI_UNLOCK
-        lock_label = "Locked" if is_locked else "Unlocked"
-
-        view.add_item(ui.Button(label=lock_label, emoji=lock_emoji, style=discord.ButtonStyle.secondary, custom_id="tv_lock", row=0))
-        view.add_item(ui.Button(label="Limit", emoji=EMOJI_LIMIT, style=discord.ButtonStyle.secondary, custom_id="tv_limit", row=0))
-        view.add_item(ui.Button(label="Rename", emoji=EMOJI_RENAME, style=discord.ButtonStyle.secondary, custom_id="tv_rename", row=0))
-
-        # Row 2
-        view.add_item(ui.Button(label="Allow", emoji=EMOJI_ALLOW, style=discord.ButtonStyle.secondary, custom_id="tv_permit", row=1))
-        view.add_item(ui.Button(label="Block", emoji=EMOJI_BLOCK, style=discord.ButtonStyle.secondary, custom_id="tv_block", row=1))
-        view.add_item(ui.Button(label="Kick", emoji=EMOJI_KICK, style=discord.ButtonStyle.secondary, custom_id="tv_kick", row=1))
-
-        # Row 3
-        view.add_item(ui.Button(label="Claim", emoji=EMOJI_CLAIM, style=discord.ButtonStyle.secondary, custom_id="tv_claim", row=2))
-        view.add_item(ui.Button(label="Transfer", emoji=EMOJI_TRANSFER, style=discord.ButtonStyle.secondary, custom_id="tv_transfer", row=2))
-        view.add_item(ui.Button(label="Clear", emoji=EMOJI_DELETE, style=discord.ButtonStyle.secondary, custom_id="tv_clear", row=2))
-
+        Creates a new TempVoiceControlPanel instance each time to avoid race
+        conditions when multiple channels update concurrently. The persistent
+        view registered via bot.add_view() handles interactions for old messages
+        after restarts; these per-message instances handle live interactions.
+        """
+        view = TempVoiceControlPanel(self)
+        view.lock_button.label = "Locked" if is_locked else "Unlocked"
+        view.lock_button.emoji = EMOJI_LOCK if is_locked else EMOJI_UNLOCK
         return view
 
     async def _send_guide_images(self, channel: discord.VoiceChannel) -> tuple[int | None, int | None]:
@@ -489,17 +478,30 @@ class TempVoiceService:
         channel: discord.VoiceChannel,
         owner: discord.Member,
     ) -> discord.Message:
-        """Send guide images + control panel to voice channel (initial creation)."""
+        """Send guide images + control panel + welcome message to voice channel."""
         music_guide_id, guide_id = await self._send_guide_images(channel)
 
         embed = self._build_panel_embed(channel, owner, is_locked=True)
 
-        # Ping owner so they notice the control panel
         message = await channel.send(
-            content=owner.mention,
             embed=embed,
             view=self._build_panel_view(is_locked=True),
         )
+
+        # Welcome message with rules reminder and music info
+        welcome = (
+            f"### Welcome to your voice channel, {owner.mention}!\n"
+            f"Use the **control panel** above to manage your channel.\n\n"
+            f"> **Rules**\n"
+            f"> - Voice channels are **self-moderated** by the owner\n"
+            f"> - Be respectful to everyone in your channel\n"
+            f"> - No mic spamming or soundboards abuse\n"
+            f"> - Follow all server rules at all times\n"
+            f"> - Mods can join locked channels\n\n"
+            f"> **Music**\n"
+            f"> We use **Boogie Premium** for music! Type `/play` to get started."
+        )
+        await channel.send(welcome)
 
         # Cache all message IDs
         update_kwargs = {"panel_message_id": message.id}

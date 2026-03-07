@@ -34,11 +34,12 @@ if TYPE_CHECKING:
 class ConfirmView(ui.View):
     """Confirmation view for destructive actions."""
 
-    def __init__(self, action: str, channel: discord.VoiceChannel, target: discord.Member = None) -> None:
+    def __init__(self, action: str, channel: discord.VoiceChannel, target: discord.Member = None, service: "TempVoiceService" = None) -> None:
         super().__init__(timeout=SELECT_TIMEOUT_DEFAULT)
         self.action = action
         self.channel = channel
         self.target = target
+        self.service = service
         self.confirmed = False
         self.message: discord.Message = None
 
@@ -155,6 +156,16 @@ class ConfirmView(ui.View):
                     ("To", f"{target.name} ({target.display_name})"),
                     ("To ID", str(target.id)),
                 ], emoji="🔄")
+
+                # Update panel to reflect new owner
+                if self.service:
+                    try:
+                        await self.service._update_panel(channel)
+                    except Exception as e:
+                        logger.error_tree("Panel Update Failed", e, [
+                            ("Channel", channel.name),
+                            ("Context", "After transfer"),
+                        ])
 
         except discord.HTTPException as e:
             logger.error_tree("Confirm Action Failed", e, [
@@ -675,7 +686,7 @@ class UserSelect(ui.UserSelect):
         )
         embed.set_thumbnail(url=user.display_avatar.url)
         set_footer(embed)
-        view = ConfirmView("transfer", channel, user)
+        view = ConfirmView("transfer", channel, user, self.service)
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
         view.message = await interaction.original_response()
         logger.tree("Transfer Confirmation Shown", [

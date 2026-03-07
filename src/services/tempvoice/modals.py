@@ -81,6 +81,7 @@ class NameModal(ui.Modal, title="Rename Channel"):
                 # User provided a custom base name - build full name with numeral
                 full_name = build_full_name(position, new_base_name)
                 await self.channel.edit(name=full_name)
+
                 db.update_temp_channel(self.channel.id, name=full_name, base_name=new_base_name)
                 db.save_user_settings(interaction.user.id, default_name=new_base_name)
                 embed = discord.Embed(
@@ -103,6 +104,7 @@ class NameModal(ui.Modal, title="Rename Channel"):
                 auto_name = build_full_name(position, display_name)
 
                 await self.channel.edit(name=auto_name)
+
                 db.update_temp_channel(self.channel.id, name=auto_name, base_name=display_name)
                 # Clear saved default name
                 db.save_user_settings(interaction.user.id, default_name=None)
@@ -144,6 +146,15 @@ class NameModal(ui.Modal, title="Rename Channel"):
             ("ID", str(interaction.user.id)),
             ("Channel", self.channel.name),
         ])
+        try:
+            embed = discord.Embed(description="❌ Failed to rename channel", color=COLOR_ERROR)
+            set_footer(embed)
+            if interaction.response.is_done():
+                await interaction.followup.send(embed=embed, ephemeral=True)
+            else:
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+        except discord.HTTPException:
+            pass
 
 
 class LimitModal(ui.Modal, title="Set User Limit"):
@@ -238,3 +249,12 @@ class LimitModal(ui.Modal, title="Set User Limit"):
             ("ID", str(interaction.user.id)),
             ("Channel", self.channel.name),
         ])
+        try:
+            embed = discord.Embed(description="❌ Failed to set limit", color=COLOR_ERROR)
+            set_footer(embed)
+            if interaction.response.is_done():
+                await interaction.followup.send(embed=embed, ephemeral=True)
+            else:
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+        except discord.HTTPException:
+            pass
