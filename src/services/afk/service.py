@@ -78,17 +78,46 @@ class AFKService:
             try:
                 guild = self.bot.get_guild(guild_id)
                 if not guild:
+                    logger.tree("AFK Expiry Skip", [
+                        ("User ID", str(user_id)),
+                        ("Guild ID", str(guild_id)),
+                        ("Reason", "Guild not found"),
+                    ], emoji="⚠️")
                     continue
                 member = guild.get_member(user_id)
                 if not member:
+                    logger.tree("AFK Expiry Skip", [
+                        ("User ID", str(user_id)),
+                        ("Guild", guild.name),
+                        ("Reason", "Member not found"),
+                    ], emoji="⚠️")
                     continue
                 if member.nick and member.nick.startswith("[AFK] "):
                     new_nick = member.nick[6:]
                     if new_nick == member.name:
                         new_nick = None
                     await member.edit(nick=new_nick)
-            except (discord.Forbidden, discord.HTTPException):
-                pass
+                    logger.tree("AFK Expiry Nickname Restored", [
+                        ("User", f"{member.name} ({member.display_name})"),
+                        ("ID", str(user_id)),
+                        ("Guild", guild.name),
+                    ], emoji="✏️")
+                logger.tree("AFK Expired", [
+                    ("User", f"{member.name} ({member.display_name})"),
+                    ("ID", str(user_id)),
+                    ("Guild", guild.name),
+                    ("AFK Since", f"<t:{entry['timestamp']}:R>"),
+                ], emoji="⏰")
+            except discord.Forbidden:
+                logger.tree("AFK Expiry Nickname Failed", [
+                    ("User ID", str(user_id)),
+                    ("Reason", "Missing permissions"),
+                ], emoji="⚠️")
+            except discord.HTTPException as e:
+                logger.tree("AFK Expiry Nickname Failed", [
+                    ("User ID", str(user_id)),
+                    ("Error", str(e)[:50]),
+                ], emoji="⚠️")
 
         logger.tree("AFK Expiry Cleanup", [
             ("Expired", str(len(expired))),
