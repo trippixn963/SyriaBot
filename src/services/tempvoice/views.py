@@ -140,19 +140,29 @@ class ClaimApprovalView(ui.View):
             # Check if requester already owns a channel
             existing = db.get_owner_channel(requester.id, interaction.guild.id)
             if existing:
-                embed = discord.Embed(
-                    description=f"❌ **{requester.display_name}** already owns another channel",
-                    color=COLOR_ERROR
-                )
-                set_footer(embed)
-                await interaction.response.edit_message(embed=embed, view=None)
-                logger.tree("Claim Approve Failed", [
-                    ("Channel", channel.name),
-                    ("Requester", f"{requester.name} ({requester.display_name})"),
-                    ("Requester ID", str(requester.id)),
-                    ("Reason", "Already owns channel"),
-                ], emoji="❌")
-                return
+                # Verify the channel still exists in Discord (clean up stale DB entries)
+                existing_channel = interaction.guild.get_channel(existing)
+                if existing_channel:
+                    embed = discord.Embed(
+                        description=f"❌ **{requester.display_name}** already owns another channel",
+                        color=COLOR_ERROR
+                    )
+                    set_footer(embed)
+                    await interaction.response.edit_message(embed=embed, view=None)
+                    logger.tree("Claim Approve Failed", [
+                        ("Channel", channel.name),
+                        ("Requester", f"{requester.name} ({requester.display_name})"),
+                        ("Requester ID", str(requester.id)),
+                        ("Reason", "Already owns channel"),
+                    ], emoji="❌")
+                    return
+                else:
+                    # Stale DB entry — channel was deleted, clean it up
+                    db.delete_temp_channel(existing)
+                    logger.tree("Orphan DB Entry Cleaned", [
+                        ("Channel ID", str(existing)),
+                        ("Owner", f"{requester.name} ({requester.display_name})"),
+                    ], emoji="🧹")
 
             # Remove old owner permissions and set new owner permissions
             # Only update DB if Discord accepts the permission changes
@@ -177,9 +187,16 @@ class ClaimApprovalView(ui.View):
                 self.stop()
                 return
 
-            # Only update DB after Discord permissions are set successfully
+            # Cancel any pending auto-transfer for this channel
+            if self.service:
+                task = self.service._pending_transfers.pop(channel.id, None)
+                if task:
+                    task.cancel()
+
+            # Update DB ownership
             db.transfer_ownership(channel.id, requester.id)
 
+            # Respond immediately (before slow API calls timeout the interaction)
             embed = discord.Embed(
                 description=f"✅ **{requester.display_name}** is now the owner",
                 color=COLOR_SUCCESS
@@ -196,14 +213,16 @@ class ClaimApprovalView(ui.View):
                 ("Approved By ID", str(self.owner.id)),
             ], emoji="👑")
 
-            # Update panel
+            # Now do the heavy work (rename, apply lists, update panel)
             if self.service:
                 try:
+                    await self.service._rename_for_new_owner(channel, requester)
+                    await self.service._apply_owner_lists(channel, requester)
                     await self.service._update_panel(channel)
                 except Exception as e:
-                    logger.error_tree("Panel Update Failed", e, [
+                    logger.error_tree("Post-Claim Setup Failed", e, [
                         ("Channel", channel.name),
-                        ("Context", "After claim approval"),
+                        ("New Owner", f"{requester.name}"),
                     ])
 
         except discord.HTTPException as e:
@@ -694,16 +713,24 @@ class TempVoiceControlPanel(ui.View):
 
             existing = db.get_owner_channel(interaction.user.id, interaction.guild.id)
             if existing:
-                embed = discord.Embed(description="⚠️ You already own a channel", color=COLOR_WARNING)
-                set_footer(embed)
-                await interaction.response.send_message(embed=embed, ephemeral=True)
-                logger.tree("Claim Rejected", [
-                    ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                    ("ID", str(interaction.user.id)),
-                    ("Channel", channel.name),
-                    ("Reason", "Owns another channel"),
-                ], emoji="⚠️")
-                return
+                existing_channel = interaction.guild.get_channel(existing)
+                if existing_channel:
+                    embed = discord.Embed(description="⚠️ You already own a channel", color=COLOR_WARNING)
+                    set_footer(embed)
+                    await interaction.response.send_message(embed=embed, ephemeral=True)
+                    logger.tree("Claim Rejected", [
+                        ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                        ("ID", str(interaction.user.id)),
+                        ("Channel", channel.name),
+                        ("Reason", "Owns another channel"),
+                    ], emoji="⚠️")
+                    return
+                else:
+                    db.delete_temp_channel(existing)
+                    logger.tree("Orphan DB Entry Cleaned", [
+                        ("Channel ID", str(existing)),
+                        ("Owner", f"{interaction.user.name}"),
+                    ], emoji="🧹")
 
             # If owner left the server, allow instant claim
             if not owner:
@@ -712,8 +739,20 @@ class TempVoiceControlPanel(ui.View):
                 # Defer first — set_owner_permissions calls Discord API which can be slow
                 await interaction.response.defer(ephemeral=True)
                 try:
+                    # Cancel any pending auto-transfer
+                    if self.service:
+                        task = self.service._pending_transfers.pop(channel.id, None)
+                        if task:
+                            task.cancel()
+
                     await set_owner_permissions(channel, interaction.user)
                     db.transfer_ownership(channel.id, interaction.user.id)
+
+                    # Rename channel and apply new owner's trusted/blocked lists
+                    if self.service:
+                        await self.service._rename_for_new_owner(channel, interaction.user)
+                        await self.service._apply_owner_lists(channel, interaction.user)
+
                     embed = discord.Embed(
                         description=f"👑 You now own **{channel.name}**\nPrevious owner left the server",
                         color=COLOR_SUCCESS

@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 import discord
 from discord import ui
 
-from src.core.colors import COLOR_SUCCESS, COLOR_ERROR, COLOR_WARNING, COLOR_NEUTRAL, COLOR_BOOST, EMOJI_ALLOW
+from src.core.colors import COLOR_SUCCESS, COLOR_ERROR, COLOR_WARNING, COLOR_NEUTRAL, COLOR_BOOST
 from src.core.config import config
 from src.core.constants import SELECT_TIMEOUT_DEFAULT
 from src.core.logger import logger
@@ -22,195 +22,12 @@ from src.utils.footer import set_footer
 from .utils import (
     is_booster,
     has_vc_mod_role,
-    generate_channel_name,
     MAX_ALLOWED_USERS_FREE,
     set_owner_permissions,
 )
 
 if TYPE_CHECKING:
     from .service import TempVoiceService
-
-
-class ConfirmView(ui.View):
-    """Confirmation view for destructive actions."""
-
-    def __init__(self, action: str, channel: discord.VoiceChannel, target: discord.Member = None, service: "TempVoiceService" = None) -> None:
-        super().__init__(timeout=SELECT_TIMEOUT_DEFAULT)
-        self.action = action
-        self.channel = channel
-        self.target = target
-        self.service = service
-        self.confirmed = False
-        self.message: discord.Message = None
-
-    async def on_error(self, interaction: discord.Interaction, error: Exception, item: ui.Item) -> None:
-        """Handle unexpected errors in confirm view callbacks."""
-        custom_id = getattr(item, "custom_id", "unknown")
-        logger.error_tree("Confirm View Error", error, [
-            ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-            ("User ID", str(interaction.user.id)),
-            ("Button", custom_id),
-            ("Action", self.action),
-        ])
-        try:
-            if not interaction.response.is_done():
-                embed = discord.Embed(description="❌ An error occurred", color=COLOR_ERROR)
-                set_footer(embed)
-                await interaction.response.send_message(embed=embed, ephemeral=True)
-            else:
-                embed = discord.Embed(description="❌ An error occurred", color=COLOR_ERROR)
-                set_footer(embed)
-                await interaction.followup.send(embed=embed, ephemeral=True)
-        except discord.HTTPException:
-            pass
-
-    async def on_timeout(self) -> None:
-        """Handle timeout - disable buttons and update message."""
-        for item in self.children:
-            item.disabled = True
-        if self.message:
-            try:
-                embed = discord.Embed(description="⏳ Confirmation expired", color=COLOR_NEUTRAL)
-                set_footer(embed)
-                await self.message.edit(embed=embed, view=None)
-            except discord.HTTPException as e:
-                logger.error_tree("Confirm View Timeout Edit Failed", e, [
-                    ("Action", self.action),
-                ])
-        logger.tree("Confirm View Expired", [
-            ("Action", self.action),
-            ("Channel", self.channel.name if self.channel else "Unknown"),
-        ], emoji="⏳")
-
-    @ui.button(label="Confirm", style=discord.ButtonStyle.secondary, emoji=EMOJI_ALLOW)
-    async def confirm(self, interaction: discord.Interaction, button: ui.Button) -> None:
-        self.confirmed = True
-        self.stop()
-
-        try:
-            # Validate channel still exists
-            channel = interaction.guild.get_channel(self.channel.id)
-            if not channel:
-                embed = discord.Embed(description="❌ Channel no longer exists", color=COLOR_ERROR)
-                set_footer(embed)
-                await interaction.response.edit_message(embed=embed, view=None)
-                logger.tree("Confirm Failed", [
-                    ("Action", self.action),
-                    ("Channel ID", str(self.channel.id)),
-                    ("Reason", "Channel deleted"),
-                ], emoji="❌")
-                return
-
-            if self.action == "transfer" and self.target:
-                # Validate target still in guild
-                target = interaction.guild.get_member(self.target.id)
-                if not target:
-                    embed = discord.Embed(description="❌ User no longer in server", color=COLOR_ERROR)
-                    set_footer(embed)
-                    await interaction.response.edit_message(embed=embed, view=None)
-                    logger.tree("Transfer Failed", [
-                        ("Channel", channel.name),
-                        ("Target", f"{self.target.name} ({self.target.display_name})"),
-                        ("Target ID", str(self.target.id)),
-                        ("Reason", "Target left server"),
-                    ], emoji="❌")
-                    return
-
-                # Validate user still owns the channel
-                channel_info = db.get_temp_channel(channel.id)
-                if not channel_info or channel_info["owner_id"] != interaction.user.id:
-                    embed = discord.Embed(description="❌ You no longer own this channel", color=COLOR_ERROR)
-                    set_footer(embed)
-                    await interaction.response.edit_message(embed=embed, view=None)
-                    logger.tree("Transfer Failed", [
-                        ("Channel", channel.name),
-                        ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                        ("User ID", str(interaction.user.id)),
-                        ("Reason", "No longer owner"),
-                    ], emoji="❌")
-                    return
-
-                old_owner = interaction.guild.get_member(channel_info["owner_id"])
-                if old_owner:
-                    await channel.set_permissions(old_owner, overwrite=None)
-                await set_owner_permissions(channel, target)
-                db.transfer_ownership(channel.id, target.id)
-
-                # Generate channel name for new owner (uses shared utility)
-                channel_name, name_source = generate_channel_name(target, interaction.guild)
-
-                await channel.edit(name=channel_name)
-                db.update_temp_channel(channel.id, name=channel_name)
-
-                embed = discord.Embed(
-                    description=f"🔄 Transferred to **{target.display_name}**\nChannel renamed to `{channel_name}`",
-                    color=COLOR_SUCCESS
-                )
-                embed.set_thumbnail(url=target.display_avatar.url)
-                set_footer(embed)
-                await interaction.response.edit_message(embed=embed, view=None)
-                logger.tree("Channel Transferred", [
-                    ("Channel", channel_name),
-                    ("From", f"{interaction.user.name} ({interaction.user.display_name})"),
-                    ("From ID", str(interaction.user.id)),
-                    ("To", f"{target.name} ({target.display_name})"),
-                    ("To ID", str(target.id)),
-                ], emoji="🔄")
-
-                # Update panel to reflect new owner
-                if self.service:
-                    try:
-                        await self.service._update_panel(channel)
-                    except Exception as e:
-                        logger.error_tree("Panel Update Failed", e, [
-                            ("Channel", channel.name),
-                            ("Context", "After transfer"),
-                        ])
-
-        except discord.HTTPException as e:
-            logger.error_tree("Confirm Action Failed", e, [
-                ("Action", self.action),
-                ("Channel", self.channel.name if self.channel else "Unknown"),
-                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                ("ID", str(interaction.user.id)),
-            ])
-            if not interaction.response.is_done():
-                embed = discord.Embed(description=f"❌ Failed: {e}", color=COLOR_ERROR)
-                set_footer(embed)
-                await interaction.response.edit_message(embed=embed, view=None)
-        except Exception as e:
-            logger.error_tree("Confirm Action Error", e, [
-                ("Action", self.action),
-                ("Channel", self.channel.name if self.channel else "Unknown"),
-            ])
-            if not interaction.response.is_done():
-                embed = discord.Embed(description="❌ An error occurred", color=COLOR_ERROR)
-                set_footer(embed)
-                await interaction.response.edit_message(embed=embed, view=None)
-
-    @ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
-    async def cancel(self, interaction: discord.Interaction, button: ui.Button) -> None:
-        try:
-            embed = discord.Embed(description="↩️ Cancelled", color=COLOR_NEUTRAL)
-            set_footer(embed)
-            await interaction.response.edit_message(embed=embed, view=None)
-            logger.tree("Action Cancelled", [
-                ("Action", self.action),
-                ("Channel", self.channel.name if self.channel else "Unknown"),
-                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                ("ID", str(interaction.user.id)),
-            ], emoji="↩️")
-        except discord.HTTPException as e:
-            logger.error_tree("Cancel Edit Failed", e, [
-                ("Action", self.action),
-                ("Channel", self.channel.name if self.channel else "Unknown"),
-            ])
-        except Exception as e:
-            logger.error_tree("Cancel Error", e, [
-                ("Action", self.action),
-            ])
-        finally:
-            self.stop()
 
 
 class UserSelectView(ui.View):
@@ -679,20 +496,74 @@ class UserSelect(ui.UserSelect):
             ], emoji="⚠️")
             return
 
-        # Confirmation required
+        # Check if target is in the voice channel
+        if not user.voice or user.voice.channel != channel:
+            embed = discord.Embed(
+                description=f"⚠️ **{user.display_name}** is not in the channel",
+                color=COLOR_WARNING,
+            )
+            set_footer(embed)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+
+        # Check if target already owns a channel
+        existing = db.get_owner_channel(user.id, interaction.guild.id)
+        if existing:
+            existing_channel = interaction.guild.get_channel(existing)
+            if existing_channel:
+                embed = discord.Embed(
+                    description=f"❌ **{user.display_name}** already owns another channel",
+                    color=COLOR_ERROR,
+                )
+                set_footer(embed)
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                return
+            else:
+                db.delete_temp_channel(existing)
+
+        # Defer — the following API calls can be slow
+        await interaction.response.defer(ephemeral=True)
+
+        # Execute transfer directly
+        channel_info = db.get_temp_channel(channel.id)
+        if not channel_info or channel_info["owner_id"] != interaction.user.id:
+            embed = discord.Embed(description="❌ You no longer own this channel", color=COLOR_ERROR)
+            set_footer(embed)
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            return
+
+        old_owner = interaction.guild.get_member(channel_info["owner_id"])
+        if old_owner:
+            await channel.set_permissions(old_owner, overwrite=None)
+        await set_owner_permissions(channel, user)
+        db.transfer_ownership(channel.id, user.id)
+
+        # Rename and apply new owner's lists
+        channel_name = await self.service._rename_for_new_owner(channel, user)
+        await self.service._apply_owner_lists(channel, user)
+
         embed = discord.Embed(
-            description=f"🔄 Transfer **{channel.name}** to {user.mention}?",
-            color=COLOR_WARNING,
+            description=f"🔄 Transferred to **{user.display_name}**\nChannel renamed to `{channel_name}`",
+            color=COLOR_SUCCESS,
         )
         embed.set_thumbnail(url=user.display_avatar.url)
         set_footer(embed)
-        view = ConfirmView("transfer", channel, user, self.service)
-        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-        view.message = await interaction.original_response()
-        logger.tree("Transfer Confirmation Shown", [
-            ("Channel", channel.name),
-            ("Target", f"{user.name} ({user.display_name})"),
-            ("Target ID", str(user.id)),
-            ("By", f"{interaction.user.name} ({interaction.user.display_name})"),
-            ("By ID", str(interaction.user.id)),
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
+        logger.tree("Channel Transferred", [
+            ("Channel", channel_name),
+            ("From", f"{interaction.user.name} ({interaction.user.display_name})"),
+            ("From ID", str(interaction.user.id)),
+            ("To", f"{user.name} ({user.display_name})"),
+            ("To ID", str(user.id)),
         ], emoji="🔄")
+
+        # Update panel to reflect new owner
+        if self.service:
+            try:
+                await self.service._update_panel(channel)
+            except Exception as e:
+                logger.error_tree("Panel Update Failed", e, [
+                    ("Channel", channel.name),
+                    ("Context", "After transfer"),
+                ])

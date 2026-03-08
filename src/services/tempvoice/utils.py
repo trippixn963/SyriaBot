@@ -256,7 +256,11 @@ def get_trusted_overwrite() -> discord.PermissionOverwrite:
 
 def get_blocked_overwrite() -> discord.PermissionOverwrite:
     """Get standard permission overwrite for blocked users."""
-    return discord.PermissionOverwrite(connect=False)
+    return discord.PermissionOverwrite(
+        connect=False,
+        send_messages=False,
+        read_message_history=False,
+    )
 
 
 def get_locked_overwrite() -> discord.PermissionOverwrite:

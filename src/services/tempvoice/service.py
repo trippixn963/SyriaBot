@@ -492,14 +492,14 @@ class TempVoiceService:
         welcome = (
             f"### Welcome to your voice channel, {owner.mention}!\n"
             f"Use the **control panel** above to manage your channel.\n\n"
-            f"> **Rules**\n"
-            f"> - Voice channels are **self-moderated** by the owner\n"
-            f"> - Be respectful to everyone in your channel\n"
-            f"> - No mic spamming or soundboards abuse\n"
-            f"> - Follow all server rules at all times\n"
-            f"> - Mods can join locked channels\n\n"
-            f"> **Music**\n"
-            f"> We use **Boogie Premium** for music! Type `/play` to get started."
+            f"<:rules:1460257117977055283> **Rules**\n"
+            f"- Voice channels are **self-moderated** by the owner\n"
+            f"- Be respectful to everyone in your channel\n"
+            f"- No mic spamming or soundboards abuse\n"
+            f"- Follow all server rules at all times\n"
+            f"- Mods can join locked channels\n\n"
+            f"<:music:1480176122582012097> **Music**\n"
+            f"We use **Boogie Premium** for music! Type `/play` to get started."
         )
         await channel.send(welcome)
 
@@ -587,6 +587,15 @@ class TempVoiceService:
                     db.update_temp_channel(channel.id, panel_message_id=message.id)
                     panel_found = True
                     break
+        except discord.NotFound:
+            # Channel was deleted — clean up DB
+            db.delete_temp_channel(channel.id)
+            logger.tree("Panel Update Aborted", [
+                ("Channel", channel.name),
+                ("Reason", "Channel deleted"),
+                ("Action", "DB entry cleaned up"),
+            ], emoji="🗑️")
+            return
         except discord.HTTPException as e:
             logger.error_tree("Panel History Search Failed", e, [
                 ("Channel", channel.name),
@@ -603,6 +612,14 @@ class TempVoiceService:
                     ("Channel", channel.name),
                     ("Owner", str(owner)),
                 ], emoji="🔧")
+            except discord.NotFound:
+                # Channel was deleted — clean up DB
+                db.delete_temp_channel(channel.id)
+                logger.tree("Panel Recovery Aborted", [
+                    ("Channel", channel.name),
+                    ("Reason", "Channel deleted"),
+                    ("Action", "DB entry cleaned up"),
+                ], emoji="🗑️")
             except discord.HTTPException as e:
                 logger.error_tree("Panel Recovery Failed", e, [
                     ("Channel", channel.name),
@@ -815,16 +832,24 @@ class TempVoiceService:
     async def _grant_text_access(self, channel: discord.VoiceChannel, member: discord.Member) -> None:
         """Grant text chat access to a member in a temp VC (includes dragged-in users)."""
         try:
+            # Only manage permissions for temp channels
+            channel_info = db.get_temp_channel(channel.id)
+            if not channel_info:
+                return
+
             # Track join time for this member (for auto-transfer ordering)
             if channel.id not in self._member_join_times:
                 self._member_join_times[channel.id] = {}
             if member.id not in self._member_join_times[channel.id]:
                 self._member_join_times[channel.id][member.id] = time.time()
 
+            # Don't override permissions for blocked users
+            if member.id in db.get_blocked_list(channel_info["owner_id"]):
+                return
+
             # Get current overwrites to preserve other permissions
             overwrites = channel.overwrites_for(member)
             # Text access
-            overwrites.view_channel = True
             overwrites.send_messages = True
             overwrites.read_message_history = True
             # Allow reconnecting if they leave (for dragged-in users)
@@ -905,43 +930,41 @@ class TempVoiceService:
             ])
 
     async def _revoke_text_access(self, channel: discord.VoiceChannel, member: discord.Member) -> None:
-        """Revoke text chat access from a member who left a VC."""
+        """Revoke text chat access from a member who left a temp VC."""
         try:
             channel_info = db.get_temp_channel(channel.id)
 
-            # For temp channels - special handling
-            if channel_info:
-                # Don't revoke from owner - they always have access
-                if member.id == channel_info["owner_id"]:
-                    # Still update panel to reflect member left
-                    await self._update_panel(channel)
-                    return
+            # Only manage permissions for temp channels
+            if not channel_info:
+                return
 
-                # Clean up join time tracking for non-owner
-                if channel.id in self._member_join_times:
-                    self._member_join_times[channel.id].pop(member.id, None)
-
-                # Check if user is trusted - they keep FULL access (text + connect)
-                is_trusted = member.id in db.get_trusted_list(channel_info["owner_id"])
-
-                if is_trusted:
-                    # Trusted users keep connect AND text access even when not in VC
-                    # No permission changes needed - they retain their allowed permissions
-                    logger.tree("Text Access Retained", [
-                        ("Channel", channel.name),
-                        ("User", f"{member.name} ({member.display_name})"),
-                        ("ID", str(member.id)),
-                        ("Reason", "Trusted user"),
-                    ], emoji="✅")
-                else:
-                    # Not trusted - remove all custom permissions
-                    await channel.set_permissions(member, overwrite=None)
-
-                # Update panel to show member left
+            # Don't revoke from owner - they always have access
+            if member.id == channel_info["owner_id"]:
+                # Still update panel to reflect member left
                 await self._update_panel(channel)
+                return
+
+            # Clean up join time tracking for non-owner
+            if channel.id in self._member_join_times:
+                self._member_join_times[channel.id].pop(member.id, None)
+
+            # Check if user is trusted - they keep FULL access (text + connect)
+            is_trusted = member.id in db.get_trusted_list(channel_info["owner_id"])
+
+            if is_trusted:
+                # Trusted users keep connect AND text access even when not in VC
+                logger.tree("Text Access Retained", [
+                    ("Channel", channel.name),
+                    ("User", f"{member.name} ({member.display_name})"),
+                    ("ID", str(member.id)),
+                    ("Reason", "Trusted user"),
+                ], emoji="✅")
             else:
-                # For non-temp channels - just remove the text permissions we granted
+                # Not trusted - remove all custom permissions
                 await channel.set_permissions(member, overwrite=None)
+
+            # Update panel to show member left
+            await self._update_panel(channel)
         except discord.HTTPException as e:
             logger.error_tree("Text Access Revoke Failed", e, [
                 ("Channel", channel.name),
@@ -1136,6 +1159,93 @@ class TempVoiceService:
 
         return 1  # Fallback
 
+    async def _rename_for_new_owner(self, channel: discord.VoiceChannel, new_owner: discord.Member) -> str:
+        """Rename a channel to the new owner's default name, keeping its position."""
+        base_name, _ = generate_base_name(new_owner)
+        position = self._get_channel_position(channel)
+        channel_name = build_full_name(position, base_name)
+        await channel.edit(name=channel_name)
+        db.update_temp_channel(channel.id, name=channel_name, base_name=base_name)
+        return channel_name
+
+    async def _apply_owner_lists(self, channel: discord.VoiceChannel, new_owner: discord.Member) -> tuple[int, int]:
+        """Clear stale overwrites and apply the new owner's trusted/blocked lists.
+
+        Re-grants text access to members currently in the channel so they
+        don't lose permissions after the overwrite wipe.
+
+        Returns (trusted_count, blocked_count).
+        """
+        guild = channel.guild
+
+        # Collect IDs of members currently in the voice channel
+        current_member_ids = {m.id for m in channel.members if not m.bot}
+
+        # Clear stale permission overwrites (members + left-server users)
+        for target, _ in list(channel.overwrites.items()):
+            # Skip roles (e.g. @everyone, VC mod roles) — only clear user overwrites
+            if isinstance(target, discord.Role):
+                continue
+            # Keep new owner and bot overwrites
+            if target.id in (new_owner.id, guild.me.id):
+                continue
+            await channel.set_permissions(target, overwrite=None)
+
+        # Build blocked set for quick lookup
+        blocked_ids = set(db.get_blocked_list(new_owner.id))
+
+        # Apply blocked list
+        blocked_count = 0
+        for blocked_id in blocked_ids:
+            blocked_user = guild.get_member(blocked_id)
+            if blocked_user:
+                if has_vc_mod_role(blocked_user) and new_owner.id != config.OWNER_ID:
+                    continue
+                await channel.set_permissions(
+                    blocked_user,
+                    connect=False,
+                    send_messages=False,
+                    read_message_history=False,
+                )
+                if blocked_user.voice and blocked_user.voice.channel == channel:
+                    try:
+                        await blocked_user.move_to(None)
+                    except discord.HTTPException as e:
+                        logger.error_tree("Blocked User Kick Failed", e, [
+                            ("Channel", channel.name),
+                            ("User", f"{blocked_user.name} ({blocked_user.display_name})"),
+                            ("ID", str(blocked_user.id)),
+                        ])
+                blocked_count += 1
+
+        # Apply trusted list
+        trusted_ids = set(db.get_trusted_list(new_owner.id))
+        trusted_count = 0
+        for trusted_id in trusted_ids:
+            trusted_user = guild.get_member(trusted_id)
+            if trusted_user:
+                await channel.set_permissions(
+                    trusted_user,
+                    connect=True,
+                    send_messages=True,
+                    read_message_history=True,
+                )
+                trusted_count += 1
+
+        # Re-grant text access to current members who aren't blocked or already handled
+        handled_ids = blocked_ids | trusted_ids | {new_owner.id, guild.me.id}
+        for member_id in current_member_ids - handled_ids:
+            member = guild.get_member(member_id)
+            if member:
+                await channel.set_permissions(
+                    member,
+                    connect=True,
+                    send_messages=True,
+                    read_message_history=True,
+                )
+
+        return trusted_count, blocked_count
+
     async def _create_temp_channel(self, member: discord.Member) -> None:
         """Create a new temp voice channel for a member."""
         # Check if lock is already held (someone else is creating)
@@ -1252,17 +1362,34 @@ class TempVoiceService:
         if existing:
             channel = guild.get_channel(existing)
             if channel:
+                # Cancel pending transfers and claims for this channel
+                task = self._pending_transfers.pop(channel.id, None)
+                if task:
+                    task.cancel()
+                self._pending_claims.discard(channel.id)
+
                 # Transfer ownership to someone else in the channel, or delete if empty
-                other_members = [m for m in channel.members if m.id != member.id and not m.bot]
+                existing_owners = {ch["owner_id"] for ch in db.get_all_temp_channels(guild.id)}
+                other_members = [
+                    m for m in channel.members
+                    if m.id != member.id and not m.bot
+                    and m.id not in existing_owners
+                ]
                 if other_members:
-                    # Transfer to first other member
+                    # Transfer to first eligible member
                     new_owner = other_members[0]
                     try:
                         await channel.set_permissions(member, overwrite=None)
                         await set_owner_permissions(channel, new_owner)
                         db.transfer_ownership(channel.id, new_owner.id)
+                        channel_name = await self._rename_for_new_owner(channel, new_owner)
+                        await self._apply_owner_lists(channel, new_owner)
+
+                        # Update panel to reflect new owner
+                        await self._update_panel(channel)
+
                         logger.tree("Auto-Transfer", [
-                            ("Channel", channel.name),
+                            ("Channel", channel_name),
                             ("From", f"{member.name} ({member.display_name})"),
                             ("From ID", str(member.id)),
                             ("To", f"{new_owner.name} ({new_owner.display_name})"),
@@ -1279,8 +1406,8 @@ class TempVoiceService:
                 else:
                     # Channel is empty, delete it
                     try:
-                        db.delete_temp_channel(channel.id)
                         await channel.delete(reason="Owner left, no other members")
+                        db.delete_temp_channel(channel.id)
                         logger.tree("Channel Auto-Deleted", [
                             ("Channel", channel.name),
                             ("Reason", "Owner creating new VC"),
@@ -1464,10 +1591,11 @@ class TempVoiceService:
             owner_id = channel_info["owner_id"] if channel_info else "Unknown"
             guild = channel.guild  # Save before deletion
 
-            # Cancel any pending transfer
+            # Cancel any pending transfer and claims
             if channel.id in self._pending_transfers:
                 self._pending_transfers[channel.id].cancel()
                 del self._pending_transfers[channel.id]
+            self._pending_claims.discard(channel.id)
 
             # Clean up all tracking for this channel
             self._member_join_times.pop(channel.id, None)
@@ -1553,18 +1681,24 @@ class TempVoiceService:
                 await self._check_empty_channel(channel)
                 return
 
-            # Find the longest-in-channel member based on join times
+            # Find the longest-in-channel member who doesn't already own a channel
             join_times = self._member_join_times.get(channel.id, {})
+            existing_owners = {ch["owner_id"] for ch in db.get_all_temp_channels(channel.guild.id)}
+            eligible = [m for m in remaining if m.id not in existing_owners]
+            if not eligible:
+                # Everyone already owns a channel - just pick longest anyway
+                eligible = remaining
+
             if join_times:
                 # Sort by join time (oldest first)
                 sorted_members = sorted(
-                    [(m, join_times.get(m.id, float('inf'))) for m in remaining],
+                    [(m, join_times.get(m.id, float('inf'))) for m in eligible],
                     key=lambda x: x[1]
                 )
                 new_owner = sorted_members[0][0]
             else:
-                # Fallback: first remaining member
-                new_owner = remaining[0]
+                # Fallback: first eligible member
+                new_owner = eligible[0]
 
             # Execute the transfer
             await self._apply_owner_transfer(channel, old_owner, new_owner)
@@ -1600,57 +1734,14 @@ class TempVoiceService:
             # Grant new owner permissions (boosters get manage_channels for renaming)
             await set_owner_permissions(channel, new_owner)
 
-            # Clear stale permission overwrites from previous owner's trusted/blocked lists
-            for target, _ in channel.overwrites.items():
-                if isinstance(target, discord.Member) and target.id not in (
-                    new_owner.id, guild.me.id
-                ):
-                    await channel.set_permissions(target, overwrite=None)
-
             # Update DB ownership
             db.transfer_ownership(channel.id, new_owner.id)
 
-            # Generate channel name for new owner (keeps same position)
-            base_name, name_source = generate_base_name(new_owner)
-            position = self._get_channel_position(channel)
-            channel_name = build_full_name(position, base_name)
+            # Rename channel for new owner (keeps same position)
+            channel_name = await self._rename_for_new_owner(channel, new_owner)
 
-            await channel.edit(name=channel_name)
-            db.update_temp_channel(channel.id, name=channel_name, base_name=base_name)
-
-            # Apply new owner's blocked list
-            blocked_count = 0
-            for blocked_id in db.get_blocked_list(new_owner.id):
-                blocked_user = guild.get_member(blocked_id)
-                if blocked_user:
-                    # Skip VC mod roles unless new owner is developer
-                    if has_vc_mod_role(blocked_user) and new_owner.id != config.OWNER_ID:
-                        continue
-                    await channel.set_permissions(blocked_user, connect=False)
-                    # Kick if in channel
-                    if blocked_user.voice and blocked_user.voice.channel == channel:
-                        try:
-                            await blocked_user.move_to(None)
-                        except discord.HTTPException as e:
-                            logger.error_tree("Blocked User Kick Failed", e, [
-                                ("Channel", channel.name),
-                                ("User", f"{blocked_user.name} ({blocked_user.display_name})"),
-                                ("ID", str(blocked_user.id)),
-                            ])
-                    blocked_count += 1
-
-            # Apply new owner's trusted list (with text permissions)
-            trusted_count = 0
-            for trusted_id in db.get_trusted_list(new_owner.id):
-                trusted_user = guild.get_member(trusted_id)
-                if trusted_user:
-                    await channel.set_permissions(
-                        trusted_user,
-                        connect=True,
-                        send_messages=True,
-                        read_message_history=True
-                    )
-                    trusted_count += 1
+            # Clear old overwrites and apply new owner's trusted/blocked lists
+            trusted_count, blocked_count = await self._apply_owner_lists(channel, new_owner)
 
             # Clear all messages in the VC chat (fresh start for new owner)
             try:
@@ -1690,7 +1781,6 @@ class TempVoiceService:
                 ("Channel", channel_name),
                 ("From", str(old_owner)),
                 ("To", str(new_owner)),
-                ("Name Source", name_source),
                 ("Allowed Applied", str(trusted_count)),
                 ("Blocked Applied", str(blocked_count)),
             ], emoji="🔄")
