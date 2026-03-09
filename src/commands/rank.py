@@ -18,7 +18,7 @@ from src.core.config import config
 from src.core.colors import COLOR_GOLD, COLOR_ERROR, EMOJI_LEADERBOARD
 from src.core.logger import logger
 from src.services.database import db
-from src.utils.permissions import is_cooldown_exempt
+from src.utils.permissions import create_cooldown
 from src.services.xp.utils import (
     xp_progress,
     xp_for_level,
@@ -27,21 +27,6 @@ from src.services.xp.utils import (
     format_voice_time,
 )
 from src.services.xp.card import generate_rank_card
-
-
-def rank_cooldown(interaction: discord.Interaction) -> app_commands.Cooldown | None:
-    """
-    Dynamic cooldown - None for exempt users, 5 min for everyone else.
-
-    Args:
-        interaction: The Discord interaction
-
-    Returns:
-        Cooldown object or None if user is exempt
-    """
-    if is_cooldown_exempt(interaction.user):
-        return None
-    return app_commands.Cooldown(1, 300.0)
 
 
 class LeaderboardView(discord.ui.View):
@@ -79,7 +64,7 @@ class RankCog(commands.Cog):
 
     @app_commands.command(name="rank", description="View your XP and level")
     @app_commands.describe(user="User to check (defaults to yourself)")
-    @app_commands.checks.dynamic_cooldown(rank_cooldown)
+    @app_commands.checks.dynamic_cooldown(create_cooldown(1, 300))
     async def rank(
         self,
         interaction: discord.Interaction,

@@ -19,22 +19,7 @@ from src.core.logger import logger
 from src.core.colors import COLOR_ERROR, COLOR_WARNING, COLOR_GOLD, EMOJI_SAVE, EMOJI_TRANSFER
 from src.core.constants import VIEW_TIMEOUT_DEFAULT
 from src.utils.http import http_session
-from src.utils.permissions import is_cooldown_exempt
-
-
-def get_cooldown(interaction: discord.Interaction) -> app_commands.Cooldown | None:
-    """
-    Dynamic cooldown - None for exempt users, 5 min for everyone else.
-
-    Args:
-        interaction: The Discord interaction
-
-    Returns:
-        Cooldown object or None if user is exempt
-    """
-    if is_cooldown_exempt(interaction.user):
-        return None
-    return app_commands.Cooldown(1, 300.0)
+from src.utils.permissions import create_cooldown
 
 # Main embed color (alias for backwards compatibility)
 COLOR_GET = COLOR_GOLD
@@ -435,7 +420,7 @@ class GetCog(commands.Cog):
         app_commands.Choice(name="Server Icon", value="server_icon"),
         app_commands.Choice(name="Server Banner", value="server_banner"),
     ])
-    @app_commands.checks.dynamic_cooldown(get_cooldown)
+    @app_commands.checks.dynamic_cooldown(create_cooldown(1, 300))
     async def get(
         self,
         interaction: discord.Interaction,

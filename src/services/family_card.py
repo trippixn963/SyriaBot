@@ -477,9 +477,10 @@ async def generate_family_card(data: FamilyData) -> bytes:
         if now - cached_time < _CACHE_TTL:
             return cached_bytes
 
-    # Clean old cache
-    if len(_family_cache) > 50:
-        _family_cache.clear()
+    # Evict expired entries
+    expired = [k for k, (_, ts) in _family_cache.items() if now - ts >= _CACHE_TTL]
+    for k in expired:
+        del _family_cache[k]
 
     # Calculate needed height based on content
     height = 140  # header + divider + bottom pad

@@ -18,22 +18,7 @@ from src.core.logger import logger
 from src.core.colors import COLOR_GOLD, COLOR_ERROR, EMOJI_TRANSFER
 from src.core.constants import VIEW_TIMEOUT_DEFAULT
 from src.utils.http import http_session
-from src.utils.permissions import is_cooldown_exempt
-
-
-def weather_cooldown(interaction: discord.Interaction) -> app_commands.Cooldown | None:
-    """
-    Dynamic cooldown - None for exempt users, 5 min for everyone else.
-
-    Args:
-        interaction: The Discord interaction
-
-    Returns:
-        Cooldown object or None if user is exempt
-    """
-    if is_cooldown_exempt(interaction.user):
-        return None
-    return app_commands.Cooldown(1, 300.0)
+from src.utils.permissions import create_cooldown
 
 # Main embed color (alias for backwards compatibility)
 COLOR_WEATHER = COLOR_GOLD
@@ -384,7 +369,7 @@ class WeatherCog(commands.Cog):
 
     @app_commands.command(name="weather", description="Get current weather for any city")
     @app_commands.describe(city="City name (type to search)")
-    @app_commands.checks.dynamic_cooldown(weather_cooldown)
+    @app_commands.checks.dynamic_cooldown(create_cooldown(1, 300))
     async def weather(self, interaction: discord.Interaction, city: str) -> None:
         """Get current weather for a city."""
         # Validate query length
