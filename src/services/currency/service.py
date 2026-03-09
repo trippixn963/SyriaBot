@@ -15,6 +15,7 @@ import aiohttp
 
 from src.core.config import config
 from src.core.logger import logger
+from src.utils.http import http_session, FAST_TIMEOUT
 
 
 class CurrencyService:
@@ -35,7 +36,6 @@ class CurrencyService:
         Requires JAWDAT_API_KEY environment variable to be enabled.
         """
         self._enabled: bool = False
-        self._session: Optional[aiohttp.ClientSession] = None
 
     async def setup(self) -> None:
         """Initialize the currency service."""
@@ -46,9 +46,6 @@ class CurrencyService:
             ], emoji="ℹ️")
             return
 
-        self._session = aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=10)
-        )
         self._enabled = True
 
         logger.tree("Currency Service Ready", [
@@ -79,7 +76,7 @@ class CurrencyService:
         Returns:
             Tuple of (success, message)
         """
-        if not self._enabled or not self._session:
+        if not self._enabled:
             logger.tree("Currency Grant Skipped", [
                 ("ID", str(user_id)),
                 ("Reason", "Service not enabled"),
@@ -103,7 +100,7 @@ class CurrencyService:
             return False, "Target must be 'wallet' or 'bank'"
 
         try:
-            async with self._session.post(
+            async with http_session.post(
                 f"{config.JAWDAT_API_URL}/api/jawdat/currency/grant",
                 json={
                     "user_id": user_id,
@@ -151,8 +148,5 @@ class CurrencyService:
 
     async def stop(self) -> None:
         """Stop the currency service."""
-        if self._session:
-            await self._session.close()
-            self._session = None
         self._enabled = False
         logger.tree("Currency Service Stopped", [], emoji="🛑")

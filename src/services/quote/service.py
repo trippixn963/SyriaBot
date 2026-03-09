@@ -22,6 +22,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageFilter
 from pilmoji import Pilmoji
 
 from src.core.logger import logger
+from src.utils.http import http_session
 from src.core.constants import (
     TIMEZONE_EST,
     FONT_ITALIC_PATHS,
@@ -94,7 +95,6 @@ class QuoteService:
         Sets up HTTP session, finds system fonts with Arabic support,
         and initializes banner cache for performance.
         """
-        self._session: Optional[aiohttp.ClientSession] = None
         self._font_path: Optional[str] = None
         self._font_italic_path: Optional[str] = None
         self._banner_cache: Dict[int, Tuple[Image.Image, str]] = {}
@@ -135,23 +135,10 @@ class QuoteService:
                 pass
         return ImageFont.load_default()
 
-    async def _get_session(self) -> aiohttp.ClientSession:
-        """Get or create aiohttp session."""
-        if self._session is None or self._session.closed:
-            timeout = aiohttp.ClientTimeout(total=15)
-            self._session = aiohttp.ClientSession(timeout=timeout)
-        return self._session
-
-    async def close(self) -> None:
-        """Close the aiohttp session."""
-        if self._session and not self._session.closed:
-            await self._session.close()
-
     async def _fetch_image(self, url: str) -> Optional[Image.Image]:
         """Fetch an image from URL."""
         try:
-            session = await self._get_session()
-            async with session.get(url) as resp:
+            async with http_session.get(url) as resp:
                 if resp.status == 200:
                     data = await resp.read()
                     return Image.open(io.BytesIO(data))

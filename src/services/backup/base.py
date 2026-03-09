@@ -18,11 +18,10 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-import aiohttp
-
 from src.core.logger import logger
 from src.core.constants import TIMEZONE_EST
 from src.utils.async_utils import create_safe_task
+from src.utils.http import http_session, FAST_TIMEOUT
 DEFAULT_RETENTION_HOURS = 48  # Keep 48 hourly backups (2 days)
 SECONDS_PER_HOUR = 3600
 
@@ -108,13 +107,16 @@ async def _send_backup_webhook(
     }
 
     try:
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
-            async with session.post(webhook_url, json=payload) as response:
-                if response.status >= 400:
-                    logger.tree("Backup Webhook Failed", [
-                        ("Status", str(response.status)),
-                        ("URL", webhook_url[:50] if webhook_url else "None"),
-                    ], emoji="⚠️")
+        async with http_session.post(
+            webhook_url,
+            json=payload,
+            timeout=FAST_TIMEOUT,
+        ) as response:
+            if response.status >= 400:
+                logger.tree("Backup Webhook Failed", [
+                    ("Status", str(response.status)),
+                    ("URL", webhook_url[:50] if webhook_url else "None"),
+                ], emoji="⚠️")
     except Exception as e:
         logger.error_tree("Backup Webhook Error", e, [
             ("URL", webhook_url[:50] if webhook_url else "None"),

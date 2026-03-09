@@ -15,6 +15,7 @@ import random
 from typing import Optional, Dict, List
 
 from src.core.logger import logger
+from src.utils.http import http_session, FAST_TIMEOUT
 
 
 # API endpoints
@@ -635,7 +636,6 @@ class ActionService:
         Sets up HTTP session for API requests.
         Pre-loads action dictionaries for quick lookup.
         """
-        self._session: Optional[aiohttp.ClientSession] = None
         logger.tree("Action Service Initialized", [
             ("Actions", str(len(ACTIONS))),
             ("Self-Actions", str(len(SELF_ACTIONS))),
@@ -643,26 +643,11 @@ class ActionService:
             ("Fallback API", "waifu.pics"),
         ], emoji="🎬")
 
-    async def _get_session(self) -> aiohttp.ClientSession:
-        """Get or create aiohttp session."""
-        if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession()
-        return self._session
-
-    async def close(self) -> None:
-        """Close the aiohttp session."""
-        if self._session and not self._session.closed:
-            await self._session.close()
-            logger.tree("Action Service Closed", [
-                ("Status", "Session closed"),
-            ], emoji="🛑")
-
     async def _fetch_from_nekos_best(self, endpoint: str) -> Optional[str]:
         """Fetch GIF from nekos.best API."""
         url = f"{NEKOS_BEST_API}/{endpoint}"
         try:
-            session = await self._get_session()
-            async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
+            async with http_session.get(url, timeout=FAST_TIMEOUT) as response:
                 if response.status == 200:
                     data = await response.json()
                     # nekos.best returns {"results": [{"url": "..."}]}
@@ -684,8 +669,7 @@ class ActionService:
         """Fetch GIF from waifu.pics API."""
         url = f"{WAIFU_PICS_API}/{endpoint}"
         try:
-            session = await self._get_session()
-            async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
+            async with http_session.get(url, timeout=FAST_TIMEOUT) as response:
                 if response.status == 200:
                     data = await response.json()
                     # waifu.pics returns {"url": "..."}
@@ -705,8 +689,7 @@ class ActionService:
         """Fetch GIF from otakugifs.xyz API."""
         url = f"{OTAKUGIFS_API}?reaction={endpoint}"
         try:
-            session = await self._get_session()
-            async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
+            async with http_session.get(url, timeout=FAST_TIMEOUT) as response:
                 if response.status == 200:
                     data = await response.json()
                     return data.get("url")
@@ -725,8 +708,7 @@ class ActionService:
         """Fetch GIF from purrbot.site API."""
         url = f"{PURRBOT_API}/{endpoint}/gif"
         try:
-            session = await self._get_session()
-            async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
+            async with http_session.get(url, timeout=FAST_TIMEOUT) as response:
                 if response.status == 200:
                     data = await response.json()
                     if not data.get("error") and data.get("link"):

@@ -15,6 +15,7 @@ from typing import Optional
 import aiohttp
 
 from src.core.logger import logger
+from src.utils.http import http_session, FAST_TIMEOUT, DOWNLOAD_TIMEOUT, DEFAULT_TIMEOUT
 from .config import (
     COBALT_API_URL,
     MAX_FILE_SIZE_MB,
@@ -27,25 +28,24 @@ from .video import compress_video
 async def check_health() -> bool:
     """Check if Cobalt API is healthy and responsive."""
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                COBALT_API_URL,
-                timeout=aiohttp.ClientTimeout(total=5),
-            ) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    version = data.get("version", "unknown")
-                    logger.tree("Cobalt API Health Check", [
-                        ("Status", "Healthy"),
-                        ("Version", version),
-                    ], emoji="✅")
-                    return True
-                else:
-                    logger.tree("Cobalt API Health Check", [
-                        ("Status", "Unhealthy"),
-                        ("HTTP Status", str(resp.status)),
-                    ], emoji="❌")
-                    return False
+        async with http_session.get(
+            COBALT_API_URL,
+            timeout=FAST_TIMEOUT,
+        ) as resp:
+            if resp.status == 200:
+                data = await resp.json()
+                version = data.get("version", "unknown")
+                logger.tree("Cobalt API Health Check", [
+                    ("Status", "Healthy"),
+                    ("Version", version),
+                ], emoji="✅")
+                return True
+            else:
+                logger.tree("Cobalt API Health Check", [
+                    ("Status", "Unhealthy"),
+                    ("HTTP Status", str(resp.status)),
+                ], emoji="❌")
+                return False
     except asyncio.TimeoutError:
         logger.tree("Cobalt API Health Check", [
             ("Status", "Timeout"),
@@ -151,32 +151,31 @@ async def download(url: str, download_dir: Path, platform: str) -> DownloadResul
             ("API", COBALT_API_URL),
         ], emoji="🌐")
 
-        async with aiohttp.ClientSession() as session:
-            # Request video from local Cobalt
-            async with session.post(
-                COBALT_API_URL,
-                json={"url": url},
-                headers={
-                    "Accept": "application/json",
-                    "Content-Type": "application/json",
-                },
-                timeout=aiohttp.ClientTimeout(total=30),
-            ) as resp:
-                if resp.status != 200:
-                    # Consume response body to properly close connection
-                    await resp.read()
-                    logger.tree("Cobalt API HTTP Error", [
-                        ("Status", str(resp.status)),
-                        ("URL", COBALT_API_URL),
-                    ], emoji="❌")
-                    return DownloadResult(
-                        success=False,
-                        files=[],
-                        platform=platform,
-                        error=f"Cobalt API returned status {resp.status}"
-                    )
+        session = http_session.session
+        async with session.post(
+            COBALT_API_URL,
+            json={"url": url},
+            headers={
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+            },
+            timeout=DEFAULT_TIMEOUT,
+        ) as resp:
+            if resp.status != 200:
+                # Consume response body to properly close connection
+                await resp.read()
+                logger.tree("Cobalt API HTTP Error", [
+                    ("Status", str(resp.status)),
+                    ("URL", COBALT_API_URL),
+                ], emoji="❌")
+                return DownloadResult(
+                    success=False,
+                    files=[],
+                    platform=platform,
+                    error=f"Cobalt API returned status {resp.status}"
+                )
 
-                data = await resp.json()
+            data = await resp.json()
 
             # Log full API response for debugging
             status = data.get("status")
