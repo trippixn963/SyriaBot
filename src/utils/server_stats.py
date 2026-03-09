@@ -9,6 +9,7 @@ Author: حَـــــنَّـــــا
 Server: discord.gg/syria
 """
 
+import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional, TYPE_CHECKING
@@ -190,9 +191,12 @@ def get_streak_stats() -> StreakStats:
     return stats
 
 
-def get_server_stats(bot: Optional["Client"] = None) -> ServerStats:
+async def get_server_stats(bot: Optional["Client"] = None) -> ServerStats:
     """
     Get all server statistics.
+
+    Guild stats come from Discord cache (no I/O).
+    DB stats run in a thread to avoid blocking the event loop.
 
     Args:
         bot: Discord client instance.
@@ -200,11 +204,18 @@ def get_server_stats(bot: Optional["Client"] = None) -> ServerStats:
     Returns:
         ServerStats with all metrics.
     """
+    guild = get_guild_stats(bot)
+
+    def _fetch_db_stats() -> tuple:
+        return get_xp_stats(), get_daily_activity(), get_streak_stats()
+
+    xp, daily, streaks = await asyncio.to_thread(_fetch_db_stats)
+
     return ServerStats(
-        guild=get_guild_stats(bot),
-        xp=get_xp_stats(),
-        daily=get_daily_activity(),
-        streaks=get_streak_stats(),
+        guild=guild,
+        xp=xp,
+        daily=daily,
+        streaks=streaks,
         updated_at=datetime.now(timezone.utc),
     )
 

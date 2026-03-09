@@ -10,6 +10,7 @@ Server: discord.gg/syria
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, time as dt_time, timedelta
 from typing import Optional, TYPE_CHECKING
 
@@ -100,47 +101,53 @@ class DailyStatsService:
             ("Guild", str(guild_id)),
         ], emoji="📊")
 
-        # ── Gather data ──────────────────────────────────────────────────
+        # ── Gather data (off event loop) ─────────────────────────────────
 
-        # Messages from server_daily_stats
-        total_messages: int = 0
-        try:
-            daily_rows = db.get_daily_stats_range(guild_id, date_str, date_str)
-            total_messages = daily_rows[0]["total_messages"] if daily_rows else 0
-        except Exception as e:
-            logger.error_tree("Daily Summary: Messages Query Failed", e)
+        def _fetch_all_stats() -> tuple:
+            """Fetch all daily stats from DB in a single thread."""
+            _total_messages = 0
+            _joins = 0
+            _leaves = 0
+            _voice_min = 0
+            _top_chatter = None
+            _top_voice = None
 
-        # Joins / Leaves from member_events (counted in SQL)
-        joins: int = 0
-        leaves: int = 0
-        try:
-            event_counts = db.get_member_event_counts(guild_id, start_ts, end_ts)
-            joins = event_counts["joins"]
-            leaves = event_counts["leaves"]
-        except Exception as e:
-            logger.error_tree("Daily Summary: Member Events Query Failed", e)
+            try:
+                daily_rows = db.get_daily_stats_range(guild_id, date_str, date_str)
+                _total_messages = daily_rows[0]["total_messages"] if daily_rows else 0
+            except Exception as e:
+                logger.error_tree("Daily Summary: Messages Query Failed", e)
+
+            try:
+                event_counts = db.get_member_event_counts(guild_id, start_ts, end_ts)
+                _joins = event_counts["joins"]
+                _leaves = event_counts["leaves"]
+            except Exception as e:
+                logger.error_tree("Daily Summary: Member Events Query Failed", e)
+
+            try:
+                _voice_min = db.get_daily_total_voice_minutes(guild_id, date_str)
+            except Exception as e:
+                logger.error_tree("Daily Summary: Voice Query Failed", e)
+
+            try:
+                _top_chatter = db.get_daily_top_chatter(guild_id, date_str)
+            except Exception as e:
+                logger.error_tree("Daily Summary: Top Chatter Query Failed", e)
+
+            try:
+                _top_voice = db.get_daily_top_voice_user(guild_id, date_str)
+            except Exception as e:
+                logger.error_tree("Daily Summary: Top Voice Query Failed", e)
+
+            return _total_messages, _joins, _leaves, _voice_min, _top_chatter, _top_voice
+
+        total_messages, joins, leaves, total_voice_min, top_chatter, top_voice = (
+            await asyncio.to_thread(_fetch_all_stats)
+        )
         net: int = joins - leaves
-
-        # Voice
-        total_voice_min: int = 0
-        try:
-            total_voice_min = db.get_daily_total_voice_minutes(guild_id, date_str)
-        except Exception as e:
-            logger.error_tree("Daily Summary: Voice Query Failed", e)
         voice_hours: int = total_voice_min // 60
         voice_mins: int = total_voice_min % 60
-
-        # Top chatter & voice user
-        top_chatter: dict | None = None
-        top_voice: dict | None = None
-        try:
-            top_chatter = db.get_daily_top_chatter(guild_id, date_str)
-        except Exception as e:
-            logger.error_tree("Daily Summary: Top Chatter Query Failed", e)
-        try:
-            top_voice = db.get_daily_top_voice_user(guild_id, date_str)
-        except Exception as e:
-            logger.error_tree("Daily Summary: Top Voice Query Failed", e)
 
         # ── Build embed ──────────────────────────────────────────────────
 

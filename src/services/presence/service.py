@@ -95,7 +95,7 @@ class BasePresenceHandler(ABC):
     # =========================================================================
 
     @abstractmethod
-    def get_status_messages(self) -> List[str]:
+    async def get_status_messages(self) -> List[str]:
         """Get list of status messages to rotate through."""
         pass
 
@@ -207,7 +207,7 @@ class BasePresenceHandler(ABC):
             return
 
         try:
-            messages = self.get_status_messages()
+            messages = await self.get_status_messages()
 
             if not messages:
                 status_text = self.get_promo_text()
@@ -320,12 +320,12 @@ class PresenceService(BasePresenceHandler):
     # Required Implementations
     # =========================================================================
 
-    def get_status_messages(self) -> List[str]:
+    async def get_status_messages(self) -> List[str]:
         """Get big dashboard-style stats for presence rotation."""
         messages = []
 
         try:
-            stats = get_server_stats(self.bot)
+            stats = await get_server_stats(self.bot)
 
             if stats.guild.member_count > 0:
                 messages.append(f"👥 {format_number(stats.guild.member_count)} members")
