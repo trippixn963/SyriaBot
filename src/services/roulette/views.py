@@ -12,7 +12,7 @@ Server: discord.gg/syria
 import discord
 from typing import List, TYPE_CHECKING
 
-from src.core.colors import COLOR_GOLD, COLOR_GREEN
+from src.core.colors import COLOR_GOLD, COLOR_GREEN, COLOR_NEUTRAL
 
 if TYPE_CHECKING:
     from .graphics import RoulettePlayer
@@ -108,6 +108,6 @@ def create_cancelled_embed(reason: str) -> discord.Embed:
     embed = discord.Embed(
         title="🎰 Roulette Cancelled",
         description=reason,
-        color=discord.Color.dark_grey(),
+        color=COLOR_NEUTRAL,
     )
     return embed

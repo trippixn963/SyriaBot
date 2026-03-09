@@ -18,6 +18,7 @@ from typing import Optional
 import time
 
 from src.core.logger import logger
+from src.core.colors import COLOR_SUCCESS
 from src.core.constants import DISBOARD_BOT_ID
 from src.utils.async_utils import create_safe_task
 
@@ -265,7 +266,7 @@ class BumpService:
                     "**How to bump:**\n"
                     "Use </bump:947088344167366698> in this channel"
                 ),
-                color=0x24B7B7
+                color=COLOR_SUCCESS
             )
             embed.set_thumbnail(url="https://disboard.org/images/bot-command-image-bump.png")
 

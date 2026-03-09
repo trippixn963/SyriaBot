@@ -21,6 +21,7 @@ import discord
 from discord import ui
 
 from src.core.config import config
+from src.core.colors import COLOR_GOLD, COLOR_SUCCESS
 from src.core.logger import logger
 from src.utils.async_utils import create_safe_task
 
@@ -98,8 +99,8 @@ class SocialMonitorService:
     """
 
     # Theme colors
-    TIKTOK_COLOR: int = 0xFFD700      # Gold
-    INSTAGRAM_COLOR: int = 0x2ECC71   # Green
+    TIKTOK_COLOR: int = COLOR_GOLD
+    INSTAGRAM_COLOR: int = COLOR_SUCCESS
 
     # Timing
     CHECK_INTERVAL: int = 300  # 5 minutes

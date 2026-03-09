@@ -67,7 +67,7 @@ class ClaimApprovalView(ui.View):
         try:
             if self.message:
                 embed = self.message.embeds[0]
-                embed.color = 0x95a5a6  # Gray
+                embed.color = COLOR_NEUTRAL
                 await self.message.edit(embed=embed, view=None)
                 logger.tree("Claim Request Expired", [
                     ("Channel", self.channel.name),
@@ -738,7 +738,7 @@ class TempVoiceControlPanel(ui.View):
             embed = discord.Embed(
                 title="🔔 Claim Request",
                 description=f"{interaction.user.mention} wants to claim this channel",
-                color=0xfaa61a  # Orange/warning
+                color=COLOR_WARNING
             )
             embed.add_field(name="Requester", value=interaction.user.mention, inline=True)
             embed.add_field(name="Current Owner", value=owner.mention, inline=True)
