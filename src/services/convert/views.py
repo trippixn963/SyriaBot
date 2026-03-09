@@ -23,7 +23,6 @@ from src.core.colors import (
     EMOJI_GREEN, EMOJI_YELLOW, EMOJI_PURPLE, EMOJI_PINK,
     EMOJI_RENAME, EMOJI_SAVE, EMOJI_BLOCK,
 )
-from src.core.config import config
 from src.core.logger import logger
 from src.core.constants import (
     BAR_HEIGHT_RATIO, FONT_SIZE_RATIO, LINE_SPACING_RATIO,
@@ -31,69 +30,7 @@ from src.core.constants import (
 )
 from src.services.convert.service import convert_service
 from src.utils.text import wrap_text, find_font, get_font
-
-
-# =============================================================================
-# Asset Storage Helper
-# =============================================================================
-
-async def upload_to_storage(bot, file_bytes: bytes, filename: str, context: str = "Convert") -> Optional[str]:
-    """
-    Upload file to asset storage channel for permanent URL.
-
-    Args:
-        bot: The bot instance
-        file_bytes: Raw file bytes to upload
-        filename: Filename for the upload
-        context: Context for logging (e.g., "Convert", "Quote", "Image")
-
-    Returns:
-        Permanent CDN URL or None if storage not configured/failed
-    """
-    if not config.ASSET_STORAGE_CHANNEL_ID:
-        logger.tree(f"{context} Asset Storage Skipped", [
-            ("Reason", "SYRIA_ASSET_CH not configured"),
-            ("Filename", filename),
-        ], emoji="ℹ️")
-        return None
-
-    try:
-        channel = bot.get_channel(config.ASSET_STORAGE_CHANNEL_ID)
-        if not channel:
-            logger.tree(f"{context} Asset Storage Channel Not Found", [
-                ("Channel ID", str(config.ASSET_STORAGE_CHANNEL_ID)),
-                ("Filename", filename),
-            ], emoji="⚠️")
-            return None
-
-        # Upload to storage channel
-        file = discord.File(fp=io.BytesIO(file_bytes), filename=filename)
-        msg = await channel.send(file=file)
-
-        if msg.attachments:
-            url = msg.attachments[0].url
-            logger.tree(f"{context} Asset Stored", [
-                ("Filename", filename),
-                ("Size", f"{len(file_bytes) / 1024:.1f} KB"),
-                ("Message ID", str(msg.id)),
-                ("URL", url[:80] + "..." if len(url) > 80 else url),
-            ], emoji="💾")
-            return url
-        else:
-            logger.tree(f"{context} Asset Storage No Attachment", [
-                ("Filename", filename),
-                ("Message ID", str(msg.id)),
-                ("Reason", "Message sent but no attachment returned"),
-            ], emoji="⚠️")
-            return None
-
-    except Exception as e:
-        logger.error_tree(f"{context} Asset Storage Failed", e, [
-            ("Filename", filename),
-            ("Size", f"{len(file_bytes) / 1024:.1f} KB"),
-            ("Channel ID", str(config.ASSET_STORAGE_CHANNEL_ID)),
-        ])
-        return None
+from src.utils.storage import upload_to_storage
 
 
 # =============================================================================
