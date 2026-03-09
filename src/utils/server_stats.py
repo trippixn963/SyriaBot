@@ -172,14 +172,7 @@ def get_streak_stats() -> StreakStats:
 
     try:
         # Count users with active streaks (streak_days > 0)
-        streak_data = db.fetchone("""
-            SELECT
-                COUNT(*) as users_with_streak,
-                MAX(streak_days) as longest_streak,
-                SUM(CASE WHEN streak_days > 0 THEN 1 ELSE 0 END) as active_streaks
-            FROM user_xp
-            WHERE guild_id = ? AND is_active = 1 AND streak_days > 0
-        """, (config.GUILD_ID,))
+        streak_data = db.get_streak_stats(config.GUILD_ID)
 
         if streak_data:
             stats.users_with_streak = streak_data.get("users_with_streak", 0)

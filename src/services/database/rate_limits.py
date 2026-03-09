@@ -8,12 +8,95 @@ Author: حَـــــنَّـــــا
 Server: discord.gg/syria
 """
 
+from typing import Optional
+
 from src.core.logger import logger
 from .core import get_week_start_timestamp
 
 
 class RateLimitsMixin:
     """Mixin for rate limiting database operations."""
+
+    # =========================================================================
+    # Unified Rate Limits Table (used by RateLimiter service)
+    # =========================================================================
+
+    def init_rate_limits_table(self) -> bool:
+        """Create the unified rate_limits table if it doesn't exist."""
+        try:
+            with self._get_conn() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS rate_limits (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL,
+                        action_type TEXT NOT NULL,
+                        week_start TEXT NOT NULL,
+                        usage_count INTEGER DEFAULT 1,
+                        last_used TEXT NOT NULL,
+                        UNIQUE(user_id, action_type, week_start)
+                    )
+                """)
+                cursor.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_rate_limits_user_week
+                    ON rate_limits(user_id, week_start)
+                """)
+            return True
+        except Exception as e:
+            logger.error_tree("DB: Rate Limits Table Init Failed", e)
+            return False
+
+    def rate_limit_get_usage(self, user_id: int, action_type: str, week_start: str) -> int:
+        """Get current usage count for a user/action this week."""
+        try:
+            with self._get_conn() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT usage_count FROM rate_limits
+                    WHERE user_id = ? AND action_type = ? AND week_start = ?
+                """, (user_id, action_type, week_start))
+                row = cursor.fetchone()
+                return row[0] if row else 0
+        except Exception as e:
+            logger.tree("DB: Rate Limit Get Usage Failed", [
+                ("ID", str(user_id)),
+                ("Action", action_type),
+                ("Error", str(e)[:50]),
+            ], emoji="❌")
+            return 0
+
+    def rate_limit_consume(self, user_id: int, action_type: str, week_start: str, now_iso: str) -> bool:
+        """Increment usage count for a user/action this week."""
+        try:
+            with self._get_conn() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT INTO rate_limits (user_id, action_type, week_start, usage_count, last_used)
+                    VALUES (?, ?, ?, 1, ?)
+                    ON CONFLICT(user_id, action_type, week_start)
+                    DO UPDATE SET usage_count = usage_count + 1, last_used = ?
+                """, (user_id, action_type, week_start, now_iso, now_iso))
+            return True
+        except Exception as e:
+            logger.tree("DB: Rate Limit Consume Failed", [
+                ("ID", str(user_id)),
+                ("Action", action_type),
+                ("Error", str(e)[:50]),
+            ], emoji="❌")
+            return False
+
+    def rate_limit_cleanup(self, cutoff_date: str) -> int:
+        """Delete rate limit records older than cutoff date."""
+        try:
+            with self._get_conn() as conn:
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM rate_limits WHERE week_start < ?", (cutoff_date,))
+                return cursor.rowcount
+        except Exception as e:
+            logger.tree("DB: Rate Limit Cleanup Failed", [
+                ("Error", str(e)[:50]),
+            ], emoji="❌")
+            return 0
 
     # =========================================================================
     # Convert Usage Tracking

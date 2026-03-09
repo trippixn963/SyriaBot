@@ -390,6 +390,28 @@ class XPMixin:
 
             return stats
 
+    def get_streak_stats(self, guild_id: int = None) -> Dict[str, Any]:
+        """Get streak statistics for a guild."""
+        from src.core.config import config
+        gid = guild_id or config.GUILD_ID
+
+        try:
+            with self._get_conn() as conn:
+                cur = conn.cursor()
+                cur.execute("""
+                    SELECT
+                        COUNT(*) as users_with_streak,
+                        MAX(streak_days) as longest_streak,
+                        SUM(CASE WHEN streak_days > 0 THEN 1 ELSE 0 END) as active_streaks
+                    FROM user_xp
+                    WHERE guild_id = ? AND is_active = 1 AND streak_days > 0
+                """, (gid,))
+                row = cur.fetchone()
+                return dict(row) if row else {}
+        except Exception as e:
+            logger.error_tree("DB: Get Streak Stats Error", e)
+            return {}
+
     def get_user_rank(self, user_id: int, guild_id: int) -> int:
         """Get user's rank position in the guild (1-indexed, only active members)."""
         with self._get_conn() as conn:

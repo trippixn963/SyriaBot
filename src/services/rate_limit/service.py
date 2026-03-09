@@ -17,7 +17,6 @@ Server: discord.gg/syria
 
 import discord
 from datetime import datetime, timedelta
-from threading import Lock
 from typing import Optional, Tuple, Set, Union
 
 from src.core.colors import COLOR_GOLD
@@ -53,7 +52,6 @@ class RateLimiter:
     """
 
     _instance: Optional["RateLimiter"] = None
-    _lock: Lock = Lock()
 
     def __init__(self) -> None:
         """
@@ -61,9 +59,7 @@ class RateLimiter:
 
         Sets up database table, loads exempt role IDs from config,
         and initializes tracking for cleanup scheduling.
-        Thread-safe singleton pattern ensures one instance.
         """
-        self._db_lock = Lock()
         self._exempt_role_ids: Set[int] = set()
         self._initialized = False
         self._background_tasks: Set = set()  # Store background tasks to prevent GC
@@ -90,45 +86,19 @@ class RateLimiter:
 
     def _init_db(self) -> None:
         """Initialize database table for rate limits."""
-        try:
-            with db._get_conn() as conn:
-                cursor = conn.cursor()
-
-                cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS rate_limits (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        user_id INTEGER NOT NULL,
-                        action_type TEXT NOT NULL,
-                        week_start TEXT NOT NULL,
-                        usage_count INTEGER DEFAULT 1,
-                        last_used TEXT NOT NULL,
-                        UNIQUE(user_id, action_type, week_start)
-                    )
-                """)
-
-                cursor.execute("""
-                    CREATE INDEX IF NOT EXISTS idx_rate_limits_user_week
-                    ON rate_limits(user_id, week_start)
-                """)
-
-            self._initialized = True
+        self._initialized = db.init_rate_limits_table()
+        if self._initialized:
             logger.tree("Rate Limiter DB Initialized", [
                 ("Table", "rate_limits"),
             ], emoji="✅")
-
-        except Exception as e:
-            logger.tree("Rate Limiter DB Init Failed", [
-                ("Error", str(e)),
-            ], emoji="❌")
-            self._initialized = False
+        else:
+            logger.tree("Rate Limiter DB Init Failed", [], emoji="❌")
 
     @classmethod
     def get_instance(cls) -> "RateLimiter":
-        """Get singleton instance (thread-safe)."""
+        """Get singleton instance."""
         if cls._instance is None:
-            with cls._lock:
-                if cls._instance is None:
-                    cls._instance = cls()
+            cls._instance = cls()
         return cls._instance
 
     # =========================================================================
@@ -194,28 +164,7 @@ class RateLimiter:
         """Get current usage count for a user and action this week."""
         if not self._initialized:
             return 0
-
-        try:
-            with self._db_lock:
-                with db._get_conn() as conn:
-                    cursor = conn.cursor()
-                    week_start = self._get_week_start()
-
-                    cursor.execute("""
-                        SELECT usage_count FROM rate_limits
-                        WHERE user_id = ? AND action_type = ? AND week_start = ?
-                    """, (user_id, action_type, week_start))
-
-                    row = cursor.fetchone()
-                    return row[0] if row else 0
-
-        except Exception as e:
-            logger.tree("Rate Limit Get Usage Failed", [
-                ("ID", str(user_id)),
-                ("Action", action_type),
-                ("Error", str(e)),
-            ], emoji="❌")
-            return 0
+        return db.rate_limit_get_usage(user_id, action_type, self._get_week_start())
 
     def get_remaining(self, user_id: int, action_type: str) -> int:
         """Get remaining uses for a user and action this week."""
@@ -253,34 +202,16 @@ class RateLimiter:
         if not self._initialized:
             return False
 
-        try:
-            with self._db_lock:
-                with db._get_conn() as conn:
-                    cursor = conn.cursor()
-                    week_start = self._get_week_start()
-                    now = datetime.now(EST).isoformat()
+        week_start = self._get_week_start()
+        now = datetime.now(EST).isoformat()
+        result = db.rate_limit_consume(user_id, action_type, week_start, now)
 
-                    cursor.execute("""
-                        INSERT INTO rate_limits (user_id, action_type, week_start, usage_count, last_used)
-                        VALUES (?, ?, ?, 1, ?)
-                        ON CONFLICT(user_id, action_type, week_start)
-                        DO UPDATE SET usage_count = usage_count + 1, last_used = ?
-                    """, (user_id, action_type, week_start, now, now))
+        # Trigger cleanup on week boundary (run once per new week)
+        if result and self._last_cleanup_week != week_start:
+            self._last_cleanup_week = week_start
+            self.cleanup_old_records()
 
-            # Trigger cleanup on week boundary (run once per new week)
-            if self._last_cleanup_week != week_start:
-                self._last_cleanup_week = week_start
-                self.cleanup_old_records()
-
-            return True
-
-        except Exception as e:
-            logger.tree("Rate Limit Consume Failed", [
-                ("ID", str(user_id)),
-                ("Action", action_type),
-                ("Error", str(e)),
-            ], emoji="❌")
-            return False
+        return result
 
     # =========================================================================
     # Embed Creation
@@ -423,33 +354,17 @@ class RateLimiter:
         if not self._initialized:
             return 0
 
-        try:
-            with self._db_lock:
-                with db._get_conn() as conn:
-                    cursor = conn.cursor()
+        cutoff = datetime.now(EST) - timedelta(weeks=weeks_to_keep)
+        cutoff_str = cutoff.strftime("%Y-%m-%d")
+        deleted = db.rate_limit_cleanup(cutoff_str)
 
-                    cutoff = datetime.now(EST) - timedelta(weeks=weeks_to_keep)
-                    cutoff_str = cutoff.strftime("%Y-%m-%d")
+        if deleted > 0:
+            logger.tree("Rate Limit Cleanup", [
+                ("Deleted", str(deleted)),
+                ("Weeks Kept", str(weeks_to_keep)),
+            ], emoji="🧹")
 
-                    cursor.execute("""
-                        DELETE FROM rate_limits WHERE week_start < ?
-                    """, (cutoff_str,))
-
-                    deleted = cursor.rowcount
-
-            if deleted > 0:
-                logger.tree("Rate Limit Cleanup", [
-                    ("Deleted", str(deleted)),
-                    ("Weeks Kept", str(weeks_to_keep)),
-                ], emoji="🧹")
-
-            return deleted
-
-        except Exception as e:
-            logger.tree("Rate Limit Cleanup Failed", [
-                ("Error", str(e)),
-            ], emoji="❌")
-            return 0
+        return deleted
 
 
 # =============================================================================
