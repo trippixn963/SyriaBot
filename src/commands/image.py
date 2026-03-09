@@ -20,6 +20,7 @@ from src.services.image import image_service
 from src.services.database import db
 from src.services.image.views import ImageView
 from src.utils.permissions import create_cooldown
+from src.services.tempvoice.utils import is_booster
 
 
 # Minimum images we want after filtering - if below this, fetch more
@@ -33,13 +34,6 @@ class ImageSize:
     XLARGE = "xlarge"
 
 
-def _is_booster(member: discord.Member) -> bool:
-    """Check if member is a server booster."""
-    if not config.BOOSTER_ROLE_ID:
-        return False
-    return any(role.id == config.BOOSTER_ROLE_ID for role in member.roles)
-
-
 async def _check_image_limit(user: discord.Member) -> tuple[bool, int, str]:
     """
     Check if user can search for images.
@@ -48,7 +42,7 @@ async def _check_image_limit(user: discord.Member) -> tuple[bool, int, str]:
         (can_search, remaining, error_message)
     """
     # Boosters have unlimited searches
-    if _is_booster(user):
+    if is_booster(user):
         return (True, -1, "")  # -1 = unlimited
 
     # Check weekly limit

@@ -24,13 +24,7 @@ from src.core.constants import DELETE_DELAY_MEDIUM
 from src.services.downloader import downloader
 from src.services.database import db
 from src.utils.permissions import create_cooldown
-
-
-def _is_booster(member: discord.Member) -> bool:
-    """Check if member is a server booster."""
-    if not config.BOOSTER_ROLE_ID:
-        return False
-    return any(role.id == config.BOOSTER_ROLE_ID for role in member.roles)
+from src.services.tempvoice.utils import is_booster
 
 
 async def _check_download_limit(user: discord.Member) -> tuple[bool, int, str]:
@@ -41,7 +35,7 @@ async def _check_download_limit(user: discord.Member) -> tuple[bool, int, str]:
         (can_download, remaining, error_message)
     """
     # Boosters have unlimited downloads
-    if _is_booster(user):
+    if is_booster(user):
         return (True, -1, "")  # -1 = unlimited
 
     # Check weekly limit
