@@ -9,13 +9,12 @@ Server: discord.gg/syria
 """
 
 import json
-import time
 from pathlib import Path
 from typing import Optional
-from collections import defaultdict
 
 from src.core.config import config
 from src.core.logger import logger
+from src.services.database import db
 
 
 # =============================================================================
@@ -530,102 +529,93 @@ class FAQAnalytics:
     Tracks FAQ usage statistics.
 
     DESIGN:
-        Persists analytics to JSON file for tracking FAQ engagement.
+        Persists analytics to SQLite via the database mixin system.
         Records triggers, helpful/unhelpful feedback, ticket clicks,
         and language switches per topic.
     """
 
-    DATA_FILE = Path(__file__).parent.parent.parent.parent / "data" / "faq_analytics.json"
+    _JSON_FILE = Path(__file__).parent.parent.parent.parent / "data" / "faq_analytics.json"
 
     def __init__(self) -> None:
-        self._stats: dict = {
-            "triggers": defaultdict(int),  # topic -> count
-            "helpful": defaultdict(int),   # topic -> helpful count
-            "unhelpful": defaultdict(int), # topic -> unhelpful count
-            "ticket_clicks": 0,
-            "language_switches": defaultdict(int),  # topic -> ar switch count
-        }
-        self._load()
+        self._migrate_json()
 
-    def _load(self) -> None:
-        """Load stats from file."""
-        try:
-            if self.DATA_FILE.exists():
-                with open(self.DATA_FILE, "r") as f:
-                    data = json.load(f)
-                    self._stats["triggers"] = defaultdict(int, data.get("triggers", {}))
-                    self._stats["helpful"] = defaultdict(int, data.get("helpful", {}))
-                    self._stats["unhelpful"] = defaultdict(int, data.get("unhelpful", {}))
-                    self._stats["ticket_clicks"] = data.get("ticket_clicks", 0)
-                    self._stats["language_switches"] = defaultdict(int, data.get("language_switches", {}))
-        except Exception as e:
-            logger.tree("FAQ Analytics Load Failed", [
-                ("Error", str(e)[:50]),
-            ], emoji="⚠️")
+    def _migrate_json(self) -> None:
+        """One-time migration from JSON file to SQLite."""
+        if not self._JSON_FILE.exists():
+            return
 
-    def _save(self) -> None:
-        """Save stats to file."""
         try:
-            self.DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.DATA_FILE, "w") as f:
-                json.dump({
-                    "triggers": dict(self._stats["triggers"]),
-                    "helpful": dict(self._stats["helpful"]),
-                    "unhelpful": dict(self._stats["unhelpful"]),
-                    "ticket_clicks": self._stats["ticket_clicks"],
-                    "language_switches": dict(self._stats["language_switches"]),
-                }, f, indent=2)
+            with open(self._JSON_FILE, "r") as f:
+                data = json.load(f)
+
+            if not isinstance(data, dict):
+                self._JSON_FILE.rename(self._JSON_FILE.with_suffix(".json.migrated"))
+                return
+
+            for metric in ("triggers", "helpful", "unhelpful", "language_switches"):
+                for topic, count in data.get(metric, {}).items():
+                    for _ in range(count):
+                        db.faq_increment(topic, metric)
+
+            ticket_clicks = data.get("ticket_clicks", 0)
+            for _ in range(ticket_clicks):
+                db.faq_increment("_global", "ticket_clicks")
+
+            self._JSON_FILE.rename(self._JSON_FILE.with_suffix(".json.migrated"))
+
+            logger.tree("FAQ Analytics Migrated", [
+                ("From", "JSON"),
+                ("To", "SQLite"),
+            ], emoji="🔄")
+
         except Exception as e:
-            logger.tree("FAQ Analytics Save Failed", [
-                ("Error", str(e)[:50]),
-            ], emoji="⚠️")
+            logger.error_tree("FAQ Analytics JSON Migration Failed", e, [
+                ("File", str(self._JSON_FILE)),
+            ])
 
     def record_trigger(self, topic: str) -> None:
         """Record a FAQ being triggered."""
-        self._stats["triggers"][topic] += 1
-        self._save()
+        db.faq_increment(topic, "triggers")
 
     def record_helpful(self, topic: str) -> None:
         """Record a helpful vote."""
-        self._stats["helpful"][topic] += 1
-        self._save()
+        db.faq_increment(topic, "helpful")
 
     def record_unhelpful(self, topic: str) -> None:
         """Record an unhelpful vote."""
-        self._stats["unhelpful"][topic] += 1
-        self._save()
+        db.faq_increment(topic, "unhelpful")
 
     def record_ticket_click(self) -> None:
         """Record a ticket button click."""
-        self._stats["ticket_clicks"] += 1
-        self._save()
+        db.faq_increment("_global", "ticket_clicks")
 
     def record_language_switch(self, topic: str) -> None:
         """Record a language switch to Arabic."""
-        self._stats["language_switches"][topic] += 1
-        self._save()
+        db.faq_increment(topic, "language_switches")
 
     def get_stats(self) -> dict:
         """Get all stats."""
+        raw = db.faq_get_all_stats()
+        triggers = raw.get("triggers", {})
+        helpful = raw.get("helpful", {})
+        unhelpful = raw.get("unhelpful", {})
+        ticket_clicks = raw.get("ticket_clicks", {}).get("_global", 0)
+        language_switches = raw.get("language_switches", {})
+
         return {
-            "triggers": dict(self._stats["triggers"]),
-            "helpful": dict(self._stats["helpful"]),
-            "unhelpful": dict(self._stats["unhelpful"]),
-            "ticket_clicks": self._stats["ticket_clicks"],
-            "language_switches": dict(self._stats["language_switches"]),
-            "total_triggers": sum(self._stats["triggers"].values()),
-            "total_helpful": sum(self._stats["helpful"].values()),
-            "total_unhelpful": sum(self._stats["unhelpful"].values()),
+            "triggers": triggers,
+            "helpful": helpful,
+            "unhelpful": unhelpful,
+            "ticket_clicks": ticket_clicks,
+            "language_switches": language_switches,
+            "total_triggers": sum(triggers.values()),
+            "total_helpful": sum(helpful.values()),
+            "total_unhelpful": sum(unhelpful.values()),
         }
 
     def get_top_faqs(self, limit: int = 5) -> list[tuple[str, int]]:
         """Get most triggered FAQs."""
-        sorted_faqs = sorted(
-            self._stats["triggers"].items(),
-            key=lambda x: x[1],
-            reverse=True
-        )
-        return sorted_faqs[:limit]
+        return db.faq_get_top("triggers", limit)
 
 
 # Global instance

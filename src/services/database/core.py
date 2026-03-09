@@ -853,6 +853,43 @@ class DatabaseCore:
             """)
 
             # =====================================================================
+            # Bump State Table
+            # =====================================================================
+
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS bump_state (
+                    key TEXT PRIMARY KEY,
+                    value REAL
+                )
+            """)
+
+            # =====================================================================
+            # Social Monitor Posted IDs Table
+            # =====================================================================
+
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS social_posted_ids (
+                    platform TEXT NOT NULL,
+                    video_id TEXT NOT NULL,
+                    posted_at INTEGER NOT NULL,
+                    PRIMARY KEY (platform, video_id)
+                )
+            """)
+
+            # =====================================================================
+            # FAQ Analytics Table
+            # =====================================================================
+
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS faq_analytics (
+                    topic TEXT NOT NULL,
+                    metric TEXT NOT NULL,
+                    count INTEGER DEFAULT 0,
+                    PRIMARY KEY (topic, metric)
+                )
+            """)
+
+            # =====================================================================
             # Migrations Table
             # =====================================================================
 

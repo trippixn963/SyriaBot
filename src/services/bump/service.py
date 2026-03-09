@@ -20,6 +20,7 @@ import time
 from src.core.logger import logger
 from src.core.colors import COLOR_SUCCESS
 from src.core.constants import DISBOARD_BOT_ID
+from src.services.database import db
 from src.utils.async_utils import create_safe_task
 
 
@@ -34,11 +35,11 @@ class BumpService:
     DESIGN:
         Monitors for Disboard's "bump done" embed to track successful bumps.
         Sends reminder pings after 2-hour cooldown expires.
-        Persists last bump time across bot restarts.
+        Persists last bump time across bot restarts via SQLite.
     """
 
     BUMP_INTERVAL = 2 * 60 * 60  # 2 hours in seconds
-    DATA_FILE = Path(__file__).parent.parent.parent / "data" / "bump_data.json"
+    _JSON_FILE = Path(__file__).parent.parent.parent / "data" / "bump_data.json"
 
     def __init__(self) -> None:
         self.bot: discord.Client = None
@@ -84,73 +85,63 @@ class BumpService:
         ], emoji="🛑")
 
     def _load_data(self) -> None:
-        """Load bump data from file."""
+        """Load bump data from database, migrating from JSON if needed."""
+        # Migrate from JSON if old file exists
+        self._migrate_json()
+
+        # Load from database
+        bump_time, reminder_time = db.bump_get_state()
+        self._last_bump_time = bump_time
+        self._last_reminder_time = reminder_time
+
+        if self._last_bump_time:
+            elapsed_min = int((time.time() - self._last_bump_time) / 60)
+            logger.tree("Bump Data Loaded", [
+                ("Last Bump", f"{elapsed_min} min ago"),
+            ], emoji="📊")
+
+    def _migrate_json(self) -> None:
+        """One-time migration from JSON file to SQLite."""
+        if not self._JSON_FILE.exists():
+            return
+
         try:
-            if self.DATA_FILE.exists():
-                with open(self.DATA_FILE, "r") as f:
-                    data = json.load(f)
+            with open(self._JSON_FILE, "r") as f:
+                data = json.load(f)
 
-                # Validate loaded data types
-                if not isinstance(data, dict):
-                    logger.tree("Bump Data Invalid", [
-                        ("Reason", "Expected dict, got " + type(data).__name__),
-                        ("Action", "Resetting to defaults"),
-                    ], emoji="⚠️")
-                    return
+            if not isinstance(data, dict):
+                self._JSON_FILE.rename(self._JSON_FILE.with_suffix(".json.migrated"))
+                return
 
-                # Validate and load last_bump_time
-                last_bump = data.get("last_bump_time")
-                if last_bump is not None:
-                    if isinstance(last_bump, (int, float)) and last_bump > 0:
-                        self._last_bump_time = float(last_bump)
-                    else:
-                        logger.tree("Bump Data Warning", [
-                            ("Field", "last_bump_time"),
-                            ("Value", str(last_bump)[:20]),
-                            ("Action", "Ignoring invalid value"),
-                        ], emoji="⚠️")
+            bump_time = data.get("last_bump_time")
+            reminder_time = data.get("last_reminder_time")
 
-                # Validate and load last_reminder_time
-                last_reminder = data.get("last_reminder_time")
-                if last_reminder is not None:
-                    if isinstance(last_reminder, (int, float)) and last_reminder > 0:
-                        self._last_reminder_time = float(last_reminder)
-                    else:
-                        logger.tree("Bump Data Warning", [
-                            ("Field", "last_reminder_time"),
-                            ("Value", str(last_reminder)[:20]),
-                            ("Action", "Ignoring invalid value"),
-                        ], emoji="⚠️")
+            if isinstance(bump_time, (int, float)) and bump_time > 0:
+                bump_time = float(bump_time)
+            else:
+                bump_time = None
 
-                if self._last_bump_time:
-                    elapsed_min = int((time.time() - self._last_bump_time) / 60)
-                    logger.tree("Bump Data Loaded", [
-                        ("Last Bump", f"{elapsed_min} min ago"),
-                    ], emoji="📊")
-        except json.JSONDecodeError as e:
-            logger.tree("Bump Data Corrupted", [
-                ("File", str(self.DATA_FILE)),
-                ("Error", str(e)[:50]),
-                ("Action", "Resetting to defaults"),
-            ], emoji="⚠️")
+            if isinstance(reminder_time, (int, float)) and reminder_time > 0:
+                reminder_time = float(reminder_time)
+            else:
+                reminder_time = None
+
+            db.bump_save_state(bump_time, reminder_time)
+            self._JSON_FILE.rename(self._JSON_FILE.with_suffix(".json.migrated"))
+
+            logger.tree("Bump Data Migrated", [
+                ("From", "JSON"),
+                ("To", "SQLite"),
+            ], emoji="🔄")
+
         except Exception as e:
-            logger.error_tree("Bump Data Load Failed", e, [
-                ("File", str(self.DATA_FILE)),
+            logger.error_tree("Bump JSON Migration Failed", e, [
+                ("File", str(self._JSON_FILE)),
             ])
 
     def _save_data(self) -> None:
-        """Save bump data to file."""
-        try:
-            self.DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.DATA_FILE, "w") as f:
-                json.dump({
-                    "last_bump_time": self._last_bump_time,
-                    "last_reminder_time": self._last_reminder_time,
-                }, f, indent=2)
-        except Exception as e:
-            logger.error_tree("Bump Data Save Failed", e, [
-                ("File", str(self.DATA_FILE)),
-            ])
+        """Save bump data to database."""
+        db.bump_save_state(self._last_bump_time, self._last_reminder_time)
 
     def record_bump(self) -> None:
         """Record that a bump just happened."""

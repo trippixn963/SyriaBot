@@ -23,6 +23,7 @@ from discord import ui
 from src.core.config import config
 from src.core.colors import COLOR_GOLD, COLOR_SUCCESS
 from src.core.logger import logger
+from src.services.database import db
 from src.utils.async_utils import create_safe_task
 
 if TYPE_CHECKING:
@@ -109,7 +110,7 @@ class SocialMonitorService:
     FETCH_TIMEOUT: int = 90
 
     # Data persistence
-    DATA_FILE: Path = Path(__file__).parent.parent.parent.parent / "data" / "social_posts.json"
+    _JSON_FILE: Path = Path(__file__).parent.parent.parent.parent / "data" / "social_posts.json"
     MAX_STORED_IDS: int = 100
     MAX_VIDEOS_TO_CHECK: int = 10
 
@@ -134,80 +135,63 @@ class SocialMonitorService:
     # =========================================================================
 
     def _load_data(self) -> None:
-        """Load posted video IDs from persistent storage."""
-        if not self.DATA_FILE.exists():
-            logger.tree("Social Monitor", [
-                ("Data File", "Not found, starting fresh"),
-            ], emoji="folder")
+        """Load posted video IDs from database, migrating from JSON if needed."""
+        self._migrate_json()
+
+        self._posted_tiktok = db.social_get_posted_ids("tiktok")
+        self._posted_instagram = db.social_get_posted_ids("instagram")
+
+        # If we have stored data, this isn't the first run
+        if self._posted_tiktok:
+            self._first_run_tiktok = False
+        if self._posted_instagram:
+            self._first_run_instagram = False
+
+        logger.tree("Social Monitor Data Loaded", [
+            ("TikTok IDs", str(len(self._posted_tiktok))),
+            ("Instagram IDs", str(len(self._posted_instagram))),
+            ("First Run TikTok", str(self._first_run_tiktok)),
+            ("First Run Instagram", str(self._first_run_instagram)),
+        ], emoji="📂")
+
+    def _migrate_json(self) -> None:
+        """One-time migration from JSON file to SQLite."""
+        if not self._JSON_FILE.exists():
             return
 
         try:
-            with open(self.DATA_FILE, "r", encoding="utf-8") as f:
-                data: StoredData = json.load(f)
+            with open(self._JSON_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
 
             if not isinstance(data, dict):
-                logger.tree("Social Monitor", [
-                    ("Data File", "Invalid format, starting fresh"),
-                ], emoji="warn")
+                self._JSON_FILE.rename(self._JSON_FILE.with_suffix(".json.migrated"))
                 return
 
-            self._posted_tiktok = set(data.get("tiktok", []))
-            self._posted_instagram = set(data.get("instagram", []))
+            for video_id in data.get("tiktok", []):
+                db.social_add_posted_id("tiktok", video_id)
+            for video_id in data.get("instagram", []):
+                db.social_add_posted_id("instagram", video_id)
 
-            # If we have stored data, this isn't the first run
-            if self._posted_tiktok:
-                self._first_run_tiktok = False
-            if self._posted_instagram:
-                self._first_run_instagram = False
+            self._JSON_FILE.rename(self._JSON_FILE.with_suffix(".json.migrated"))
 
-            logger.tree("Social Monitor Data Loaded", [
-                ("TikTok IDs", str(len(self._posted_tiktok))),
-                ("Instagram IDs", str(len(self._posted_instagram))),
-                ("First Run TikTok", str(self._first_run_tiktok)),
-                ("First Run Instagram", str(self._first_run_instagram)),
-            ], emoji="folder")
+            logger.tree("Social Monitor Data Migrated", [
+                ("From", "JSON"),
+                ("To", "SQLite"),
+                ("TikTok", str(len(data.get("tiktok", [])))),
+                ("Instagram", str(len(data.get("instagram", [])))),
+            ], emoji="🔄")
 
-        except json.JSONDecodeError as e:
-            logger.error_tree("Social Monitor Data Load Failed", e, [
-                ("Reason", "Invalid JSON"),
-                ("File", str(self.DATA_FILE)),
-            ])
-        except PermissionError as e:
-            logger.error_tree("Social Monitor Data Load Failed", e, [
-                ("Reason", "Permission denied"),
-                ("File", str(self.DATA_FILE)),
-            ])
         except Exception as e:
-            logger.error_tree("Social Monitor Data Load Failed", e, [
-                ("File", str(self.DATA_FILE)),
+            logger.error_tree("Social Monitor JSON Migration Failed", e, [
+                ("File", str(self._JSON_FILE)),
             ])
 
     def _save_data(self) -> None:
-        """Save posted video IDs to persistent storage."""
-        try:
-            self.DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
-
-            # Keep only the most recent IDs to prevent unbounded growth
-            tiktok_list = list(self._posted_tiktok)[-self.MAX_STORED_IDS:]
-            instagram_list = list(self._posted_instagram)[-self.MAX_STORED_IDS:]
-
-            data: StoredData = {
-                "tiktok": tiktok_list,
-                "instagram": instagram_list,
-            }
-
-            with open(self.DATA_FILE, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2)
-
-        except PermissionError as e:
-            logger.error_tree("Social Monitor Data Save Failed", e, [
-                ("Reason", "Permission denied"),
-                ("File", str(self.DATA_FILE)),
-            ])
-        except Exception as e:
-            logger.error_tree("Social Monitor Data Save Failed", e, [
-                ("File", str(self.DATA_FILE)),
-            ])
+        """Persist current posted IDs and clean up old entries."""
+        # Add any new IDs that are in memory but not yet in DB
+        # (individual adds happen in _check_tiktok/_check_instagram)
+        db.social_cleanup("tiktok", self.MAX_STORED_IDS)
+        db.social_cleanup("instagram", self.MAX_STORED_IDS)
 
     # =========================================================================
     # Lifecycle
@@ -474,6 +458,7 @@ class SocialMonitorService:
                 continue
 
             self._posted_tiktok.add(video_id)
+            db.social_add_posted_id("tiktok", video_id)
 
             # Only post notifications after first run
             if not self._first_run_tiktok:
@@ -532,6 +517,7 @@ class SocialMonitorService:
                 continue
 
             self._posted_instagram.add(video_id)
+            db.social_add_posted_id("instagram", video_id)
 
             if not self._first_run_instagram:
                 post_url = f"https://www.instagram.com/p/{video_id}/"

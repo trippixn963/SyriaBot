@@ -32,6 +32,9 @@ from .actions import ActionsMixin
 from .birthdays import BirthdaysMixin
 from .actions_panel import ActionsPanelMixin
 from .family import FamilyMixin
+from .bump import BumpMixin
+from .social_monitor import SocialMonitorMixin
+from .faq import FAQAnalyticsMixin
 
 
 class Database(
@@ -46,6 +49,9 @@ class Database(
     BirthdaysMixin,
     ActionsPanelMixin,
     FamilyMixin,
+    BumpMixin,
+    SocialMonitorMixin,
+    FAQAnalyticsMixin,
     DatabaseCore,
 ):
     """
