@@ -18,6 +18,7 @@ from starlette.status import HTTP_500_INTERNAL_SERVER_ERROR
 
 from src.core.logger import logger
 from src.api.config import get_api_config
+from src.utils.async_utils import create_safe_task
 from src.api.errors import APIError, ErrorCode, error_response
 from src.api.middleware.rate_limit import RateLimitMiddleware, get_rate_limiter
 from src.api.middleware.logging import LoggingMiddleware
@@ -63,7 +64,7 @@ async def lifespan(app: FastAPI):
         try:
             loop = asyncio.get_event_loop()
             if loop.is_running():
-                asyncio.create_task(ws_manager.broadcast_discord_event(event_data))
+                create_safe_task(ws_manager.broadcast_discord_event(event_data), "Event Broadcast")
         except Exception as e:
             logger.error_tree("Event Broadcast Failed", e, [
                 ("Event Type", str(event_data.get("type", "unknown"))),

@@ -17,7 +17,7 @@ from fastapi.responses import JSONResponse
 from src.core.logger import logger
 from src.api.errors import APIError, ErrorCode
 from src.core.config import config
-from src.core.constants import TIMEZONE_DAMASCUS
+from src.core.constants import TIMEZONE_EST
 from src.services.database import db
 from src.api.models.stats import ChannelStats, ChannelsResponse
 from src.api.services.cache import get_cache_service
@@ -72,7 +72,7 @@ async def get_channels(request: Request) -> JSONResponse:
 
         response = ChannelsResponse(
             channels=channels,
-            updated_at=datetime.now(TIMEZONE_DAMASCUS),
+            updated_at=datetime.now(TIMEZONE_EST),
         )
 
         response_data = response.model_dump(mode="json")

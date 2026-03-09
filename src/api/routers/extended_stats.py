@@ -19,6 +19,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from src.core.logger import logger
 from src.core.config import config
+from src.core.constants import TIMEZONE_EST
 from src.api.errors import APIError, ErrorCode
 from src.services.database import db
 from src.api.dependencies import get_bot
@@ -626,7 +627,7 @@ async def export_stats(
             ("Response Time", f"{elapsed_ms}ms"),
         ], emoji="📤")
 
-        filename = f"syria_{type}_{datetime.now().strftime('%Y%m%d')}.csv"
+        filename = f"syria_{type}_{datetime.now(TIMEZONE_EST).strftime('%Y%m%d')}.csv"
         return StreamingResponse(
             iter([output.getvalue()]),
             media_type="text/csv",

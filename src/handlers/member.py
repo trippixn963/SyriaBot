@@ -158,8 +158,8 @@ class MemberHandler(commands.Cog):
         # Track new member for daily stats
         try:
             from datetime import datetime
-            from zoneinfo import ZoneInfo
-            today = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
+            from src.core.constants import TIMEZONE_EST
+            today = datetime.now(TIMEZONE_EST).strftime("%Y-%m-%d")
             db.increment_new_members(member.guild.id, today)
         except Exception as e:
             logger.error_tree("New Member Track Failed", e, [

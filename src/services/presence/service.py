@@ -28,6 +28,7 @@ from src.core.constants import (
     PROMO_TEXT,
     TIMEZONE_EST,
 )
+from src.utils.async_utils import create_safe_task
 from src.utils.server_stats import (
     get_server_stats,
     format_number,
@@ -150,8 +151,8 @@ class BasePresenceHandler(ABC):
             return
 
         self._running = True
-        self._rotation_task = asyncio.create_task(self._rotation_loop())
-        self._promo_task = asyncio.create_task(self._promo_loop())
+        self._rotation_task = create_safe_task(self._rotation_loop(), "Presence Rotation")
+        self._promo_task = create_safe_task(self._promo_loop(), "Presence Promo")
         self.on_handler_ready()
 
     async def stop(self) -> None:

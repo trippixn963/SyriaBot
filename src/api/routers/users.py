@@ -18,7 +18,7 @@ from fastapi.responses import JSONResponse
 from src.core.logger import logger
 from src.api.errors import APIError, ErrorCode, error_response
 from src.core.config import config
-from src.core.constants import TIMEZONE_DAMASCUS
+from src.core.constants import TIMEZONE_EST
 from src.services.database import db
 from src.services.xp.utils import xp_progress
 from src.api.dependencies import get_bot
@@ -147,7 +147,7 @@ async def get_user(
             invites_count=invites_count,
             mentions_received=mentions_received,
             channels=channels,
-            updated_at=datetime.now(TIMEZONE_DAMASCUS),
+            updated_at=datetime.now(TIMEZONE_EST),
         )
 
         return JSONResponse(

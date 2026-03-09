@@ -8,6 +8,7 @@ Author: حَـــــنَّـــــا
 Server: discord.gg/syria
 """
 
+import asyncio
 from datetime import datetime
 
 import discord
@@ -16,6 +17,8 @@ from discord.ext import commands
 
 from src.core.logger import logger
 from src.core.colors import COLOR_SYRIA_GREEN, COLOR_ERROR
+from src.core.constants import TIMEZONE_EST
+from src.services.database import db
 from src.utils.footer import set_footer
 from src.services.birthday import get_birthday_service, MONTH_NAMES
 
@@ -107,7 +110,7 @@ class BirthdayCog(commands.Cog):
 
         if success:
             # Calculate age for display
-            current_year = datetime.now().year
+            current_year = datetime.now(TIMEZONE_EST).year
             age = current_year - year
 
             embed = discord.Embed(
@@ -228,10 +231,7 @@ class BirthdayCog(commands.Cog):
             return
 
         # Get upcoming birthdays
-        from src.services.database import db
-        import asyncio
-
-        now = datetime.now()
+        now = datetime.now(TIMEZONE_EST)
         upcoming = await asyncio.to_thread(
             db.get_upcoming_birthdays,
             interaction.guild.id,

@@ -16,6 +16,7 @@ from fastapi import WebSocket
 from starlette.websockets import WebSocketState
 
 from src.core.logger import logger
+from src.utils.async_utils import create_safe_task
 
 
 class WebSocketManager:
@@ -50,7 +51,7 @@ class WebSocketManager:
         if self._online_task is not None:
             return
 
-        self._online_task = asyncio.create_task(self._online_update_loop())
+        self._online_task = create_safe_task(self._online_update_loop(), "WS Online Update Loop")
         logger.tree("WebSocket Online Updates", [
             ("Interval", "30 seconds"),
         ], emoji="🟢")

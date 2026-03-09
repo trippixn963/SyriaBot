@@ -38,6 +38,7 @@ from src.core.constants import (
 from src.core.logger import logger
 from src.services.database import db
 from src.utils.footer import set_footer
+from src.utils.async_utils import create_safe_task
 from .utils import (
     generate_base_name,
     build_full_name,
@@ -133,7 +134,7 @@ class TempVoiceService:
         await self._strip_manage_channels()  # One-time fix for existing channels
 
         # Start periodic cleanup task
-        self._cleanup_task = asyncio.create_task(self._periodic_cleanup())
+        self._cleanup_task = create_safe_task(self._periodic_cleanup(), "TempVoice Cleanup")
 
         cleanup_mins = config.VC_CLEANUP_INTERVAL // 60
         logger.tree("TempVoice Service", [
@@ -999,7 +1000,7 @@ class TempVoiceService:
             ], emoji="🔄")
 
         # Schedule new reorder after debounce delay
-        task = asyncio.create_task(self._debounced_reorder(guild))
+        task = create_safe_task(self._debounced_reorder(guild), "TempVoice Reorder")
         self._pending_reorders[guild_id] = task
 
         if not existing_task:
@@ -1439,7 +1440,7 @@ class TempVoiceService:
                     ("Reason", "Users left server"),
                 ], emoji="🧹")
 
-        asyncio.create_task(_stale_cleanup())
+        create_safe_task(_stale_cleanup(), "TempVoice Stale Cleanup")
 
         # Get user settings for default limit
         settings = db.get_user_settings(member.id)
@@ -1640,7 +1641,7 @@ class TempVoiceService:
         ], emoji="⏳")
 
         # Schedule the transfer
-        task = asyncio.create_task(self._execute_owner_transfer(channel, old_owner))
+        task = create_safe_task(self._execute_owner_transfer(channel, old_owner), "TempVoice Owner Transfer")
         self._pending_transfers[channel.id] = task
 
     async def _execute_owner_transfer(self, channel: discord.VoiceChannel, old_owner: discord.Member) -> None:

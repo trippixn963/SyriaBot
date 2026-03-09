@@ -17,10 +17,10 @@ from fastapi.responses import JSONResponse
 
 from src.core.logger import logger
 from src.api.errors import APIError, ErrorCode
-from src.core.constants import TIMEZONE_DAMASCUS
+from src.core.constants import TIMEZONE_EST
 from src.services.database import db
 from src.api.dependencies import get_bot, PaginationParams, get_pagination, get_period
-from src.api.models.leaderboard import LeaderboardEntry, LeaderboardResponse
+from src.api.models.leaderboard import LeaderboardEntry
 from src.api.services.cache import get_cache_service
 from src.api.services.discord import get_discord_service
 from src.api.utils import format_voice_time, format_last_seen, get_client_ip
@@ -89,7 +89,7 @@ async def _enrich_leaderboard(
     return enriched
 
 
-@router.get("/leaderboard", response_model=LeaderboardResponse)
+@router.get("/leaderboard")
 async def get_leaderboard(
     request: Request,
     pagination: PaginationParams = Depends(get_pagination),
@@ -168,7 +168,7 @@ async def get_leaderboard(
             "limit": pagination.limit,
             "offset": pagination.offset,
             "period": period,
-            "updated_at": datetime.now(TIMEZONE_DAMASCUS).isoformat(),
+            "updated_at": datetime.now(TIMEZONE_EST).isoformat(),
         }
 
         # Cache response

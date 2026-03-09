@@ -12,20 +12,18 @@ from __future__ import annotations
 
 from datetime import datetime, time as dt_time, timedelta
 from typing import Optional, TYPE_CHECKING
-from zoneinfo import ZoneInfo
 
 import discord
 from discord.ext import tasks
 
 from src.core.config import config
 from src.core.colors import COLOR_GOLD
+from src.core.constants import TIMEZONE_EST
 from src.core.logger import logger
 from src.services.database import db
 
 if TYPE_CHECKING:
     from src.bot import SyriaBot
-
-EST = ZoneInfo("America/New_York")
 
 
 class DailyStatsService:
@@ -58,7 +56,7 @@ class DailyStatsService:
             self.daily_summary.cancel()
         logger.tree("Daily Stats Service Stopped", [], emoji="🛑")
 
-    @tasks.loop(time=dt_time(hour=0, minute=0, tzinfo=EST))  # Midnight Eastern (DST-aware)
+    @tasks.loop(time=dt_time(hour=0, minute=0, tzinfo=TIMEZONE_EST))  # Midnight Eastern (DST-aware)
     async def daily_summary(self) -> None:
         """Send the daily summary embed."""
         if not self._enabled:
@@ -84,7 +82,7 @@ class DailyStatsService:
             return
 
         # Yesterday's date in EST
-        now_est = datetime.now(EST)
+        now_est = datetime.now(TIMEZONE_EST)
         yesterday = now_est - timedelta(days=1)
         date_str: str = yesterday.strftime("%Y-%m-%d")
         display_date: str = yesterday.strftime("%b %-d, %Y")

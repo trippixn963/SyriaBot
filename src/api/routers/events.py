@@ -11,6 +11,7 @@ Server: discord.gg/syria
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import JSONResponse
 
 from src.core.config import config
 from src.api.dependencies import require_auth
@@ -36,7 +37,7 @@ async def get_events(
     channel_id: Optional[int] = Query(None),
     search: Optional[str] = Query(None),
     hours: Optional[int] = Query(None),
-) -> Dict[str, Any]:
+) -> JSONResponse:
     """
     Get paginated Discord events with filtering.
 
@@ -86,7 +87,7 @@ async def get_events(
 @router.get("/stats")
 async def get_event_stats(
     user_id: int = Depends(require_auth),
-) -> Dict[str, Any]:
+) -> JSONResponse:
     """Get event statistics (counts by type/category, top actors)."""
     storage = get_event_storage()
     stats = storage.get_stats(config.GUILD_ID)
@@ -100,7 +101,7 @@ async def get_event_stats(
 @router.get("/types")
 async def get_event_types(
     user_id: int = Depends(require_auth),
-) -> Dict[str, Any]:
+) -> JSONResponse:
     """Get all event types with their categories."""
     types = [
         # Member events
@@ -141,7 +142,7 @@ async def get_event_types(
 @router.get("/categories")
 async def get_event_categories(
     user_id: int = Depends(require_auth),
-) -> Dict[str, Any]:
+) -> JSONResponse:
     """Get event categories."""
     categories = [
         {"key": "member", "label": "Members", "color": "emerald"},

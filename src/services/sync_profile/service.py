@@ -10,14 +10,12 @@ Server: discord.gg/syria
 
 import asyncio
 from datetime import datetime, time, timedelta
-from zoneinfo import ZoneInfo
 
 import discord
 
 from src.core.logger import logger
-
-
-TIMEZONE = ZoneInfo("America/New_York")
+from src.core.constants import TIMEZONE_EST
+from src.utils.async_utils import create_safe_task
 SYNC_TIME = time(0, 0)  # Midnight
 
 
@@ -50,7 +48,7 @@ class ProfileSyncService:
         await self._sync_profile()
 
         # Start scheduler
-        self._task = asyncio.create_task(self._scheduler())
+        self._task = create_safe_task(self._scheduler(), "Profile Sync Scheduler")
         logger.tree("Profile Sync Initialized", [
             ("Guild ID", str(guild_id)),
             ("Schedule", "Daily at midnight EST"),
@@ -69,14 +67,14 @@ class ProfileSyncService:
         """Run sync at midnight every day."""
         while True:
             try:
-                now = datetime.now(TIMEZONE)
+                now = datetime.now(TIMEZONE_EST)
 
                 # Calculate next midnight
                 tomorrow = now.date()
                 if now.time() >= SYNC_TIME:
                     tomorrow = now.date() + timedelta(days=1)
 
-                next_run = datetime.combine(tomorrow, SYNC_TIME, TIMEZONE)
+                next_run = datetime.combine(tomorrow, SYNC_TIME, TIMEZONE_EST)
                 wait_seconds = (next_run - now).total_seconds()
 
                 logger.tree("Profile Sync Scheduled", [

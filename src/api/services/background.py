@@ -14,6 +14,7 @@ from typing import Any, Optional
 
 from src.core.logger import logger
 from src.core.constants import TIMEZONE_EST
+from src.utils.async_utils import create_safe_task
 from src.core.config import config
 from src.services.database import db
 from src.api.services.cache import get_cache_service
@@ -43,9 +44,9 @@ class BackgroundTaskService:
         await self._bootstrap_snapshots()
 
         # Start background tasks
-        self._cleanup_task = asyncio.create_task(self._periodic_cleanup())
-        self._midnight_task = asyncio.create_task(self._midnight_booster_refresh())
-        self._snapshot_task = asyncio.create_task(self._daily_xp_snapshot())
+        self._cleanup_task = create_safe_task(self._periodic_cleanup(), "API Cache Cleanup")
+        self._midnight_task = create_safe_task(self._midnight_booster_refresh(), "Midnight Booster Refresh")
+        self._snapshot_task = create_safe_task(self._daily_xp_snapshot(), "Daily XP Snapshot")
 
         logger.tree("Background Tasks Started", [
             ("Cleanup", "Every 2 min"),

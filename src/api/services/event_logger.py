@@ -10,7 +10,7 @@ Server: discord.gg/syria
 """
 
 import functools
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import discord
@@ -131,7 +131,7 @@ class EventLogger:
         from src.api.services.event_storage import EventType
 
         # Calculate account age
-        account_age = (datetime.utcnow() - member.created_at.replace(tzinfo=None)).days
+        account_age = (datetime.now(timezone.utc) - member.created_at).days
 
         details = {
             "account_age_days": account_age,
@@ -175,7 +175,7 @@ class EventLogger:
 
         # Calculate membership duration
         if member.joined_at:
-            duration = (datetime.utcnow() - member.joined_at.replace(tzinfo=None)).days
+            duration = (datetime.now(timezone.utc) - member.joined_at.replace(tzinfo=None)).days
         else:
             duration = 0
 

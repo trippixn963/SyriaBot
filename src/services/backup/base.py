@@ -17,19 +17,12 @@ import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from zoneinfo import ZoneInfo
 
 import aiohttp
 
 from src.core.logger import logger
+from src.core.constants import TIMEZONE_EST
 from src.utils.async_utils import create_safe_task
-
-
-# =============================================================================
-# Constants
-# =============================================================================
-
-DEFAULT_TIMEZONE = "America/New_York"
 DEFAULT_RETENTION_HOURS = 48  # Keep 48 hourly backups (2 days)
 SECONDS_PER_HOUR = 3600
 
@@ -51,14 +44,6 @@ def _format_size(size_bytes: int) -> str:
         return f"{size_bytes / MB_DIVISOR:.1f} MB"
     else:
         return f"{size_bytes / KB_DIVISOR:.1f} KB"
-
-
-def _get_timezone(timezone_name: Optional[str] = None) -> ZoneInfo:
-    """Get timezone, with fallback to default."""
-    try:
-        return ZoneInfo(timezone_name or DEFAULT_TIMEZONE)
-    except (KeyError, ValueError):
-        return ZoneInfo(DEFAULT_TIMEZONE)
 
 
 def _check_database_integrity(db_path: Path, max_retries: int = 3) -> tuple[bool, str]:
@@ -89,13 +74,9 @@ def _format_tree_log(
     title: str,
     items: List[tuple[str, Any]],
     emoji: str = "\U0001f4be",
-    tz: Optional[ZoneInfo] = None,
 ) -> str:
     """Format a tree log message for webhook."""
-    if tz is None:
-        tz = ZoneInfo(DEFAULT_TIMEZONE)
-
-    timestamp = datetime.now(tz).strftime("[%I:%M:%S %p %Z]")
+    timestamp = datetime.now(TIMEZONE_EST).strftime("[%I:%M:%S %p %Z]")
     lines = [f"{timestamp} {emoji} {title}"]
 
     for i, (key, value) in enumerate(items):
@@ -115,13 +96,12 @@ async def _send_backup_webhook(
     title: str,
     items: List[tuple[str, Any]],
     emoji: str = "\U0001f4be",
-    tz: Optional[ZoneInfo] = None,
 ) -> None:
     """Send backup notification to Discord webhook."""
     if not webhook_url:
         return
 
-    formatted = _format_tree_log(title, items, emoji, tz)
+    formatted = _format_tree_log(title, items, emoji)
     payload = {
         "content": f"```\n{formatted}\n```",
         "username": "Backups",
@@ -150,8 +130,6 @@ async def send_backup_notification(result: Optional[Dict[str, Any]]) -> None:
     if not webhook_url:
         return
 
-    tz = result.get("tz")
-
     if result.get("success"):
         await _send_backup_webhook(
             webhook_url,
@@ -163,7 +141,6 @@ async def send_backup_notification(result: Optional[Dict[str, Any]]) -> None:
                 ("Integrity", "Verified \u2713"),
             ],
             emoji="\u2601\ufe0f",
-            tz=tz,
         )
     elif result.get("error") == "corruption":
         await _send_backup_webhook(
@@ -175,7 +152,6 @@ async def send_backup_notification(result: Optional[Dict[str, Any]]) -> None:
                 ("Action", "Backup skipped"),
             ],
             emoji="\U0001f6a8",
-            tz=tz,
         )
     elif result.get("error") == "upload_failed":
         await _send_backup_webhook(
@@ -186,7 +162,6 @@ async def send_backup_notification(result: Optional[Dict[str, Any]]) -> None:
                 ("Error", result.get("error_msg", "Unknown")[:80]),
             ],
             emoji="\u274c",
-            tz=tz,
         )
 
 
@@ -208,7 +183,6 @@ class R2BackupScheduler:
         r2_bucket: str = "bot-backups",
         retention_hours: int = DEFAULT_RETENTION_HOURS,
         webhook_url: Optional[str] = None,
-        timezone_name: str = DEFAULT_TIMEZONE,
     ) -> None:
         self._db_path = Path(database_path)
         self._bot_name = bot_name.lower()
@@ -216,7 +190,7 @@ class R2BackupScheduler:
         self._r2_bucket = r2_bucket
         self._retention_hours = retention_hours
         self._webhook_url = webhook_url
-        self._tz = _get_timezone(timezone_name)
+        self._tz = TIMEZONE_EST
         self._task: Optional[asyncio.Task] = None
         self._running = False
 
@@ -225,7 +199,6 @@ class R2BackupScheduler:
         base_result = {
             "bot_name": self._bot_display,
             "webhook_url": self._webhook_url,
-            "tz": self._tz,
             "retention_hours": self._retention_hours,
         }
 
@@ -402,5 +375,4 @@ __all__ = [
     "R2BackupScheduler",
     "send_backup_notification",
     "DEFAULT_RETENTION_HOURS",
-    "DEFAULT_TIMEZONE",
 ]

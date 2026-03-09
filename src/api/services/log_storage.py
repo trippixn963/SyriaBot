@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from dataclasses import dataclass
 
 from src.core.logger import logger
+from src.utils.async_utils import create_safe_task
 
 
 # =============================================================================
@@ -385,7 +386,7 @@ class LogStorage:
                     # Schedule broadcast in the event loop
                     loop = asyncio.get_event_loop()
                     if loop.is_running():
-                        asyncio.create_task(ws_manager.broadcast_bot_log(log_data))
+                        create_safe_task(ws_manager.broadcast_bot_log(log_data), "Bot Log Broadcast")
             except Exception:
                 pass  # Don't fail logging if broadcast fails
         except (KeyError, TypeError, RuntimeError):

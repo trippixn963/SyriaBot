@@ -19,7 +19,7 @@ from fastapi.responses import JSONResponse
 from src.core.logger import logger
 from src.api.errors import APIError, ErrorCode
 from src.core.config import config
-from src.core.constants import TIMEZONE_DAMASCUS
+from src.core.constants import TIMEZONE_EST
 from src.services.database import db
 from src.api.dependencies import get_bot
 from src.api.models.stats import ServerStats, TopUser, DailyStats
@@ -178,7 +178,7 @@ async def get_stats(
             new_members_today=today_stats.get("new_members", 0),
             voice_peak_today=today_stats.get("voice_peak_users", 0),
             daily_stats_history=daily_stats_history,
-            updated_at=datetime.now(TIMEZONE_DAMASCUS),
+            updated_at=datetime.now(TIMEZONE_EST),
         )
 
         response_data = response.model_dump(mode="json")

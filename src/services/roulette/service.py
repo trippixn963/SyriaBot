@@ -21,6 +21,7 @@ import discord
 from src.core.config import config
 from src.core.logger import logger
 from src.services.database import db
+from src.utils.async_utils import create_safe_task
 
 from .graphics import RoulettePlayer, generate_wheel_result
 from .views import (
@@ -97,7 +98,7 @@ class RouletteService:
     async def setup(self) -> None:
         """Start the roulette spawn timer."""
         self._running = True
-        self._spawn_task = asyncio.create_task(self._spawn_loop())
+        self._spawn_task = create_safe_task(self._spawn_loop(), "Roulette Spawn Loop")
 
         logger.tree("Roulette Service Started", [
             ("Min Interval", f"{MIN_SPAWN_INTERVAL // 3600}h"),

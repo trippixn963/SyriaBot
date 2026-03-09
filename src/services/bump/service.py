@@ -20,6 +20,7 @@ import time
 from src.core.logger import logger
 from src.core.constants import DISBOARD_BOT_ID
 from src.utils.footer import set_footer
+from src.utils.async_utils import create_safe_task
 
 
 # =============================================================================
@@ -66,7 +67,7 @@ class BumpService:
             return
 
         self._running = True
-        self._task = asyncio.create_task(self._reminder_loop())
+        self._task = create_safe_task(self._reminder_loop(), "Bump Reminder Loop")
         logger.tree("Bump Scheduler Started", [
             ("Status", "Running"),
             ("Interval", "2 hours"),

@@ -23,7 +23,7 @@ import hashlib
 import random
 import time
 from collections import OrderedDict
-from datetime import time as dt_time
+from datetime import datetime, time as dt_time
 from typing import TYPE_CHECKING, Dict, Optional
 
 import discord
@@ -31,7 +31,8 @@ from discord.ext import tasks
 
 from src.core.config import config
 from src.core.colors import COLOR_GOLD
-from src.core.constants import XP_COOLDOWN_CACHE_MAX_SIZE
+from src.core.constants import TIMEZONE_EST, XP_COOLDOWN_CACHE_MAX_SIZE
+from src.utils.async_utils import create_safe_task
 from src.core.logger import logger
 from src.services.database import db
 from src.services.birthday import has_birthday_bonus, BIRTHDAY_XP_MULTIPLIER
@@ -109,8 +110,7 @@ class XPService:
         self._cleanup_task: Optional[asyncio.Task] = None
 
         # Timezone for daily tracking (reused every minute in voice loop)
-        from zoneinfo import ZoneInfo
-        self._est_tz = ZoneInfo("America/New_York")
+        self._est_tz = TIMEZONE_EST
 
     async def setup(self) -> None:
         """
@@ -125,14 +125,14 @@ class XPService:
         and performs initial role sync.
         """
         # Start voice XP background task with auto-restart wrapper
-        self._voice_xp_task = asyncio.create_task(self._run_with_restart(
+        self._voice_xp_task = create_safe_task(self._run_with_restart(
             self._voice_xp_loop, "Voice XP Loop"
-        ))
+        ), "Voice XP Loop")
 
         # Start cache cleanup task (runs hourly) with auto-restart wrapper
-        self._cleanup_task = asyncio.create_task(self._run_with_restart(
+        self._cleanup_task = create_safe_task(self._run_with_restart(
             self._cache_cleanup_loop, "Cache Cleanup Loop"
-        ))
+        ), "Cache Cleanup Loop")
 
         # Initialize voice sessions for users already in voice (main server only)
         main_guild = self.bot.get_guild(config.GUILD_ID)
@@ -281,11 +281,7 @@ class XPService:
 
         # Track additional metrics (non-blocking)
         try:
-            from datetime import datetime
-            from zoneinfo import ZoneInfo
-
-            est = ZoneInfo("America/New_York")
-            now_est = datetime.now(est)
+            now_est = datetime.now(TIMEZONE_EST)
             today_date = now_est.strftime("%Y-%m-%d")
             current_hour = now_est.hour
 
@@ -677,10 +673,7 @@ class XPService:
                         break  # All remaining entries are valid
 
                 # Clean DAU cache - remove old dates (keep only today)
-                from datetime import datetime
-                from zoneinfo import ZoneInfo
-                est = ZoneInfo("America/New_York")
-                today_date = datetime.now(est).strftime("%Y-%m-%d")
+                today_date = datetime.now(TIMEZONE_EST).strftime("%Y-%m-%d")
                 async with self._dau_cache_lock:
                     old_dau_size = len(self._dau_cache)
                     self._dau_cache = {k for k in self._dau_cache if k[2] == today_date}
@@ -731,10 +724,7 @@ class XPService:
             db.update_last_active(member.id, member.guild.id, now)
 
             # Update streak
-            from datetime import datetime
-            from zoneinfo import ZoneInfo
-            est = ZoneInfo("America/New_York")
-            today = datetime.now(est).strftime("%Y-%m-%d")
+            today = datetime.now(TIMEZONE_EST).strftime("%Y-%m-%d")
             db.update_streak(member.id, member.guild.id, today)
 
             old_level = result["old_level"]

@@ -11,14 +11,9 @@ Server: discord.gg/syria
 import time
 from fastapi import Request
 
+from src.services.xp.utils import format_voice_time
 
-def format_voice_time(mins: int) -> str:
-    """Format minutes into human-readable string (e.g., '5h 30m')."""
-    if mins >= 60:
-        hours = mins // 60
-        remaining_mins = mins % 60
-        return f"{hours}h {remaining_mins}m"
-    return f"{mins}m"
+
 
 
 def format_last_seen(last_active_at: int) -> str:

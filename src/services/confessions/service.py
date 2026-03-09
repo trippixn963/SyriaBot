@@ -12,7 +12,6 @@ Server: discord.gg/syria
 import asyncio
 import time
 from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
 import discord
 from typing import TYPE_CHECKING, Optional, Tuple, Set, Dict
 from collections import OrderedDict
@@ -20,12 +19,9 @@ from collections import OrderedDict
 from src.core.config import config
 from src.core.logger import logger
 from src.core.colors import COLOR_SYRIA_GREEN, COLOR_WARNING, EMOJI_HEART, EMOJI_CONFESSION
-from src.core.constants import DELETE_DELAY_MEDIUM
+from src.core.constants import DELETE_DELAY_MEDIUM, TIMEZONE_EST
 from src.services.database import db
 from src.utils.footer import set_footer
-
-# Timezone for daily reset
-EST_TIMEZONE = ZoneInfo("America/New_York")
 
 if TYPE_CHECKING:
     from src.bot import SyriaBot
@@ -409,10 +405,10 @@ class ConfessionService:
             return True, None
 
         # Get current time in Eastern timezone
-        now_eastern = datetime.now(EST_TIMEZONE)
+        now_eastern = datetime.now(TIMEZONE_EST)
 
         # Convert last confession timestamp to Eastern datetime
-        last_confession_eastern = datetime.fromtimestamp(last_time, tz=EST_TIMEZONE)
+        last_confession_eastern = datetime.fromtimestamp(last_time, tz=TIMEZONE_EST)
 
         # Check if both are on the same calendar day in Eastern time
         if now_eastern.date() != last_confession_eastern.date():

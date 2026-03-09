@@ -8,7 +8,7 @@ Author: حَـــــنَّـــــا
 Server: discord.gg/syria
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Generic, Optional, TypeVar
 
 from pydantic import BaseModel, Field
@@ -32,7 +32,7 @@ class APIResponse(BaseModel, Generic[T]):
     message: Optional[str] = None
     data: Optional[T] = None
     error: Optional[str] = None
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     class Config:
         json_encoders = {
@@ -47,7 +47,7 @@ class ErrorResponse(BaseModel):
     error_code: str
     message: str
     details: Optional[dict[str, Any]] = None
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class PaginationMeta(BaseModel):
@@ -65,7 +65,7 @@ class PaginatedResponse(BaseModel, Generic[T]):
     success: bool = True
     data: list[T]
     pagination: PaginationMeta
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     class Config:
         json_encoders = {
@@ -108,7 +108,7 @@ class WSMessage(BaseModel):
 
     type: str = Field(description="Event type")
     data: dict[str, Any] = Field(default_factory=dict)
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class WSEventType:

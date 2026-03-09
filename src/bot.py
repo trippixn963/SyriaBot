@@ -16,6 +16,7 @@ from typing import Optional
 
 from src.core.config import config, validate_config
 from src.core.constants import HEALTH_CHECK_INTERVAL, HEALTH_MAX_FAILURES
+from src.utils.async_utils import create_safe_task
 
 
 # =============================================================================
@@ -429,7 +430,7 @@ class SyriaBot(commands.Bot):
             logger.error_tree("Roulette Service Init Failed", e)
 
         # Start connection health monitor
-        self._health_task = asyncio.create_task(self._health_check_loop())
+        self._health_task = create_safe_task(self._health_check_loop(), "Health Check Loop")
 
         logger.tree("Services Init Complete", [
             ("Services", ", ".join(initialized)),

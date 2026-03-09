@@ -20,23 +20,19 @@ import calendar
 import time
 from datetime import datetime, time as dt_time
 from typing import TYPE_CHECKING, Optional, Tuple, Set
-from zoneinfo import ZoneInfo
 
 import discord
 from discord.ext import tasks
 
 from src.core.config import config
 from src.core.colors import COLOR_SYRIA_GREEN
+from src.core.constants import TIMEZONE_EST
 from src.core.logger import logger
 from src.services.database import db
 from src.utils.footer import set_footer
 
 if TYPE_CHECKING:
     from src.bot import SyriaBot
-
-
-# Timezone for birthday checks
-NY_TZ = ZoneInfo("America/New_York")
 
 # Birthday role duration (24 hours in seconds)
 BIRTHDAY_ROLE_DURATION = 24 * 60 * 60
@@ -142,7 +138,7 @@ class BirthdayService:
         if not self._enabled:
             return
 
-        now = datetime.now(NY_TZ)
+        now = datetime.now(TIMEZONE_EST)
         month = now.month
         day = now.day
 
@@ -374,7 +370,7 @@ class BirthdayService:
             return False, f"Invalid day. {MONTH_NAMES[month]} {year} has {max_day} days."
 
         # Validate year (reasonable range)
-        current_year = datetime.now().year
+        current_year = datetime.now(TIMEZONE_EST).year
         if year < 1900 or year > current_year:
             return False, f"Invalid year. Please enter a year between 1900 and {current_year}."
 

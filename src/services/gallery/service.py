@@ -19,6 +19,7 @@ from discord.ext import commands, tasks
 from src.core.logger import logger
 from src.core.config import config
 from src.core.colors import COLOR_GOLD, EMOJI_HEART, EMOJI_COMMENT
+from src.core.constants import TIMEZONE_EST
 from src.utils.footer import set_footer
 
 
@@ -227,7 +228,7 @@ class GalleryService:
         # Create comment thread
         thread = None
         try:
-            date_str = datetime.now().strftime("%b %-d")
+            date_str = datetime.now(TIMEZONE_EST).strftime("%b %-d")
             thread_name = f"{thread_emoji} {message.author.display_name} • {date_str}"[:100]
 
             thread = await message.create_thread(

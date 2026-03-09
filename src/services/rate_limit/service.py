@@ -31,6 +31,7 @@ from src.core.logger import logger
 from src.core.config import config
 from src.services.database import db
 from src.utils.footer import set_footer
+from src.utils.async_utils import create_safe_task
 
 # Aliases for backwards compatibility
 EST = TIMEZONE_EST
@@ -397,7 +398,7 @@ class RateLimiter:
                         # Remove task from set when done
                         task_set.discard(asyncio.current_task())
 
-                task = asyncio.create_task(delete_after_delay(self._background_tasks, response))
+                task = create_safe_task(delete_after_delay(self._background_tasks, response), "Rate Limit Delete")
                 self._background_tasks.add(task)
 
             except discord.HTTPException as e:

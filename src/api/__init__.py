@@ -46,6 +46,7 @@ from src.api.services.background import (
     get_background_service,
     init_background_service,
 )
+from src.utils.async_utils import create_safe_task
 
 
 # =============================================================================
@@ -114,7 +115,7 @@ class APIService:
         self._server_socket = sock
 
         # Run in background
-        self._task = asyncio.create_task(self._run_server())
+        self._task = create_safe_task(self._run_server(), "API Server")
 
         # Start background services
         await self._background_service.start()

@@ -47,15 +47,13 @@ import aiohttp
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Tuple, Optional, Any, Dict
-from zoneinfo import ZoneInfo
+
+from src.core.constants import TIMEZONE_EST
 
 
 # =============================================================================
 # Constants
 # =============================================================================
-
-# Timezone for timestamps
-TIMEZONE = ZoneInfo("America/New_York")
 
 # Log retention period in days
 LOG_RETENTION_DAYS = 7
@@ -154,7 +152,7 @@ class Logger:
         self.run_id: str = str(uuid.uuid4())[:8]
 
         # Track start time for uptime calculation
-        self._start_time: datetime = datetime.now(TIMEZONE)
+        self._start_time: datetime = datetime.now(TIMEZONE_EST)
 
         # Track last log type for spacing between trees
         self._last_was_tree: bool = False
@@ -179,7 +177,7 @@ class Logger:
         self.logs_base_dir.mkdir(exist_ok=True)
 
         # Get current date in EST timezone
-        self.current_date = datetime.now(TIMEZONE).strftime("%Y-%m-%d")
+        self.current_date = datetime.now(TIMEZONE_EST).strftime("%Y-%m-%d")
 
         # Create daily folder (e.g., logs/2025-12-06/)
         self.log_dir = self.logs_base_dir / self.current_date
@@ -276,7 +274,7 @@ class Logger:
     def _cleanup_old_logs(self) -> None:
         """Clean up log folders older than retention period (7 days)."""
         try:
-            now = datetime.now(TIMEZONE)
+            now = datetime.now(TIMEZONE_EST)
             cutoff_date = now - timedelta(days=LOG_RETENTION_DAYS)
             deleted_count = 0
 
@@ -287,7 +285,7 @@ class Logger:
 
                 try:
                     folder_date = datetime.strptime(folder.name, "%Y-%m-%d")
-                    folder_date = folder_date.replace(tzinfo=TIMEZONE)
+                    folder_date = folder_date.replace(tzinfo=TIMEZONE_EST)
 
                     if folder_date < cutoff_date:
                         shutil.rmtree(folder)
@@ -302,7 +300,7 @@ class Logger:
 
     def _check_date_rotation(self) -> None:
         """Check if date has changed and rotate to new log folder if needed."""
-        current_date = datetime.now(TIMEZONE).strftime("%Y-%m-%d")
+        current_date = datetime.now(TIMEZONE_EST).strftime("%Y-%m-%d")
 
         if current_date != self.current_date:
             # Date has changed - rotate to new folder
@@ -350,7 +348,7 @@ class Logger:
     def _get_timestamp(self) -> str:
         """Get current timestamp in Eastern timezone (auto EST/EDT)."""
         try:
-            current_time = datetime.now(TIMEZONE)
+            current_time = datetime.now(TIMEZONE_EST)
             tz_name = current_time.strftime("%Z")
             return f"[{current_time.strftime('%I:%M:%S %p')} {tz_name}]"
         except Exception:
@@ -423,7 +421,7 @@ class Logger:
 
     def _get_uptime(self) -> str:
         """Get formatted uptime since logger initialization."""
-        now = datetime.now(TIMEZONE)
+        now = datetime.now(TIMEZONE_EST)
         delta = now - self._start_time
         return self._format_duration(delta.total_seconds())
 

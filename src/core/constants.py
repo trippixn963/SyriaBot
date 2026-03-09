@@ -17,7 +17,6 @@ from zoneinfo import ZoneInfo
 # =============================================================================
 
 TIMEZONE_EST = ZoneInfo("America/New_York")
-TIMEZONE_DAMASCUS = ZoneInfo("Asia/Damascus")
 
 
 # =============================================================================

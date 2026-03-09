@@ -15,9 +15,9 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
-from zoneinfo import ZoneInfo
 
 from src.core.logger import logger
+from src.core.constants import TIMEZONE_EST
 
 
 # =============================================================================
@@ -25,7 +25,6 @@ from src.core.logger import logger
 # =============================================================================
 
 DEFAULT_RETENTION_DAYS = 30
-EST = ZoneInfo("America/New_York")
 
 
 # =============================================================================
@@ -285,7 +284,7 @@ class EventStorage:
         details: Optional[Dict[str, Any]] = None,
     ) -> int:
         """Add an event to storage."""
-        timestamp = datetime.now(EST)
+        timestamp = datetime.now(TIMEZONE_EST)
         details_json = json.dumps(details or {})
 
         with self._lock:
@@ -383,7 +382,7 @@ class EventStorage:
             params.append(channel_id)
 
         if hours:
-            cutoff = datetime.now(EST) - timedelta(hours=hours)
+            cutoff = datetime.now(TIMEZONE_EST) - timedelta(hours=hours)
             conditions.append("timestamp >= ?")
             params.append(cutoff.isoformat())
 
@@ -459,7 +458,7 @@ class EventStorage:
                 by_category[category] = by_category.get(category, 0) + count
 
             # By hour (last 24h)
-            cutoff = datetime.now(EST) - timedelta(hours=24)
+            cutoff = datetime.now(TIMEZONE_EST) - timedelta(hours=24)
             cursor.execute("""
                 SELECT strftime('%H', timestamp) as hour, COUNT(*) as count
                 FROM events
@@ -500,7 +499,7 @@ class EventStorage:
 
     def cleanup_old_events(self, days: int = DEFAULT_RETENTION_DAYS) -> int:
         """Delete events older than retention period."""
-        cutoff = datetime.now(EST) - timedelta(days=days)
+        cutoff = datetime.now(TIMEZONE_EST) - timedelta(days=days)
 
         with self._lock:
             conn = sqlite3.connect(self._db_path)

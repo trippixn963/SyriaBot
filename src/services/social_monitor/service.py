@@ -22,6 +22,7 @@ from discord import ui
 
 from src.core.config import config
 from src.core.logger import logger
+from src.utils.async_utils import create_safe_task
 
 if TYPE_CHECKING:
     from src.bot import SyriaBot
@@ -228,7 +229,7 @@ class SocialMonitorService:
             return
 
         self._running = True
-        self._task = asyncio.create_task(self._monitor_loop())
+        self._task = create_safe_task(self._monitor_loop(), "Social Monitor Loop")
 
         accounts: list[str] = []
         if config.TIKTOK_USERNAME:

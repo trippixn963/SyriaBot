@@ -10,12 +10,12 @@ Server: discord.gg/syria
 
 import asyncio
 from datetime import datetime
-from zoneinfo import ZoneInfo
 
 import discord
 from discord.ext import commands
 
 from src.core.config import config
+from src.core.constants import TIMEZONE_EST
 from src.core.logger import logger
 from src.services.database import db
 from src.api.services.event_logger import event_logger
@@ -81,8 +81,7 @@ class VoiceHandler(commands.Cog):
         # Track server-level voice stats (main server only)
         if member.guild.id == config.GUILD_ID:
             try:
-                now = int(datetime.now().timestamp())
-                est = ZoneInfo("America/New_York")
+                now = int(datetime.now(TIMEZONE_EST).timestamp())
 
                 # Track server mute changes (by moderator)
                 if before.mute != after.mute:
@@ -101,7 +100,7 @@ class VoiceHandler(commands.Cog):
 
                 # User joined a voice channel
                 if after.channel and (not before.channel or before.channel.id != after.channel.id):
-                    current_hour = datetime.now(est).hour
+                    current_hour = datetime.now(TIMEZONE_EST).hour
                     db.increment_server_hour_activity(member.guild.id, current_hour, "voice")
 
                     # Track join time for session duration
@@ -142,7 +141,7 @@ class VoiceHandler(commands.Cog):
                         1 for vc in member.guild.voice_channels
                         for m in vc.members if not m.bot
                     )
-                    today = datetime.now(est).strftime("%Y-%m-%d")
+                    today = datetime.now(TIMEZONE_EST).strftime("%Y-%m-%d")
                     db.update_voice_peak(member.guild.id, today, total_voice_users)
             except Exception as e:
                 logger.error_tree("Voice Stats Track Failed", e, [
