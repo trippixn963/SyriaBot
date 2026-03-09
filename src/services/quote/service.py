@@ -26,6 +26,7 @@ from src.utils.http import http_session
 from src.core.constants import (
     TIMEZONE_EST,
     FONT_ITALIC_PATHS,
+    QUOTE_FONT_PATHS,
     QUOTE_IMAGE_WIDTH,
     QUOTE_IMAGE_HEIGHT,
     QUOTE_THEME_COLOR,
@@ -49,14 +50,7 @@ BG_COLOR = QUOTE_BG_COLOR
 TEXT_COLOR = QUOTE_TEXT_COLOR
 SUBTEXT_COLOR = QUOTE_SUBTEXT_COLOR
 AVATAR_SECTION_WIDTH = int(IMAGE_WIDTH * QUOTE_AVATAR_SECTION_WIDTH_RATIO)
-
-# Font paths - Premium fonts with Arabic support (quote-specific)
-FONT_PATHS = [
-    "/usr/share/fonts/opentype/fonts-hosny-amiri/Amiri-Regular.ttf",
-    "/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf",
-    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-    "/System/Library/Fonts/Helvetica.ttc",
-]
+FONT_PATHS = QUOTE_FONT_PATHS
 
 
 # =============================================================================

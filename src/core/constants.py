@@ -45,6 +45,13 @@ FONT_ITALIC_PATHS = [
     "ariali.ttf",  # Windows fallback
 ]
 
+QUOTE_FONT_PATHS = [
+    "/usr/share/fonts/opentype/fonts-hosny-amiri/Amiri-Regular.ttf",  # Arabic serif
+    "/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf",  # Arabic sans
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",  # Linux fallback
+    "/System/Library/Fonts/Helvetica.ttc",  # macOS fallback
+]
+
 
 # =============================================================================
 # Media File Limits
