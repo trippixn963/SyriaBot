@@ -23,7 +23,6 @@ from src.core.config import config
 from src.core.colors import COLOR_ERROR, COLOR_WARNING, COLOR_SYRIA_GREEN
 from src.core.constants import DELETE_DELAY_SHORT
 from src.services.fun import fun_service, generate_ship_card, generate_meter_card
-from src.utils.footer import set_footer
 from src.utils.permissions import is_cooldown_exempt
 
 
@@ -109,7 +108,6 @@ class FunHandler:
             ),
             color=COLOR_SYRIA_GREEN
         )
-        set_footer(embed)
 
         sticky_msg = await channel.send(embed=embed)
         self._sticky_message_id = sticky_msg.id
@@ -167,7 +165,6 @@ class FunHandler:
                 description=f"Fun commands only work in <#{config.CMDS_CHANNEL_ID}>",
                 color=COLOR_WARNING
             )
-            set_footer(embed)
             msg = await message.reply(embed=embed, mention_author=False)
             await msg.delete(delay=DELETE_DELAY_SHORT)
             logger.tree("Fun Command Wrong Channel", [
@@ -250,7 +247,6 @@ class FunHandler:
                 description="Failed to generate image. Please try again.",
                 color=COLOR_ERROR
             )
-            set_footer(embed)
             await message.channel.send(embed=embed)
             return True
 
@@ -272,7 +268,6 @@ class FunHandler:
                     description="Usage: `ship @user1 @user2` or `ship @user`",
                     color=COLOR_WARNING
                 )
-                set_footer(embed)
                 msg = await message.channel.send(embed=embed)
                 await msg.delete(delay=DELETE_DELAY_SHORT)
                 return None  # No cooldown for usage errors
@@ -290,7 +285,6 @@ class FunHandler:
                 description="You can't ship someone with themselves!",
                 color=COLOR_WARNING
             )
-            set_footer(embed)
             msg = await message.channel.send(embed=embed)
             await msg.delete(delay=DELETE_DELAY_SHORT)
             return None  # No cooldown for validation errors
@@ -306,7 +300,6 @@ class FunHandler:
                 description="You can't ship bots!",
                 color=COLOR_WARNING
             )
-            set_footer(embed)
             msg = await message.channel.send(embed=embed)
             await msg.delete(delay=DELETE_DELAY_SHORT)
             return None  # No cooldown for validation errors

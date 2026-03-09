@@ -17,7 +17,6 @@ from src.core.logger import logger
 from src.core.colors import COLOR_ERROR, COLOR_WARNING
 from src.services.translate import translate_service, find_similar_language
 from src.services.translate.views import TranslateView, create_translate_embed
-from src.utils.footer import set_footer
 
 
 class TranslateCog(commands.Cog):
@@ -87,7 +86,6 @@ class TranslateCog(commands.Cog):
                 description=f"❌ {error_msg}",
                 color=COLOR_ERROR
             )
-            set_footer(embed)
             await interaction.followup.send(embed=embed, ephemeral=True)
 
             logger.tree("Translation Failed", [
@@ -104,7 +102,6 @@ class TranslateCog(commands.Cog):
                 description=f"This text is already in {result.target_name}.",
                 color=COLOR_WARNING
             )
-            set_footer(embed)
             await interaction.followup.send(embed=embed, ephemeral=True)
             logger.tree("Translation Skipped", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
@@ -152,7 +149,6 @@ class TranslateCog(commands.Cog):
                 description="❌ An error occurred",
                 color=COLOR_ERROR
             )
-            set_footer(embed)
 
             if not interaction.response.is_done():
                 await interaction.response.send_message(embed=embed, ephemeral=True)

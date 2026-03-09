@@ -20,7 +20,6 @@ from src.core.colors import COLOR_GOLD, COLOR_NEUTRAL
 from src.core.logger import logger
 from src.services.actions import action_service
 from src.services.database import db
-from src.utils.footer import set_footer
 
 # Constants
 EMOJI_ZZZ = "💤"
@@ -332,7 +331,6 @@ class AFKService:
         if gif_url:
             embed.set_image(url=gif_url)
 
-        set_footer(embed)
 
         try:
             await message.reply(
@@ -437,7 +435,6 @@ class AFKService:
             if gif_url:
                 embed.set_image(url=gif_url)
 
-        set_footer(embed)
 
         try:
             await message.reply(

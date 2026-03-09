@@ -58,7 +58,6 @@ class ReplyModal(ui.Modal, title="Anonymous Reply"):
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         """Handle reply submission."""
-        from src.utils.footer import set_footer
 
         content = self.reply_text.value.strip()
 
@@ -77,7 +76,6 @@ class ReplyModal(ui.Modal, title="Anonymous Reply"):
                 description="❌ Reply must be at least 5 characters.",
                 color=COLOR_ERROR
             )
-            set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
@@ -102,7 +100,6 @@ class ReplyModal(ui.Modal, title="Anonymous Reply"):
                 color=COLOR_ERROR
             )
 
-        set_footer(embed)
         await interaction.followup.send(embed=embed, ephemeral=True)
 
     async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:

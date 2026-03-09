@@ -17,7 +17,6 @@ from src.core.config import config
 from src.core.logger import logger
 from src.core.colors import COLOR_GOLD, COLOR_ERROR, EMOJI_TRANSFER
 from src.core.constants import VIEW_TIMEOUT_DEFAULT
-from src.utils.footer import set_footer
 from src.utils.http import http_session
 from src.utils.permissions import is_cooldown_exempt
 
@@ -268,7 +267,6 @@ class WeatherView(discord.ui.View):
         if icon_code:
             embed.set_thumbnail(url=f"https://openweathermap.org/img/wn/{icon_code}@4x.png")
 
-        set_footer(embed)
 
         return embed
 
@@ -289,7 +287,15 @@ class WeatherView(discord.ui.View):
 
         self.is_celsius = not self.is_celsius
         embed = self.build_embed()
-        await interaction.response.edit_message(embed=embed, view=self)
+        try:
+            await interaction.response.edit_message(embed=embed, view=self)
+        except discord.HTTPException as e:
+            logger.error_tree("Weather Toggle Failed", e, [
+                ("City", self.city),
+                ("User", f"{interaction.user.name}"),
+                ("ID", str(interaction.user.id)),
+            ])
+            return
 
         logger.tree("Weather Unit Toggled", [
             ("City", self.city),
@@ -401,7 +407,6 @@ class WeatherCog(commands.Cog):
                 description="⚠️ Weather API is not configured.",
                 color=COLOR_ERROR
             )
-            set_footer(embed)
             await interaction.followup.send(embed=embed, ephemeral=True)
             logger.tree("Weather Command Failed", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
@@ -429,7 +434,6 @@ class WeatherCog(commands.Cog):
                            f"• Check spelling",
                 color=COLOR_ERROR
             )
-            set_footer(embed)
             await interaction.followup.send(embed=embed, ephemeral=True)
             return
 

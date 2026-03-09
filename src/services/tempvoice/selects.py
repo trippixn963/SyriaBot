@@ -18,7 +18,6 @@ from src.core.config import config
 from src.core.constants import SELECT_TIMEOUT_DEFAULT
 from src.core.logger import logger
 from src.services.database import db
-from src.utils.footer import set_footer
 from .utils import (
     is_booster,
     has_vc_mod_role,
@@ -51,11 +50,9 @@ class UserSelectView(ui.View):
         try:
             if not interaction.response.is_done():
                 embed = discord.Embed(description="❌ An error occurred", color=COLOR_ERROR)
-                set_footer(embed)
                 await interaction.response.send_message(embed=embed, ephemeral=True)
             else:
                 embed = discord.Embed(description="❌ An error occurred", color=COLOR_ERROR)
-                set_footer(embed)
                 await interaction.followup.send(embed=embed, ephemeral=True)
         except discord.HTTPException:
             pass
@@ -67,7 +64,6 @@ class UserSelectView(ui.View):
         if self.message:
             try:
                 embed = discord.Embed(description="⏳ Selection expired", color=COLOR_NEUTRAL)
-                set_footer(embed)
                 await self.message.edit(embed=embed, view=None)
             except discord.HTTPException as e:
                 logger.error_tree("User Select Timeout Edit Failed", e, [
@@ -102,7 +98,6 @@ class UserSelect(ui.UserSelect):
             channel = interaction.guild.get_channel(self.channel.id)
             if not channel:
                 embed = discord.Embed(description="❌ Channel no longer exists", color=COLOR_ERROR)
-                set_footer(embed)
                 await interaction.response.send_message(embed=embed, ephemeral=True)
                 logger.tree("User Select Failed", [
                     ("Action", self.action),
@@ -114,7 +109,6 @@ class UserSelect(ui.UserSelect):
             channel_info = db.get_temp_channel(channel.id)
             if not channel_info:
                 embed = discord.Embed(description="❌ Channel not found", color=COLOR_ERROR)
-                set_footer(embed)
                 await interaction.response.send_message(embed=embed, ephemeral=True)
                 logger.tree("User Select Failed", [
                     ("Action", self.action),
@@ -142,7 +136,6 @@ class UserSelect(ui.UserSelect):
             ])
             if not interaction.response.is_done():
                 embed = discord.Embed(description="❌ Failed to complete action", color=COLOR_ERROR)
-                set_footer(embed)
                 await interaction.response.send_message(embed=embed, ephemeral=True)
         except Exception as e:
             logger.error_tree("User Select Error", e, [
@@ -152,14 +145,12 @@ class UserSelect(ui.UserSelect):
             ])
             if not interaction.response.is_done():
                 embed = discord.Embed(description="❌ An error occurred", color=COLOR_ERROR)
-                set_footer(embed)
                 await interaction.response.send_message(embed=embed, ephemeral=True)
 
     async def _handle_permit(self, interaction: discord.Interaction, channel: discord.VoiceChannel, user: discord.Member, owner_id: int) -> None:
         """Handle permit/unpermit action."""
         if user.id == owner_id:
             embed = discord.Embed(description="⚠️ Can't permit yourself", color=COLOR_WARNING)
-            set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
             logger.tree("Permit Rejected", [
                 ("Channel", channel.name),
@@ -170,7 +161,6 @@ class UserSelect(ui.UserSelect):
             return
         if user.bot:
             embed = discord.Embed(description="⚠️ Can't permit bots", color=COLOR_WARNING)
-            set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
             logger.tree("Permit Rejected", [
                 ("Channel", channel.name),
@@ -223,7 +213,6 @@ class UserSelect(ui.UserSelect):
                     value="**Boost the server** to unlock unlimited allowed users and custom channel names!",
                     inline=False
                 )
-                set_footer(embed)
                 await interaction.response.send_message(embed=embed, ephemeral=True)
                 logger.tree("Permit Blocked", [
                     ("Channel", channel.name),
@@ -249,7 +238,6 @@ class UserSelect(ui.UserSelect):
                 color=COLOR_SUCCESS
             )
             embed.set_thumbnail(url=user.display_avatar.url)
-            set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
             logger.tree("User Permitted", [
                 ("Channel", channel.name),
@@ -278,7 +266,6 @@ class UserSelect(ui.UserSelect):
                 color=COLOR_ERROR
             )
             embed.set_thumbnail(url=user.display_avatar.url)
-            set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
             logger.tree("User Unpermitted", [
                 ("Channel", channel.name),
@@ -304,7 +291,6 @@ class UserSelect(ui.UserSelect):
         """Handle block/unblock action."""
         if user.id == owner_id:
             embed = discord.Embed(description="⚠️ Can't block yourself", color=COLOR_WARNING)
-            set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
             logger.tree("Block Rejected", [
                 ("Channel", channel.name),
@@ -315,7 +301,6 @@ class UserSelect(ui.UserSelect):
             return
         if user.bot:
             embed = discord.Embed(description="⚠️ Can't block bots", color=COLOR_WARNING)
-            set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
             logger.tree("Block Rejected", [
                 ("Channel", channel.name),
@@ -328,7 +313,6 @@ class UserSelect(ui.UserSelect):
         # Check if target has VC mod role - can only be blocked by developer
         if has_vc_mod_role(user) and owner_id != config.OWNER_ID:
             embed = discord.Embed(description="⚠️ Can't block moderators", color=COLOR_WARNING)
-            set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
             logger.tree("Block Rejected", [
                 ("Channel", channel.name),
@@ -371,7 +355,6 @@ class UserSelect(ui.UserSelect):
                     color=COLOR_ERROR
                 )
             embed.set_thumbnail(url=user.display_avatar.url)
-            set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
             logger.tree("User Blocked", [
                 ("Channel", channel.name),
@@ -391,7 +374,6 @@ class UserSelect(ui.UserSelect):
                 color=COLOR_SUCCESS
             )
             embed.set_thumbnail(url=user.display_avatar.url)
-            set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
             logger.tree("User Unblocked", [
                 ("Channel", channel.name),
@@ -415,7 +397,6 @@ class UserSelect(ui.UserSelect):
         """Handle kick action."""
         if user.id == owner_id:
             embed = discord.Embed(description="⚠️ Can't kick yourself", color=COLOR_WARNING)
-            set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
             logger.tree("Kick Rejected", [
                 ("Channel", channel.name),
@@ -428,7 +409,6 @@ class UserSelect(ui.UserSelect):
         # Protect VC mod roles from being kicked
         if has_vc_mod_role(user):
             embed = discord.Embed(description="⚠️ Can't kick staff members", color=COLOR_WARNING)
-            set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
             logger.tree("Kick Rejected", [
                 ("Channel", channel.name),
@@ -445,7 +425,6 @@ class UserSelect(ui.UserSelect):
                 color=COLOR_ERROR
             )
             embed.set_thumbnail(url=user.display_avatar.url)
-            set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
             logger.tree("User Kicked", [
                 ("Channel", channel.name),
@@ -460,7 +439,6 @@ class UserSelect(ui.UserSelect):
                 color=COLOR_WARNING
             )
             embed.set_thumbnail(url=user.display_avatar.url)
-            set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
             logger.tree("Kick Rejected", [
                 ("Channel", channel.name),
@@ -475,7 +453,6 @@ class UserSelect(ui.UserSelect):
         """Handle transfer action."""
         if user.id == owner_id:
             embed = discord.Embed(description="⚠️ Already the owner", color=COLOR_WARNING)
-            set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
             logger.tree("Transfer Rejected", [
                 ("Channel", channel.name),
@@ -486,7 +463,6 @@ class UserSelect(ui.UserSelect):
             return
         if user.bot:
             embed = discord.Embed(description="⚠️ Can't transfer to bots", color=COLOR_WARNING)
-            set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
             logger.tree("Transfer Rejected", [
                 ("Channel", channel.name),
@@ -502,7 +478,6 @@ class UserSelect(ui.UserSelect):
                 description=f"⚠️ **{user.display_name}** is not in the channel",
                 color=COLOR_WARNING,
             )
-            set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
@@ -515,7 +490,6 @@ class UserSelect(ui.UserSelect):
                     description=f"❌ **{user.display_name}** already owns another channel",
                     color=COLOR_ERROR,
                 )
-                set_footer(embed)
                 await interaction.response.send_message(embed=embed, ephemeral=True)
                 return
             else:
@@ -528,7 +502,6 @@ class UserSelect(ui.UserSelect):
         channel_info = db.get_temp_channel(channel.id)
         if not channel_info or channel_info["owner_id"] != interaction.user.id:
             embed = discord.Embed(description="❌ You no longer own this channel", color=COLOR_ERROR)
-            set_footer(embed)
             await interaction.followup.send(embed=embed, ephemeral=True)
             return
 
@@ -547,7 +520,6 @@ class UserSelect(ui.UserSelect):
             color=COLOR_SUCCESS,
         )
         embed.set_thumbnail(url=user.display_avatar.url)
-        set_footer(embed)
         await interaction.followup.send(embed=embed, ephemeral=True)
 
         logger.tree("Channel Transferred", [

@@ -19,7 +19,6 @@ from src.core.logger import logger
 from src.core.colors import COLOR_SYRIA_GREEN, COLOR_ERROR
 from src.core.constants import TIMEZONE_EST
 from src.services.database import db
-from src.utils.footer import set_footer
 from src.services.birthday import get_birthday_service, MONTH_NAMES
 
 
@@ -127,7 +126,6 @@ class BirthdayCog(commands.Cog):
                 value="*Use `/birthday set` to register yours!*",
                 inline=False
             )
-            set_footer(embed)
 
             await interaction.response.send_message(embed=embed)
 
@@ -141,7 +139,6 @@ class BirthdayCog(commands.Cog):
                 description=f"**{message}**",
                 color=COLOR_ERROR
             )
-            set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
 
             logger.tree("Birthday Set Failed", [
@@ -185,7 +182,6 @@ class BirthdayCog(commands.Cog):
                 color=COLOR_SYRIA_GREEN
             )
             embed.set_thumbnail(url=user.display_avatar.url)
-            set_footer(embed)
 
             await interaction.response.send_message(embed=embed, ephemeral=True)
 
@@ -199,7 +195,6 @@ class BirthdayCog(commands.Cog):
                 description=f"**{message}**",
                 color=COLOR_ERROR
             )
-            set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
 
             logger.tree("Birthday Remove Failed", [
@@ -245,7 +240,6 @@ class BirthdayCog(commands.Cog):
                 description="No birthdays registered yet.\n\n*Use `/birthday set` to register yours!*",
                 color=COLOR_SYRIA_GREEN
             )
-            set_footer(embed)
             await interaction.response.send_message(embed=embed)
             return
 
@@ -303,7 +297,6 @@ class BirthdayCog(commands.Cog):
                 description="No birthdays registered yet.\n\n*Use `/birthday set` to register yours!*",
                 color=COLOR_SYRIA_GREEN
             )
-            set_footer(embed)
             await interaction.response.send_message(embed=embed)
             return
 
@@ -317,7 +310,6 @@ class BirthdayCog(commands.Cog):
             value="*Use `/birthday set` to register yours!*",
             inline=False
         )
-        set_footer(embed)
 
         await interaction.response.send_message(embed=embed)
 

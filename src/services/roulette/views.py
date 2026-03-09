@@ -13,7 +13,6 @@ import discord
 from typing import List, TYPE_CHECKING
 
 from src.core.colors import COLOR_GOLD, COLOR_GREEN
-from src.utils.footer import set_footer
 
 if TYPE_CHECKING:
     from .graphics import RoulettePlayer
@@ -54,7 +53,6 @@ def create_announcement_embed(
         inline=True,
     )
 
-    set_footer(embed)
     return embed
 
 
@@ -65,7 +63,6 @@ def create_spinning_embed() -> discord.Embed:
         description="Good luck everyone!",
         color=COLOR_GOLD,
     )
-    set_footer(embed)
     return embed
 
 
@@ -103,7 +100,6 @@ def create_winner_embed(
         )
 
     embed.set_thumbnail(url=winner.display_avatar.url)
-    set_footer(embed)
     return embed
 
 
@@ -114,5 +110,4 @@ def create_cancelled_embed(reason: str) -> discord.Embed:
         description=reason,
         color=discord.Color.dark_grey(),
     )
-    set_footer(embed)
     return embed

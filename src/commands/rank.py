@@ -18,7 +18,6 @@ from src.core.config import config
 from src.core.colors import COLOR_GOLD, COLOR_ERROR, EMOJI_LEADERBOARD
 from src.core.logger import logger
 from src.services.database import db
-from src.utils.footer import set_footer
 from src.utils.permissions import is_cooldown_exempt
 from src.services.xp.utils import (
     xp_progress,
@@ -97,7 +96,6 @@ class RankCog(commands.Cog):
                 description="❌ User not found in this server",
                 color=COLOR_ERROR,
             )
-            set_footer(embed)
             await interaction.followup.send(embed=embed, ephemeral=True)
             logger.tree("Rank User Not Found", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
@@ -227,7 +225,6 @@ class RankCog(commands.Cog):
             embed.add_field(name="Boost", value="**2x XP**", inline=True)
 
         embed.set_thumbnail(url=member.display_avatar.url)
-        set_footer(embed)
 
         view = LeaderboardView(member.id)
         await interaction.followup.send(embed=embed, view=view)

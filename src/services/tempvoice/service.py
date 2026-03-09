@@ -37,7 +37,6 @@ from src.core.constants import (
 )
 from src.core.logger import logger
 from src.services.database import db
-from src.utils.footer import set_footer
 from src.utils.async_utils import create_safe_task
 from .utils import (
     generate_base_name,
@@ -442,7 +441,6 @@ class TempVoiceService:
             embed.add_field(name="Allowed Users", value="*None - use Allow button to add*", inline=False)
 
         embed.set_thumbnail(url=owner.display_avatar.url)
-        set_footer(embed)
 
         return embed
 
@@ -818,7 +816,6 @@ class TempVoiceService:
             ),
             color=COLOR_SUCCESS,
         )
-        set_footer(embed)
 
         try:
             await channel.send(embed=embed)

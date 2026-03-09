@@ -175,7 +175,7 @@ class EventLogger:
 
         # Calculate membership duration
         if member.joined_at:
-            duration = (datetime.now(timezone.utc) - member.joined_at.replace(tzinfo=None)).days
+            duration = (datetime.now(timezone.utc) - member.joined_at).days
         else:
             duration = 0
 

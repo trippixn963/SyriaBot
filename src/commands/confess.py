@@ -16,7 +16,6 @@ from discord.ext import commands
 from src.core.config import config
 from src.core.logger import logger
 from src.core.colors import COLOR_SUCCESS, COLOR_ERROR, COLOR_WARNING
-from src.utils.footer import set_footer
 
 
 def strip_mentions_and_emojis(text: str) -> str:
@@ -94,7 +93,6 @@ class ConfessModal(discord.ui.Modal, title="Submit Confession"):
                 description="❌ Confession must be at least 10 characters (after removing mentions/emojis).",
                 color=COLOR_ERROR
             )
-            set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
@@ -109,7 +107,6 @@ class ConfessModal(discord.ui.Modal, title="Submit Confession"):
                 description="✅ Your confession has been posted anonymously!",
                 color=COLOR_SUCCESS
             )
-            set_footer(embed)
 
             logger.tree("Confession Modal Success", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
@@ -121,7 +118,6 @@ class ConfessModal(discord.ui.Modal, title="Submit Confession"):
                 description="❌ Failed to submit confession. Please try again later.",
                 color=COLOR_ERROR
             )
-            set_footer(embed)
 
             logger.tree("Confession Modal Failed", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
@@ -150,7 +146,6 @@ class ConfessModal(discord.ui.Modal, title="Submit Confession"):
             description="❌ An error occurred. Please try again.",
             color=COLOR_ERROR
         )
-        set_footer(embed)
 
         try:
             if not interaction.response.is_done():
@@ -215,7 +210,6 @@ class ReplyModal(discord.ui.Modal, title="Anonymous Reply"):
                 description="❌ Reply must be at least 5 characters (after removing mentions/emojis).",
                 color=COLOR_ERROR
             )
-            set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
@@ -235,7 +229,6 @@ class ReplyModal(discord.ui.Modal, title="Anonymous Reply"):
                 description="✅ Your anonymous reply has been posted.",
                 color=COLOR_SUCCESS
             )
-            set_footer(embed)
 
             logger.tree("Reply Modal Success", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
@@ -248,7 +241,6 @@ class ReplyModal(discord.ui.Modal, title="Anonymous Reply"):
                 description="❌ Failed to post reply. Please try again.",
                 color=COLOR_ERROR
             )
-            set_footer(embed)
 
             logger.tree("Reply Modal Failed", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
@@ -279,7 +271,6 @@ class ReplyModal(discord.ui.Modal, title="Anonymous Reply"):
             description="❌ An error occurred. Please try again.",
             color=COLOR_ERROR
         )
-        set_footer(embed)
 
         try:
             if not interaction.response.is_done():
@@ -329,7 +320,6 @@ class ConfessCog(commands.Cog):
                 description="❌ Confessions system is not available.",
                 color=COLOR_ERROR
             )
-            set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
@@ -359,7 +349,6 @@ class ConfessCog(commands.Cog):
                 ),
                 color=COLOR_WARNING
             )
-            set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
@@ -390,7 +379,6 @@ class ConfessCog(commands.Cog):
                 description="❌ Confessions system is not available.",
                 color=COLOR_ERROR
             )
-            set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
@@ -408,7 +396,6 @@ class ConfessCog(commands.Cog):
                 description="❌ This command can only be used inside a confession thread.",
                 color=COLOR_ERROR
             )
-            set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
@@ -424,7 +411,6 @@ class ConfessCog(commands.Cog):
                 description="❌ This command can only be used inside a confession thread.",
                 color=COLOR_ERROR
             )
-            set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
@@ -442,7 +428,6 @@ class ConfessCog(commands.Cog):
                 description="❌ Could not identify confession number.",
                 color=COLOR_ERROR
             )
-            set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 

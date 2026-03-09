@@ -14,7 +14,6 @@ from typing import Optional
 
 from src.core.logger import logger
 from src.core.colors import COLOR_SYRIA_GREEN, EMOJI_TICKET
-from src.utils.footer import set_footer
 from src.services.faq.service import FAQ_DATA, faq_analytics
 from src.core.config import config
 
@@ -34,7 +33,6 @@ def _create_faq_embed(topic: str, lang: str) -> discord.Embed:
         description=faq["description"].get(lang, faq["description"]["en"]),
         color=COLOR_SYRIA_GREEN,
     )
-    set_footer(embed)
     return embed
 
 

@@ -16,7 +16,6 @@ from typing import Optional
 from src.core.config import config
 from src.core.logger import logger
 from src.core.colors import COLOR_SYRIA_GREEN
-from src.utils.footer import set_footer
 from src.services.faq import FAQ_DATA, faq_analytics, FAQView
 
 
@@ -90,7 +89,6 @@ class FAQCog(commands.Cog):
             description=faq["description"]["en"],
             color=COLOR_SYRIA_GREEN,
         )
-        set_footer(embed)
 
         # Create view with buttons
         view = FAQView(topic=topic, current_lang="en")

@@ -15,7 +15,6 @@ from src.core.config import config
 from src.core.colors import COLOR_SUCCESS, COLOR_ERROR, COLOR_WARNING
 from src.core.logger import logger
 from src.services.database import db
-from src.utils.footer import set_footer
 from .utils import extract_base_name, build_full_name
 
 
@@ -88,7 +87,6 @@ class NameModal(ui.Modal, title="Rename Channel"):
                     description=f"✏️ Renamed to **{full_name}**\n*Saved as default for future VCs*",
                     color=COLOR_SUCCESS
                 )
-                set_footer(embed)
                 await interaction.followup.send(embed=embed, ephemeral=True)
                 logger.tree("Channel Renamed", [
                     ("From", old_name),
@@ -112,7 +110,6 @@ class NameModal(ui.Modal, title="Rename Channel"):
                     description=f"🔄 Reset to **{auto_name}**\n*Future VCs will use auto-naming*",
                     color=COLOR_SUCCESS
                 )
-                set_footer(embed)
                 await interaction.followup.send(embed=embed, ephemeral=True)
                 logger.tree("Channel Name Reset", [
                     ("From", old_name),
@@ -128,7 +125,6 @@ class NameModal(ui.Modal, title="Rename Channel"):
                 ("ID", str(interaction.user.id)),
             ])
             embed = discord.Embed(description="❌ Failed to rename channel", color=COLOR_ERROR)
-            set_footer(embed)
             await interaction.followup.send(embed=embed, ephemeral=True)
 
     async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
@@ -148,7 +144,6 @@ class NameModal(ui.Modal, title="Rename Channel"):
         ])
         try:
             embed = discord.Embed(description="❌ Failed to rename channel", color=COLOR_ERROR)
-            set_footer(embed)
             if interaction.response.is_done():
                 await interaction.followup.send(embed=embed, ephemeral=True)
             else:
@@ -194,13 +189,11 @@ class LimitModal(ui.Modal, title="Set User Limit"):
                 ("Reason", "Invalid number"),
             ], emoji="⚠️")
             embed = discord.Embed(description="⚠️ Enter a valid number", color=COLOR_WARNING)
-            set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
         if limit < 0 or limit > 99:
             embed = discord.Embed(description="⚠️ Must be 0-99", color=COLOR_WARNING)
-            set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
 
@@ -216,7 +209,6 @@ class LimitModal(ui.Modal, title="Set User Limit"):
                 description=f"👥 Limit set to **{limit_text}**\n*Saved as default for future VCs*",
                 color=COLOR_SUCCESS
             )
-            set_footer(embed)
             await interaction.followup.send(embed=embed, ephemeral=True)
             logger.tree("Limit Changed", [
                 ("Channel", self.channel.name),
@@ -231,7 +223,6 @@ class LimitModal(ui.Modal, title="Set User Limit"):
                 ("ID", str(interaction.user.id)),
             ])
             embed = discord.Embed(description="❌ Failed to set limit", color=COLOR_ERROR)
-            set_footer(embed)
             await interaction.followup.send(embed=embed, ephemeral=True)
 
     async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
@@ -251,7 +242,6 @@ class LimitModal(ui.Modal, title="Set User Limit"):
         ])
         try:
             embed = discord.Embed(description="❌ Failed to set limit", color=COLOR_ERROR)
-            set_footer(embed)
             if interaction.response.is_done():
                 await interaction.followup.send(embed=embed, ephemeral=True)
             else:

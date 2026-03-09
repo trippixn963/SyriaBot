@@ -30,7 +30,6 @@ from src.core.constants import (
 from src.core.logger import logger
 from src.core.config import config
 from src.services.database import db
-from src.utils.footer import set_footer
 from src.utils.async_utils import create_safe_task
 
 # Aliases for backwards compatibility
@@ -332,7 +331,6 @@ class RateLimiter:
             inline=False
         )
 
-        set_footer(embed)
         return embed
 
     # =========================================================================

@@ -30,7 +30,6 @@ from src.core.constants import (
     BAR_PADDING_RATIO, TEXT_PADDING_RATIO,
 )
 from src.services.convert.service import convert_service
-from src.utils.footer import set_footer
 from src.utils.text import wrap_text, find_font, get_font
 
 
@@ -391,7 +390,6 @@ class ConvertView(ui.View):
             inline=True
         )
 
-        set_footer(embed)
 
         return embed
 
@@ -417,7 +415,6 @@ class ConvertView(ui.View):
         """Only allow the requester to use buttons."""
         if interaction.user.id != self.requester_id:
             embed = discord.Embed(description="⚠️ Only the person who started this can use these buttons", color=COLOR_WARNING)
-            set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return False
         return True
@@ -479,7 +476,6 @@ class ConvertView(ui.View):
             await interaction.message.edit(view=self)
 
             embed = discord.Embed(description=f"❌ Failed to process image: {result.error}", color=COLOR_ERROR)
-            set_footer(embed)
             await interaction.followup.send(embed=embed, ephemeral=True)
             logger.tree("Convert Image Failed", [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
@@ -638,7 +634,6 @@ class VideoConvertView(ui.View):
             inline=True
         )
 
-        set_footer(embed)
 
         return embed
 
@@ -662,12 +657,10 @@ class VideoConvertView(ui.View):
         """Only allow the requester to use buttons."""
         if interaction.user.id != self.requester_id:
             embed = discord.Embed(description="⚠️ Only the person who started this can use these buttons", color=COLOR_WARNING)
-            set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return False
         if self._processing:
             embed = discord.Embed(description="⏳ Already processing video, please wait...", color=COLOR_WARNING)
-            set_footer(embed)
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return False
         return True
@@ -717,7 +710,6 @@ class VideoConvertView(ui.View):
         )
         processing_embed.add_field(name="Text", value=f"`{self.settings.text or '(none)'}`", inline=True)
         processing_embed.add_field(name="Color", value=self.settings.get_preset_name(), inline=True)
-        set_footer(processing_embed)
         await interaction.message.edit(embed=processing_embed, view=self)
 
         # Convert video
@@ -740,7 +732,6 @@ class VideoConvertView(ui.View):
                 description=f"{result.error or 'Unknown error occurred'}\n\n*You can try again with different settings.*",
                 color=COLOR_ERROR
             )
-            set_footer(embed)
             await interaction.message.edit(embed=embed, view=self)
 
             logger.tree("Video Convert Failed", [

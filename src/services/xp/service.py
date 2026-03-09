@@ -37,7 +37,6 @@ from src.core.logger import logger
 from src.services.database import db
 from src.services.birthday import has_birthday_bonus, BIRTHDAY_XP_MULTIPLIER
 from src.api.services.event_logger import event_logger
-from src.utils.footer import set_footer
 from .utils import level_from_xp, format_xp
 
 if TYPE_CHECKING:
@@ -981,7 +980,6 @@ class XPService:
                 )
 
             embed.set_thumbnail(url=member.display_avatar.url)
-            set_footer(embed)
 
             await member.send(embed=embed)
 

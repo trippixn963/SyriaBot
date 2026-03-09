@@ -21,7 +21,6 @@ from src.core.logger import logger
 from src.core.colors import COLOR_SYRIA_GREEN, COLOR_WARNING, EMOJI_HEART, EMOJI_CONFESSION
 from src.core.constants import DELETE_DELAY_MEDIUM, TIMEZONE_EST
 from src.services.database import db
-from src.utils.footer import set_footer
 
 if TYPE_CHECKING:
     from src.bot import SyriaBot
@@ -222,7 +221,6 @@ class ConfessionService:
                             ),
                             color=COLOR_WARNING
                         )
-                        set_footer(embed)
                         warn_msg = await message.channel.send(embed=embed)
                         await warn_msg.delete(delay=DELETE_DELAY_MEDIUM)
 
@@ -579,7 +577,6 @@ class ConfessionService:
                 inline=False
             )
 
-            set_footer(embed)
 
             # Send the confession
             confession_msg = await channel.send(embed=embed)
@@ -635,7 +632,6 @@ class ConfessionService:
                     ),
                     color=COLOR_SYRIA_GREEN
                 )
-                set_footer(thread_embed)
                 view = ConfessionReplyView(confession_number)
                 await thread.send(embed=thread_embed, view=view)
 
@@ -839,7 +835,6 @@ class ConfessionService:
             ),
             color=COLOR_SYRIA_GREEN
         )
-        set_footer(embed)
 
         # Use thread URL if available, otherwise confession message
         jump_url = thread.jump_url if thread else confession_msg.jump_url

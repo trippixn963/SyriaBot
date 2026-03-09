@@ -114,28 +114,38 @@ class RulesCog(commands.Cog):
 
             # Post each category: banner image + plain-text rules
             for i, category in enumerate(RULES_CATEGORIES):
-                banner_path = ASSETS_DIR / category["banner"]
-                await channel.send(file=discord.File(banner_path))
+                try:
+                    banner_path = ASSETS_DIR / category["banner"]
+                    await channel.send(file=discord.File(banner_path))
 
-                lines = []
-                for name, value in category["rules"]:
-                    lines.append(f"◈ **{name}** — {value}")
-                await channel.send("\n".join(lines))
+                    lines = []
+                    for name, value in category["rules"]:
+                        lines.append(f"◈ **{name}** — {value}")
+                    await channel.send("\n".join(lines))
 
-                # Spacer between categories (not after the last one)
-                if i < len(RULES_CATEGORIES) - 1:
-                    await channel.send("\u200b")
+                    # Spacer between categories (not after the last one)
+                    if i < len(RULES_CATEGORIES) - 1:
+                        await channel.send("\u200b")
+                except discord.HTTPException as e:
+                    logger.error_tree("Rules Category Send Failed", e, [
+                        ("Category", str(i + 1)),
+                        ("Channel", channel.name),
+                    ])
+                    break
 
             # Spacer before footer
-            await channel.send("\u200b")
-
-            # Footer banner + message
-            await channel.send(file=discord.File(ASSETS_DIR / "need_help.png"))
-            await channel.send(
-                f"Staff reserves the right to take any action deemed appropriate.\n"
-                f"<:ticket:1459987754942337024> **Questions?** Open a ticket in <#{config.TICKET_CHANNEL_ID}>\n"
-                f"<:link:1479498358208069743> **Invite:** discord.gg/syria"
-            )
+            try:
+                await channel.send("\u200b")
+                await channel.send(file=discord.File(ASSETS_DIR / "need_help.png"))
+                await channel.send(
+                    f"Staff reserves the right to take any action deemed appropriate.\n"
+                    f"<:ticket:1459987754942337024> **Questions?** Open a ticket in <#{config.TICKET_CHANNEL_ID}>\n"
+                    f"<:link:1479498358208069743> **Invite:** discord.gg/syria"
+                )
+            except discord.HTTPException as e:
+                logger.error_tree("Rules Footer Send Failed", e, [
+                    ("Channel", channel.name),
+                ])
 
             await interaction.edit_original_response(
                 content=f"✅ Rules posted to {channel.mention} ({len(deleted)} messages purged)",

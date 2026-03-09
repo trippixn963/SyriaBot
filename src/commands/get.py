@@ -18,7 +18,6 @@ from src.core.config import config
 from src.core.logger import logger
 from src.core.colors import COLOR_ERROR, COLOR_WARNING, COLOR_GOLD, EMOJI_SAVE, EMOJI_TRANSFER
 from src.core.constants import VIEW_TIMEOUT_DEFAULT
-from src.utils.footer import set_footer
 from src.utils.http import http_session
 from src.utils.permissions import is_cooldown_exempt
 
@@ -286,7 +285,6 @@ class AvatarToggleView(ui.View):
         embed.set_image(url=current_url)
         embed.add_field(name="Type", value=avatar_type, inline=True)
         embed.add_field(name="User", value=self.target.mention, inline=True)
-        set_footer(embed)
 
         await interaction.response.edit_message(embed=embed, view=self)
 
@@ -394,7 +392,6 @@ class BannerToggleView(ui.View):
         embed.set_image(url=current_url)
         embed.add_field(name="Type", value=banner_type, inline=True)
         embed.add_field(name="User", value=self.target.mention, inline=True)
-        set_footer(embed)
 
         await interaction.response.edit_message(embed=embed, view=self)
 
@@ -493,7 +490,6 @@ class GetCog(commands.Cog):
                 description="❌ Failed to fetch data.",
                 color=COLOR_ERROR
             )
-            set_footer(embed)
             await interaction.followup.send(embed=embed, ephemeral=True)
         except Exception as e:
             logger.error_tree("Get Command Error", e, [
@@ -505,7 +501,6 @@ class GetCog(commands.Cog):
                 description="❌ An error occurred.",
                 color=COLOR_ERROR
             )
-            set_footer(embed)
             await interaction.followup.send(embed=embed, ephemeral=True)
 
     async def _handle_avatar(
@@ -555,7 +550,6 @@ class GetCog(commands.Cog):
         embed.set_image(url=avatar_url)
         embed.add_field(name="Type", value=avatar_type, inline=True)
         embed.add_field(name="User", value=target.mention, inline=True)
-        set_footer(embed)
 
         # Use toggle view if both avatars exist, otherwise just download view
         if has_both:
@@ -595,7 +589,6 @@ class GetCog(commands.Cog):
                 description="❌ Could not find that user.",
                 color=COLOR_ERROR
             )
-            set_footer(embed)
             await interaction.followup.send(embed=embed, ephemeral=True)
             return
 
@@ -615,7 +608,6 @@ class GetCog(commands.Cog):
                 description=f"⚠️ **{target.name}** doesn't have a banner.",
                 color=COLOR_WARNING
             )
-            set_footer(embed)
             await interaction.followup.send(embed=embed, ephemeral=True)
             return
 
@@ -655,7 +647,6 @@ class GetCog(commands.Cog):
         embed.set_image(url=banner_url)
         embed.add_field(name="Type", value=banner_type, inline=True)
         embed.add_field(name="User", value=target.mention, inline=True)
-        set_footer(embed)
 
         # Use toggle view if both banners exist, otherwise just download view
         if has_both:
@@ -682,7 +673,6 @@ class GetCog(commands.Cog):
                 description="⚠️ This command can only be used in a server.",
                 color=COLOR_WARNING
             )
-            set_footer(embed)
             await interaction.followup.send(embed=embed, ephemeral=True)
             return
 
@@ -697,7 +687,6 @@ class GetCog(commands.Cog):
                 description="⚠️ This server doesn't have an icon.",
                 color=COLOR_WARNING
             )
-            set_footer(embed)
             await interaction.followup.send(embed=embed, ephemeral=True)
             return
 
@@ -723,7 +712,6 @@ class GetCog(commands.Cog):
             color=COLOR_GET
         )
         embed.set_image(url=icon_url)
-        set_footer(embed)
 
         view = DownloadView(icon_url, "Server Icon", requester_id=interaction.user.id)
         msg = await interaction.followup.send(embed=embed, view=view)
@@ -743,7 +731,6 @@ class GetCog(commands.Cog):
                 description="⚠️ This command can only be used in a server.",
                 color=COLOR_WARNING
             )
-            set_footer(embed)
             await interaction.followup.send(embed=embed, ephemeral=True)
             return
 
@@ -758,7 +745,6 @@ class GetCog(commands.Cog):
                 description="⚠️ This server doesn't have a banner.",
                 color=COLOR_WARNING
             )
-            set_footer(embed)
             await interaction.followup.send(embed=embed, ephemeral=True)
             return
 
@@ -784,7 +770,6 @@ class GetCog(commands.Cog):
             color=COLOR_GET
         )
         embed.set_image(url=banner_url)
-        set_footer(embed)
 
         view = DownloadView(banner_url, "Server Banner", requester_id=interaction.user.id)
         msg = await interaction.followup.send(embed=embed, view=view)

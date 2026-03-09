@@ -19,7 +19,6 @@ from src.core.colors import COLOR_ERROR, COLOR_WARNING
 from src.services.image import image_service
 from src.services.database import db
 from src.services.image.views import ImageView
-from src.utils.footer import set_footer
 from src.utils.permissions import create_cooldown
 
 
@@ -126,7 +125,6 @@ class ImageCog(commands.Cog):
                 description="Image search is not configured. Contact the bot owner.",
                 color=COLOR_ERROR
             )
-            set_footer(embed)
             await interaction.followup.send(embed=embed, ephemeral=True)
 
             logger.tree("Image Search Unavailable", [
@@ -150,7 +148,6 @@ class ImageCog(commands.Cog):
                 value="Boost the server to get unlimited image searches!",
                 inline=False
             )
-            set_footer(embed)
             await interaction.followup.send(embed=embed, ephemeral=True)
 
             logger.tree("Image Search Limit Reached", [
@@ -177,7 +174,6 @@ class ImageCog(commands.Cog):
                 description=result.error or "An unknown error occurred.",
                 color=COLOR_ERROR
             )
-            set_footer(embed)
             await interaction.followup.send(embed=embed, ephemeral=True)
 
             logger.tree("Image Search Failed", [
@@ -212,7 +208,6 @@ class ImageCog(commands.Cog):
                 description=f"No images found for: **{subject}**\nTry a different size or search term.",
                 color=COLOR_WARNING
             )
-            set_footer(embed)
             await interaction.followup.send(embed=embed, ephemeral=True)
 
             logger.tree("Image Search No Results", [
@@ -279,7 +274,6 @@ class ImageCog(commands.Cog):
                 description=f"Please wait {error.retry_after:.1f}s before searching again.",
                 color=COLOR_WARNING
             )
-            set_footer(embed)
 
             try:
                 if not interaction.response.is_done():
@@ -309,7 +303,6 @@ class ImageCog(commands.Cog):
                 description="An error occurred while searching.",
                 color=COLOR_ERROR
             )
-            set_footer(embed)
 
             if not interaction.response.is_done():
                 await interaction.response.send_message(embed=embed, ephemeral=True)

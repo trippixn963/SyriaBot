@@ -20,7 +20,6 @@ from discord.ext import commands
 from src.core.config import config
 from src.core.colors import COLOR_GOLD
 from src.core.logger import logger
-from src.utils.footer import set_footer
 from src.services.database import db
 from .service import ACTIONS, SELF_ACTIONS
 
@@ -177,7 +176,6 @@ class ActionsPanelService:
             inline=False
         )
 
-        set_footer(embed)
         return embed
 
     async def _edit_panel(self, channel: discord.TextChannel, message: discord.Message) -> bool:

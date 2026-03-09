@@ -29,7 +29,6 @@ from src.services.rate_limit import check_rate_limit
 from src.services.convert.views import start_convert_editor
 from src.services.translate.views import TranslateView, create_translate_embed
 from src.services.quote.views import QuoteView
-from src.utils.footer import set_footer
 from src.commands.download import handle_download
 
 if TYPE_CHECKING:
@@ -552,7 +551,6 @@ class ReplyHandler:
                     error_msg = result.error
 
             embed = discord.Embed(description=f"❌ {error_msg}", color=COLOR_ERROR)
-            set_footer(embed)
             await message.reply(embed=embed, mention_author=False)
 
             logger.tree("Translation Failed", [
@@ -569,7 +567,6 @@ class ReplyHandler:
                 description=f"This text is already in {result.target_name}.",
                 color=COLOR_WARNING
             )
-            set_footer(embed)
             await message.reply(embed=embed, mention_author=False)
             logger.tree("Translation Skipped", [
                 ("User", f"{message.author.name}"),
@@ -620,7 +617,6 @@ class ReplyHandler:
                     description=f"Please wait **{remaining:.0f}s** before downloading again.",
                     color=COLOR_WARNING
                 )
-                set_footer(embed)
                 msg = await message.reply(embed=embed, mention_author=False)
                 await msg.delete(delay=DELETE_DELAY_SHORT)
                 try:

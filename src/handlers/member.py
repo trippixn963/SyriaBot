@@ -20,7 +20,6 @@ from src.core.logger import logger
 from src.services.database import db
 from src.api.services.websocket import get_ws_manager
 from src.api.services.event_logger import event_logger
-from src.utils.footer import set_footer
 
 
 class MemberHandler(commands.Cog):
@@ -470,7 +469,6 @@ class MemberHandler(commands.Cog):
         # Set booster avatar as thumbnail
         embed.set_thumbnail(url=member.display_avatar.url)
 
-        set_footer(embed)
 
         try:
             await channel.send(content=member.mention, embed=embed)
@@ -520,7 +518,6 @@ class MemberHandler(commands.Cog):
         )
 
         embed.set_thumbnail(url=member.guild.icon.url if member.guild.icon else None)
-        set_footer(embed)
 
         try:
             await member.send(embed=embed)

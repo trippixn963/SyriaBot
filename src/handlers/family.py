@@ -26,7 +26,6 @@ from src.core.constants import (
     FAMILY_VIEW_TIMEOUT, FAMILY_CONFIRM_TIMEOUT,
 )
 from src.services.database import db
-from src.utils.footer import set_footer
 from src.utils.permissions import is_cooldown_exempt
 from src.handlers.family_views import (
     ProposalView, AdoptApprovalView, DivorceView, DisownView, RunawayView,
@@ -160,7 +159,6 @@ class FamilyHandler:
     async def _send_error(self, message: discord.Message, description: str) -> None:
         """Send an error embed and auto-delete both it and the original message."""
         embed = discord.Embed(description=description, color=COLOR_ERROR)
-        set_footer(embed)
         error_msg = await message.channel.send(embed=embed)
         await asyncio.gather(
             message.delete(delay=DELETE_DELAY_SHORT),
@@ -171,7 +169,6 @@ class FamilyHandler:
     async def _send_warning(self, message: discord.Message, description: str) -> None:
         """Send a warning embed and auto-delete both it and the original message."""
         embed = discord.Embed(description=description, color=COLOR_WARNING)
-        set_footer(embed)
         warn_msg = await message.channel.send(embed=embed)
         await asyncio.gather(
             message.delete(delay=DELETE_DELAY_SHORT),
@@ -341,7 +338,6 @@ class FamilyHandler:
         gif_url = await self._fetch_gif("marry_proposal")
         if gif_url:
             embed.set_image(url=gif_url)
-        set_footer(embed)
 
         # Check for active outgoing proposal
         last_proposal = self._active_proposals.get(user.id, 0)
@@ -385,7 +381,6 @@ class FamilyHandler:
             description=f"⚠️ {user.mention}, are you sure you want to divorce <@{spouse_id}>?\n\nBoth of you will have a **24-hour cooldown** before remarrying.",
             color=COLOR_WARNING,
         )
-        set_footer(embed)
 
         view = DivorceView(user, spouse_id)
         msg = await message.channel.send(embed=embed, view=view)
@@ -536,7 +531,6 @@ class FamilyHandler:
         )
         if gif_url:
             embed.set_image(url=gif_url)
-        set_footer(embed)
 
         # Check for active outgoing proposal/adopt
         last_proposal = self._active_proposals.get(user.id, 0)
@@ -617,7 +611,6 @@ class FamilyHandler:
                 description=f"⚠️ {user.mention} wants to disown {target.mention}. Waiting for <@{spouse_id}> to approve.",
                 color=COLOR_WARNING,
             )
-            set_footer(embed)
             view = SpouseApprovalView(
                 action="disown",
                 initiator=user,
@@ -641,7 +634,6 @@ class FamilyHandler:
                 description=f"⚠️ {user.mention}, are you sure you want to disown {target.mention}?",
                 color=COLOR_WARNING,
             )
-            set_footer(embed)
             view = DisownView(user, target, actual_parent_id)
             msg = await message.channel.send(embed=embed, view=view)
             view.message = msg
@@ -679,7 +671,6 @@ class FamilyHandler:
             description = f"⚠️ {user.mention}, are you sure you want to run away from <@{parent_id}>?"
 
         embed = discord.Embed(description=description, color=COLOR_WARNING)
-        set_footer(embed)
 
         view = RunawayView(user, parent_id)
         msg = await message.channel.send(embed=embed, view=view)

@@ -16,7 +16,6 @@ from src.core.logger import logger
 from src.core.config import config
 from src.core.colors import COLOR_GOLD, COLOR_SUCCESS, EMOJI_AI
 from src.services.translate.service import translate_service, LANGUAGES
-from src.utils.footer import set_footer
 
 
 # Priority languages for quick buttons
@@ -203,7 +202,6 @@ class TranslateView(ui.View):
                 value="Boost the server to instantly unlock AI translations and other booster perks!",
                 inline=False
             )
-            set_footer(embed)
 
             await interaction.response.send_message(embed=embed)  # Public to encourage boosting
 
@@ -425,7 +423,4 @@ def create_translate_embed(result, is_ai: bool = False) -> tuple[discord.Embed, 
             fp=io.BytesIO(file_content.encode('utf-8')),
             filename="translation.txt"
         )
-    else:
-        set_footer(embed)
-
     return embed, file

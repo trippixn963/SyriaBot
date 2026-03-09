@@ -20,7 +20,6 @@ from src.core.logger import logger
 from src.core.config import config
 from src.core.colors import COLOR_GOLD, EMOJI_HEART, EMOJI_COMMENT
 from src.core.constants import TIMEZONE_EST
-from src.utils.footer import set_footer
 
 
 class GalleryService:
@@ -284,7 +283,6 @@ class GalleryService:
                 color=COLOR_GOLD
             )
             embed.set_thumbnail(url=message.author.display_avatar.url)
-            set_footer(embed)
 
             # Create view with comment button if thread exists
             view = None

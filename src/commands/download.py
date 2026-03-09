@@ -23,7 +23,6 @@ from src.core.colors import COLOR_ERROR, COLOR_WARNING, EMOJI_SAVE
 from src.core.constants import DELETE_DELAY_MEDIUM
 from src.services.downloader import downloader
 from src.services.database import db
-from src.utils.footer import set_footer
 from src.utils.permissions import create_cooldown
 
 
@@ -138,7 +137,6 @@ async def handle_download(
             value="Boost the server to get unlimited downloads!",
             inline=False
         )
-        set_footer(embed)
 
         if is_interaction:
             await interaction_or_message.followup.send(embed=embed, ephemeral=True)
@@ -170,7 +168,6 @@ async def handle_download(
             description="Supported platforms: Instagram, Twitter/X, TikTok, Reddit, Facebook, Snapchat, Twitch.",
             color=COLOR_ERROR
         )
-        set_footer(embed)
 
         if is_interaction:
             await interaction_or_message.followup.send(embed=embed, ephemeral=True)
@@ -265,13 +262,18 @@ async def handle_download(
             description=result.error or "An unknown error occurred.",
             color=COLOR_ERROR
         )
-        set_footer(embed)
 
-        if is_interaction:
-            await interaction_or_message.followup.send(embed=embed, ephemeral=True)
-        else:
-            msg = await channel.send(embed=embed)
-            await msg.delete(delay=DELETE_DELAY_MEDIUM)
+        try:
+            if is_interaction:
+                await interaction_or_message.followup.send(embed=embed, ephemeral=True)
+            else:
+                msg = await channel.send(embed=embed)
+                await msg.delete(delay=DELETE_DELAY_MEDIUM)
+        except discord.HTTPException as e:
+            logger.error_tree("Download Error Reply Failed", e, [
+                ("User", f"{user.name}"),
+                ("ID", str(user.id)),
+            ])
 
         logger.tree("Download Failed", [
             ("User", f"{user.name} ({user.display_name})"),
@@ -363,7 +365,6 @@ async def handle_download(
             description="The file couldn't be uploaded to Discord. It may be too large.",
             color=COLOR_ERROR
         )
-        set_footer(embed)
 
         if is_interaction:
             await interaction_or_message.followup.send(embed=embed, ephemeral=True)
@@ -427,7 +428,6 @@ class DownloadCog(commands.Cog):
                 description=f"Please wait {error.retry_after:.1f}s before downloading again.",
                 color=COLOR_WARNING
             )
-            set_footer(embed)
 
             try:
                 if not interaction.response.is_done():
@@ -457,7 +457,6 @@ class DownloadCog(commands.Cog):
                 description="An error occurred while downloading.",
                 color=COLOR_ERROR
             )
-            set_footer(embed)
 
             if not interaction.response.is_done():
                 await interaction.response.send_message(embed=embed, ephemeral=True)

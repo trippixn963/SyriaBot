@@ -29,7 +29,6 @@ from src.core.colors import COLOR_SYRIA_GREEN
 from src.core.constants import TIMEZONE_EST
 from src.core.logger import logger
 from src.services.database import db
-from src.utils.footer import set_footer
 
 if TYPE_CHECKING:
     from src.bot import SyriaBot
@@ -479,7 +478,6 @@ class BirthdayService:
                 value="*Use `/birthday set` to register your birthday!*",
                 inline=False
             )
-            set_footer(embed)
 
             await channel.send(embed=embed)
 
@@ -528,7 +526,6 @@ class BirthdayService:
             color=COLOR_SYRIA_GREEN
         )
         embed.set_thumbnail(url=member.guild.icon.url if member.guild.icon else None)
-        set_footer(embed)
 
         try:
             await member.send(embed=embed)

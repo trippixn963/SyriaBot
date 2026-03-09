@@ -19,7 +19,6 @@ import time
 
 from src.core.logger import logger
 from src.core.constants import DISBOARD_BOT_ID
-from src.utils.footer import set_footer
 from src.utils.async_utils import create_safe_task
 
 
@@ -269,7 +268,6 @@ class BumpService:
                 color=0x24B7B7
             )
             embed.set_thumbnail(url="https://disboard.org/images/bot-command-image-bump.png")
-            set_footer(embed)
 
             await channel.send(content=role_mention, embed=embed)
 

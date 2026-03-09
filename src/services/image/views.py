@@ -20,7 +20,6 @@ from src.core.config import config
 from src.core.logger import logger
 from src.core.colors import COLOR_SYRIA_GREEN, COLOR_SYRIA_GOLD, EMOJI_SAVE, EMOJI_DELETE
 from src.services.image.service import ImageResult
-from src.utils.footer import set_footer
 from src.utils.http import http_session
 
 
@@ -273,7 +272,6 @@ class ImageView(ui.View):
                 description=f"No results for: **{self.query}**",
                 color=COLOR_SYRIA_GOLD
             )
-            set_footer(embed)
             return embed
 
         image = self.images[self.current_index]
@@ -308,7 +306,6 @@ class ImageView(ui.View):
         ext = extension.upper() if use_attachment else self._get_file_extension(image.url).upper()
         embed.add_field(name="Type", value=ext, inline=True)
 
-        set_footer(embed)
 
         return embed
 
@@ -388,7 +385,6 @@ class ImageView(ui.View):
             description=f"All {len(self.images)} images failed to load.\nTry a different search query.",
             color=COLOR_SYRIA_GOLD
         )
-        set_footer(embed)
         return embed, None
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:

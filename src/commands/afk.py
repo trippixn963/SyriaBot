@@ -20,7 +20,6 @@ from src.core.config import config
 from src.core.logger import logger
 from src.core.colors import COLOR_SYRIA_GREEN
 from src.services.actions import action_service
-from src.utils.footer import set_footer
 from src.services.database import db
 
 
@@ -129,7 +128,6 @@ class AFKCog(commands.Cog):
                 ("ID", str(interaction.user.id)),
             ])
 
-        set_footer(embed)
 
         try:
             await interaction.response.send_message(embed=embed)

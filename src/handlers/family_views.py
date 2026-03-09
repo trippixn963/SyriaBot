@@ -22,7 +22,6 @@ from src.core.constants import (
 from src.core.logger import logger
 from src.services.database import db
 from src.services.actions import action_service
-from src.utils.footer import set_footer
 
 
 # =============================================================================
@@ -60,7 +59,6 @@ class ProposalView(ui.View):
                 description=f"{self.proposer.mention} proposed to {self.target.mention}, but they didn't respond in time.",
                 color=COLOR_NEUTRAL,
             )
-            set_footer(embed)
             if self.message:
                 await self.message.edit(content=None, embed=embed, view=None)
             logger.tree("Marriage Proposal Expired", [
@@ -86,7 +84,6 @@ class ProposalView(ui.View):
                     description=f"❌ {self.proposer.mention} is already married to someone else.",
                     color=COLOR_ERROR,
                 )
-                set_footer(embed)
                 await interaction.response.edit_message(embed=embed, view=None)
                 self.stop()
                 return
@@ -96,7 +93,6 @@ class ProposalView(ui.View):
                     description=f"❌ {self.target.mention} is already married to someone else.",
                     color=COLOR_ERROR,
                 )
-                set_footer(embed)
                 await interaction.response.edit_message(embed=embed, view=None)
                 self.stop()
                 return
@@ -111,7 +107,6 @@ class ProposalView(ui.View):
             gif_url = await fetch_family_gif("hug")
             if gif_url:
                 embed.set_image(url=gif_url)
-            set_footer(embed)
             await interaction.response.edit_message(embed=embed, view=None)
 
             logger.tree("Marriage Accepted", [
@@ -149,7 +144,6 @@ class ProposalView(ui.View):
                 description=f"{self.target.mention} declined {self.proposer.mention}'s proposal.",
                 color=COLOR_NEUTRAL,
             )
-            set_footer(embed)
             await interaction.response.edit_message(embed=embed, view=None)
 
             logger.tree("Marriage Rejected", [
@@ -208,7 +202,6 @@ class AdoptApprovalView(ui.View):
         )
         if self.gif_url:
             embed.set_image(url=self.gif_url)
-        set_footer(embed)
         return embed
 
     async def _try_complete(self, interaction: discord.Interaction) -> None:
@@ -227,7 +220,6 @@ class AdoptApprovalView(ui.View):
                 description=f"❌ {self.target.mention} already has a parent.",
                 color=COLOR_ERROR,
             )
-            set_footer(embed)
             await interaction.response.edit_message(content=None, embed=embed, view=None)
             self.stop()
             return
@@ -237,7 +229,6 @@ class AdoptApprovalView(ui.View):
                 description=f"❌ {self.requester.mention}'s household already has {MAX_CHILDREN} children (max).",
                 color=COLOR_ERROR,
             )
-            set_footer(embed)
             await interaction.response.edit_message(content=None, embed=embed, view=None)
             self.stop()
             return
@@ -247,7 +238,6 @@ class AdoptApprovalView(ui.View):
                 description="❌ You are no longer married — adoption cancelled.",
                 color=COLOR_ERROR,
             )
-            set_footer(embed)
             await interaction.response.edit_message(content=None, embed=embed, view=None)
             self.stop()
             return
@@ -257,7 +247,6 @@ class AdoptApprovalView(ui.View):
                 description="❌ Can't adopt — circular family relationship detected.",
                 color=COLOR_ERROR,
             )
-            set_footer(embed)
             await interaction.response.edit_message(content=None, embed=embed, view=None)
             self.stop()
             return
@@ -267,7 +256,6 @@ class AdoptApprovalView(ui.View):
                 description="❌ Can't adopt — circular family relationship detected.",
                 color=COLOR_ERROR,
             )
-            set_footer(embed)
             await interaction.response.edit_message(content=None, embed=embed, view=None)
             self.stop()
             return
@@ -282,7 +270,6 @@ class AdoptApprovalView(ui.View):
         gif_url = await fetch_family_gif("pat")
         if gif_url:
             embed.set_image(url=gif_url)
-        set_footer(embed)
         await interaction.response.edit_message(content=None, embed=embed, view=None)
 
         logger.tree("Adoption Completed", [
@@ -301,7 +288,6 @@ class AdoptApprovalView(ui.View):
                 description=f"{self.requester.mention} wanted to adopt {self.target.mention}, but not everyone responded in time.",
                 color=COLOR_NEUTRAL,
             )
-            set_footer(embed)
             if self.message:
                 await self.message.edit(content=None, embed=embed, view=None)
             logger.tree("Adoption Request Expired", [
@@ -359,7 +345,6 @@ class AdoptApprovalView(ui.View):
                 description=f"{interaction.user.mention} declined {self.requester.mention}'s adoption request.",
                 color=COLOR_NEUTRAL,
             )
-            set_footer(embed)
             await interaction.response.edit_message(content=None, embed=embed, view=None)
 
             logger.tree("Adoption Rejected", [
@@ -400,7 +385,6 @@ class DivorceView(ui.View):
                 description="⏳ Divorce confirmation expired.",
                 color=COLOR_NEUTRAL,
             )
-            set_footer(embed)
             if self.message:
                 await self.message.edit(content=None, embed=embed, view=None)
             logger.tree("Divorce Confirmation Expired", [
@@ -431,7 +415,6 @@ class DivorceView(ui.View):
                     description="❌ You're not married anymore.",
                     color=COLOR_ERROR,
                 )
-                set_footer(embed)
                 await interaction.response.edit_message(embed=embed, view=None)
                 self.stop()
                 return
@@ -456,7 +439,6 @@ class DivorceView(ui.View):
             gif_url = await fetch_family_gif("cry")
             if gif_url:
                 embed.set_image(url=gif_url)
-            set_footer(embed)
 
             # Ping ex-spouse and children via content (same message as embed)
             pings = [f"<@{ex_spouse_id}>"]
@@ -498,7 +480,6 @@ class DivorceView(ui.View):
                 description="↩️ Divorce cancelled.",
                 color=COLOR_NEUTRAL,
             )
-            set_footer(embed)
             await interaction.response.edit_message(content=None, embed=embed, view=None)
 
             logger.tree("Divorce Cancelled", [
@@ -537,7 +518,6 @@ class DisownView(ui.View):
                 description="⏳ Disown confirmation expired.",
                 color=COLOR_NEUTRAL,
             )
-            set_footer(embed)
             if self.message:
                 await self.message.edit(content=None, embed=embed, view=None)
             logger.tree("Disown Confirmation Expired", [
@@ -566,7 +546,6 @@ class DisownView(ui.View):
                     description=f"⚠️ {self.parent.mention} wants to disown {self.child.mention}. Waiting for <@{spouse_id}> to approve.",
                     color=COLOR_WARNING,
                 )
-                set_footer(embed)
                 view = SpouseApprovalView(
                     action="disown",
                     initiator=self.parent,
@@ -592,7 +571,6 @@ class DisownView(ui.View):
                         description=f"❌ {self.child.mention} is no longer your child.",
                         color=COLOR_ERROR,
                     )
-                    set_footer(embed)
                     await interaction.response.edit_message(embed=embed, view=None)
                     self.stop()
                     return
@@ -605,7 +583,6 @@ class DisownView(ui.View):
                 gif_url = await fetch_family_gif("wave")
                 if gif_url:
                     embed.set_image(url=gif_url)
-                set_footer(embed)
                 await interaction.response.edit_message(embed=embed, view=None)
 
                 logger.tree("Disown Confirmed", [
@@ -642,7 +619,6 @@ class DisownView(ui.View):
                 description="↩️ Disown cancelled.",
                 color=COLOR_NEUTRAL,
             )
-            set_footer(embed)
             await interaction.response.edit_message(content=None, embed=embed, view=None)
 
             logger.tree("Disown Cancelled", [
@@ -695,7 +671,6 @@ class SpouseApprovalView(ui.View):
                 description=f"⏳ {action_name} cancelled — <@{self.spouse_id}> didn't respond in time.",
                 color=COLOR_NEUTRAL,
             )
-            set_footer(embed)
             if self.message:
                 await self.message.edit(content=None, embed=embed, view=None)
             logger.tree(f"Spouse Approval Expired ({self.action})", [
@@ -722,7 +697,6 @@ class SpouseApprovalView(ui.View):
                     description="❌ You are no longer married — action cancelled.",
                     color=COLOR_ERROR,
                 )
-                set_footer(embed)
                 await interaction.response.edit_message(content=None, embed=embed, view=None)
                 self.stop()
                 return
@@ -734,7 +708,6 @@ class SpouseApprovalView(ui.View):
                         description=f"❌ {self.target.mention} already has a parent.",
                         color=COLOR_ERROR,
                     )
-                    set_footer(embed)
                     await interaction.response.edit_message(content=None, embed=embed, view=None)
                     self.stop()
                     return
@@ -744,7 +717,6 @@ class SpouseApprovalView(ui.View):
                         description=f"❌ Your household already has {MAX_CHILDREN} children (max).",
                         color=COLOR_ERROR,
                     )
-                    set_footer(embed)
                     await interaction.response.edit_message(content=None, embed=embed, view=None)
                     self.stop()
                     return
@@ -759,7 +731,6 @@ class SpouseApprovalView(ui.View):
                 gif_url = await fetch_family_gif("pat")
                 if gif_url:
                     embed.set_image(url=gif_url)
-                set_footer(embed)
                 await interaction.response.edit_message(content=None, embed=embed, view=None)
 
                 logger.tree("Adoption Spouse Approved", [
@@ -777,7 +748,6 @@ class SpouseApprovalView(ui.View):
                         description=f"❌ {self.target.mention} is no longer your child.",
                         color=COLOR_ERROR,
                     )
-                    set_footer(embed)
                     await interaction.response.edit_message(content=None, embed=embed, view=None)
                     self.stop()
                     return
@@ -790,7 +760,6 @@ class SpouseApprovalView(ui.View):
                 gif_url = await fetch_family_gif("wave")
                 if gif_url:
                     embed.set_image(url=gif_url)
-                set_footer(embed)
                 await interaction.response.edit_message(content=None, embed=embed, view=None)
 
                 logger.tree("Disown Spouse Approved", [
@@ -831,7 +800,6 @@ class SpouseApprovalView(ui.View):
                 description=f"❌ <@{self.spouse_id}> rejected the {action_name} of {self.target.mention}.",
                 color=COLOR_NEUTRAL,
             )
-            set_footer(embed)
             await interaction.response.edit_message(content=None, embed=embed, view=None)
 
             logger.tree(f"Spouse Rejected ({self.action})", [
@@ -872,7 +840,6 @@ class RunawayView(ui.View):
                 description="⏳ Runaway confirmation expired.",
                 color=COLOR_NEUTRAL,
             )
-            set_footer(embed)
             if self.message:
                 await self.message.edit(content=None, embed=embed, view=None)
             logger.tree("Runaway Confirmation Expired", [
@@ -903,7 +870,6 @@ class RunawayView(ui.View):
                     description="❌ You no longer have a parent.",
                     color=COLOR_ERROR,
                 )
-                set_footer(embed)
                 await interaction.response.edit_message(embed=embed, view=None)
                 self.stop()
                 return
@@ -916,7 +882,6 @@ class RunawayView(ui.View):
             gif_url = await fetch_family_gif("run")
             if gif_url:
                 embed.set_image(url=gif_url)
-            set_footer(embed)
 
             # Ping parents via content (same message as embed)
             ping = f"<@{parent_id}>"
@@ -959,7 +924,6 @@ class RunawayView(ui.View):
                 description="↩️ Runaway cancelled.",
                 color=COLOR_NEUTRAL,
             )
-            set_footer(embed)
             await interaction.response.edit_message(content=None, embed=embed, view=None)
 
             logger.tree("Runaway Cancelled", [

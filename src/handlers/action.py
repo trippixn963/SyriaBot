@@ -21,7 +21,6 @@ from src.core.colors import COLOR_ERROR, COLOR_GOLD
 from src.core.constants import DELETE_DELAY_SHORT
 from src.services.actions import action_service
 from src.services.database import db
-from src.utils.footer import set_footer
 from src.utils.permissions import is_cooldown_exempt
 
 
@@ -296,7 +295,6 @@ class ActionHandler:
             # Create embed with GIF
             embed = discord.Embed(description=action_text, color=COLOR_GOLD)
             embed.set_image(url=gif_url)
-            set_footer(embed)
 
             # Send embed
             await message.channel.send(embed=embed)

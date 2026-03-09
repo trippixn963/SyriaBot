@@ -15,7 +15,6 @@ from datetime import datetime, timezone
 
 from src.core.config import config
 from src.core.logger import logger
-from src.utils.footer import init_footer
 from src.services.database import db
 from src.api.services.websocket import get_ws_manager
 
@@ -78,13 +77,6 @@ class ReadyHandler(commands.Cog):
 
         # Log feature status
         self._log_feature_status()
-
-        # Initialize footer (cache developer avatar)
-        # Note: init_footer() logs its own status with Avatar Cached: Yes/No
-        try:
-            await init_footer(self.bot)
-        except Exception as e:
-            logger.error_tree("Footer Init Failed", e)
 
         # Sync slash commands to Syria guild only (not globally)
         try:
