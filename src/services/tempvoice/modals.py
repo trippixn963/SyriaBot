@@ -123,9 +123,19 @@ class NameModal(ui.Modal, title="Rename Channel"):
                 ("Channel", self.channel.name),
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
+                ("Status", str(e.status)),
             ])
-            embed = discord.Embed(description="❌ Failed to rename channel", color=COLOR_ERROR)
-            await interaction.followup.send(embed=embed, ephemeral=True)
+            if e.status == 429:
+                embed = discord.Embed(
+                    description="⏳ Discord is rate limiting channel renames.\nPlease wait **a few minutes** and try again.",
+                    color=COLOR_WARNING,
+                )
+            else:
+                embed = discord.Embed(description="❌ Failed to rename channel", color=COLOR_ERROR)
+            try:
+                await interaction.followup.send(embed=embed, ephemeral=True)
+            except Exception:
+                pass
 
     async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
         """Handle modal errors — expired interactions are silently ignored."""

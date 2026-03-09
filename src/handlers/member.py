@@ -10,16 +10,19 @@ Server: discord.gg/syria
 
 
 import asyncio
+from pathlib import Path
 
 import discord
 from discord.ext import commands
 
 from src.core.config import config
-from src.core.colors import COLOR_BOOST, COLOR_SYRIA_GREEN
+from src.core.colors import COLOR_BOOST, COLOR_GOLD, COLOR_SYRIA_GREEN
 from src.core.logger import logger
 from src.services.database import db
 from src.api.services.websocket import get_ws_manager
 from src.api.services.event_logger import event_logger
+
+WELCOME_BANNER = Path(__file__).resolve().parent.parent.parent / "assets" / "welcome" / "welcome.png"
 
 
 class MemberHandler(commands.Cog):
@@ -485,42 +488,38 @@ class MemberHandler(commands.Cog):
 
     async def _send_welcome_dm(self, member: discord.Member) -> None:
         """Send a welcome DM to new members with server info and commands."""
-        # Build rules channel mention
-        rules_text = f"<#{config.RULES_CHANNEL_ID}>" if config.RULES_CHANNEL_ID else "the rules"
+        vc_text = f"<#{config.VC_CREATOR_CHANNEL_ID}>" if config.VC_CREATOR_CHANNEL_ID else "the VC creator"
 
         embed = discord.Embed(
-            title=f"Welcome to {member.guild.name}!",
+            title="Syrian Arab Republic",
             description=(
-                f"Hey {member.display_name}, we're glad to have you here!\n\n"
-                f"Please read {rules_text} before chatting."
+                f"Ahlan {member.display_name}, welcome to the family!\n\n"
+                f"\u2022 Pick your roles via <id:customize>\n"
+                f"\u2022 Grab a free custom role in <#1459644341361447181>\n"
+                f"\u2022 Join {vc_text} to make your own voice chat"
             ),
-            color=COLOR_SYRIA_GREEN
+            color=COLOR_GOLD
         )
 
-        embed.add_field(
-            name="Useful Commands",
-            value=(
-                "`/rank` — Check your level and XP\n"
-                "`/confess` — Share anonymously\n"
-                "`/download` — Download social media videos\n"
-                "`/birthday set` — Register your birthday"
-            ),
-            inline=False
-        )
+        if member.guild.banner:
+            embed.set_image(url=member.guild.banner.url)
 
-        embed.add_field(
-            name="Earn XP",
-            value=(
-                "Chat in channels and join voice calls to earn XP.\n"
-                "Level up to unlock new permissions!"
-            ),
-            inline=False
-        )
-
-        embed.set_thumbnail(url=member.guild.icon.url if member.guild.icon else None)
+        view = discord.ui.View()
+        view.add_item(discord.ui.Button(
+            style=discord.ButtonStyle.link,
+            label="Rules",
+            url=f"https://discord.com/channels/{member.guild.id}/{config.RULES_CHANNEL_ID}",
+            emoji=discord.PartialEmoji(name="rules", id=1460257117977055283),
+        ))
+        view.add_item(discord.ui.Button(
+            style=discord.ButtonStyle.link,
+            label="Leaderboard",
+            url=config.LEADERBOARD_BASE_URL,
+            emoji=discord.PartialEmoji(name="leaderboard", id=1456582433033162927),
+        ))
 
         try:
-            await member.send(embed=embed)
+            await member.send(file=discord.File(WELCOME_BANNER), embed=embed, view=view)
             logger.tree("Welcome DM Sent", [
                 ("User", f"{member.name} ({member.display_name})"),
                 ("ID", str(member.id)),

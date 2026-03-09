@@ -24,6 +24,7 @@ import random
 import time
 from collections import OrderedDict
 from datetime import datetime, time as dt_time
+from pathlib import Path
 from typing import TYPE_CHECKING, Dict, Optional
 
 import discord
@@ -38,6 +39,8 @@ from src.services.database import db
 from src.services.birthday import has_birthday_bonus, BIRTHDAY_XP_MULTIPLIER
 from src.api.services.event_logger import event_logger
 from .utils import level_from_xp, format_xp
+
+LEVELUP_BANNER = Path(__file__).resolve().parent.parent.parent.parent / "assets" / "xp" / "levelup.png"
 
 if TYPE_CHECKING:
     from src.bot import SyriaBot
@@ -951,7 +954,7 @@ class XPService:
 
             # Build embed
             embed = discord.Embed(
-                title="🏆 Rewards Unlocked!",
+                title="Rewards Unlocked",
                 description=f"You've reached **Level {new_level}** in **{member.guild.name}**!",
                 color=COLOR_GOLD,
             )
@@ -974,14 +977,20 @@ class XPService:
                 )
             elif new_level >= 100:
                 embed.add_field(
-                    name="🎊 Max Level!",
+                    name="Max Level!",
                     value="You've unlocked everything!",
                     inline=False,
                 )
 
-            embed.set_thumbnail(url=member.display_avatar.url)
+            view = discord.ui.View()
+            view.add_item(discord.ui.Button(
+                style=discord.ButtonStyle.link,
+                label="Leaderboard",
+                url=config.LEADERBOARD_BASE_URL,
+                emoji=discord.PartialEmoji(name="leaderboard", id=1456582433033162927),
+            ))
 
-            await member.send(embed=embed)
+            await member.send(file=discord.File(LEVELUP_BANNER), embed=embed, view=view)
 
             logger.tree("Reward DM Sent", [
                 ("User", f"{member.name} ({member.display_name})"),

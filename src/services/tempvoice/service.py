@@ -1101,8 +1101,8 @@ class TempVoiceService:
                         ("Position", str(position)),
                     ], emoji="🔢")
 
-                # Small delay to avoid rate limits
-                await asyncio.sleep(0.3)
+                # Discord rate limits channel renames to 2 per 10 min per channel
+                await asyncio.sleep(3)
 
             except discord.HTTPException as e:
                 logger.error_tree("Reorder Rename Failed", e, [
