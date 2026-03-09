@@ -55,5 +55,16 @@ EMOJI_DELETE = "<:delete:1455710362539397192>"
 
 EMOJI_CONFESSION = "<:confession:1458963705256742962>"
 EMOJI_TICKET = "<:ticket:1459987754942337024>"
+EMOJI_LINK = "<:link:1479498358208069743>"
+
+
+# =============================================================================
+# Social Media Platform Emojis
+# =============================================================================
+
+EMOJI_TIKTOK_ID = "tiktok:1460681068591185921"
+EMOJI_INSTAGRAM_ID = "insta:1460681067236163763"
+EMOJI_TIKTOK = f"<:{EMOJI_TIKTOK_ID}>"
+EMOJI_INSTAGRAM = f"<:{EMOJI_INSTAGRAM_ID}>"
 
 

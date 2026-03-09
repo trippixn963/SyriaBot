@@ -15,6 +15,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from src.core.config import config
+from src.core.emojis import EMOJI_TICKET, EMOJI_LINK
 from src.core.logger import logger
 
 ASSETS_DIR = Path(__file__).resolve().parent.parent.parent / "assets" / "rules"
@@ -139,8 +140,8 @@ class RulesCog(commands.Cog):
                 await channel.send(file=discord.File(ASSETS_DIR / "need_help.png"))
                 await channel.send(
                     f"Staff reserves the right to take any action deemed appropriate.\n"
-                    f"<:ticket:1459987754942337024> **Questions?** Open a ticket in <#{config.TICKET_CHANNEL_ID}>\n"
-                    f"<:link:1479498358208069743> **Invite:** discord.gg/syria"
+                    f"{EMOJI_TICKET} **Questions?** Open a ticket in <#{config.TICKET_CHANNEL_ID}>\n"
+                    f"{EMOJI_LINK} **Invite:** discord.gg/syria"
                 )
             except discord.HTTPException as e:
                 logger.error_tree("Rules Footer Send Failed", e, [

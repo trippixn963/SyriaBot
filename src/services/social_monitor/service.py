@@ -22,6 +22,7 @@ from discord import ui
 
 from src.core.config import config
 from src.core.colors import COLOR_GOLD, COLOR_SUCCESS
+from src.core.emojis import EMOJI_TIKTOK_ID, EMOJI_INSTAGRAM_ID, EMOJI_TIKTOK, EMOJI_INSTAGRAM
 from src.core.logger import logger
 from src.services.database import db
 from src.utils.async_utils import create_safe_task
@@ -50,16 +51,6 @@ class StoredData(TypedDict):
 
 
 # =============================================================================
-# Constants
-# =============================================================================
-
-TIKTOK_EMOJI_ID = "tiktok:1460681068591185921"
-INSTAGRAM_EMOJI_ID = "insta:1460681067236163763"
-TIKTOK_EMOJI = f"<:{TIKTOK_EMOJI_ID}>"
-INSTAGRAM_EMOJI = f"<:{INSTAGRAM_EMOJI_ID}>"
-
-
-# =============================================================================
 # Views
 # =============================================================================
 
@@ -70,10 +61,10 @@ class SocialLinkView(ui.View):
         super().__init__(timeout=None)
 
         if platform == "tiktok":
-            emoji = discord.PartialEmoji.from_str(TIKTOK_EMOJI_ID)
+            emoji = discord.PartialEmoji.from_str(EMOJI_TIKTOK_ID)
             label = "Watch on TikTok"
         else:
-            emoji = discord.PartialEmoji.from_str(INSTAGRAM_EMOJI_ID)
+            emoji = discord.PartialEmoji.from_str(EMOJI_INSTAGRAM_ID)
             label = "View on Instagram"
 
         self.add_item(ui.Button(
@@ -598,13 +589,13 @@ class SocialMonitorService:
             if platform == "tiktok":
                 color = self.TIKTOK_COLOR
                 platform_name = "TikTok"
-                platform_emoji = TIKTOK_EMOJI
+                platform_emoji = EMOJI_TIKTOK
                 profile_url = f"https://tiktok.com/@{username}"
                 video_url = post["url"] or f"https://www.tiktok.com/@{username}/video/{post['id']}"
             else:
                 color = self.INSTAGRAM_COLOR
                 platform_name = "Instagram"
-                platform_emoji = INSTAGRAM_EMOJI
+                platform_emoji = EMOJI_INSTAGRAM
                 profile_url = f"https://instagram.com/{username}"
                 video_url = post["url"] or f"https://www.instagram.com/p/{post['id']}/"
 
