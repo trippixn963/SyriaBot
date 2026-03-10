@@ -65,6 +65,8 @@ class UserSelectView(ui.View):
             try:
                 embed = discord.Embed(description="⏳ Selection expired", color=COLOR_NEUTRAL)
                 await self.message.edit(embed=embed, view=None)
+            except discord.NotFound:
+                pass  # Message already deleted
             except discord.HTTPException as e:
                 logger.error_tree("User Select Timeout Edit Failed", e, [
                     ("Action", self.action),

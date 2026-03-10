@@ -424,17 +424,20 @@ class AFKService:
 
         # Single AFK user: embed with poke GIF
         # Multiple AFK users: embed with text list, no GIF
+        description = "\n".join(afk_lines)
+        if len(description) > 4096:
+            description = description[:4093] + "..."
+
         embed = discord.Embed(
-            description="\n".join(afk_lines),
+            description=description,
             color=COLOR_NEUTRAL,
         )
 
         if len(afk_lines) == 1:
             embed.set_thumbnail(url=afk_members[0].display_avatar.url)
             gif_url = await self._fetch_gif("poke", fallback="pat")
-            if gif_url:
+            if gif_url and gif_url.startswith("http"):
                 embed.set_image(url=gif_url)
-
 
         try:
             await message.reply(
@@ -449,5 +452,5 @@ class AFKService:
             ], emoji="💤")
         except discord.HTTPException as e:
             logger.tree("AFK Notification Failed", [
-                ("Error", str(e)[:50]),
+                ("Error", str(e)),
             ], emoji="⚠️")
