@@ -120,6 +120,8 @@ class DatabaseCore:
         try:
             conn = sqlite3.connect(self.db_path, timeout=10.0)
             conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA journal_mode = WAL")
+            conn.execute("PRAGMA busy_timeout = 10000")
             yield conn
             conn.commit()
         except sqlite3.DatabaseError as e:

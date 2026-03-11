@@ -202,7 +202,7 @@ class EventStorage:
     def _init_db(self) -> None:
         """Initialize database schema."""
         with self._lock:
-            conn = sqlite3.connect(self._db_path)
+            conn = sqlite3.connect(self._db_path, timeout=10)
             cursor = conn.cursor()
 
             # Main events table
@@ -288,7 +288,7 @@ class EventStorage:
         details_json = json.dumps(details or {})
 
         with self._lock:
-            conn = sqlite3.connect(self._db_path)
+            conn = sqlite3.connect(self._db_path, timeout=10)
             cursor = conn.cursor()
 
             cursor.execute("""
@@ -394,7 +394,7 @@ class EventStorage:
             params.append(f'"{search}"*')
 
         with self._lock:
-            conn = sqlite3.connect(self._db_path)
+            conn = sqlite3.connect(self._db_path, timeout=10)
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
 
@@ -436,7 +436,7 @@ class EventStorage:
     def get_stats(self, guild_id: int) -> Dict[str, Any]:
         """Get event statistics."""
         with self._lock:
-            conn = sqlite3.connect(self._db_path)
+            conn = sqlite3.connect(self._db_path, timeout=10)
             cursor = conn.cursor()
 
             # Total count
@@ -502,7 +502,7 @@ class EventStorage:
         cutoff = datetime.now(TIMEZONE_EST) - timedelta(days=days)
 
         with self._lock:
-            conn = sqlite3.connect(self._db_path)
+            conn = sqlite3.connect(self._db_path, timeout=10)
             cursor = conn.cursor()
 
             cursor.execute(

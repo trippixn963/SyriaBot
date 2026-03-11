@@ -421,67 +421,68 @@ class MemberHandler(commands.Cog):
             ])
 
     async def _handle_new_boost(self, member: discord.Member) -> None:
-        """Send thank you message when someone boosts."""
+        """Send thank you DM when someone boosts."""
         # Log to events system (for dashboard Events tab)
         event_logger.log_boost(member)
 
-        # Get general channel
-        if not config.GENERAL_CHANNEL_ID:
-            logger.tree("Boost Notification Skipped", [
-                ("User", f"{member.name} ({member.display_name})"),
-                ("ID", str(member.id)),
-                ("Reason", "GENERAL_CHANNEL_ID not configured"),
-            ], emoji="⚠️")
-            return
+        guild = member.guild
+        boost_count = guild.premium_subscription_count or 0
 
-        channel = member.guild.get_channel(config.GENERAL_CHANNEL_ID)
-        if not channel:
-            logger.tree("Boost Notification Failed", [
-                ("User", f"{member.name} ({member.display_name})"),
-                ("ID", str(member.id)),
-                ("Reason", "General channel not found"),
-                ("Channel ID", str(config.GENERAL_CHANNEL_ID)),
-            ], emoji="⚠️")
-            return
-
-        # Get boost count
-        boost_count = member.guild.premium_subscription_count or 0
-
-        # Build the thank you embed
         embed = discord.Embed(
-            title="New Server Booster!",
-            description=(
-                f"Thank you {member.mention} for boosting **{member.guild.name}**!\n\n"
-                f"We now have **{boost_count}** boosts!"
-            ),
-            color=COLOR_BOOST
+            title="Thank You for Boosting!",
+            description=f"You just boosted **{guild.name}**! Here's what you unlocked:",
+            color=COLOR_BOOST,
         )
 
-        # Feature unlocks field
         embed.add_field(
-            name="Booster Perks",
-            value=(
-                "• **2x XP** on messages and voice\n"
-                "• **No cooldowns** on commands\n"
-                "• **Unlimited** `/download` and `/image`\n"
-                "• **AI Translation** via `/translate`"
-            ),
-            inline=False
+            name="XP",
+            value="`2x` on messages & voice",
+            inline=True,
         )
+        embed.add_field(
+            name="Downloads",
+            value="`Unlimited` /download",
+            inline=True,
+        )
+        embed.add_field(
+            name="Image Search",
+            value="`Unlimited` /image",
+            inline=True,
+        )
+        embed.add_field(
+            name="Commands",
+            value="`No cooldowns` on all commands",
+            inline=True,
+        )
+        embed.add_field(
+            name="Translation",
+            value="`AI Translation` via /translate",
+            inline=True,
+        )
+        embed.set_thumbnail(url=guild.icon.url if guild.icon else member.display_avatar.url)
 
-        # Set booster avatar as thumbnail
-        embed.set_thumbnail(url=member.display_avatar.url)
-
+        view = discord.ui.View(timeout=None)
+        view.add_item(discord.ui.Button(
+            label="Leaderboard",
+            style=discord.ButtonStyle.link,
+            url=config.LEADERBOARD_BASE_URL,
+            emoji="🏆",
+        ))
 
         try:
-            await channel.send(content=member.mention, embed=embed)
-            logger.tree("Boost Notification Sent", [
+            await member.send(embed=embed, view=view)
+            logger.tree("Boost DM Sent", [
                 ("User", f"{member.name} ({member.display_name})"),
                 ("ID", str(member.id)),
-                ("Channel", channel.name),
-            ], emoji="✅")
+            ], emoji="💎")
+        except discord.Forbidden:
+            logger.tree("Boost DM Failed", [
+                ("User", f"{member.name} ({member.display_name})"),
+                ("ID", str(member.id)),
+                ("Reason", "DMs disabled"),
+            ], emoji="⚠️")
         except discord.HTTPException as e:
-            logger.error_tree("Boost Notification Failed", e, [
+            logger.error_tree("Boost DM Failed", e, [
                 ("User", f"{member.name} ({member.display_name})"),
                 ("ID", str(member.id)),
             ])
