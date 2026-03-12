@@ -246,12 +246,8 @@ async def set_owner_permissions(channel: discord.VoiceChannel, member: discord.M
 
 
 def get_trusted_overwrite() -> discord.PermissionOverwrite:
-    """Get standard permission overwrite for trusted users."""
-    return discord.PermissionOverwrite(
-        connect=True,
-        send_messages=True,
-        read_message_history=True,
-    )
+    """Get standard permission overwrite for trusted users (same as owner)."""
+    return get_owner_overwrite()
 
 
 def get_blocked_overwrite() -> discord.PermissionOverwrite:
@@ -264,12 +260,57 @@ def get_blocked_overwrite() -> discord.PermissionOverwrite:
 
 
 def get_locked_overwrite() -> discord.PermissionOverwrite:
-    """Get permission overwrite for @everyone when channel is locked."""
+    """Get permission overwrite for @everyone when channel is locked (same as blocked)."""
+    return get_blocked_overwrite()
+
+
+def get_unlocked_overwrite() -> discord.PermissionOverwrite:
+    """Get permission overwrite for @everyone when channel is unlocked."""
     return discord.PermissionOverwrite(
-        connect=False,
+        connect=True,
         send_messages=False,
         read_message_history=False,
     )
+
+
+def get_vc_mod_overwrite() -> discord.PermissionOverwrite:
+    """Get permission overwrite for VC mod roles (full moderation access)."""
+    return discord.PermissionOverwrite(
+        connect=True,
+        speak=True,
+        mute_members=True,
+        deafen_members=True,
+        move_members=True,
+        send_messages=True,
+        read_message_history=True,
+        manage_messages=True,
+        attach_files=True,
+        embed_links=True,
+    )
+
+
+# =============================================================================
+# Channel Position
+# =============================================================================
+
+def get_channel_position(channel: discord.VoiceChannel) -> int:
+    """Get a channel's position number based on its position in the category."""
+    if not channel.category:
+        return 1
+
+    # Get all temp voice channels in category, sorted by position
+    voice_channels = sorted(
+        [ch for ch in channel.category.voice_channels
+         if ch.id != config.VC_CREATOR_CHANNEL_ID and db.is_temp_channel(ch.id)],
+        key=lambda c: c.position
+    )
+
+    # Find this channel's position (1-indexed)
+    for idx, ch in enumerate(voice_channels, start=1):
+        if ch.id == channel.id:
+            return idx
+
+    return 1  # Fallback
 
 
 # =============================================================================
@@ -294,10 +335,14 @@ __all__ = [
     "build_full_name",
     "generate_base_name",
     "generate_channel_name",
+    # Channel position
+    "get_channel_position",
     # Permissions
     "get_owner_overwrite",
     "set_owner_permissions",
     "get_trusted_overwrite",
     "get_blocked_overwrite",
     "get_locked_overwrite",
+    "get_unlocked_overwrite",
+    "get_vc_mod_overwrite",
 ]

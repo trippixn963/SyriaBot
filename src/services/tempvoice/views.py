@@ -23,7 +23,7 @@ from src.core.logger import logger
 from src.services.database import db
 from .modals import NameModal, LimitModal
 from .selects import UserSelectView
-from .utils import is_booster, set_owner_permissions
+from .utils import is_booster, set_owner_permissions, get_locked_overwrite, get_unlocked_overwrite
 
 if TYPE_CHECKING:
     from .service import TempVoiceService
@@ -342,41 +342,14 @@ class TempVoiceControlPanel(ui.View):
     async def lock_button(self, interaction: discord.Interaction, button: ui.Button) -> None:
         """Toggle lock/unlock."""
         try:
-            # Check ownership first (before deferring)
-            channel_id = db.get_owner_channel(interaction.user.id, interaction.guild.id)
-            if not channel_id:
-                embed = discord.Embed(description="⚠️ You don't own a channel", color=COLOR_WARNING)
-                await interaction.response.send_message(embed=embed, ephemeral=True)
-                logger.tree("Lock Toggle Rejected", [
-                    ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                    ("ID", str(interaction.user.id)),
-                    ("Reason", "No owned channel"),
-                ], emoji="⚠️")
-                return
-
-            channel = interaction.guild.get_channel(channel_id)
+            channel = await self._get_user_channel(interaction, "Lock Toggle")
             if not channel:
-                db.delete_temp_channel(channel_id)
-                embed = discord.Embed(description="❌ Channel no longer exists", color=COLOR_ERROR)
-                await interaction.response.send_message(embed=embed, ephemeral=True)
-                logger.tree("Lock Toggle Failed", [
-                    ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                    ("ID", str(interaction.user.id)),
-                    ("Channel ID", str(channel_id)),
-                    ("Reason", "Channel deleted"),
-                ], emoji="❌")
                 return
 
             channel_info = db.get_temp_channel(channel.id)
             if not channel_info:
                 embed = discord.Embed(description="❌ Channel data not found", color=COLOR_ERROR)
                 await interaction.response.send_message(embed=embed, ephemeral=True)
-                logger.tree("Lock Toggle Failed", [
-                    ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
-                    ("ID", str(interaction.user.id)),
-                    ("Channel", channel.name),
-                    ("Reason", "No DB record"),
-                ], emoji="❌")
                 return
 
             is_locked = channel_info.get("is_locked", 0)
@@ -387,9 +360,9 @@ class TempVoiceControlPanel(ui.View):
             await interaction.response.defer(ephemeral=True)
 
             if new_locked:
-                await channel.set_permissions(everyone, connect=False, send_messages=False, read_message_history=False)
+                await channel.set_permissions(everyone, overwrite=get_locked_overwrite())
             else:
-                await channel.set_permissions(everyone, connect=True, send_messages=False, read_message_history=False)
+                await channel.set_permissions(everyone, overwrite=get_unlocked_overwrite())
 
             db.update_temp_channel(channel.id, is_locked=new_locked)
 
@@ -701,13 +674,11 @@ class TempVoiceControlPanel(ui.View):
                         if task:
                             task.cancel()
 
-                    await set_owner_permissions(channel, interaction.user)
-                    db.transfer_ownership(channel.id, interaction.user.id)
-
-                    # Rename channel and apply new owner's trusted/blocked lists
                     if self.service:
-                        await self.service._rename_for_new_owner(channel, interaction.user)
-                        await self.service._apply_owner_lists(channel, interaction.user)
+                        await self.service._transfer_ownership(channel, owner_id, interaction.user)
+                    else:
+                        await set_owner_permissions(channel, interaction.user)
+                        db.transfer_ownership(channel.id, interaction.user.id)
 
                     embed = discord.Embed(
                         description=f"👑 You now own **{channel.name}**\nPrevious owner left the server",

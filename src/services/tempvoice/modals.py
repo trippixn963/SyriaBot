@@ -15,27 +15,7 @@ from src.core.config import config
 from src.core.colors import COLOR_SUCCESS, COLOR_ERROR, COLOR_WARNING
 from src.core.logger import logger
 from src.services.database import db
-from .utils import extract_base_name, build_full_name
-
-
-def _get_channel_position(channel: discord.VoiceChannel) -> int:
-    """Get a channel's position number based on its position in the category."""
-    if not channel.category:
-        return 1
-
-    # Get all temp voice channels in category, sorted by position
-    voice_channels = sorted(
-        [ch for ch in channel.category.voice_channels
-         if ch.id != config.VC_CREATOR_CHANNEL_ID and db.is_temp_channel(ch.id)],
-        key=lambda c: c.position
-    )
-
-    # Find this channel's position (1-indexed)
-    for idx, ch in enumerate(voice_channels, start=1):
-        if ch.id == channel.id:
-            return idx
-
-    return 1  # Fallback
+from .utils import extract_base_name, build_full_name, get_channel_position
 
 
 class NameModal(ui.Modal, title="Rename Channel"):
@@ -74,7 +54,7 @@ class NameModal(ui.Modal, title="Rename Channel"):
 
         try:
             old_name = self.channel.name
-            position = _get_channel_position(self.channel)
+            position = get_channel_position(self.channel)
 
             if new_base_name:
                 # User provided a custom base name - build full name with numeral

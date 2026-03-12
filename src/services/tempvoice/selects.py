@@ -23,6 +23,8 @@ from .utils import (
     has_vc_mod_role,
     MAX_ALLOWED_USERS_FREE,
     set_owner_permissions,
+    get_trusted_overwrite,
+    get_blocked_overwrite,
 )
 
 if TYPE_CHECKING:
@@ -228,12 +230,7 @@ class UserSelect(ui.UserSelect):
         db.remove_blocked(owner_id, user.id)
         if db.add_trusted(owner_id, user.id):
             # Grant connect + permanent text access (even when not in VC)
-            await channel.set_permissions(
-                user,
-                connect=True,
-                send_messages=True,
-                read_message_history=True
-            )
+            await channel.set_permissions(user, overwrite=get_trusted_overwrite())
             total_allowed = len(db.get_trusted_list(owner_id))
             embed = discord.Embed(
                 description=f"✅ **{user.display_name}** added to allowed list\n`{total_allowed}` users allowed • Can access chat anytime",
@@ -330,7 +327,7 @@ class UserSelect(ui.UserSelect):
         db.remove_trusted(owner_id, user.id)
         if db.add_blocked(owner_id, user.id):
             # Set permission to deny connect
-            await channel.set_permissions(user, connect=False, send_messages=False, read_message_history=False)
+            await channel.set_permissions(user, overwrite=get_blocked_overwrite())
 
             # Kick from channel if currently in it
             was_kicked = False
@@ -408,8 +405,8 @@ class UserSelect(ui.UserSelect):
             ], emoji="⚠️")
             return
 
-        # Protect VC mod roles from being kicked
-        if has_vc_mod_role(user):
+        # Protect VC mod roles from being kicked (developer can kick anyone)
+        if has_vc_mod_role(user) and owner_id != config.OWNER_ID:
             embed = discord.Embed(description="⚠️ Can't kick staff members", color=COLOR_WARNING)
             await interaction.response.send_message(embed=embed, ephemeral=True)
             logger.tree("Kick Rejected", [
@@ -507,15 +504,7 @@ class UserSelect(ui.UserSelect):
             await interaction.followup.send(embed=embed, ephemeral=True)
             return
 
-        old_owner = interaction.guild.get_member(channel_info["owner_id"])
-        if old_owner:
-            await channel.set_permissions(old_owner, overwrite=None)
-        await set_owner_permissions(channel, user)
-        db.transfer_ownership(channel.id, user.id)
-
-        # Rename and apply new owner's lists
-        channel_name = await self.service._rename_for_new_owner(channel, user)
-        await self.service._apply_owner_lists(channel, user)
+        channel_name = await self.service._transfer_ownership(channel, interaction.user.id, user)
 
         embed = discord.Embed(
             description=f"🔄 Transferred to **{user.display_name}**\nChannel renamed to `{channel_name}`",

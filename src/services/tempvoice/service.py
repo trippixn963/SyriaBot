@@ -44,11 +44,14 @@ from .utils import (
     extract_base_name,
     is_booster,
     has_vc_mod_role,
+    get_channel_position,
     get_owner_overwrite,
     set_owner_permissions,
     get_trusted_overwrite,
     get_blocked_overwrite,
     get_locked_overwrite,
+    get_unlocked_overwrite,
+    get_vc_mod_overwrite,
 )
 from .views import TempVoiceControlPanel
 
@@ -185,11 +188,39 @@ class TempVoiceService:
         self._member_join_times.clear()
         self._message_counts.clear()
         self._panel_locks.clear()
+        self._pending_panels.clear()
+        self._pending_claims.clear()
 
         logger.tree("TempVoice Service Stopped", [
             ("Cancelled Tasks", str(len(cancelled_tasks))),
             ("Panel Locks Cleared", str(locks_count)),
         ], emoji="🔇")
+
+    def _cleanup_channel_cache(self, channel_id: int) -> None:
+        """Remove all cached state for a channel."""
+        self._panel_locks.pop(channel_id, None)
+        self._member_join_times.pop(channel_id, None)
+        self._message_counts.pop(channel_id, None)
+
+    async def _transfer_ownership(
+        self,
+        channel: discord.VoiceChannel,
+        old_owner_id: int,
+        new_owner: discord.Member,
+    ) -> str:
+        """Core transfer: clear old perms, set new perms, DB transfer, rename, apply lists.
+
+        Returns the new channel name.
+        """
+        guild = channel.guild
+        old_owner = guild.get_member(old_owner_id)
+        if old_owner:
+            await channel.set_permissions(old_owner, overwrite=None)
+        await set_owner_permissions(channel, new_owner)
+        db.transfer_ownership(channel.id, new_owner.id)
+        channel_name = await self._rename_for_new_owner(channel, new_owner)
+        await self._apply_owner_lists(channel, new_owner)
+        return channel_name
 
     async def _periodic_cleanup(self) -> None:
         """Periodically clean up empty temp channels."""
@@ -224,9 +255,7 @@ class TempVoiceService:
             # Channel doesn't exist in Discord - clean up DB
             if not channel:
                 db.delete_temp_channel(channel_id)
-                self._panel_locks.pop(channel_id, None)
-                self._member_join_times.pop(channel_id, None)
-                self._message_counts.pop(channel_id, None)
+                self._cleanup_channel_cache(channel_id)
                 cleaned += 1
                 if guild_id:
                     guilds_affected.add(guild_id)
@@ -243,9 +272,7 @@ class TempVoiceService:
             except (AttributeError, TypeError):
                 # Channel reference is stale - clean up DB
                 db.delete_temp_channel(channel_id)
-                self._panel_locks.pop(channel_id, None)
-                self._member_join_times.pop(channel_id, None)
-                self._message_counts.pop(channel_id, None)
+                self._cleanup_channel_cache(channel_id)
                 cleaned += 1
                 logger.tree("Stale Channel Cleaned", [
                     ("Channel ID", str(channel_id)),
@@ -260,9 +287,7 @@ class TempVoiceService:
                     await channel.delete(reason="Empty channel cleanup")
                     # Delete DB record after Discord delete succeeds
                     db.delete_temp_channel(channel_id)
-                    self._panel_locks.pop(channel_id, None)
-                    self._member_join_times.pop(channel_id, None)
-                    self._message_counts.pop(channel_id, None)
+                    self._cleanup_channel_cache(channel_id)
                     cleaned += 1
                     guilds_affected.add(guild_id_for_reorder)
                     logger.tree("Empty Channel Cleaned", [
@@ -295,9 +320,7 @@ class TempVoiceService:
             channel = self.bot.get_channel(channel_id)
             if not channel:
                 db.delete_temp_channel(channel_id)
-                self._panel_locks.pop(channel_id, None)
-                self._member_join_times.pop(channel_id, None)
-                self._message_counts.pop(channel_id, None)
+                self._cleanup_channel_cache(channel_id)
                 cleaned += 1
 
         if cleaned > 0:
@@ -896,7 +919,7 @@ class TempVoiceService:
                 return
 
             # Rename to display name
-            position = self._get_channel_position(channel)
+            position = get_channel_position(channel)
             expected_name = build_full_name(position, expected_base)
             old_name = channel.name
             await channel.edit(name=expected_name)
@@ -1138,29 +1161,10 @@ class TempVoiceService:
 
         return len(temp_channels) + 1
 
-    def _get_channel_position(self, channel: discord.VoiceChannel) -> int:
-        """Get a channel's position number based on its position in the category."""
-        if not channel.category:
-            return 1
-
-        # Get all temp voice channels in category, sorted by position
-        voice_channels = sorted(
-            [ch for ch in channel.category.voice_channels
-             if ch.id != config.VC_CREATOR_CHANNEL_ID and db.is_temp_channel(ch.id)],
-            key=lambda c: c.position
-        )
-
-        # Find this channel's position (1-indexed)
-        for idx, ch in enumerate(voice_channels, start=1):
-            if ch.id == channel.id:
-                return idx
-
-        return 1  # Fallback
-
     async def _rename_for_new_owner(self, channel: discord.VoiceChannel, new_owner: discord.Member) -> str:
         """Rename a channel to the new owner's default name, keeping its position."""
         base_name, _ = generate_base_name(new_owner)
-        position = self._get_channel_position(channel)
+        position = get_channel_position(channel)
         channel_name = build_full_name(position, base_name)
         await channel.edit(name=channel_name)
         db.update_temp_channel(channel.id, name=channel_name, base_name=base_name)
@@ -1199,12 +1203,7 @@ class TempVoiceService:
             if blocked_user:
                 if has_vc_mod_role(blocked_user) and new_owner.id != config.OWNER_ID:
                     continue
-                await channel.set_permissions(
-                    blocked_user,
-                    connect=False,
-                    send_messages=False,
-                    read_message_history=False,
-                )
+                await channel.set_permissions(blocked_user, overwrite=get_blocked_overwrite())
                 if blocked_user.voice and blocked_user.voice.channel == channel:
                     try:
                         await blocked_user.move_to(None)
@@ -1222,12 +1221,7 @@ class TempVoiceService:
         for trusted_id in trusted_ids:
             trusted_user = guild.get_member(trusted_id)
             if trusted_user:
-                await channel.set_permissions(
-                    trusted_user,
-                    connect=True,
-                    send_messages=True,
-                    read_message_history=True,
-                )
+                await channel.set_permissions(trusted_user, overwrite=get_trusted_overwrite())
                 trusted_count += 1
 
         # Re-grant text access to current members who aren't blocked or already handled
@@ -1235,12 +1229,20 @@ class TempVoiceService:
         for member_id in current_member_ids - handled_ids:
             member = guild.get_member(member_id)
             if member:
-                await channel.set_permissions(
-                    member,
-                    connect=True,
-                    send_messages=True,
-                    read_message_history=True,
-                )
+                await channel.set_permissions(member, overwrite=get_owner_overwrite())
+
+        # Update VC mod role overwrites based on new owner
+        # Developer's channels: VC mods cannot enter (matches _create_temp_channel_inner logic)
+        # Regular channels: VC mods get full moderation access
+        if config.VC_MOD_ROLES:
+            for role_id in config.VC_MOD_ROLES:
+                mod_role = guild.get_role(role_id)
+                if not mod_role:
+                    continue
+                if new_owner.id == config.OWNER_ID:
+                    await channel.set_permissions(mod_role, overwrite=None)
+                else:
+                    await channel.set_permissions(mod_role, overwrite=get_vc_mod_overwrite())
 
         return trusted_count, blocked_count
 
@@ -1377,13 +1379,7 @@ class TempVoiceService:
                     # Transfer to first eligible member
                     new_owner = other_members[0]
                     try:
-                        await channel.set_permissions(member, overwrite=None)
-                        await set_owner_permissions(channel, new_owner)
-                        db.transfer_ownership(channel.id, new_owner.id)
-                        channel_name = await self._rename_for_new_owner(channel, new_owner)
-                        await self._apply_owner_lists(channel, new_owner)
-
-                        # Update panel to reflect new owner
+                        channel_name = await self._transfer_ownership(channel, member.id, new_owner)
                         await self._update_panel(channel)
 
                         logger.tree("Auto-Transfer", [
@@ -1481,18 +1477,7 @@ class TempVoiceService:
                 for role_id in config.VC_MOD_ROLES:
                     mod_role = guild.get_role(role_id)
                     if mod_role:
-                        overwrites[mod_role] = discord.PermissionOverwrite(
-                            connect=True,
-                            speak=True,
-                            mute_members=True,
-                            deafen_members=True,
-                            move_members=True,
-                            send_messages=True,
-                            read_message_history=True,
-                            manage_messages=True,
-                            attach_files=True,
-                            embed_links=True,
-                        )
+                        overwrites[mod_role] = get_vc_mod_overwrite()
 
             # Pre-build blocked user overwrites
             blocked_count = 0
@@ -1596,9 +1581,7 @@ class TempVoiceService:
             self._pending_claims.discard(channel.id)
 
             # Clean up all tracking for this channel
-            self._member_join_times.pop(channel.id, None)
-            self._message_counts.pop(channel.id, None)
-            self._panel_locks.pop(channel.id, None)
+            self._cleanup_channel_cache(channel.id)
 
             try:
                 await channel.delete(reason="Empty")
@@ -1722,24 +1705,7 @@ class TempVoiceService:
     ) -> None:
         """Apply the ownership transfer to a new owner with their settings."""
         try:
-            guild = channel.guild
-
-            # Get old owner's current permissions
-            old_owner_member = guild.get_member(old_owner.id)
-            if old_owner_member:
-                await channel.set_permissions(old_owner_member, overwrite=None)
-
-            # Grant new owner permissions (boosters get manage_channels for renaming)
-            await set_owner_permissions(channel, new_owner)
-
-            # Update DB ownership
-            db.transfer_ownership(channel.id, new_owner.id)
-
-            # Rename channel for new owner (keeps same position)
-            channel_name = await self._rename_for_new_owner(channel, new_owner)
-
-            # Clear old overwrites and apply new owner's trusted/blocked lists
-            trusted_count, blocked_count = await self._apply_owner_lists(channel, new_owner)
+            channel_name = await self._transfer_ownership(channel, old_owner.id, new_owner)
 
             # Clear all messages in the VC chat (fresh start for new owner)
             try:
@@ -1779,8 +1745,6 @@ class TempVoiceService:
                 ("Channel", channel_name),
                 ("From", str(old_owner)),
                 ("To", str(new_owner)),
-                ("Allowed Applied", str(trusted_count)),
-                ("Blocked Applied", str(blocked_count)),
             ], emoji="🔄")
 
         except discord.HTTPException as e:
