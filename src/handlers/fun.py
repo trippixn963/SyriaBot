@@ -96,14 +96,20 @@ class FunHandler:
                 pass  # Message gone, forbidden, or API error - all ok
 
         embed = discord.Embed(
-            title="🎮 Commands Channel",
+            title="<:bot:1455709985467011173> Commands Channel",
             description=(
                 "**⚠️ This channel does not earn XP.**\n\n"
+                "**Fun**\n"
                 "`ship @user @user` — Compatibility %\n"
                 "`howgay` `howsimp` `howsmart` `howfat` — Meters\n"
                 "`hug` `kiss` `slap` `kick` etc — Actions\n\n"
-                "`marry @user` · `divorce` · `adopt @user`\n"
-                "`disown @user` · `runaway` · `family [@user]`\n\n"
+                "**Family**\n"
+                "`marry @user` — Propose to someone\n"
+                "`divorce` — End your marriage\n"
+                "`adopt @user` — Adopt a child\n"
+                "`disown @user` — Disown a child\n"
+                "`runaway` — Run away from your parent\n"
+                "`family [@user]` — View family tree\n\n"
                 "📌 Check pinned messages for more info."
             ),
             color=COLOR_SYRIA_GREEN

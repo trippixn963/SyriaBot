@@ -10,6 +10,9 @@ Server: discord.gg/syria
 
 
 import asyncio
+import random
+import re
+import time
 from pathlib import Path
 
 import discord
@@ -19,10 +22,120 @@ from src.core.config import config
 from src.core.colors import COLOR_BOOST, COLOR_GOLD, COLOR_SYRIA_GREEN
 from src.core.logger import logger
 from src.services.database import db
+from src.services.actions import action_service
 from src.api.services.websocket import get_ws_manager
 from src.api.services.event_logger import event_logger
 
 WELCOME_BANNER = Path(__file__).resolve().parent.parent.parent / "assets" / "welcome" / "welcome.png"
+
+WAVE_MESSAGES = [
+    "{user} waves at {target}",
+    "{user} waves hello to {target}",
+    "{user} says hi to {target}",
+]
+
+WELCOME_GREETINGS = [
+    "ahlan wa sahlan",
+    "ya hala",
+    "nawwart",
+    "ahla w sahla",
+    "tfaddal",
+    "marhaba",
+    "hayyak allah",
+    "ya marhaba",
+    "ahlan fik",
+    "sharraftna",
+]
+
+
+# Track who already waved per welcome message: {message_id: {user_id, ...}}
+_wave_tracker: dict[int, set[int]] = {}
+_WAVE_TRACKER_MAX = 200  # Max tracked messages before cleanup
+
+# Per-user cooldown for wave button (seconds)
+_WAVE_COOLDOWN = 5
+_wave_cooldowns: dict[int, float] = {}
+
+
+def _cleanup_wave_tracker() -> None:
+    """Evict oldest entries if tracker is too large."""
+    while len(_wave_tracker) > _WAVE_TRACKER_MAX:
+        oldest = next(iter(_wave_tracker))
+        _wave_tracker.pop(oldest, None)
+
+
+class WaveButton(discord.ui.DynamicItem[discord.ui.Button], template=r"wave:(?P<member_id>\d+)"):
+    """Persistent wave button that survives bot restarts. One wave per user per welcome."""
+
+    def __init__(self, member_id: int):
+        self.member_id = member_id
+        super().__init__(
+            discord.ui.Button(
+                label="Wave to say hi!",
+                style=discord.ButtonStyle.secondary,
+                custom_id=f"wave:{member_id}",
+                emoji="👋",
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Button,
+        match: re.Match[str],
+    ) -> "WaveButton":
+        return cls(int(match.group("member_id")))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        user_id = interaction.user.id
+        msg_id = interaction.message.id if interaction.message else 0
+
+        # One wave per user per welcome message
+        if msg_id in _wave_tracker and user_id in _wave_tracker[msg_id]:
+            await interaction.response.send_message(
+                "You already waved!", ephemeral=True,
+            )
+            return
+
+        # Per-user cooldown
+        now = time.monotonic()
+        last_used = _wave_cooldowns.get(user_id, 0)
+        if now - last_used < _WAVE_COOLDOWN:
+            await interaction.response.send_message(
+                "Slow down! Try again in a few seconds.", ephemeral=True,
+            )
+            return
+
+        # Mark as waved and set cooldown before deferring
+        _wave_tracker.setdefault(msg_id, set()).add(user_id)
+        _wave_cooldowns[user_id] = now
+        _cleanup_wave_tracker()
+
+        await interaction.response.defer()
+
+        try:
+            gif_url = await action_service.get_action_gif("wave")
+            if not gif_url:
+                return
+
+            action_text = random.choice(WAVE_MESSAGES).format(
+                user=interaction.user.mention,
+                target=f"<@{self.member_id}>",
+            )
+            embed = discord.Embed(description=action_text, color=COLOR_GOLD)
+            embed.set_image(url=gif_url)
+            await interaction.channel.send(embed=embed)
+        except discord.HTTPException:
+            pass
+
+
+class WaveView(discord.ui.View):
+    """View wrapper for the wave button."""
+
+    def __init__(self, member_id: int):
+        super().__init__(timeout=None)
+        self.add_item(WaveButton(member_id).item)
 
 
 class MemberHandler(commands.Cog):
@@ -178,30 +291,27 @@ class MemberHandler(commands.Cog):
             ])
 
         # Give auto-role
-        if not config.AUTO_ROLE_ID:
-            return
-
-        role = member.guild.get_role(config.AUTO_ROLE_ID)
-        if not role:
-            logger.tree("Auto-Role Not Found", [
-                ("Role ID", str(config.AUTO_ROLE_ID)),
-                ("Guild", member.guild.name),
-            ], emoji="⚠️")
-            return
-
-        try:
-            await member.add_roles(role, reason="Auto-role on join")
-            # Log to events system (for dashboard Events tab)
-            event_logger.log_join(
-                member=member,
-                invite_code=invite.code if invite else None,
-                inviter=invite.inviter if invite else None,
-            )
-        except discord.HTTPException as e:
-            logger.error_tree("Auto-Role Failed", e, [
-                ("User", f"{member.name} ({member.id})"),
-                ("Role", role.name),
-            ])
+        if config.AUTO_ROLE_ID:
+            role = member.guild.get_role(config.AUTO_ROLE_ID)
+            if role:
+                try:
+                    await member.add_roles(role, reason="Auto-role on join")
+                    # Log to events system (for dashboard Events tab)
+                    event_logger.log_join(
+                        member=member,
+                        invite_code=invite.code if invite else None,
+                        inviter=invite.inviter if invite else None,
+                    )
+                except discord.HTTPException as e:
+                    logger.error_tree("Auto-Role Failed", e, [
+                        ("User", f"{member.name} ({member.id})"),
+                        ("Role", role.name),
+                    ])
+            else:
+                logger.tree("Auto-Role Not Found", [
+                    ("Role ID", str(config.AUTO_ROLE_ID)),
+                    ("Guild", member.guild.name),
+                ], emoji="⚠️")
 
         # Restore XP roles if they had any (for returning members)
         if hasattr(self.bot, 'xp_service') and self.bot.xp_service:
@@ -225,6 +335,9 @@ class MemberHandler(commands.Cog):
         # Send welcome DM
         await self._send_welcome_dm(member)
 
+        # Send welcome message in general chat
+        await self._send_welcome_message(member)
+
         # Broadcast updated member count via WebSocket
         try:
             ws_manager = get_ws_manager()
@@ -232,6 +345,41 @@ class MemberHandler(commands.Cog):
                 await ws_manager.broadcast_stat("members", member.guild.member_count)
         except Exception as e:
             logger.error_tree("WS Member Broadcast Error", e)
+
+    async def _send_welcome_message(self, member: discord.Member) -> None:
+        """Send a welcome message in general chat with a wave button."""
+        if not config.GENERAL_CHANNEL_ID:
+            return
+
+        channel = self.bot.get_channel(config.GENERAL_CHANNEL_ID)
+        if not channel:
+            return
+
+        try:
+            created_ts = int(member.created_at.timestamp())
+            greeting = random.choice(WELCOME_GREETINGS)
+            embed = discord.Embed(
+                description=(
+                    f"**{member.display_name}** {greeting}.\n\n"
+                    f"• Check the rules in <#{config.RULES_CHANNEL_ID}>\n"
+                    f"• Grab free roles in <#{config.ROLE_SHOP_CHANNEL_ID}>\n\n"
+                    f"<:claim:1455709985467011173> Account created <t:{created_ts}:R>"
+                ),
+                color=COLOR_SYRIA_GREEN,
+            )
+            embed.set_thumbnail(url=member.display_avatar.url)
+            view = WaveView(member.id)
+            await channel.send(embed=embed, view=view)
+            logger.tree("Welcome Message Sent", [
+                ("User", f"{member.name} ({member.display_name})"),
+                ("ID", str(member.id)),
+                ("Channel", channel.name),
+            ], emoji="👋")
+        except discord.HTTPException as e:
+            logger.error_tree("Welcome Message Failed", e, [
+                ("User", f"{member.name} ({member.display_name})"),
+                ("ID", str(member.id)),
+            ])
 
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member) -> None:
@@ -496,7 +644,7 @@ class MemberHandler(commands.Cog):
             description=(
                 f"Ahlan {member.display_name}, welcome to the family!\n\n"
                 f"\u2022 Pick your roles via <id:customize>\n"
-                f"\u2022 Grab a free custom role in <#1459644341361447181>\n"
+                f"\u2022 Grab a free custom role in <#{config.ROLE_SHOP_CHANNEL_ID}>\n"
                 f"\u2022 Join {vc_text} to make your own voice chat"
             ),
             color=COLOR_GOLD

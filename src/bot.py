@@ -149,9 +149,12 @@ class SyriaBot(commands.Bot):
                     ("Command", cmd),
                 ])
 
-        # Register persistent views
+        # Register persistent views and dynamic items
         setup_persistent_views(self)
         setup_confession_views(self)
+
+        from src.handlers.member import WaveButton
+        self.add_dynamic_items(WaveButton)
 
         logger.tree("Setup Hook Complete", [
             ("Handlers", ", ".join(loaded_handlers)),

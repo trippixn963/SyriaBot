@@ -16,7 +16,7 @@ import discord
 
 from src.core.config import config
 
-DIVIDER_PATH = Path(__file__).resolve().parent.parent / "assets" / "dividers" / "divider.png"
+DIVIDER_PATH = Path(__file__).resolve().parent.parent.parent / "assets" / "dividers" / "divider.png"
 
 # Track divider message IDs so we only block reactions on actual dividers
 _divider_message_ids: Set[int] = set()
@@ -27,14 +27,21 @@ _MAX_TRACKED = 500
 
 async def send_divider(channel: discord.abc.Messageable) -> None:
     """Send a divider image to a channel and track the message ID."""
+    from src.core.logger import logger
     try:
+        if not DIVIDER_PATH.exists():
+            logger.error("Divider file not found", [("Path", str(DIVIDER_PATH))])
+            return
         msg = await channel.send(file=discord.File(DIVIDER_PATH))
         _divider_message_ids.add(msg.id)
         # Evict oldest if over cap
         while len(_divider_message_ids) > _MAX_TRACKED:
             _divider_message_ids.pop()
-    except discord.HTTPException:
-        pass
+    except discord.HTTPException as e:
+        logger.error("Divider send failed", [
+            ("Channel", str(getattr(channel, 'name', channel))),
+            ("Error", str(e)[:100]),
+        ])
 
 
 def is_divider_message(message_id: int) -> bool:
