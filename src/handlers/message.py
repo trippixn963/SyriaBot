@@ -17,6 +17,7 @@ from discord.ext import commands
 
 from src.core.logger import logger
 from src.core.config import config
+from src.utils.divider import send_divider, is_divider_message, is_divider_channel
 from src.core.constants import DISBOARD_BOT_ID
 from src.services.bump import bump_service
 from src.services.database import db
@@ -95,6 +96,10 @@ class MessageHandler(commands.Cog):
                     ("ID", str(message.author.id)),
                     ("Channel", str(message.channel.id)),
                 ])
+
+        # Divider channels - send divider after each post
+        if is_divider_channel(message.channel.id):
+            await send_divider(message.channel)
 
         # TempVoice sticky panel
         if hasattr(self.bot, 'tempvoice') and self.bot.tempvoice:
@@ -326,6 +331,14 @@ class MessageHandler(commands.Cog):
             return
 
         if not reaction.message.guild:
+            return
+
+        # Remove reactions on divider images
+        if is_divider_message(reaction.message.id):
+            try:
+                await reaction.remove(user)
+            except discord.HTTPException:
+                pass
             return
 
         # Gallery service handles its reactions

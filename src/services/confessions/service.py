@@ -21,6 +21,7 @@ from src.core.logger import logger
 from src.core.colors import COLOR_SYRIA_GREEN, COLOR_WARNING, EMOJI_HEART, EMOJI_CONFESSION
 from src.core.constants import DELETE_DELAY_MEDIUM, TIMEZONE_EST
 from src.services.database import db
+from src.utils.divider import send_divider
 
 if TYPE_CHECKING:
     from src.bot import SyriaBot
@@ -653,6 +654,9 @@ class ConfessionService:
 
             # Send notification to general
             await self._send_notification(confession_msg, confession_number, thread)
+
+            # Send divider after the confession
+            await send_divider(channel)
 
             return True
 

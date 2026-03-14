@@ -19,6 +19,7 @@ from src.core.emojis import EMOJI_TICKET, EMOJI_LINK
 from src.core.logger import logger
 
 ASSETS_DIR = Path(__file__).resolve().parent.parent.parent / "assets" / "rules"
+DIVIDER_PATH = Path(__file__).resolve().parent.parent.parent / "assets" / "dividers" / "divider.png"
 
 # =============================================================================
 # Rules Data — compact one-liner per rule
@@ -124,9 +125,9 @@ class RulesCog(commands.Cog):
                         lines.append(f"◈ **{name}** — {value}")
                     await channel.send("\n".join(lines))
 
-                    # Spacer between categories (not after the last one)
+                    # Divider between categories (not after the last one)
                     if i < len(RULES_CATEGORIES) - 1:
-                        await channel.send("\u200b")
+                        await channel.send(file=discord.File(DIVIDER_PATH))
                 except discord.HTTPException as e:
                     logger.error_tree("Rules Category Send Failed", e, [
                         ("Category", str(i + 1)),
@@ -134,9 +135,9 @@ class RulesCog(commands.Cog):
                     ])
                     break
 
-            # Spacer before footer
+            # Divider before footer
             try:
-                await channel.send("\u200b")
+                await channel.send(file=discord.File(DIVIDER_PATH))
                 await channel.send(file=discord.File(ASSETS_DIR / "need_help.png"))
                 await channel.send(
                     f"Staff reserves the right to take any action deemed appropriate.\n"

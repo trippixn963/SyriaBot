@@ -20,6 +20,7 @@ from src.core.logger import logger
 from src.core.config import config
 from src.core.colors import COLOR_GOLD, EMOJI_HEART, EMOJI_COMMENT
 from src.core.constants import TIMEZONE_EST
+from src.utils.divider import send_divider
 
 
 class GalleryService:
@@ -246,6 +247,9 @@ class GalleryService:
 
         # Send notification to general chat
         await self._send_notification(message, thread, is_video, thumbnail_url, channel_type)
+
+        # Send divider after the post
+        await send_divider(message.channel)
 
     async def _send_notification(
         self,

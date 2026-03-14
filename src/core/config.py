@@ -130,6 +130,9 @@ class Config:
     FLAGS_GAME_CHANNEL_ID: int = _env_int("SYRIA_FLAGS_CH")
     COUNTING_CHANNEL_ID: int = _env_int("SYRIA_COUNTING_CH")
     DAILY_STATS_CHANNEL_ID: int = _env_int("SYRIA_DAILY_STATS_CH")
+    DIVIDER_CHANNELS: FrozenSet[int] = field(
+        default_factory=lambda: _env_set("SYRIA_DIVIDER_CHS")
+    )
 
     # ==========================================================================
     # TempVoice
