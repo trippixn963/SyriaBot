@@ -8,6 +8,8 @@ Author: حَـــــنَّـــــا
 Server: discord.gg/syria
 """
 
+from typing import TYPE_CHECKING
+
 import discord
 from discord import ui
 
@@ -16,6 +18,9 @@ from src.core.colors import COLOR_SUCCESS, COLOR_ERROR, COLOR_WARNING
 from src.core.logger import logger
 from src.services.database import db
 from .utils import extract_base_name, build_full_name, get_channel_position
+
+if TYPE_CHECKING:
+    from .service import TempVoiceService
 
 
 class NameModal(ui.Modal, title="Rename Channel"):
@@ -232,6 +237,96 @@ class LimitModal(ui.Modal, title="Set User Limit"):
         ])
         try:
             embed = discord.Embed(description="❌ Failed to set limit", color=COLOR_ERROR)
+            if interaction.response.is_done():
+                await interaction.followup.send(embed=embed, ephemeral=True)
+            else:
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+        except discord.HTTPException:
+            pass
+
+
+class UserIdModal(ui.Modal, title="Enter User ID"):
+    """Modal for searching a user by ID when the dropdown doesn't find them."""
+
+    user_id_input = ui.TextInput(
+        label="User ID",
+        placeholder="Right-click user → Copy User ID",
+        max_length=20,
+        required=True,
+    )
+
+    def __init__(
+        self,
+        channel: discord.VoiceChannel,
+        action: str,
+        service: "TempVoiceService" = None,
+    ) -> None:
+        super().__init__()
+        self.channel = channel
+        self.action = action
+        self.service = service
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        raw = self.user_id_input.value.strip()
+
+        try:
+            user_id = int(raw)
+        except ValueError:
+            embed = discord.Embed(description="⚠️ Invalid ID — must be a number", color=COLOR_WARNING)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+
+        member = interaction.guild.get_member(user_id)
+        if not member:
+            try:
+                member = await interaction.guild.fetch_member(user_id)
+            except discord.NotFound:
+                embed = discord.Embed(description="❌ User not found in this server", color=COLOR_ERROR)
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                return
+            except discord.HTTPException:
+                embed = discord.Embed(description="❌ Failed to fetch user", color=COLOR_ERROR)
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                return
+
+        # Validate channel still exists
+        channel = interaction.guild.get_channel(self.channel.id)
+        if not channel:
+            embed = discord.Embed(description="❌ Channel no longer exists", color=COLOR_ERROR)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+
+        channel_info = db.get_temp_channel(channel.id)
+        if not channel_info:
+            embed = discord.Embed(description="❌ Channel not found", color=COLOR_ERROR)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+
+        owner_id = channel_info["owner_id"]
+
+        # Route to the same handlers as UserSelect
+        from .selects import UserSelect
+        handler = UserSelect(channel, self.action, self.service)
+
+        if self.action == "permit":
+            await handler._handle_permit(interaction, channel, member, owner_id)
+        elif self.action == "block":
+            await handler._handle_block(interaction, channel, member, owner_id)
+        elif self.action == "kick":
+            await handler._handle_kick(interaction, channel, member, owner_id)
+        elif self.action == "transfer":
+            await handler._handle_transfer(interaction, channel, member, owner_id)
+
+    async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
+        if isinstance(error, discord.NotFound):
+            return
+        logger.error_tree("UserID Modal Error", error, [
+            ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+            ("Action", self.action),
+            ("Channel", self.channel.name),
+        ])
+        try:
+            embed = discord.Embed(description="❌ An error occurred", color=COLOR_ERROR)
             if interaction.response.is_done():
                 await interaction.followup.send(embed=embed, ephemeral=True)
             else:

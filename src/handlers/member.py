@@ -360,7 +360,6 @@ class MemberHandler(commands.Cog):
             greeting = random.choice(WELCOME_GREETINGS)
             embed = discord.Embed(
                 description=(
-                    f"**{member.display_name}** {greeting}.\n\n"
                     f"• Check the rules in <#{config.RULES_CHANNEL_ID}>\n"
                     f"• Grab free roles in <#{config.ROLE_SHOP_CHANNEL_ID}>\n\n"
                     f"<:claim:1455709985467011173> Account created <t:{created_ts}:R>"
@@ -369,7 +368,11 @@ class MemberHandler(commands.Cog):
             )
             embed.set_thumbnail(url=member.display_avatar.url)
             view = WaveView(member.id)
-            await channel.send(embed=embed, view=view)
+            await channel.send(
+                content=f"{member.mention} {greeting}!",
+                embed=embed,
+                view=view,
+            )
             logger.tree("Welcome Message Sent", [
                 ("User", f"{member.name} ({member.display_name})"),
                 ("ID", str(member.id)),

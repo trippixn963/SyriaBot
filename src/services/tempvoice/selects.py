@@ -18,6 +18,7 @@ from src.core.config import config
 from src.core.constants import SELECT_TIMEOUT_DEFAULT
 from src.core.logger import logger
 from src.services.database import db
+from .modals import UserIdModal
 from .utils import (
     is_booster,
     has_vc_mod_role,
@@ -32,7 +33,7 @@ if TYPE_CHECKING:
 
 
 class UserSelectView(ui.View):
-    """View for user selection actions."""
+    """View for user selection actions with ID fallback button."""
 
     def __init__(self, channel: discord.VoiceChannel, action: str, service: "TempVoiceService" = None) -> None:
         super().__init__(timeout=SELECT_TIMEOUT_DEFAULT)
@@ -41,6 +42,11 @@ class UserSelectView(ui.View):
         self.service = service
         self.message: discord.Message = None
         self.add_item(UserSelect(channel, action, service))
+
+    @ui.button(label="Search by ID", style=discord.ButtonStyle.secondary, emoji="🔍", row=1)
+    async def search_by_id(self, interaction: discord.Interaction, button: ui.Button) -> None:
+        """Open a modal to enter a user ID manually."""
+        await interaction.response.send_modal(UserIdModal(self.channel, self.action, self.service))
 
     async def on_error(self, interaction: discord.Interaction, error: Exception, item: ui.Item) -> None:
         """Handle unexpected errors in user select view callbacks."""
