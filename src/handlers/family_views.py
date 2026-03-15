@@ -24,6 +24,12 @@ from src.services.database import db
 from src.services.actions import action_service
 
 
+def _member_name(guild: discord.Guild, user_id: int) -> str:
+    """Resolve a user ID to a mention safe for embeds."""
+    member = guild.get_member(user_id)
+    return member.mention if member else f"<@{user_id}>"
+
+
 # =============================================================================
 # Shared GIF Helper
 # =============================================================================
@@ -192,7 +198,8 @@ class AdoptApprovalView(ui.View):
         """Build status line showing who has accepted."""
         t = "✅" if self.target_accepted else "⏳"
         s = "✅" if self.spouse_accepted else "⏳"
-        return f"{t} {self.target.mention}  ·  {s} <@{self.spouse_id}>"
+        spouse_display = _member_name(self.target.guild, self.spouse_id)
+        return f"{t} {self.target.mention}  ·  {s} {spouse_display}"
 
     async def _build_pending_embed(self) -> discord.Embed:
         """Build the pending adoption embed with current status."""
@@ -264,7 +271,7 @@ class AdoptApprovalView(ui.View):
 
         embed = discord.Embed(
             title="👨‍👧 Adopted!",
-            description=f"🎉 {self.requester.mention} & <@{self.spouse_id}> adopted {self.target.mention}!",
+            description=f"🎉 {self.requester.mention} & {_member_name(self.target.guild, self.spouse_id)} adopted {self.target.mention}!",
             color=COLOR_SUCCESS,
         )
         gif_url = await fetch_family_gif("pat")
@@ -426,9 +433,11 @@ class DivorceView(ui.View):
                     db.disown(parent_of_child, child_id, guild_id)
 
             # Build description
-            desc = f"{self.user.mention} and <@{ex_spouse_id}> are no longer married.\n\n⏳ Both must wait **24 hours** before remarrying."
+            guild = interaction.guild
+            ex_display = _member_name(guild, ex_spouse_id)
+            desc = f"{self.user.mention} and {ex_display} are no longer married.\n\n⏳ Both must wait **24 hours** before remarrying."
             if all_children:
-                children_str = ", ".join(f"<@{c}>" for c in all_children)
+                children_str = ", ".join(_member_name(guild, c) for c in all_children)
                 desc += f"\n\n👶 {children_str} — put up for adoption."
 
             embed = discord.Embed(
@@ -543,7 +552,7 @@ class DisownView(ui.View):
             spouse_id = db.get_spouse(self.parent.id, guild_id)
             if spouse_id:
                 embed = discord.Embed(
-                    description=f"⚠️ {self.parent.mention} wants to disown {self.child.mention}. Waiting for <@{spouse_id}> to approve.",
+                    description=f"⚠️ {self.parent.mention} wants to disown {self.child.mention}. Waiting for {_member_name(interaction.guild, spouse_id)} to approve.",
                     color=COLOR_WARNING,
                 )
                 view = SpouseApprovalView(

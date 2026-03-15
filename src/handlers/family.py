@@ -27,6 +27,12 @@ from src.core.constants import (
 )
 from src.services.database import db
 from src.utils.permissions import is_cooldown_exempt
+
+
+def _member_name(guild: discord.Guild, user_id: int) -> str:
+    """Resolve a user ID to a mention safe for embeds."""
+    member = guild.get_member(user_id)
+    return member.mention if member else f"<@{user_id}>"
 from src.handlers.family_views import (
     ProposalView, AdoptApprovalView, DivorceView, DisownView, RunawayView,
     SpouseApprovalView, fetch_family_gif,
@@ -378,7 +384,7 @@ class FamilyHandler:
             return
 
         embed = discord.Embed(
-            description=f"⚠️ {user.mention}, are you sure you want to divorce <@{spouse_id}>?\n\nBoth of you will have a **24-hour cooldown** before remarrying.",
+            description=f"⚠️ {user.mention}, are you sure you want to divorce {_member_name(message.guild, spouse_id)}?\n\nBoth of you will have a **24-hour cooldown** before remarrying.",
             color=COLOR_WARNING,
         )
 
@@ -526,7 +532,7 @@ class FamilyHandler:
         gif_url = await self._fetch_gif("adopt_request")
 
         embed = discord.Embed(
-            description=f"👨‍👧 {user.mention} wants to adopt {target.mention}!\n\n⏳ {target.mention}  ·  ⏳ <@{spouse_id}>",
+            description=f"👨‍👧 {user.mention} wants to adopt {target.mention}!\n\n⏳ {target.mention}  ·  ⏳ {_member_name(message.guild, spouse_id)}",
             color=COLOR_GOLD,
         )
         if gif_url:
@@ -608,7 +614,7 @@ class FamilyHandler:
         spouse_id = db.get_spouse(user.id, guild_id)
         if spouse_id:
             embed = discord.Embed(
-                description=f"⚠️ {user.mention} wants to disown {target.mention}. Waiting for <@{spouse_id}> to approve.",
+                description=f"⚠️ {user.mention} wants to disown {target.mention}. Waiting for {_member_name(message.guild, spouse_id)} to approve.",
                 color=COLOR_WARNING,
             )
             view = SpouseApprovalView(
@@ -666,9 +672,9 @@ class FamilyHandler:
         # Show confirmation with both parents
         parent_spouse_id: Optional[int] = db.get_spouse(parent_id, guild_id)
         if parent_spouse_id:
-            description = f"⚠️ {user.mention}, are you sure you want to run away from <@{parent_id}> & <@{parent_spouse_id}>?"
+            description = f"⚠️ {user.mention}, are you sure you want to run away from {_member_name(message.guild, parent_id)} & {_member_name(message.guild, parent_spouse_id)}?"
         else:
-            description = f"⚠️ {user.mention}, are you sure you want to run away from <@{parent_id}>?"
+            description = f"⚠️ {user.mention}, are you sure you want to run away from {_member_name(message.guild, parent_id)}?"
 
         embed = discord.Embed(description=description, color=COLOR_WARNING)
 
