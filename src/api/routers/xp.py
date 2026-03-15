@@ -124,6 +124,19 @@ async def grant_xp(
             ("Client IP", client_ip),
         ], emoji="⬆️")
 
+        # Sync roles if level changed
+        if new_level > current_level:
+            bot = get_bot_optional()
+            if bot and hasattr(bot, "xp_service") and bot.xp_service:
+                try:
+                    await bot.xp_service.sync_user_role(body.user_id, new_level)
+                except Exception as e:
+                    logger.error("API XP Grant Role Sync Failed", [
+                        ("ID", str(body.user_id)),
+                        ("Level", str(new_level)),
+                        ("Error", str(e)[:50]),
+                    ])
+
         # Clear response cache
         await cache.clear_responses()
 
@@ -197,8 +210,15 @@ async def set_xp(
         # Sync Discord roles if level changed
         if new_level != old_level:
             bot = get_bot_optional()
-            if bot and hasattr(bot, "xp") and bot.xp:
-                await bot.xp.sync_user_role(body.user_id, new_level)
+            if bot and hasattr(bot, "xp_service") and bot.xp_service:
+                try:
+                    await bot.xp_service.sync_user_role(body.user_id, new_level)
+                except Exception as e:
+                    logger.error("API Role Sync Failed", [
+                        ("ID", str(body.user_id)),
+                        ("Level", str(new_level)),
+                        ("Error", str(e)[:50]),
+                    ])
 
         # Clear response cache
         await cache.clear_responses()
@@ -300,8 +320,15 @@ async def drain_xp(
         # Sync Discord roles if level changed
         if new_level != old_level:
             bot = get_bot_optional()
-            if bot and hasattr(bot, "xp") and bot.xp:
-                await bot.xp.sync_user_role(body.user_id, new_level)
+            if bot and hasattr(bot, "xp_service") and bot.xp_service:
+                try:
+                    await bot.xp_service.sync_user_role(body.user_id, new_level)
+                except Exception as e:
+                    logger.error("API Role Sync Failed", [
+                        ("ID", str(body.user_id)),
+                        ("Level", str(new_level)),
+                        ("Error", str(e)[:50]),
+                    ])
 
         # Clear response cache
         await cache.clear_responses()
