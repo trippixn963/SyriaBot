@@ -14,6 +14,7 @@ from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 
 from src.core.logger import logger
+from src.core.constants import SECONDS_PER_DAY, SECONDS_PER_30_DAYS
 
 
 class XPMixin:
@@ -274,11 +275,11 @@ class XPMixin:
         # Calculate cutoff timestamp based on period
         now = int(time.time())
         if period == "today":
-            cutoff = now - 86400  # 24 hours
+            cutoff = now - SECONDS_PER_DAY  # 24 hours
         elif period == "week":
-            cutoff = now - 604800  # 7 days
+            cutoff = now - SECONDS_PER_DAY * 7  # 7 days
         elif period == "month":
-            cutoff = now - 2592000  # 30 days
+            cutoff = now - SECONDS_PER_30_DAYS  # 30 days
         else:
             cutoff = 0  # All time (no filter)
 
@@ -326,11 +327,11 @@ class XPMixin:
         # Calculate cutoff timestamp based on period
         now = int(time.time())
         if period == "today":
-            cutoff = now - 86400
+            cutoff = now - SECONDS_PER_DAY
         elif period == "week":
-            cutoff = now - 604800
+            cutoff = now - SECONDS_PER_DAY * 7
         elif period == "month":
-            cutoff = now - 2592000
+            cutoff = now - SECONDS_PER_30_DAYS
         else:
             cutoff = 0
 

@@ -23,6 +23,19 @@ TIMEZONE_EST = ZoneInfo("America/New_York")
 # Health Check
 # =============================================================================
 
+# =============================================================================
+# Time Constants (in seconds)
+# =============================================================================
+
+SECONDS_PER_HOUR = 3600
+SECONDS_PER_DAY = 86400
+SECONDS_PER_30_DAYS = 2592000
+
+
+# =============================================================================
+# Health Check
+# =============================================================================
+
 HEALTH_CHECK_INTERVAL = 30      # Seconds between health checks
 HEALTH_MAX_FAILURES = 5         # Consecutive failures before forced restart
 
@@ -180,6 +193,8 @@ CLAIM_APPROVAL_TIMEOUT = 300    # 5 minutes for claim approval
 
 XP_BASE_MULTIPLIER = 100        # Base for XP formula: 100 * level^1.5
 XP_COOLDOWN_CACHE_MAX_SIZE = 2000   # Hard limit - evict oldest entries beyond this
+XP_MAX_LEVEL = 100              # Maximum achievable level
+XP_MAX_VALUE = 10_000_000       # Maximum XP value (API validation)
 
 
 # =============================================================================

@@ -273,7 +273,8 @@ class ReadyHandler(commands.Cog):
         await self.bot.wait_until_ready()
         # Delay first cleanup by 1 hour to not run immediately on startup
         import asyncio
-        await asyncio.sleep(3600)
+        from src.core.constants import SECONDS_PER_HOUR
+        await asyncio.sleep(SECONDS_PER_HOUR)
 
     def cog_unload(self) -> None:
         """Cancel tasks when cog is unloaded."""

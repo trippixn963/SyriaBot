@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from src.core.logger import logger
-from src.core.constants import TIMEZONE_EST
+from src.core.constants import TIMEZONE_EST, SECONDS_PER_HOUR
 from src.utils.async_utils import create_safe_task
 from src.core.config import config
 from src.services.database import db
@@ -124,7 +124,7 @@ class BackgroundTaskService:
             except Exception as e:
                 logger.error_tree("Midnight Refresh Error", e)
                 # Wait an hour before retrying on error
-                await asyncio.sleep(3600)
+                await asyncio.sleep(SECONDS_PER_HOUR)
 
     async def _refresh_all_booster_status(self) -> None:
         """Refresh booster status for all cached users."""
@@ -248,7 +248,7 @@ class BackgroundTaskService:
             except Exception as e:
                 logger.error_tree("XP Snapshot Error", e)
                 # Wait an hour before retrying
-                await asyncio.sleep(3600)
+                await asyncio.sleep(SECONDS_PER_HOUR)
 
     async def _bootstrap_snapshots(self) -> None:
         """Create initial XP snapshot if none exist."""

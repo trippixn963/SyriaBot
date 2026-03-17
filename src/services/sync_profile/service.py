@@ -14,7 +14,7 @@ from datetime import datetime, time, timedelta
 import discord
 
 from src.core.logger import logger
-from src.core.constants import TIMEZONE_EST
+from src.core.constants import TIMEZONE_EST, SECONDS_PER_HOUR
 from src.utils.async_utils import create_safe_task
 SYNC_TIME = time(0, 0)  # Midnight
 
@@ -94,7 +94,7 @@ class ProfileSyncService:
                 raise  # Re-raise to allow clean shutdown
             except Exception as e:
                 logger.error_tree("Profile Scheduler Error", e)
-                await asyncio.sleep(3600)  # Wait 1 hour before retrying
+                await asyncio.sleep(SECONDS_PER_HOUR)  # Wait 1 hour before retrying
 
     async def _sync_profile(self) -> None:
         """Sync bot avatar and banner with server."""

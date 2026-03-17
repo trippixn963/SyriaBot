@@ -17,7 +17,7 @@ Server: discord.gg/syria
 
 import asyncio
 import time
-from pathlib import Path
+
 from typing import TYPE_CHECKING
 
 import discord
@@ -64,10 +64,8 @@ OWNER_LEAVE_TRANSFER_DELAY = TEMPVOICE_OWNER_LEAVE_TRANSFER_DELAY
 STICKY_PANEL_MESSAGE_THRESHOLD = TEMPVOICE_STICKY_PANEL_THRESHOLD
 REORDER_DEBOUNCE_DELAY = TEMPVOICE_REORDER_DEBOUNCE_DELAY
 
-# Guide image paths
-_ASSETS_DIR = Path(__file__).resolve().parent.parent.parent.parent / "assets" / "tempvoice"
-_MUSIC_GUIDE_PATH = _ASSETS_DIR / "music_guide.png"
-_VOICE_GUIDE_PATH = _ASSETS_DIR / "guide.png"
+# CSS-rendered guide images (transparent PNG, gold/green style)
+from src.services.tempvoice.graphics import render_voice_guide, render_music_guide
 
 
 class TempVoiceService:
@@ -481,16 +479,19 @@ class TempVoiceService:
         return view
 
     async def _send_guide_images(self, channel: discord.VoiceChannel) -> tuple[int | None, int | None]:
-        """Send guide images (music then voice controls). Returns (music_guide_id, guide_id)."""
+        """Send CSS-rendered guide images. Returns (music_guide_id, guide_id)."""
+        import io
         music_guide_id = None
         guide_id = None
 
-        if _MUSIC_GUIDE_PATH.exists():
-            music_msg = await channel.send(file=discord.File(_MUSIC_GUIDE_PATH))
+        music_bytes = await render_music_guide()
+        if music_bytes:
+            music_msg = await channel.send(file=discord.File(io.BytesIO(music_bytes), "music_guide.png"))
             music_guide_id = music_msg.id
 
-        if _VOICE_GUIDE_PATH.exists():
-            guide_msg = await channel.send(file=discord.File(_VOICE_GUIDE_PATH))
+        voice_bytes = await render_voice_guide()
+        if voice_bytes:
+            guide_msg = await channel.send(file=discord.File(io.BytesIO(voice_bytes), "voice_guide.png"))
             guide_id = guide_msg.id
 
         return music_guide_id, guide_id

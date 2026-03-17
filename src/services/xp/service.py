@@ -32,7 +32,7 @@ from discord.ext import tasks
 
 from src.core.config import config
 from src.core.colors import COLOR_GOLD
-from src.core.constants import TIMEZONE_EST, XP_COOLDOWN_CACHE_MAX_SIZE
+from src.core.constants import TIMEZONE_EST, XP_COOLDOWN_CACHE_MAX_SIZE, SECONDS_PER_HOUR, XP_MAX_LEVEL
 from src.utils.async_utils import create_safe_task
 from src.core.logger import logger
 from src.services.database import db
@@ -585,7 +585,7 @@ class XPService:
                 mute_start = self._mute_timestamps.get(user_id)
                 if mute_start:
                     mute_duration = now - mute_start
-                    if mute_duration > 3600:  # 1 hour
+                    if mute_duration > SECONDS_PER_HOUR:
                         logger.tree("Voice XP Blocked (AFK Mute)", [
                             ("User", f"{member.name} ({member.display_name})"),
                             ("ID", str(member.id)),
@@ -647,7 +647,7 @@ class XPService:
 
         while not self.bot.is_closed():
             try:
-                await asyncio.sleep(3600)  # Wait 1 hour
+                await asyncio.sleep(SECONDS_PER_HOUR)
 
                 now = time.time()
                 cleaned = {"mute": 0, "cooldowns": 0, "dau": 0}
@@ -696,7 +696,7 @@ class XPService:
                 break
             except Exception as e:
                 logger.error_tree("Cache Cleanup Loop Error", e)
-                await asyncio.sleep(3600)
+                await asyncio.sleep(SECONDS_PER_HOUR)
 
     # =========================================================================
     # Core XP Logic
@@ -985,7 +985,7 @@ class XPService:
                     value=next_text,
                     inline=False,
                 )
-            elif new_level >= 100:
+            elif new_level >= XP_MAX_LEVEL:
                 embed.add_field(
                     name="Max Level!",
                     value="You've unlocked everything!",

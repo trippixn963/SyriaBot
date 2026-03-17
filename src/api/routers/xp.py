@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from src.core.logger import logger
+from src.core.constants import XP_MAX_VALUE
 from src.api.errors import APIError, ErrorCode
 from src.core.config import config
 from src.services.database import db
@@ -44,7 +45,7 @@ class XPSetRequest(BaseModel):
     """Request body for setting XP."""
 
     user_id: int = Field(..., description="Discord user ID")
-    xp: int = Field(..., ge=0, le=10000000, description="New XP value (0-10000000)")
+    xp: int = Field(..., ge=0, le=XP_MAX_VALUE, description="New XP value")
     reason: str = Field(default="API set", description="Reason for the change (for logging)")
 
 
