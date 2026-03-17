@@ -72,6 +72,7 @@ def create_winner_embed(
     player_count: int,
     message_count: int = 0,
     win_probability: float = 0.0,
+    coins_awarded: int = 0,
 ) -> discord.Embed:
     """Create the winner announcement embed."""
     embed = discord.Embed(
@@ -80,9 +81,13 @@ def create_winner_embed(
         color=COLOR_GREEN,
     )
 
+    prize_text = f"+**{xp_awarded:,}** XP"
+    if coins_awarded > 0:
+        prize_text += f"\n+**{coins_awarded:,}** coins"
+
     embed.add_field(
         name="Prize",
-        value=f"+**{xp_awarded:,}** XP",
+        value=prize_text,
         inline=True,
     )
 

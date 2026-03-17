@@ -39,6 +39,7 @@ if TYPE_CHECKING:
 MIN_PLAYERS = 3
 MAX_PLAYERS = 10
 XP_REWARD = 1000
+COIN_REWARD = 10_000
 MIN_SPAWN_INTERVAL = 3 * 60 * 60  # 3 hours
 MAX_SPAWN_INTERVAL = 6 * 60 * 60  # 6 hours
 MIN_SEGMENT_WEIGHT = 0.05  # 5% minimum slice
@@ -365,6 +366,29 @@ class RouletteService:
                     ("XP Amount", str(XP_REWARD)),
                 ])
 
+            # 11b. Award coins via JawdatBot economy
+            coins_granted = False
+            if self.bot.currency_service and self.bot.currency_service.is_enabled():
+                try:
+                    success, _ = await self.bot.currency_service.grant(
+                        user_id=winner_player.user_id,
+                        amount=COIN_REWARD,
+                        reason=f"Roulette win (Game {game_id})",
+                        target="bank",
+                    )
+                    coins_granted = success
+                    if success:
+                        logger.tree("Roulette Coins Awarded", [
+                            ("Game ID", game_id),
+                            ("Winner", f"{winner.name} ({winner.display_name})"),
+                            ("Coins", f"{COIN_REWARD:,}"),
+                        ], emoji="🏦")
+                except Exception as e:
+                    logger.error_tree("Roulette Coin Award Failed", e, [
+                        ("Game ID", game_id),
+                        ("Winner ID", str(winner_player.user_id)),
+                    ])
+
             # 12. Reveal winner with wheel image
             winner_embed = create_winner_embed(
                 winner=winner,
@@ -372,6 +396,7 @@ class RouletteService:
                 player_count=len(players),
                 message_count=winner_player.message_count,
                 win_probability=winner_player.weight * 100,
+                coins_awarded=COIN_REWARD if coins_granted else 0,
             )
 
             file = discord.File(
@@ -402,6 +427,7 @@ class RouletteService:
                 ("Players", str(len(players))),
                 ("Total Messages", str(total_messages)),
                 ("XP Awarded", str(XP_REWARD)),
+                ("Coins Awarded", f"{COIN_REWARD:,}" if coins_granted else "Skipped"),
             ], emoji="🎉")
 
         except Exception as e:
