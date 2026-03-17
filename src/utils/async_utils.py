@@ -83,24 +83,6 @@ def create_safe_task(
     return asyncio.create_task(wrapped())
 
 
-async def run_with_timeout(
-    coro: Coroutine[Any, Any, Any],
-    timeout: float,
-    name: str = "Operation",
-) -> Optional[Any]:
-    """
-    Run a coroutine with a timeout, logging if it times out.
-    """
-    try:
-        return await asyncio.wait_for(coro, timeout=timeout)
-    except asyncio.TimeoutError:
-        logger.warning("Operation Timed Out", [
-            ("Operation", name),
-            ("Timeout", f"{timeout}s"),
-        ])
-        return None
-
-
 # =============================================================================
 # Module Export
 # =============================================================================
@@ -108,5 +90,4 @@ async def run_with_timeout(
 __all__ = [
     "gather_with_logging",
     "create_safe_task",
-    "run_with_timeout",
 ]
