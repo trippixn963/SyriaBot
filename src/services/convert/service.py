@@ -777,7 +777,7 @@ class ConvertService:
     # =========================================================================
 
     def _get_video_info(self, video_path: str) -> Optional[VideoInfo]:
-        """Get video information using ffprobe."""
+        """Get video information using ffprobe (sync — called via to_thread)."""
         try:
             cmd = [
                 "ffprobe",
@@ -1256,7 +1256,7 @@ class ConvertService:
                     ], emoji="⚠️")
 
     def get_video_duration(self, video_data: bytes) -> Optional[float]:
-        """Get video duration in seconds from video data."""
+        """Get video duration in seconds from video data (sync)."""
         temp_id = uuid.uuid4().hex[:8]
         input_path = TEMP_DIR / f"duration_{temp_id}.mp4"
 

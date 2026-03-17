@@ -29,19 +29,25 @@ class FamilyMixin:
     # =========================================================================
 
     def marry(self, user1_id: int, user2_id: int, guild_id: int) -> None:
-        """Create a marriage between two users (inserts both directions)."""
+        """Create a marriage between two users (inserts both directions, atomic)."""
         now = int(time.time())
 
         with self._get_conn() as conn:
             cur = conn.cursor()
-            cur.execute("""
-                INSERT INTO family_marriages (user_id, spouse_id, guild_id, married_at)
-                VALUES (?, ?, ?, ?)
-            """, (user1_id, user2_id, guild_id, now))
-            cur.execute("""
-                INSERT INTO family_marriages (user_id, spouse_id, guild_id, married_at)
-                VALUES (?, ?, ?, ?)
-            """, (user2_id, user1_id, guild_id, now))
+            cur.execute("BEGIN IMMEDIATE")
+            try:
+                cur.execute("""
+                    INSERT INTO family_marriages (user_id, spouse_id, guild_id, married_at)
+                    VALUES (?, ?, ?, ?)
+                """, (user1_id, user2_id, guild_id, now))
+                cur.execute("""
+                    INSERT INTO family_marriages (user_id, spouse_id, guild_id, married_at)
+                    VALUES (?, ?, ?, ?)
+                """, (user2_id, user1_id, guild_id, now))
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
 
         logger.tree("Marriage Created", [
             ("User 1", str(user1_id)),
@@ -66,27 +72,32 @@ class FamilyMixin:
 
             spouse_id = row["spouse_id"]
 
-            # Delete both directions
-            cur.execute("""
-                DELETE FROM family_marriages
-                WHERE guild_id = ? AND (
-                    (user_id = ? AND spouse_id = ?) OR
-                    (user_id = ? AND spouse_id = ?)
-                )
-            """, (guild_id, user_id, spouse_id, spouse_id, user_id))
+            # Atomic: delete + cooldown must all succeed or all fail
+            cur.execute("BEGIN IMMEDIATE")
+            try:
+                cur.execute("""
+                    DELETE FROM family_marriages
+                    WHERE guild_id = ? AND (
+                        (user_id = ? AND spouse_id = ?) OR
+                        (user_id = ? AND spouse_id = ?)
+                    )
+                """, (guild_id, user_id, spouse_id, spouse_id, user_id))
 
-            # Set cooldown for both users
-            now = int(time.time())
-            cur.execute("""
-                INSERT INTO family_divorce_cooldowns (user_id, guild_id, divorced_at)
-                VALUES (?, ?, ?)
-                ON CONFLICT(user_id, guild_id) DO UPDATE SET divorced_at = ?
-            """, (user_id, guild_id, now, now))
-            cur.execute("""
-                INSERT INTO family_divorce_cooldowns (user_id, guild_id, divorced_at)
-                VALUES (?, ?, ?)
-                ON CONFLICT(user_id, guild_id) DO UPDATE SET divorced_at = ?
-            """, (spouse_id, guild_id, now, now))
+                now = int(time.time())
+                cur.execute("""
+                    INSERT INTO family_divorce_cooldowns (user_id, guild_id, divorced_at)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(user_id, guild_id) DO UPDATE SET divorced_at = ?
+                """, (user_id, guild_id, now, now))
+                cur.execute("""
+                    INSERT INTO family_divorce_cooldowns (user_id, guild_id, divorced_at)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(user_id, guild_id) DO UPDATE SET divorced_at = ?
+                """, (spouse_id, guild_id, now, now))
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
 
         logger.tree("Divorce Completed", [
             ("User", str(user_id)),

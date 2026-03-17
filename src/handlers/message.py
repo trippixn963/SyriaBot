@@ -388,7 +388,7 @@ class MessageHandler(commands.Cog):
                     thread.guild.id
                 )
                 # Log to events system (for dashboard Events tab)
-                owner = thread.guild.get_member(thread.owner_id)
+                owner = thread.guild.get_member(thread.owner_id) if thread.guild else None
                 event_logger.log_thread_create(thread, owner)
             except Exception as e:
                 logger.error_tree("Thread Track Failed", e, [

@@ -64,6 +64,7 @@ class RouletteService:
         # Per-user activity tracking since last roulette
         # {user_id: {name: str, avatar_url: str, count: int}}
         self._user_activity: Dict[int, Dict] = {}
+        self._activity_max_users = 500  # Cap to prevent unbounded growth
 
     def on_message(self, message: discord.Message) -> None:
         """Track message activity in general channel."""
@@ -79,6 +80,9 @@ class RouletteService:
             self._user_activity[uid]["name"] = message.author.display_name
             self._user_activity[uid]["avatar_url"] = message.author.display_avatar.url
         else:
+            # Cap activity tracking to prevent unbounded growth
+            if len(self._user_activity) >= self._activity_max_users:
+                return
             self._user_activity[uid] = {
                 "name": message.author.display_name,
                 "avatar_url": message.author.display_avatar.url,

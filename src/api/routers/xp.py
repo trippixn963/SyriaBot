@@ -124,18 +124,17 @@ async def grant_xp(
             ("Client IP", client_ip),
         ], emoji="⬆️")
 
-        # Sync roles if level changed
-        if new_level > current_level:
-            bot = get_bot_optional()
-            if bot and hasattr(bot, "xp_service") and bot.xp_service:
-                try:
-                    await bot.xp_service.sync_user_role(body.user_id, new_level)
-                except Exception as e:
-                    logger.error("API XP Grant Role Sync Failed", [
-                        ("ID", str(body.user_id)),
-                        ("Level", str(new_level)),
-                        ("Error", str(e)[:50]),
-                    ])
+        # Always sync roles (fixes missing roles even without level change)
+        bot = get_bot_optional()
+        if bot and hasattr(bot, "xp_service") and bot.xp_service:
+            try:
+                await bot.xp_service.sync_user_role(body.user_id, new_level)
+            except Exception as e:
+                logger.error("API XP Grant Role Sync Failed", [
+                    ("ID", str(body.user_id)),
+                    ("Level", str(new_level)),
+                    ("Error", str(e)[:50]),
+                ])
 
         # Clear response cache
         await cache.clear_responses()
@@ -207,18 +206,17 @@ async def set_xp(
             ("Client IP", client_ip),
         ], emoji="✏️")
 
-        # Sync Discord roles if level changed
-        if new_level != old_level:
-            bot = get_bot_optional()
-            if bot and hasattr(bot, "xp_service") and bot.xp_service:
-                try:
-                    await bot.xp_service.sync_user_role(body.user_id, new_level)
-                except Exception as e:
-                    logger.error("API Role Sync Failed", [
-                        ("ID", str(body.user_id)),
-                        ("Level", str(new_level)),
-                        ("Error", str(e)[:50]),
-                    ])
+        # Always sync Discord roles (fixes missing roles even if level unchanged)
+        bot = get_bot_optional()
+        if bot and hasattr(bot, "xp_service") and bot.xp_service:
+            try:
+                await bot.xp_service.sync_user_role(body.user_id, new_level)
+            except Exception as e:
+                logger.error("API Role Sync Failed", [
+                    ("ID", str(body.user_id)),
+                    ("Level", str(new_level)),
+                    ("Error", str(e)[:50]),
+                ])
 
         # Clear response cache
         await cache.clear_responses()
@@ -317,18 +315,17 @@ async def drain_xp(
             ("Client IP", client_ip),
         ], emoji="⬇️")
 
-        # Sync Discord roles if level changed
-        if new_level != old_level:
-            bot = get_bot_optional()
-            if bot and hasattr(bot, "xp_service") and bot.xp_service:
-                try:
-                    await bot.xp_service.sync_user_role(body.user_id, new_level)
-                except Exception as e:
-                    logger.error("API Role Sync Failed", [
-                        ("ID", str(body.user_id)),
-                        ("Level", str(new_level)),
-                        ("Error", str(e)[:50]),
-                    ])
+        # Always sync Discord roles (fixes missing roles even if level unchanged)
+        bot = get_bot_optional()
+        if bot and hasattr(bot, "xp_service") and bot.xp_service:
+            try:
+                await bot.xp_service.sync_user_role(body.user_id, new_level)
+            except Exception as e:
+                logger.error("API Role Sync Failed", [
+                    ("ID", str(body.user_id)),
+                    ("Level", str(new_level)),
+                    ("Error", str(e)[:50]),
+                ])
 
         # Clear response cache
         await cache.clear_responses()

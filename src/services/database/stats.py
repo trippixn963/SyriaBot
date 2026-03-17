@@ -504,17 +504,20 @@ class StatsMixin:
             logger.error_tree("DB: Get Daily Stats Range Error", e, [("guild_id", str(guild_id)), ("start_date", start_date)])
             return []
 
-    def get_all_daily_stats(self, guild_id: int) -> List[Dict[str, Any]]:
-        """Get all daily stats for a guild (no limit)."""
+    def get_all_daily_stats(self, guild_id: int, limit: int = 730) -> List[Dict[str, Any]]:
+        """Get daily stats for a guild (default 2 years max)."""
         try:
             with self._get_conn() as conn:
                 cur = conn.cursor()
                 cur.execute("""
                     SELECT * FROM server_daily_stats
                     WHERE guild_id = ?
-                    ORDER BY date ASC
-                """, (guild_id,))
-                return [dict(row) for row in cur.fetchall()]
+                    ORDER BY date DESC
+                    LIMIT ?
+                """, (guild_id, limit))
+                rows = [dict(row) for row in cur.fetchall()]
+                rows.reverse()  # Return in ascending order
+                return rows
         except Exception as e:
             logger.error_tree("DB: Get All Daily Stats Error", e, [("guild_id", str(guild_id))])
             return []

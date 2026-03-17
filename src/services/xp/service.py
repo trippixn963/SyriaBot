@@ -38,6 +38,7 @@ from src.core.logger import logger
 from src.services.database import db
 from src.services.birthday import has_birthday_bonus, BIRTHDAY_XP_MULTIPLIER
 from src.api.services.event_logger import event_logger
+from src.api.services.websocket import get_ws_manager
 from .utils import level_from_xp, format_xp
 
 LEVELUP_BANNER = Path(__file__).resolve().parent.parent.parent.parent / "assets" / "xp" / "levelup.png"
@@ -160,7 +161,9 @@ class XPService:
         # Sync active status on startup (ensures accuracy for leaderboard)
         await self._sync_active_status()
 
-        # Sync roles on startup (fix any missed role assignments)
+        # Delay role sync to ensure Discord member cache is fully populated
+        # (guild.get_member() returns None if cache isn't ready yet)
+        await asyncio.sleep(10)
         await self._sync_roles()
 
     async def stop(self) -> None:
@@ -629,7 +632,6 @@ class XPService:
         # Broadcast voice minutes update (1 minute per user)
         if users_to_reward:
             try:
-                from src.api.services.websocket import get_ws_manager
                 ws = get_ws_manager()
                 if ws.connection_count > 0:
                     await ws.increment_voice_minutes(len(users_to_reward))
@@ -772,7 +774,6 @@ class XPService:
 
             # Broadcast updated XP stats via WebSocket (in-memory increment, no DB query)
             try:
-                from src.api.services.websocket import get_ws_manager
                 ws = get_ws_manager()
                 if ws.connection_count > 0:
                     # Increment XP counter
@@ -846,6 +847,15 @@ class XPService:
                 highest_applicable_level = level
             else:
                 break
+
+        # Ensure the user has the correct highest-tier role (fixes missed assignments
+        # from previous level-ups during bot outages or failed API calls)
+        if highest_applicable_level is not None:
+            correct_role_id = config.XP_ROLE_REWARDS[highest_applicable_level]
+            correct_role = member.guild.get_role(correct_role_id)
+            if correct_role and correct_role not in member.roles and correct_role not in roles_to_add:
+                roles_to_add.append(correct_role)
+                earned.append((highest_applicable_level, correct_role))
 
         # Only remove old XP roles if they're BELOW the highest applicable role
         # (e.g., level 6 user keeps level 5 role until they reach level 10)
@@ -1175,7 +1185,15 @@ class XPService:
 
             member = guild.get_member(user_id)
             if not member:
-                continue
+                # Cache miss — try API fetch for users with level >= 5
+                # (lower levels have less value, skip to avoid rate limits)
+                if level >= 5:
+                    try:
+                        member = await guild.fetch_member(user_id)
+                    except (discord.NotFound, discord.HTTPException):
+                        pass
+                if not member:
+                    continue
 
             checked_count += 1
 

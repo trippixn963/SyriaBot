@@ -15,6 +15,17 @@ from typing import Optional, List, Dict, Any
 from src.core.logger import logger
 
 
+_VALID_CHANNEL_COLUMNS = frozenset({
+    "owner_id", "guild_id", "name", "user_limit", "is_locked",
+    "is_hidden", "panel_message_id", "base_name",
+})
+
+_VALID_SETTINGS_COLUMNS = frozenset({
+    "default_name", "default_limit", "default_locked", "default_hidden",
+    "default_region", "default_bitrate",
+})
+
+
 class TempVoiceMixin:
     """
     Mixin for TempVoice database operations.
@@ -110,11 +121,15 @@ class TempVoiceMixin:
         """Update temp channel properties."""
         if not kwargs:
             return
+        # Validate column names against whitelist to prevent injection
+        safe_kwargs = {k: v for k, v in kwargs.items() if k in _VALID_CHANNEL_COLUMNS}
+        if not safe_kwargs:
+            return
         try:
             with self._get_conn() as conn:
                 cur = conn.cursor()
-                sets = ", ".join(f"{k} = ?" for k in kwargs.keys())
-                values = list(kwargs.values()) + [channel_id]
+                sets = ", ".join(f"{k} = ?" for k in safe_kwargs.keys())
+                values = list(safe_kwargs.values()) + [channel_id]
                 cur.execute(f"UPDATE temp_channels SET {sets} WHERE channel_id = ?", values)
         except Exception as e:
             logger.error_tree("DB: Update Channel Error", e, [
@@ -172,9 +187,11 @@ class TempVoiceMixin:
                     ON CONFLICT(user_id) DO NOTHING
                 """, (user_id,))
                 if kwargs:
-                    sets = ", ".join(f"{k} = ?" for k in kwargs.keys())
-                    values = list(kwargs.values()) + [user_id]
-                    cur.execute(f"UPDATE user_settings SET {sets} WHERE user_id = ?", values)
+                    safe_kwargs = {k: v for k, v in kwargs.items() if k in _VALID_SETTINGS_COLUMNS}
+                    if safe_kwargs:
+                        sets = ", ".join(f"{k} = ?" for k in safe_kwargs.keys())
+                        values = list(safe_kwargs.values()) + [user_id]
+                        cur.execute(f"UPDATE user_settings SET {sets} WHERE user_id = ?", values)
         except Exception as e:
             logger.error_tree("DB: Save User Settings Error", e, [
                 ("ID", str(user_id)),

@@ -579,11 +579,8 @@ class TempVoiceService:
                 await message.edit(embed=embed, view=self._build_panel_view(is_locked))
                 return
             except discord.NotFound:
-                logger.tree("Panel Message Not Found", [
-                    ("Channel", channel.name),
-                    ("Message ID", str(panel_message_id)),
-                    ("Action", "Will recreate"),
-                ], emoji="⚠️")
+                logger.debug("Panel Message Not Found — will recreate (channel=%s, msg_id=%s)",
+                             channel.name, panel_message_id)
             except discord.HTTPException as e:
                 logger.error_tree("Panel Update Failed", e, [
                     ("Channel", channel.name),
@@ -1519,6 +1516,19 @@ class TempVoiceService:
             # Mark panel as pending so _update_panel skips recovery
             # (moving user triggers _grant_text_access -> _update_panel)
             self._pending_panels.add(channel.id)
+
+            # Re-check voice state right before move (user may have disconnected during channel creation)
+            if not member.voice or not member.voice.channel:
+                logger.tree("Create Skipped", [
+                    ("Channel", channel_name),
+                    ("User", f"{member.name} ({member.display_name})"),
+                    ("ID", str(member.id)),
+                    ("Reason", "User disconnected during channel creation"),
+                ], emoji="⏭️")
+                self._pending_panels.discard(channel.id)
+                db.delete_temp_channel(channel.id)
+                await channel.delete(reason="User disconnected before move")
+                return
 
             # Move user FIRST for instant response
             try:

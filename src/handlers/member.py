@@ -63,6 +63,12 @@ def _cleanup_wave_tracker() -> None:
         oldest = next(iter(_wave_tracker))
         _wave_tracker.pop(oldest, None)
 
+    # Clean expired cooldowns (>5s old) to prevent unbounded growth
+    now = time.monotonic()
+    expired = [uid for uid, ts in _wave_cooldowns.items() if now - ts > _WAVE_COOLDOWN]
+    for uid in expired:
+        _wave_cooldowns.pop(uid, None)
+
 
 class WaveButton(discord.ui.DynamicItem[discord.ui.Button], template=r"wave:(?P<member_id>\d+)"):
     """Persistent wave button that survives bot restarts. One wave per user per welcome."""
@@ -160,6 +166,7 @@ class MemberHandler(commands.Cog):
         self.bot = bot
         # Cache invites for tracking: {invite_code: uses}
         self._invite_cache: dict[str, int] = {}
+        self._invite_lock = asyncio.Lock()
         # Flag to prevent duplicate caching on reconnects
         self._invites_cached: bool = False
 
@@ -210,15 +217,16 @@ class MemberHandler(commands.Cog):
         try:
             # Add timeout to prevent hanging
             new_invites = await asyncio.wait_for(guild.invites(), timeout=10.0)
-            for invite in new_invites:
-                cached_uses = self._invite_cache.get(invite.code, 0)
-                if invite.uses > cached_uses:
-                    # This invite was used, update cache
-                    self._invite_cache[invite.code] = invite.uses
-                    return invite
+            async with self._invite_lock:
+                for invite in new_invites:
+                    cached_uses = self._invite_cache.get(invite.code, 0)
+                    if invite.uses > cached_uses:
+                        # This invite was used, update cache
+                        self._invite_cache[invite.code] = invite.uses
+                        return invite
 
-            # Update cache with any new invites
-            self._invite_cache = {inv.code: inv.uses for inv in new_invites}
+                # Update cache with any new invites
+                self._invite_cache = {inv.code: inv.uses for inv in new_invites}
         except asyncio.TimeoutError as e:
             logger.error_tree("Invite Fetch Timeout", e, [
                 ("Guild", guild.name),

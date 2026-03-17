@@ -589,23 +589,6 @@ class ConfessionService:
                 ("Channel", channel.name),
             ], emoji="📨")
 
-            # Add heart reaction
-            try:
-                await confession_msg.add_reaction(EMOJI_HEART)
-                logger.tree("Confession Reaction Added", [
-                    ("Number", f"#{confession_number}"),
-                    ("Emoji", EMOJI_HEART),
-                ], emoji="❤️")
-            except discord.Forbidden:
-                logger.tree("Confession Reaction Forbidden", [
-                    ("Number", f"#{confession_number}"),
-                    ("Reason", "Missing permissions"),
-                ], emoji="⚠️")
-            except discord.HTTPException as e:
-                logger.tree("Confession Reaction Failed", [
-                    ("Number", f"#{confession_number}"),
-                    ("Error", str(e)[:50]),
-                ], emoji="⚠️")
 
             # Create thread for discussion
             thread: Optional[discord.Thread] = None

@@ -659,6 +659,10 @@ class DatabaseCore:
                 ON temp_channels(guild_id)
             """)
             cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_temp_channels_owner
+                ON temp_channels(owner_id, guild_id)
+            """)
+            cur.execute("""
                 CREATE INDEX IF NOT EXISTS idx_boost_history_guild
                 ON boost_history(guild_id, timestamp DESC)
             """)
