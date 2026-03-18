@@ -1242,62 +1242,68 @@ class XPMixin:
                 ("Minutes", str(minutes)),
             ])
 
-    def get_top_interactions(self, user_id: int, guild_id: int, limit: int = 5) -> Dict[str, List[Dict[str, Any]]]:
+    def get_top_interactions(self, user_id: int, guild_id: int, limit: int = 5, direction: str = "sent") -> Dict[str, List[Dict[str, Any]]]:
         """
         Get user's top social interactions.
-
-        Returns top voice partners, most mentioned users, and most replied-to users
-        for displaying in the user's profile card.
 
         Args:
             user_id: The user to get interactions for.
             guild_id: The guild to filter by.
             limit: Maximum number of results per category (default 5).
+            direction: "sent" = who this user interacted with (outgoing),
+                       "received" = who interacted with this user (incoming).
 
         Returns:
-            Dict with keys: voice_partners, mentions, replies.
-            Each contains a list of {user_id, count/minutes} sorted by count desc.
-            Returns empty dict on error.
+            Dict with keys: voice_partners, mentions, replies, reactions.
         """
         try:
             with self._get_conn() as conn:
                 cur = conn.cursor()
 
-                # Top voice partners
-                cur.execute("""
-                    SELECT target_user_id as user_id, voice_minutes_together as minutes
+                # Sent: user_id = me, target = them
+                # Received: target_user_id = me, user_id = them
+                if direction == "received":
+                    who_col = "user_id"
+                    where_col = "target_user_id"
+                else:
+                    who_col = "target_user_id"
+                    where_col = "user_id"
+
+                # Top voice partners (voice is always mutual, same either direction)
+                cur.execute(f"""
+                    SELECT {who_col} as user_id, voice_minutes_together as minutes
                     FROM user_interactions
-                    WHERE user_id = ? AND guild_id = ? AND voice_minutes_together > 0
+                    WHERE {where_col} = ? AND guild_id = ? AND voice_minutes_together > 0
                     ORDER BY voice_minutes_together DESC
                     LIMIT ?
                 """, (user_id, guild_id, limit))
                 voice_partners = [dict(row) for row in cur.fetchall()]
 
-                # Top mentioned users
-                cur.execute("""
-                    SELECT target_user_id as user_id, mentions as count
+                # Top mentions
+                cur.execute(f"""
+                    SELECT {who_col} as user_id, mentions as count
                     FROM user_interactions
-                    WHERE user_id = ? AND guild_id = ? AND mentions > 0
+                    WHERE {where_col} = ? AND guild_id = ? AND mentions > 0
                     ORDER BY mentions DESC
                     LIMIT ?
                 """, (user_id, guild_id, limit))
                 mentions = [dict(row) for row in cur.fetchall()]
 
-                # Top replied-to users
-                cur.execute("""
-                    SELECT target_user_id as user_id, replies as count
+                # Top replies
+                cur.execute(f"""
+                    SELECT {who_col} as user_id, replies as count
                     FROM user_interactions
-                    WHERE user_id = ? AND guild_id = ? AND replies > 0
+                    WHERE {where_col} = ? AND guild_id = ? AND replies > 0
                     ORDER BY replies DESC
                     LIMIT ?
                 """, (user_id, guild_id, limit))
                 replies = [dict(row) for row in cur.fetchall()]
 
-                # Top reacted-to users
-                cur.execute("""
-                    SELECT target_user_id as user_id, reactions as count
+                # Top reactions
+                cur.execute(f"""
+                    SELECT {who_col} as user_id, reactions as count
                     FROM user_interactions
-                    WHERE user_id = ? AND guild_id = ? AND reactions > 0
+                    WHERE {where_col} = ? AND guild_id = ? AND reactions > 0
                     ORDER BY reactions DESC
                     LIMIT ?
                 """, (user_id, guild_id, limit))

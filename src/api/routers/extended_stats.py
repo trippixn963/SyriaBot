@@ -913,25 +913,30 @@ async def get_user_interactions(
     request: Request,
     user_id: int = Path(..., gt=0),
     limit: int = Query(5, ge=1, le=10, description="Max interactions per category"),
+    direction: str = Query("sent", description="sent = outgoing, received = incoming"),
     bot=Depends(get_bot),
 ) -> JSONResponse:
     """
     Get user's top social interactions.
-    Returns who they spend most voice time with, mention most, and reply to most.
+    Returns who they interact with (sent) or who interacts with them (received).
     """
     client_ip = get_client_ip(request)
     start_time = time.time()
     cache = get_cache_service()
 
+    # Validate direction
+    if direction not in ("sent", "received"):
+        direction = "sent"
+
     try:
-        cache_key = f"user_interactions_{user_id}_{limit}"
+        cache_key = f"user_interactions_{user_id}_{limit}_{direction}"
         cached_data = await cache.get_response(cache_key, EXTENDED_STATS_CACHE_TTL)
 
         if cached_data:
             return JSONResponse(content=cached_data, headers={"X-Cache": "HIT"})
 
         # Get raw interaction data from database
-        interactions = db.get_top_interactions(user_id, config.GUILD_ID, limit)
+        interactions = db.get_top_interactions(user_id, config.GUILD_ID, limit, direction=direction)
 
         # Enrich with user info (avatars, usernames)
         async def enrich_user(uid: int) -> dict:
