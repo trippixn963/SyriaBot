@@ -1336,6 +1336,12 @@ class XPService:
             return False
 
         member = guild.get_member(user_id)
+        if not member:
+            # Cache miss — try API fetch
+            try:
+                member = await guild.fetch_member(user_id)
+            except (discord.NotFound, discord.HTTPException):
+                return False
         if not member or member.bot:
             return False
 

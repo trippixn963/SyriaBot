@@ -201,4 +201,93 @@ async def get_leaderboard(
         raise APIError(ErrorCode.SERVER_ERROR)
 
 
+@router.get("/search")
+async def search_users(
+    request: Request,
+    q: str = Query(..., min_length=2, max_length=100, description="Search query"),
+    limit: int = Query(50, ge=1, le=100, description="Max results"),
+    bot: Any = Depends(get_bot),
+) -> JSONResponse:
+    """
+    Search leaderboard users by name.
+
+    Searches Discord display names and usernames against guild members
+    who have XP data. Returns enriched leaderboard entries.
+    """
+    client_ip = get_client_ip(request)
+    start_time = time.time()
+    cache = get_cache_service()
+
+    try:
+        query = q.strip().lower()
+
+        # Check cache
+        cache_key = f"search:{query}:{limit}"
+        cached_data = await cache.get_response(cache_key, 30)
+        if cached_data:
+            return JSONResponse(content=cached_data, headers={"X-Cache": "HIT"})
+
+        from src.core.config import config
+        guild = bot.get_guild(config.GUILD_ID)
+        if not guild:
+            return JSONResponse(content={"results": []})
+
+        # Search guild members by name
+        matched_ids = []
+        for member in guild.members:
+            if member.bot:
+                continue
+            name_match = (
+                query in member.name.lower()
+                or query in member.display_name.lower()
+                or (member.global_name and query in member.global_name.lower())
+                or query in str(member.id)
+            )
+            if name_match:
+                matched_ids.append(member.id)
+                if len(matched_ids) >= limit * 2:  # Over-fetch to allow XP filtering
+                    break
+
+        if not matched_ids:
+            response_data = {"results": []}
+            await cache.set_response(cache_key, response_data)
+            return JSONResponse(content=response_data)
+
+        # Get XP data for matched users
+        raw_entries = db.get_users_by_ids(matched_ids, config.GUILD_ID)
+        if not raw_entries:
+            response_data = {"results": []}
+            await cache.set_response(cache_key, response_data)
+            return JSONResponse(content=response_data)
+
+        # Sort by XP descending and limit
+        raw_entries.sort(key=lambda e: e.get("xp", 0), reverse=True)
+        raw_entries = raw_entries[:limit]
+
+        # Enrich with Discord data
+        enriched = await _enrich_leaderboard(bot, raw_entries)
+
+        response_data = {
+            "results": [entry.model_dump() for entry in enriched],
+        }
+        await cache.set_response(cache_key, response_data)
+
+        elapsed_ms = round((time.time() - start_time) * 1000)
+        logger.tree("Search API Request", [
+            ("Client IP", client_ip),
+            ("Query", q[:30]),
+            ("Results", str(len(enriched))),
+            ("Response Time", f"{elapsed_ms}ms"),
+        ], emoji="🔍")
+
+        return JSONResponse(content=response_data)
+
+    except Exception as e:
+        logger.error_tree("Search API Error", e, [
+            ("Client IP", client_ip),
+            ("Query", q[:30]),
+        ])
+        raise APIError(ErrorCode.SERVER_ERROR)
+
+
 __all__ = ["router"]

@@ -244,6 +244,28 @@ class XPMixin:
             return row["last_message_xp"] if row else None
 
     # =========================================================================
+    # Search / Lookup Methods
+    # =========================================================================
+
+    def get_users_by_ids(self, user_ids: list[int], guild_id: int) -> List[Dict[str, Any]]:
+        """Get XP data for a list of user IDs with their global rank."""
+        if not user_ids:
+            return []
+
+        placeholders = ",".join("?" * len(user_ids))
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute(f"""
+                SELECT u.*,
+                    (SELECT COUNT(*) + 1 FROM user_xp r
+                     WHERE r.guild_id = u.guild_id AND r.xp > u.xp AND r.is_active = 1
+                    ) as rank
+                FROM user_xp u
+                WHERE u.user_id IN ({placeholders}) AND u.guild_id = ?
+            """, (*user_ids, guild_id))
+            return [dict(row) for row in cur.fetchall()]
+
+    # =========================================================================
     # Leaderboard Methods
     # =========================================================================
 
