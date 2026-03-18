@@ -738,6 +738,7 @@ class DatabaseCore:
                     guild_id INTEGER NOT NULL,
                     mentions INTEGER DEFAULT 0,
                     replies INTEGER DEFAULT 0,
+                    reactions INTEGER DEFAULT 0,
                     voice_minutes_together INTEGER DEFAULT 0,
                     last_interaction INTEGER DEFAULT 0,
                     PRIMARY KEY (user_id, target_user_id, guild_id)
@@ -753,6 +754,12 @@ class DatabaseCore:
                 CREATE INDEX IF NOT EXISTS idx_user_interactions_target
                 ON user_interactions(target_user_id, guild_id)
             """)
+
+            # Migration: Add reactions column to user_interactions
+            try:
+                cur.execute("ALTER TABLE user_interactions ADD COLUMN reactions INTEGER DEFAULT 0")
+            except sqlite3.OperationalError:
+                pass  # Column already exists
 
             # =====================================================================
             # Family System Tables

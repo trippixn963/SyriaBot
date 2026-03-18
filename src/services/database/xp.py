@@ -518,6 +518,20 @@ class XPMixin:
                 WHERE user_id = ? AND guild_id = ?
             """, (user_id, guild_id))
 
+    def increment_reaction_interaction(self, user_id: int, target_user_id: int, guild_id: int) -> None:
+        """Track that user_id reacted to target_user_id's message."""
+        import time
+        now = int(time.time())
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO user_interactions (user_id, target_user_id, guild_id, reactions, last_interaction)
+                VALUES (?, ?, ?, 1, ?)
+                ON CONFLICT(user_id, target_user_id, guild_id) DO UPDATE SET
+                    reactions = reactions + 1,
+                    last_interaction = ?
+            """, (user_id, target_user_id, guild_id, now, now))
+
     def increment_images_shared(self, user_id: int, guild_id: int) -> None:
         """Increment user's images shared count."""
         self.ensure_user_xp(user_id, guild_id)
@@ -1267,10 +1281,21 @@ class XPMixin:
                 """, (user_id, guild_id, limit))
                 replies = [dict(row) for row in cur.fetchall()]
 
+                # Top reacted-to users
+                cur.execute("""
+                    SELECT target_user_id as user_id, reactions as count
+                    FROM user_interactions
+                    WHERE user_id = ? AND guild_id = ? AND reactions > 0
+                    ORDER BY reactions DESC
+                    LIMIT ?
+                """, (user_id, guild_id, limit))
+                reactions = [dict(row) for row in cur.fetchall()]
+
                 return {
                     "voice_partners": voice_partners,
                     "mentions": mentions,
                     "replies": replies,
+                    "reactions": reactions,
                 }
         except Exception as e:
             logger.error_tree("Get Top Interactions Failed", e, [

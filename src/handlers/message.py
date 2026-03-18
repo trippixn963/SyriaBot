@@ -368,6 +368,13 @@ class MessageHandler(commands.Cog):
                         reaction.message.author.id,
                         reaction.message.guild.id
                     )
+                    # Track per-target reaction interaction
+                    await asyncio.to_thread(
+                        db.increment_reaction_interaction,
+                        user.id,
+                        reaction.message.author.id,
+                        reaction.message.guild.id
+                    )
         except Exception as e:
             logger.error_tree("Reaction Track Failed", e, [
                 ("User", f"{user.name} ({user.display_name})"),

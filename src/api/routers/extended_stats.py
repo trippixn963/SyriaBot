@@ -973,11 +973,19 @@ async def get_user_interactions(
             user_info["count"] = entry["count"]
             enriched_replies.append(user_info)
 
+        # Enrich reactions
+        enriched_reactions = []
+        for entry in interactions.get("reactions", []):
+            user_info = await enrich_user(entry["user_id"])
+            user_info["count"] = entry["count"]
+            enriched_reactions.append(user_info)
+
         response_data = {
             "user_id": str(user_id),
             "voice_partners": enriched_voice,
             "mentions": enriched_mentions,
             "replies": enriched_replies,
+            "reactions": enriched_reactions,
         }
 
         await cache.set_response(cache_key, response_data)
