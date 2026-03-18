@@ -232,21 +232,12 @@ async def search_users(
         if not guild:
             return JSONResponse(content={"results": []})
 
-        # Search guild members by name
-        matched_ids = []
-        for member in guild.members:
-            if member.bot:
-                continue
-            name_match = (
-                query in member.name.lower()
-                or query in member.display_name.lower()
-                or (member.global_name and query in member.global_name.lower())
-                or query in str(member.id)
-            )
-            if name_match:
-                matched_ids.append(member.id)
-                if len(matched_ids) >= limit * 2:  # Over-fetch to allow XP filtering
-                    break
+        # Use Discord's server-side member search (fast, no local iteration)
+        try:
+            members = await guild.query_members(query=query, limit=limit)
+        except Exception:
+            members = []
+        matched_ids = [m.id for m in members if not m.bot]
 
         if not matched_ids:
             response_data = {"results": []}
