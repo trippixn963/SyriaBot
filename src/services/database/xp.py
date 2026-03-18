@@ -261,7 +261,7 @@ class XPMixin:
                      WHERE r.guild_id = u.guild_id AND r.xp > u.xp AND r.is_active = 1
                     ) as rank
                 FROM user_xp u
-                WHERE u.user_id IN ({placeholders}) AND u.guild_id = ?
+                WHERE u.user_id IN ({placeholders}) AND u.guild_id = ? AND u.is_active = 1
             """, (*user_ids, guild_id))
             return [dict(row) for row in cur.fetchall()]
 
@@ -1269,44 +1269,55 @@ class XPMixin:
                     who_col = "target_user_id"
                     where_col = "user_id"
 
-                # Top voice partners (voice is always mutual, same either direction)
+                # Only return users still in the server (is_active = 1)
+                active_filter = f"""
+                    AND i.{who_col} IN (
+                        SELECT user_id FROM user_xp WHERE guild_id = ? AND is_active = 1
+                    )
+                """
+
+                # Top voice partners
                 cur.execute(f"""
-                    SELECT {who_col} as user_id, voice_minutes_together as minutes
-                    FROM user_interactions
-                    WHERE {where_col} = ? AND guild_id = ? AND voice_minutes_together > 0
-                    ORDER BY voice_minutes_together DESC
+                    SELECT i.{who_col} as user_id, i.voice_minutes_together as minutes
+                    FROM user_interactions i
+                    WHERE i.{where_col} = ? AND i.guild_id = ? AND i.voice_minutes_together > 0
+                    {active_filter}
+                    ORDER BY i.voice_minutes_together DESC
                     LIMIT ?
-                """, (user_id, guild_id, limit))
+                """, (user_id, guild_id, guild_id, limit))
                 voice_partners = [dict(row) for row in cur.fetchall()]
 
                 # Top mentions
                 cur.execute(f"""
-                    SELECT {who_col} as user_id, mentions as count
-                    FROM user_interactions
-                    WHERE {where_col} = ? AND guild_id = ? AND mentions > 0
-                    ORDER BY mentions DESC
+                    SELECT i.{who_col} as user_id, i.mentions as count
+                    FROM user_interactions i
+                    WHERE i.{where_col} = ? AND i.guild_id = ? AND i.mentions > 0
+                    {active_filter}
+                    ORDER BY i.mentions DESC
                     LIMIT ?
-                """, (user_id, guild_id, limit))
+                """, (user_id, guild_id, guild_id, limit))
                 mentions = [dict(row) for row in cur.fetchall()]
 
                 # Top replies
                 cur.execute(f"""
-                    SELECT {who_col} as user_id, replies as count
-                    FROM user_interactions
-                    WHERE {where_col} = ? AND guild_id = ? AND replies > 0
-                    ORDER BY replies DESC
+                    SELECT i.{who_col} as user_id, i.replies as count
+                    FROM user_interactions i
+                    WHERE i.{where_col} = ? AND i.guild_id = ? AND i.replies > 0
+                    {active_filter}
+                    ORDER BY i.replies DESC
                     LIMIT ?
-                """, (user_id, guild_id, limit))
+                """, (user_id, guild_id, guild_id, limit))
                 replies = [dict(row) for row in cur.fetchall()]
 
                 # Top reactions
                 cur.execute(f"""
-                    SELECT {who_col} as user_id, reactions as count
-                    FROM user_interactions
-                    WHERE {where_col} = ? AND guild_id = ? AND reactions > 0
-                    ORDER BY reactions DESC
+                    SELECT i.{who_col} as user_id, i.reactions as count
+                    FROM user_interactions i
+                    WHERE i.{where_col} = ? AND i.guild_id = ? AND i.reactions > 0
+                    {active_filter}
+                    ORDER BY i.reactions DESC
                     LIMIT ?
-                """, (user_id, guild_id, limit))
+                """, (user_id, guild_id, guild_id, limit))
                 reactions = [dict(row) for row in cur.fetchall()]
 
                 return {
