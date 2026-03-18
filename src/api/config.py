@@ -49,7 +49,7 @@ class APIConfig:
     max_page_size: int = 100
 
     # Cache TTLs (seconds)
-    stats_cache_ttl: int = 60
+    stats_cache_ttl: int = 30
     leaderboard_cache_ttl: int = 30
     cache_max_size: int = 200
 

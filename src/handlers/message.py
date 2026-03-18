@@ -357,24 +357,18 @@ class MessageHandler(commands.Cog):
             return
 
         try:
-            # Track reaction given by user
-            await asyncio.to_thread(db.increment_reactions_given, user.id, reaction.message.guild.id)
-
-            # Track reaction received by message author (if not a bot and not self-react)
+            # Single DB call: track given, received, and per-target interaction
+            target_id = None
             if reaction.message.author and not reaction.message.author.bot:
                 if reaction.message.author.id != user.id:
-                    await asyncio.to_thread(
-                        db.increment_reactions_received,
-                        reaction.message.author.id,
-                        reaction.message.guild.id
-                    )
-                    # Track per-target reaction interaction
-                    await asyncio.to_thread(
-                        db.increment_reaction_interaction,
-                        user.id,
-                        reaction.message.author.id,
-                        reaction.message.guild.id
-                    )
+                    target_id = reaction.message.author.id
+
+            await asyncio.to_thread(
+                db.track_reaction,
+                user.id,
+                target_id,
+                reaction.message.guild.id,
+            )
         except Exception as e:
             logger.error_tree("Reaction Track Failed", e, [
                 ("User", f"{user.name} ({user.display_name})"),

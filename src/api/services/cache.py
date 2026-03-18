@@ -73,9 +73,14 @@ class CacheService:
         while len(self._response_cache) > self._response_cache_max_size:
             self._response_cache.popitem(last=False)
 
-    async def clear_responses(self) -> None:
-        """Clear all cached responses."""
-        self._response_cache.clear()
+    async def clear_responses(self, prefix: str = None) -> None:
+        """Clear cached responses. If prefix given, only clear matching keys."""
+        if prefix is None:
+            self._response_cache.clear()
+        else:
+            keys_to_remove = [k for k in self._response_cache if k.startswith(prefix)]
+            for k in keys_to_remove:
+                self._response_cache.pop(k, None)
 
     async def cleanup_expired_responses(self) -> int:
         """Remove expired response cache entries. Returns count removed."""

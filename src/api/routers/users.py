@@ -33,7 +33,7 @@ router = APIRouter(prefix="/api/syria", tags=["Users"])
 @router.get("/user/{user_id}")
 async def get_user(
     request: Request,
-    user_id: int = Path(..., description="Discord user ID"),
+    user_id: int = Path(..., gt=0, description="Discord user ID"),
     bot: Any = Depends(get_bot),
 ) -> JSONResponse:
     """

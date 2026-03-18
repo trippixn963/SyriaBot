@@ -10,6 +10,7 @@ Server: discord.gg/syria
 
 import asyncio
 import json
+import time
 from typing import Set, Dict, Any, Optional, List
 
 from fastapi import WebSocket
@@ -41,6 +42,11 @@ class WebSocketManager:
         # Background task for periodic online count updates
         self._online_task: Optional[asyncio.Task] = None
         self._bot = None
+
+        # Cached enriched leaderboard (avoid refetching per connection)
+        self._leaderboard_cache: List[Dict[str, Any]] = []
+        self._leaderboard_cache_time: float = 0
+        _LEADERBOARD_CACHE_TTL = 30  # seconds
 
     def set_bot(self, bot) -> None:
         """Set bot reference for online count updates."""
@@ -201,9 +207,13 @@ class WebSocketManager:
         # Send current stats immediately
         await self._send_full_stats(websocket)
 
-        # Send leaderboard
+        # Send leaderboard (use cache to avoid refetching per connection)
         if self._bot and self._bot.is_ready():
-            leaderboard = await self._get_enriched_leaderboard()
+            now = time.time()
+            if not self._leaderboard_cache or now - self._leaderboard_cache_time > 30:
+                self._leaderboard_cache = await self._get_enriched_leaderboard()
+                self._leaderboard_cache_time = now
+            leaderboard = self._leaderboard_cache
             if leaderboard:
                 try:
                     message = json.dumps({

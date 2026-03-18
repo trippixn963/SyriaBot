@@ -138,7 +138,9 @@ async def grant_xp(
                 ])
 
         # Clear response cache
-        await cache.clear_responses()
+        await cache.clear_responses("leaderboard:")
+        await cache.clear_responses("search:")
+        await cache.clear_responses("stats:")
 
         # Broadcast XP change to dashboard via WebSocket
         ws = get_ws_manager()
@@ -220,7 +222,9 @@ async def set_xp(
                 ])
 
         # Clear response cache
-        await cache.clear_responses()
+        await cache.clear_responses("leaderboard:")
+        await cache.clear_responses("search:")
+        await cache.clear_responses("stats:")
 
         return JSONResponse(
             content=XPSetResponse(
@@ -329,7 +333,9 @@ async def drain_xp(
                 ])
 
         # Clear response cache
-        await cache.clear_responses()
+        await cache.clear_responses("leaderboard:")
+        await cache.clear_responses("search:")
+        await cache.clear_responses("stats:")
 
         # Broadcast XP change to dashboard via WebSocket
         if actual_drain > 0:

@@ -518,19 +518,31 @@ class XPMixin:
                 WHERE user_id = ? AND guild_id = ?
             """, (user_id, guild_id))
 
-    def increment_reaction_interaction(self, user_id: int, target_user_id: int, guild_id: int) -> None:
-        """Track that user_id reacted to target_user_id's message."""
+    def track_reaction(self, user_id: int, target_user_id: int | None, guild_id: int) -> None:
+        """Track a reaction: given count, received count, and per-target interaction in one call."""
         import time
         now = int(time.time())
+        self.ensure_user_xp(user_id, guild_id)
         with self._get_conn() as conn:
             cur = conn.cursor()
-            cur.execute("""
-                INSERT INTO user_interactions (user_id, target_user_id, guild_id, reactions, last_interaction)
-                VALUES (?, ?, ?, 1, ?)
-                ON CONFLICT(user_id, target_user_id, guild_id) DO UPDATE SET
-                    reactions = reactions + 1,
-                    last_interaction = ?
-            """, (user_id, target_user_id, guild_id, now, now))
+            # Increment given
+            cur.execute(
+                "UPDATE user_xp SET reactions_given = reactions_given + 1 WHERE user_id = ? AND guild_id = ?",
+                (user_id, guild_id),
+            )
+            # Increment received + per-target interaction
+            if target_user_id:
+                cur.execute(
+                    "UPDATE user_xp SET reactions_received = reactions_received + 1 WHERE user_id = ? AND guild_id = ?",
+                    (target_user_id, guild_id),
+                )
+                cur.execute("""
+                    INSERT INTO user_interactions (user_id, target_user_id, guild_id, reactions, last_interaction)
+                    VALUES (?, ?, ?, 1, ?)
+                    ON CONFLICT(user_id, target_user_id, guild_id) DO UPDATE SET
+                        reactions = reactions + 1,
+                        last_interaction = ?
+                """, (user_id, target_user_id, guild_id, now, now))
 
     def increment_images_shared(self, user_id: int, guild_id: int) -> None:
         """Increment user's images shared count."""

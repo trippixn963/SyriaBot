@@ -14,7 +14,7 @@ import time
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, Request, Query
+from fastapi import APIRouter, Depends, Path, Request, Query
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from src.core.logger import logger
@@ -911,7 +911,7 @@ async def get_period_comparison(
 @router.get("/user/{user_id}/interactions")
 async def get_user_interactions(
     request: Request,
-    user_id: int,
+    user_id: int = Path(..., gt=0),
     limit: int = Query(5, ge=1, le=10, description="Max interactions per category"),
     bot=Depends(get_bot),
 ) -> JSONResponse:
