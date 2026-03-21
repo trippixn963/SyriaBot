@@ -77,6 +77,7 @@ class SyriaBot(commands.Bot):
             command_prefix="!",
             intents=intents,
             help_command=None,
+            chunk_guilds_at_startup=True,
         )
 
         # Services
