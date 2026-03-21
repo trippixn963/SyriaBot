@@ -499,15 +499,6 @@ class SyriaBot(commands.Bot):
             except asyncio.CancelledError:
                 pass
 
-        # Disconnect from Discord FIRST so no new events flow during cleanup
-        try:
-            await asyncio.wait_for(super().close(), timeout=5)
-        except Exception as e:
-            logger.error_tree("Discord Disconnect Failed", e, [
-                ("Phase", "shutdown"),
-                ("Timeout", "5s"),
-            ])
-
         # Stop sync services (instant, no await)
         sync_stopped = []
         sync_services = [
@@ -580,3 +571,12 @@ class SyriaBot(commands.Bot):
         logger.tree("Bot Shutdown Complete", [
             ("Services Stopped", ", ".join(all_stopped)),
         ], emoji="✅")
+
+        # Disconnect from Discord LAST so services can clean up first
+        try:
+            await asyncio.wait_for(super().close(), timeout=5)
+        except Exception as e:
+            logger.error_tree("Discord Disconnect Failed", e, [
+                ("Phase", "shutdown"),
+                ("Timeout", "5s"),
+            ])

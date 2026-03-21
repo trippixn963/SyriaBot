@@ -99,6 +99,8 @@ class SocialMonitorService:
     INITIAL_DELAY: int = 30   # Wait before first check
     ERROR_RETRY_DELAY: int = 60
     FETCH_TIMEOUT: int = 90
+    MAX_CONSECUTIVE_FAILURES: int = 5  # After this, apply backoff
+    MAX_BACKOFF_INTERVAL: int = 3600   # Max 1 hour between checks on repeated failure
 
     # Data persistence
     _JSON_FILE: Path = Path(__file__).parent.parent.parent.parent / "data" / "social_posts.json"
@@ -119,6 +121,8 @@ class SocialMonitorService:
         self._posted_instagram: set[str] = set()
         self._first_run_tiktok: bool = True
         self._first_run_instagram: bool = True
+        self._tiktok_failures: int = 0
+        self._instagram_failures: int = 0
         self._load_data()
 
     # =========================================================================
@@ -234,6 +238,17 @@ class SocialMonitorService:
     # Monitor Loop
     # =========================================================================
 
+    def _get_backoff_interval(self, failures: int) -> int:
+        """Calculate backoff interval based on consecutive failure count."""
+        if failures <= self.MAX_CONSECUTIVE_FAILURES:
+            return self.CHECK_INTERVAL
+        # Exponential backoff: 10min, 20min, 40min, capped at 1 hour
+        backoff = min(
+            self.CHECK_INTERVAL * (2 ** (failures - self.MAX_CONSECUTIVE_FAILURES)),
+            self.MAX_BACKOFF_INTERVAL,
+        )
+        return backoff
+
     async def _monitor_loop(self) -> None:
         """Main monitoring loop that periodically checks for new posts."""
         await asyncio.sleep(self.INITIAL_DELAY)
@@ -246,12 +261,23 @@ class SocialMonitorService:
                 if config.INSTAGRAM_USERNAME:
                     await self._check_instagram()
 
-                logger.tree("Social Monitor", [
-                    ("Status", "Check complete"),
-                    ("Next", f"{self.CHECK_INTERVAL}s"),
-                ], emoji="clock")
+                # Use the highest failure count to determine wait time
+                max_failures = max(self._tiktok_failures, self._instagram_failures)
+                wait_interval = self._get_backoff_interval(max_failures)
 
-                await asyncio.sleep(self.CHECK_INTERVAL)
+                if max_failures > self.MAX_CONSECUTIVE_FAILURES:
+                    logger.tree("Social Monitor", [
+                        ("Status", "Check complete (backoff active)"),
+                        ("Consecutive Failures", str(max_failures)),
+                        ("Next", f"{wait_interval}s"),
+                    ], emoji="⏳")
+                else:
+                    logger.tree("Social Monitor", [
+                        ("Status", "Check complete"),
+                        ("Next", f"{wait_interval}s"),
+                    ], emoji="clock")
+
+                await asyncio.sleep(wait_interval)
 
             except asyncio.CancelledError:
                 logger.tree("Social Monitor", [
@@ -441,7 +467,10 @@ class SocialMonitorService:
 
         video_ids = await self._fetch_video_list(profile_url, "tiktok")
         if not video_ids:
+            self._tiktok_failures += 1
             return
+
+        self._tiktok_failures = 0
 
         new_count = 0
         for video_id in video_ids:
@@ -500,7 +529,10 @@ class SocialMonitorService:
 
         video_ids = await self._fetch_video_list(profile_url, "instagram")
         if not video_ids:
+            self._instagram_failures += 1
             return
+
+        self._instagram_failures = 0
 
         new_count = 0
         for video_id in video_ids:
