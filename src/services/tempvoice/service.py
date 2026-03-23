@@ -768,14 +768,23 @@ class TempVoiceService:
                 ], emoji="⚠️")
                 return
 
-            # Delete old guide images and panel (partial message avoids fetch overhead)
-            for msg_key in ("music_guide_message_id", "guide_message_id", "panel_message_id"):
-                msg_id = channel_info.get(msg_key)
-                if msg_id:
-                    try:
-                        await channel.get_partial_message(msg_id).delete()
-                    except (discord.NotFound, discord.HTTPException):
-                        pass
+            # Delete old guide images and panel (keep welcome message with owner ping)
+            # Scan all bot messages — delete images (guides) and embeds with "Owner" field (panel)
+            try:
+                bot_id = self.bot.user.id if self.bot.user else None
+                if bot_id:
+                    async for msg in channel.history(limit=50):
+                        if msg.author.id != bot_id:
+                            continue
+                        is_guide = msg.attachments and any(a.filename in ("music_guide.png", "voice_guide.png") for a in msg.attachments)
+                        is_panel = msg.embeds and any(f.name == "Owner" for e in msg.embeds for f in e.fields)
+                        if is_guide or is_panel:
+                            try:
+                                await msg.delete()
+                            except (discord.NotFound, discord.HTTPException):
+                                pass
+            except discord.HTTPException:
+                pass
 
             # Send new guides + panel (no owner ping on resend)
             try:
@@ -868,11 +877,9 @@ class TempVoiceService:
 
             # Get current overwrites to preserve other permissions
             overwrites = channel.overwrites_for(member)
-            # Text access
+            # Text access while in VC
             overwrites.send_messages = True
             overwrites.read_message_history = True
-            # Allow reconnecting if they leave (for dragged-in users)
-            overwrites.connect = True
             await channel.set_permissions(member, overwrite=overwrites)
             # Update panel to show new member
             await self._update_panel(channel)
@@ -967,19 +974,16 @@ class TempVoiceService:
             if channel.id in self._member_join_times:
                 self._member_join_times[channel.id].pop(member.id, None)
 
-            # Check if user is trusted - they keep FULL access (text + connect)
+            # Check if user is trusted — they keep connect but lose text
             is_trusted = member.id in db.get_trusted_list(channel_info["owner_id"])
 
             if is_trusted:
-                # Trusted users keep connect AND text access even when not in VC
-                logger.tree("Text Access Retained", [
-                    ("Channel", channel.name),
-                    ("User", f"{member.name} ({member.display_name})"),
-                    ("ID", str(member.id)),
-                    ("Reason", "Trusted user"),
-                ], emoji="✅")
+                # Trusted: keep connect so they can rejoin, but revoke text access
+                await channel.set_permissions(member, overwrite=discord.PermissionOverwrite(
+                    connect=True,
+                ))
             else:
-                # Not trusted - remove all custom permissions
+                # Not trusted — remove all custom permissions
                 await channel.set_permissions(member, overwrite=None)
 
             # Update panel to show member left
@@ -1222,12 +1226,8 @@ class TempVoiceService:
                 await channel.set_permissions(trusted_user, overwrite=get_trusted_overwrite())
                 trusted_count += 1
 
-        # Re-grant text access to current members who aren't blocked or already handled
-        handled_ids = blocked_ids | trusted_ids | {new_owner.id, guild.me.id}
-        for member_id in current_member_ids - handled_ids:
-            member = guild.get_member(member_id)
-            if member:
-                await channel.set_permissions(member, overwrite=get_owner_overwrite())
+        # Non-trusted members in the channel get no special permissions
+        # Their overwrites were already cleared above — nothing to re-grant
 
         # Update VC mod role overwrites based on new owner
         # Developer's channels: VC mods cannot enter (matches _create_temp_channel_inner logic)
