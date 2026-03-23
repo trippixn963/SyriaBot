@@ -17,6 +17,7 @@ Server: discord.gg/syria
 
 import asyncio
 import time
+from pathlib import Path
 
 from typing import TYPE_CHECKING
 
@@ -210,13 +211,10 @@ class TempVoiceService:
 
         Returns the new channel name.
         """
-        guild = channel.guild
-        old_owner = guild.get_member(old_owner_id)
-        if old_owner:
-            await channel.set_permissions(old_owner, overwrite=None)
         await set_owner_permissions(channel, new_owner)
         db.transfer_ownership(channel.id, new_owner.id)
         channel_name = await self._rename_for_new_owner(channel, new_owner)
+        # _apply_owner_lists handles clearing old overwrites — skips current VC members
         await self._apply_owner_lists(channel, new_owner)
         return channel_name
 
@@ -525,6 +523,11 @@ class TempVoiceService:
             f"We use **Boogie Premium** for music! Type `/play` to get started."
         )
         await channel.send(welcome)
+
+        # Send divider image to separate setup from chat
+        divider_path = Path(__file__).parent.parent.parent.parent / "assets" / "dividers" / "divider.png"
+        if divider_path.exists():
+            await channel.send(file=discord.File(str(divider_path), "divider.png"))
 
         # Cache all message IDs
         update_kwargs = {"panel_message_id": message.id}
@@ -878,6 +881,7 @@ class TempVoiceService:
             # Get current overwrites to preserve other permissions
             overwrites = channel.overwrites_for(member)
             # Text access while in VC
+            overwrites.view_channel = True
             overwrites.send_messages = True
             overwrites.read_message_history = True
             await channel.set_permissions(member, overwrite=overwrites)
@@ -1186,12 +1190,16 @@ class TempVoiceService:
         current_member_ids = {m.id for m in channel.members if not m.bot}
 
         # Clear stale permission overwrites (members + left-server users)
+        # Skip current VC members — they'll be handled at the end to avoid losing text mid-transfer
         for target, _ in list(channel.overwrites.items()):
             # Skip roles (e.g. @everyone, VC mod roles) — only clear user overwrites
             if isinstance(target, discord.Role):
                 continue
             # Keep new owner and bot overwrites
             if target.id in (new_owner.id, guild.me.id):
+                continue
+            # Don't wipe members currently in the VC — re-grant comes later
+            if target.id in current_member_ids:
                 continue
             await channel.set_permissions(target, overwrite=None)
 
@@ -1217,17 +1225,49 @@ class TempVoiceService:
                         ])
                 blocked_count += 1
 
-        # Apply trusted list
+        # Apply trusted list (connect only, or connect + text if currently in VC)
         trusted_ids = set(db.get_trusted_list(new_owner.id))
         trusted_count = 0
         for trusted_id in trusted_ids:
             trusted_user = guild.get_member(trusted_id)
             if trusted_user:
-                await channel.set_permissions(trusted_user, overwrite=get_trusted_overwrite())
+                if trusted_id in current_member_ids:
+                    # In VC — give connect + text
+                    await channel.set_permissions(trusted_user, overwrite=discord.PermissionOverwrite(
+                        connect=True,
+                        view_channel=True,
+                        send_messages=True,
+                        read_message_history=True,
+                    ))
+                else:
+                    # Not in VC — connect only
+                    await channel.set_permissions(trusted_user, overwrite=get_trusted_overwrite())
                 trusted_count += 1
 
-        # Non-trusted members in the channel get no special permissions
-        # Their overwrites were already cleared above — nothing to re-grant
+        # Re-grant text access to members currently in the VC (no connect — they're already in)
+        handled_ids = blocked_ids | trusted_ids | {new_owner.id, guild.me.id}
+        unhandled_in_vc = current_member_ids - handled_ids
+        logger.tree("Apply Owner Lists — Re-granting Text", [
+            ("Channel", channel.name),
+            ("Current Members", str(len(current_member_ids))),
+            ("Handled (skip)", str(len(handled_ids))),
+            ("Re-granting To", str(len(unhandled_in_vc))),
+            ("Member IDs", ", ".join(str(mid) for mid in unhandled_in_vc) if unhandled_in_vc else "None"),
+        ], emoji="🔄")
+        for member_id in unhandled_in_vc:
+            member = guild.get_member(member_id)
+            if member:
+                await channel.set_permissions(member, overwrite=discord.PermissionOverwrite(
+                    connect=True,
+                    view_channel=True,
+                    send_messages=True,
+                    read_message_history=True,
+                ))
+                logger.tree("Text Re-granted", [
+                    ("User", f"{member.name} ({member.display_name})"),
+                    ("ID", str(member.id)),
+                    ("Channel", channel.name),
+                ], emoji="✅")
 
         # Update VC mod role overwrites based on new owner
         # Developer's channels: VC mods cannot enter (matches _create_temp_channel_inner logic)

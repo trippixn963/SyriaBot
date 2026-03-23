@@ -157,14 +157,8 @@ class ClaimApprovalView(ui.View):
                         ("Owner", f"{requester.name} ({requester.display_name})"),
                     ], emoji="🧹")
 
-            # Remove old owner permissions and set new owner permissions
-            # Only update DB if Discord accepts the permission changes
+            # Set new owner permissions
             try:
-                old_owner = interaction.guild.get_member(self.owner.id)
-                if old_owner:
-                    await channel.set_permissions(old_owner, overwrite=None)
-
-                # Give new owner full permissions (no move_members - use kick button instead)
                 await set_owner_permissions(channel, requester)
             except discord.Forbidden:
                 embed = discord.Embed(
@@ -188,7 +182,7 @@ class ClaimApprovalView(ui.View):
             # Update DB ownership
             db.transfer_ownership(channel.id, requester.id)
 
-            # Respond immediately (before slow API calls timeout the interaction)
+            # Respond IMMEDIATELY (heavy work happens after)
             embed = discord.Embed(
                 description=f"✅ **{requester.display_name}** is now the owner",
                 color=COLOR_SUCCESS
@@ -204,7 +198,8 @@ class ClaimApprovalView(ui.View):
                 ("Approved By ID", str(self.owner.id)),
             ], emoji="👑")
 
-            # Now do the heavy work (rename, apply lists, update panel)
+            # Now do heavy work — _apply_owner_lists skips current VC members
+            # during the wipe so nobody loses text access mid-transfer
             if self.service:
                 try:
                     await self.service._rename_for_new_owner(channel, requester)

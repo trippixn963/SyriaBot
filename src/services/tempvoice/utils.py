@@ -246,8 +246,10 @@ async def set_owner_permissions(channel: discord.VoiceChannel, member: discord.M
 
 
 def get_trusted_overwrite() -> discord.PermissionOverwrite:
-    """Get standard permission overwrite for trusted users (same as owner)."""
-    return get_owner_overwrite()
+    """Get permission overwrite for trusted users (connect only, text granted on join)."""
+    return discord.PermissionOverwrite(
+        connect=True,
+    )
 
 
 def get_blocked_overwrite() -> discord.PermissionOverwrite:
