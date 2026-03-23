@@ -255,8 +255,9 @@ class SocialMonitorService:
 
         while self._running:
             try:
-                if config.TIKTOK_USERNAME:
-                    await self._check_tiktok()
+                # TikTok disabled — account has no videos, spamming errors
+                # if config.TIKTOK_USERNAME:
+                #     await self._check_tiktok()
 
                 if config.INSTAGRAM_USERNAME:
                     await self._check_instagram()
