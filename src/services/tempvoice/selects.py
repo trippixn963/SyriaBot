@@ -425,8 +425,12 @@ class UserSelect(ui.UserSelect):
 
         if user.voice and user.voice.channel == channel:
             await user.move_to(None)
+            # Record kick cooldown so they can't rejoin for 5 minutes
+            if self.service:
+                import time as _time
+                self.service._kick_cooldowns[(channel.id, user.id)] = _time.time()
             embed = discord.Embed(
-                description=f"👢 **{user.display_name}** kicked from channel",
+                description=f"👢 **{user.display_name}** kicked from channel\nThey cannot rejoin for **5 minutes**",
                 color=COLOR_ERROR
             )
             embed.set_thumbnail(url=user.display_avatar.url)
@@ -437,6 +441,7 @@ class UserSelect(ui.UserSelect):
                 ("Target ID", str(user.id)),
                 ("By", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("By ID", str(interaction.user.id)),
+                ("Cooldown", "5 minutes"),
             ], emoji="👢")
         else:
             embed = discord.Embed(

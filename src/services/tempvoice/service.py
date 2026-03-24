@@ -59,6 +59,8 @@ from .views import TempVoiceControlPanel
 if TYPE_CHECKING:
     from src.bot import SyriaBot
 
+KICK_REJOIN_COOLDOWN = 300  # 5 minutes before kicked user can rejoin
+
 # Aliases for backwards compatibility
 JOIN_COOLDOWN = TEMPVOICE_JOIN_COOLDOWN
 OWNER_LEAVE_TRANSFER_DELAY = TEMPVOICE_OWNER_LEAVE_TRANSFER_DELAY
@@ -98,6 +100,7 @@ class TempVoiceService:
         self.control_panel = TempVoiceControlPanel(self)
         self._cleanup_task: asyncio.Task = None
         self._join_cooldowns: dict[int, float] = {}  # user_id -> last join timestamp
+        self._kick_cooldowns: dict[tuple[int, int], float] = {}  # (channel_id, user_id) -> kick timestamp
         self._member_join_times: dict[int, dict[int, float]] = {}  # channel_id -> {user_id: join_time}
         self._pending_transfers: dict[int, asyncio.Task] = {}  # channel_id -> pending transfer task
         self._message_counts: dict[int, int] = {}  # channel_id -> message count since last panel
@@ -200,6 +203,10 @@ class TempVoiceService:
         self._panel_locks.pop(channel_id, None)
         self._member_join_times.pop(channel_id, None)
         self._message_counts.pop(channel_id, None)
+        # Clean up kick cooldowns for this channel
+        stale_keys = [k for k in self._kick_cooldowns if k[0] == channel_id]
+        for k in stale_keys:
+            del self._kick_cooldowns[k]
 
     async def _transfer_ownership(
         self,
@@ -695,6 +702,38 @@ class TempVoiceService:
             # Re-fetch channel to ensure it still exists
             channel = member.guild.get_channel(after_channel.id)
             if channel:
+                # Enforce kick rejoin cooldown (skip for owner, mods, and expired entries)
+                kick_key = (channel.id, member.id)
+                kick_time = self._kick_cooldowns.get(kick_key)
+                if kick_time:
+                    elapsed = time.time() - kick_time
+                    if elapsed >= KICK_REJOIN_COOLDOWN:
+                        # Expired — clean up
+                        del self._kick_cooldowns[kick_key]
+                    else:
+                        # Check if user is now the owner or has mod role — bypass cooldown
+                        channel_info = db.get_temp_channel(channel.id)
+                        is_owner = channel_info and channel_info["owner_id"] == member.id
+                        if not is_owner and not has_vc_mod_role(member):
+                            remaining = int(KICK_REJOIN_COOLDOWN - elapsed)
+                            try:
+                                await member.move_to(None)
+                                try:
+                                    await member.send(
+                                        f"You were kicked from **{channel.name}** and cannot rejoin for **{remaining // 60}m {remaining % 60}s**."
+                                    )
+                                except discord.Forbidden:
+                                    pass
+                                logger.tree("Kick Cooldown Enforced", [
+                                    ("User", f"{member.name} ({member.display_name})"),
+                                    ("ID", str(member.id)),
+                                    ("Channel", channel.name),
+                                    ("Remaining", f"{remaining}s"),
+                                ], emoji="⏳")
+                            except discord.HTTPException:
+                                pass
+                            return
+
                 await self._grant_text_access(channel, member)
                 # Owner rejoined - cancel pending transfer
                 channel_info = db.get_temp_channel(channel.id)
