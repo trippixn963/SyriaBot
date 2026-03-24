@@ -17,8 +17,6 @@ Server: discord.gg/syria
 
 import asyncio
 import time
-from pathlib import Path
-
 from typing import TYPE_CHECKING
 
 import discord
@@ -532,9 +530,8 @@ class TempVoiceService:
         await channel.send(welcome)
 
         # Send divider image to separate setup from chat
-        divider_path = Path(__file__).parent.parent.parent.parent / "assets" / "dividers" / "divider.png"
-        if divider_path.exists():
-            await channel.send(file=discord.File(str(divider_path), "divider.png"))
+        from src.utils.divider import send_divider
+        await send_divider(channel)
 
         # Cache all message IDs
         update_kwargs = {"panel_message_id": message.id}
