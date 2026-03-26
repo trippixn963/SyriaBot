@@ -186,16 +186,24 @@ class VoiceHandler(commands.Cog):
                         send_messages=True,
                         read_message_history=True,
                     ))
-                except discord.HTTPException:
-                    pass
+                except discord.HTTPException as e:
+                    logger.debug("Public VC Text Grant Failed", [
+                        ("User", f"{member.name}"),
+                        ("Channel", after_channel.name),
+                        ("Error", str(e)[:80]),
+                    ])
 
         # Left a public VC
         if before_channel and before_channel.id in public_vcs:
             if not after_channel or after_channel.id != before_channel.id:
                 try:
                     await before_channel.set_permissions(member, overwrite=None)
-                except discord.HTTPException:
-                    pass
+                except discord.HTTPException as e:
+                    logger.debug("Public VC Text Revoke Failed", [
+                        ("User", f"{member.name}"),
+                        ("Channel", before_channel.name),
+                        ("Error", str(e)[:80]),
+                    ])
 
                 # Delete all messages from this user in the VC text
                 try:
