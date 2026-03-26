@@ -63,7 +63,10 @@ def _build_guide_html(title: str, subtitle: str, items: list[tuple[str, str]]) -
 <html>
 <head>
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@900&family=Inter:wght@400;600;700&display=swap');
+    @font-face {{ font-family: 'Playfair Display'; src: url('file:///usr/share/fonts/truetype/playfair/PlayfairDisplay-Variable.ttf'); font-weight: 900; }}
+    @font-face {{ font-family: 'Inter'; src: url('file:///usr/share/fonts/truetype/inter/Inter-Regular.ttf'); font-weight: 400; }}
+    @font-face {{ font-family: 'Inter'; src: url('file:///usr/share/fonts/truetype/inter/Inter-SemiBold.ttf'); font-weight: 600; }}
+    @font-face {{ font-family: 'Inter'; src: url('file:///usr/share/fonts/truetype/inter/Inter-Bold.ttf'); font-weight: 700; }}
 
     * {{ margin: 0; padding: 0; box-sizing: border-box; }}
 

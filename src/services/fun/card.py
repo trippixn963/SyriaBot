@@ -58,7 +58,12 @@ _BASE_CSS = '''
     }
 '''
 
-_GOOGLE_FONTS_LINK = '<link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;600;700;900&family=Noto+Sans+Arabic:wght@400;600;700&display=swap" rel="stylesheet">'
+_GOOGLE_FONTS_LINK = '''<style>
+@font-face { font-family: 'Noto Sans'; src: url('file:///usr/share/fonts/truetype/noto/NotoSans-Regular.ttf'); font-weight: 400; }
+@font-face { font-family: 'Noto Sans'; src: url('file:///usr/share/fonts/truetype/noto/NotoSans-Bold.ttf'); font-weight: 700; }
+@font-face { font-family: 'Noto Sans Arabic'; src: url('file:///usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf'); font-weight: 400; }
+@font-face { font-family: 'Noto Sans Arabic'; src: url('file:///usr/share/fonts/truetype/noto/NotoSansArabic-Bold.ttf'); font-weight: 700; }
+</style>'''
 
 
 def _generate_ship_html(
