@@ -255,14 +255,18 @@ class XPMixin:
         placeholders = ",".join("?" * len(user_ids))
         with self._get_conn() as conn:
             cur = conn.cursor()
+            # Window function ranks all active users once, then filters
             cur.execute(f"""
-                SELECT u.*,
-                    (SELECT COUNT(*) + 1 FROM user_xp r
-                     WHERE r.guild_id = u.guild_id AND r.xp > u.xp AND r.is_active = 1
-                    ) as rank
-                FROM user_xp u
-                WHERE u.user_id IN ({placeholders}) AND u.guild_id = ? AND u.is_active = 1
-            """, (*user_ids, guild_id))
+                WITH ranked AS (
+                    SELECT user_id, guild_id, xp, level, total_messages, voice_minutes,
+                           last_active_at, streak_days, is_active,
+                           ROW_NUMBER() OVER (ORDER BY xp DESC) as rank
+                    FROM user_xp
+                    WHERE guild_id = ? AND is_active = 1
+                )
+                SELECT * FROM ranked
+                WHERE user_id IN ({placeholders})
+            """, (guild_id, *user_ids))
             return [dict(row) for row in cur.fetchall()]
 
     # =========================================================================
