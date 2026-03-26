@@ -377,9 +377,20 @@ class MessageHandler(commands.Cog):
 
     @commands.Cog.listener()
     async def on_thread_create(self, thread: discord.Thread) -> None:
-        """Track thread creation."""
+        """Track thread creation and handle media channel posts."""
         if not thread.guild or thread.guild.id != config.GUILD_ID:
             return
+
+        # Gallery/Memes media channel — react + notify
+        if hasattr(self.bot, 'gallery_service') and self.bot.gallery_service:
+            try:
+                handled = await self.bot.gallery_service.on_thread_create(thread)
+                if handled:
+                    return
+            except Exception as e:
+                logger.error_tree("Gallery Thread Handler Failed", e, [
+                    ("Thread", thread.name),
+                ])
 
         if thread.owner_id:
             try:
@@ -388,7 +399,6 @@ class MessageHandler(commands.Cog):
                     thread.owner_id,
                     thread.guild.id
                 )
-                # Log to events system (for dashboard Events tab)
                 owner = thread.guild.get_member(thread.owner_id) if thread.guild else None
                 event_logger.log_thread_create(thread, owner)
             except Exception as e:

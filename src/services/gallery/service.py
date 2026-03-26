@@ -2,331 +2,191 @@
 SyriaBot - Gallery Service
 ==========================
 
-Instagram-style media channel with auto-threads, heart reactions,
-and empty thread cleanup.
+Heart reactions, guides, and notifications for Discord media channel.
+Media validation and thread creation handled natively by Discord.
 
 Author: حَـــــنَّـــــا
 Server: discord.gg/syria
 """
 
-import time
+import asyncio
+import io
 from datetime import datetime
-from typing import Optional
 
 import discord
-from discord.ext import commands, tasks
+from discord.ext import commands
 
 from src.core.logger import logger
 from src.core.config import config
 from src.core.colors import COLOR_GOLD, EMOJI_HEART, EMOJI_COMMENT
 from src.core.constants import TIMEZONE_EST
 from src.utils.divider import send_divider
+from src.services.gallery.graphics import render_gallery_guide
 
 
 class GalleryService:
     """
-    Service for managing gallery and memes channels.
+    Service for the gallery media channel.
 
-    DESIGN:
-        Instagram-style media channels with automatic features:
-        - Validates media (images/videos only, no GIFs)
-        - Adds heart reactions and creates comment threads
-        - Sends notifications to general chat
-        - Removes invalid messages automatically
+    Discord handles media validation and thread creation.
+    This service adds: heart reactions, guide graphic, divider,
+    notifications to general, and reaction filtering.
     """
 
-    # Channel types for identification
-    GALLERY = "gallery"
-    MEMES = "memes"
-
     def __init__(self, bot: commands.Bot) -> None:
-        """
-        Initialize the gallery service.
-
-        Args:
-            bot: Main bot instance for Discord API access.
-        """
         self.bot = bot
-        # Cleanup disabled - let Discord's 7-day auto-archive handle empty threads
-        # self.cleanup_task.start()
 
     async def setup(self) -> None:
         """Initialize the gallery service."""
         logger.tree("Gallery Service Ready", [
-            ("Gallery ID", str(config.GALLERY_CHANNEL_ID)),
-            ("Memes ID", str(config.MEMES_CHANNEL_ID)),
-            ("Thread Cleanup", "Disabled"),
+            ("Channel ID", str(config.GALLERY_CHANNEL_ID)),
+            ("Mode", "Discord Media Channel"),
         ], emoji="📸")
 
     def stop(self) -> None:
-        """Stop the cleanup task (if running)."""
-        if self.cleanup_task.is_running():
-            self.cleanup_task.cancel()
+        """Stop the gallery service."""
         logger.tree("Gallery Service Stopped", [], emoji="📸")
 
-    @tasks.loop(hours=1)
-    async def cleanup_task(self) -> None:
-        """Clean up empty threads older than 1 hour from gallery and memes channels."""
-        channel_ids = [
-            (config.GALLERY_CHANNEL_ID, "Gallery"),
-            (config.MEMES_CHANNEL_ID, "Memes"),
-        ]
+    def _is_gallery(self, channel_id: int) -> bool:
+        """Check if a channel is the gallery media channel."""
+        return channel_id == config.GALLERY_CHANNEL_ID
 
-        for channel_id, channel_name in channel_ids:
-            if not channel_id:
-                continue
+    async def on_thread_create(self, thread: discord.Thread) -> bool:
+        """
+        Handle new post in gallery media channel.
 
+        Returns True if handled, False if not the gallery.
+        """
+        if not thread.parent_id or not self._is_gallery(thread.parent_id):
+            return False
+
+        # Fetch the starter message (contains the media)
+        starter = thread.starter_message
+        if not starter:
+            await asyncio.sleep(1)
             try:
-                channel = self.bot.get_channel(channel_id)
-                if not channel:
-                    logger.tree(f"{channel_name} Cleanup Skipped", [
-                        ("Reason", "Channel not found"),
-                    ], emoji="⚠️")
-                    continue
+                starter = await thread.fetch_message(thread.id)
+            except discord.NotFound:
+                try:
+                    async for msg in thread.history(limit=1, oldest_first=True):
+                        starter = msg
+                        break
+                except Exception:
+                    pass
 
-                now = time.time()
-                deleted_count = 0
-
-                for thread in channel.threads:
-                    # Check if thread is older than 1 hour
-                    thread_age = now - thread.created_at.timestamp()
-                    if thread_age < 3600:
-                        continue
-
-                    # Check if thread has no messages
-                    if thread.message_count == 0:
-                        try:
-                            await thread.delete()
-                            deleted_count += 1
-                            logger.tree(f"{channel_name} Empty Thread Deleted", [
-                                ("Thread", thread.name),
-                                ("Age", f"{int(thread_age // 3600)}h"),
-                            ], emoji="🗑️")
-                        except discord.HTTPException as e:
-                            logger.error_tree(f"{channel_name} Thread Delete Failed", e, [
-                                ("Thread", thread.name),
-                            ])
-
-                if deleted_count > 0:
-                    logger.tree(f"{channel_name} Cleanup Complete", [
-                        ("Deleted", str(deleted_count)),
-                    ], emoji="🧹")
-
-            except Exception as e:
-                logger.error_tree(f"{channel_name} Cleanup Error", e, [])
-
-    @cleanup_task.before_loop
-    async def before_cleanup(self) -> None:
-        await self.bot.wait_until_ready()
-
-    def _get_channel_type(self, channel_id: int) -> Optional[str]:
-        """Get the channel type (gallery/memes) or None if not a media channel."""
-        if channel_id == config.GALLERY_CHANNEL_ID:
-            return self.GALLERY
-        elif channel_id == config.MEMES_CHANNEL_ID:
-            return self.MEMES
-        return None
-
-    async def on_message(self, message: discord.Message) -> bool:
-        """
-        Handle gallery/memes channel message.
-
-        Returns True if message was handled (valid or deleted).
-        Returns False if not a media channel message.
-        """
-        if not message.guild:
+        if not starter or starter.author.bot:
             return False
 
-        channel_type = self._get_channel_type(message.channel.id)
-        if not channel_type:
-            return False
-
-        # Single-pass: validate media AND detect type + thumbnail
-        is_video = False
-        thumbnail_url = None
-        valid_media = False
-        for attachment in message.attachments:
-            content_type = attachment.content_type or ""
-            filename = attachment.filename.lower()
-
-            if content_type.startswith("video/") or filename.endswith((".mp4", ".mov", ".webm", ".avi", ".mkv")):
-                valid_media = True
-                is_video = True
-                break
-            elif (content_type.startswith("image/") and "gif" not in content_type) or filename.endswith((".png", ".jpg", ".jpeg", ".webp", ".bmp")):
-                valid_media = True
-                thumbnail_url = attachment.url
-                break
-
-        if not valid_media:
-            await self._delete_invalid(message, channel_type)
-            return True
-
-        # Valid media - add heart and create thread
-        channel_name = "Gallery" if channel_type == self.GALLERY else "Memes"
-        logger.tree(f"{channel_name} Valid Post Detected", [
-            ("User", f"{message.author.name} ({message.author.display_name})"),
-            ("ID", str(message.author.id)),
-            ("Attachments", str(len(message.attachments))),
+        logger.tree("Gallery Post Detected", [
+            ("User", f"{starter.author.name} ({starter.author.display_name})"),
+            ("ID", str(starter.author.id)),
+            ("Attachments", str(len(starter.attachments))),
         ], emoji="📸")
 
-        await self._handle_valid_post(message, channel_type, is_video=is_video, thumbnail_url=thumbnail_url)
-        return True
-
-    async def _delete_invalid(self, message: discord.Message, channel_type: str) -> None:
-        """Delete invalid media channel message."""
-        channel_name = "Gallery" if channel_type == self.GALLERY else "Memes"
+        # Rename thread: 📅 MM-DD-YY | Username
         try:
-            await message.delete()
-            logger.tree(f"{channel_name} Message Deleted", [
-                ("User", f"{message.author.name} ({message.author.display_name})"),
-                ("ID", str(message.author.id)),
-                ("Reason", "No valid image/video attachment"),
-                ("Content", message.content[:50] if message.content else "None"),
-            ], emoji="🗑️")
+            date_str = datetime.now(TIMEZONE_EST).strftime("%m-%d-%y")
+            new_name = f"📅 {date_str} | {starter.author.display_name}"[:100]
+            await thread.edit(name=new_name)
         except discord.HTTPException as e:
-            logger.error_tree(f"{channel_name} Delete Failed", e, [
-                ("User", f"{message.author.name}"),
+            logger.error_tree("Gallery Rename Failed", e, [
+                ("Thread", thread.name[:30]),
             ])
-
-    async def _handle_valid_post(self, message: discord.Message, channel_type: str, is_video: bool = False, thumbnail_url: str | None = None) -> None:
-        """Handle a valid media post - add heart and create thread."""
-        channel_name = "Gallery" if channel_type == self.GALLERY else "Memes"
-        thread_emoji = "📸" if channel_type == self.GALLERY else "😂"
 
         # Add heart reaction
         try:
-            await message.add_reaction(EMOJI_HEART)
-            logger.tree(f"{channel_name} Heart Added", [
-                ("User", f"{message.author.name}"),
-                ("Message ID", str(message.id)),
-            ], emoji="❤️")
+            await starter.add_reaction(EMOJI_HEART)
         except discord.HTTPException as e:
-            logger.error_tree(f"{channel_name} Heart Failed", e, [
-                ("User", f"{message.author.name}"),
+            logger.error_tree("Gallery Heart Failed", e, [
+                ("User", f"{starter.author.name}"),
             ])
 
-        # Create comment thread
-        thread = None
+        # Detect media type
+        is_video = False
+        for attachment in starter.attachments:
+            content_type = attachment.content_type or ""
+            filename = attachment.filename.lower()
+            if content_type.startswith("video/") or filename.endswith((".mp4", ".mov", ".webm", ".avi", ".mkv")):
+                is_video = True
+                break
+
+        # Send gallery guide + divider inside the thread
         try:
-            date_str = datetime.now(TIMEZONE_EST).strftime("%b %-d")
-            thread_name = f"{thread_emoji} {message.author.display_name} • {date_str}"[:100]
-
-            thread = await message.create_thread(
-                name=thread_name,
-                auto_archive_duration=10080,  # 7 days
-            )
-            logger.tree(f"{channel_name} Thread Created", [
-                ("User", f"{message.author.name}"),
-                ("Thread", thread_name),
-                ("Thread ID", str(thread.id)),
-            ], emoji="💬")
-        except discord.HTTPException as e:
-            logger.error_tree(f"{channel_name} Thread Failed", e, [
-                ("User", f"{message.author.name}"),
-            ])
+            guide_bytes = await render_gallery_guide()
+            if guide_bytes:
+                await thread.send(file=discord.File(io.BytesIO(guide_bytes), "gallery_guide.png"))
+                await send_divider(thread)
+        except Exception as e:
+            logger.error_tree("Gallery Guide Send Failed", e)
 
         # Send notification to general chat
-        await self._send_notification(message, thread, is_video, thumbnail_url, channel_type)
+        await self._send_notification(starter, thread, is_video)
 
-        # Send divider after the post
-        await send_divider(message.channel)
+        return True
+
+    async def on_message(self, message: discord.Message) -> bool:
+        """Check if message is in gallery (handled by on_thread_create)."""
+        if not message.guild:
+            return False
+        parent_id = getattr(message.channel, 'parent_id', None)
+        if parent_id and self._is_gallery(parent_id):
+            return True
+        return False
 
     async def _send_notification(
         self,
         message: discord.Message,
-        thread: Optional[discord.Thread],
+        thread: discord.Thread,
         is_video: bool = False,
-        thumbnail_url: Optional[str] = None,
-        channel_type: str = GALLERY
     ) -> None:
-        """Send a notification to general chat about a new media post."""
-        channel_name = "Gallery" if channel_type == self.GALLERY else "Memes"
-
+        """Send a notification to general chat about a new gallery post."""
         if not config.GENERAL_CHANNEL_ID:
-            logger.tree(f"{channel_name} Notification Skipped", [
-                ("Reason", "No general channel configured"),
-            ], emoji="ℹ️")
             return
 
         general_channel = self.bot.get_channel(config.GENERAL_CHANNEL_ID)
         if not general_channel:
-            logger.tree(f"{channel_name} Notification Skipped", [
-                ("Reason", "General channel not found"),
-                ("Channel ID", str(config.GENERAL_CHANNEL_ID)),
-            ], emoji="⚠️")
             return
 
         try:
-            # Build embed - different title for gallery vs memes
             media_type = "🎬 video" if is_video else "🖼️ image"
-            title = "🔔 New Gallery Post" if channel_type == self.GALLERY else "🔔 New Meme Post"
 
             embed = discord.Embed(
-                title=title,
+                title="🔔 New Gallery Post",
                 description=f"<@{message.author.id}> posted a new {media_type}",
-                color=COLOR_GOLD
+                color=COLOR_GOLD,
             )
             embed.set_thumbnail(url=message.author.display_avatar.url)
 
-            # Create view with comment button if thread exists
-            view = None
-            if thread:
-                view = discord.ui.View()
-                comment_button = discord.ui.Button(
-                    style=discord.ButtonStyle.link,
-                    label="Comment",
-                    emoji=discord.PartialEmoji.from_str(EMOJI_COMMENT),
-                    url=thread.jump_url
-                )
-                view.add_item(comment_button)
+            view = discord.ui.View()
+            view.add_item(discord.ui.Button(
+                style=discord.ButtonStyle.link,
+                label="View Post",
+                emoji=discord.PartialEmoji.from_str(EMOJI_COMMENT),
+                url=thread.jump_url,
+            ))
 
             await general_channel.send(embed=embed, view=view)
-            logger.tree(f"{channel_name} Notification Sent", [
+            logger.tree("Gallery Notification Sent", [
                 ("User", f"{message.author.name}"),
-                ("Channel", general_channel.name),
-                ("Post ID", str(message.id)),
                 ("Media Type", "Video" if is_video else "Image"),
-                ("Thread", thread.name if thread else "None"),
             ], emoji="📢")
-        except discord.Forbidden as e:
-            logger.error_tree(f"{channel_name} Notification Failed", e, [
-                ("Channel", str(config.GENERAL_CHANNEL_ID)),
-            ])
         except discord.HTTPException as e:
-            logger.error_tree(f"{channel_name} Notification Failed", e, [])
+            logger.error_tree("Gallery Notification Failed", e)
 
     async def on_reaction_add(self, reaction: discord.Reaction, user: discord.User) -> bool:
         """
-        Handle reaction in gallery/memes - only allow heart emoji.
+        Handle reaction in gallery — only allow heart emoji.
 
-        Returns True if reaction was handled (media channel).
-        Returns False if not a media channel reaction.
+        Returns True if handled, False if not the gallery.
         """
-        channel_type = self._get_channel_type(reaction.message.channel.id)
-        if not channel_type:
+        parent_id = getattr(reaction.message.channel, 'parent_id', None) or reaction.message.channel.id
+        if not self._is_gallery(parent_id):
             return False
 
-        channel_name = "Gallery" if channel_type == self.GALLERY else "Memes"
-
-        # Check if it's the allowed heart emoji
-        emoji_str = str(reaction.emoji)
-        if emoji_str != EMOJI_HEART:
+        if str(reaction.emoji) != EMOJI_HEART:
             try:
                 await reaction.remove(user)
-                logger.tree(f"{channel_name} Reaction Removed", [
-                    ("User", f"{user.name}"),
-                    ("Emoji", emoji_str[:20]),
-                    ("Message ID", str(reaction.message.id)),
-                ], emoji="🚫")
-            except discord.HTTPException as e:
-                logger.error_tree(f"{channel_name} Reaction Remove Failed", e, [
-                    ("User", f"{user.name}"),
-                ])
-        else:
-            logger.tree(f"{channel_name} Heart Reaction", [
-                ("User", f"{user.name}"),
-                ("Message ID", str(reaction.message.id)),
-            ], emoji="❤️")
+            except discord.HTTPException:
+                pass
 
         return True
