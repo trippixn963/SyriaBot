@@ -150,6 +150,9 @@ class Config:
     VC_MOD_ROLES: FrozenSet[int] = field(
         default_factory=lambda: _env_set("SYRIA_VC_MOD_ROLES")
     )
+    PUBLIC_VC_CHANNELS: FrozenSet[int] = field(
+        default_factory=lambda: _env_set("SYRIA_PUBLIC_VCS")
+    )
 
     # ==========================================================================
     # XP System

@@ -43,6 +43,11 @@ class VoiceHandler(commands.Cog):
         self.voice_join_times: dict[int, tuple[int, int]] = {}  # user_id -> (timestamp, channel_id)
 
     @commands.Cog.listener()
+    async def on_ready(self) -> None:
+        """Sync public VC permissions on startup."""
+        await self.sync_public_vc_permissions()
+
+    @commands.Cog.listener()
     async def on_voice_state_update(
         self,
         member: discord.Member,
@@ -77,6 +82,9 @@ class VoiceHandler(commands.Cog):
                     ("Before Channel", str(before.channel.id) if before.channel else "None"),
                     ("After Channel", str(after.channel.id) if after.channel else "None"),
                 ])
+
+        # Public VC text access — grant on join, revoke on leave
+        await self._handle_public_vc_text(member, before, after)
 
         # Track server-level voice stats (main server only)
         if member.guild.id == config.GUILD_ID:
@@ -148,6 +156,104 @@ class VoiceHandler(commands.Cog):
                     ("User", f"{member.name} ({member.display_name})"),
                     ("ID", str(member.id)),
                 ])
+
+
+    async def _handle_public_vc_text(
+        self,
+        member: discord.Member,
+        before: discord.VoiceState,
+        after: discord.VoiceState,
+    ) -> None:
+        """Grant/revoke text access for public voice channels."""
+        public_vcs = config.PUBLIC_VC_CHANNELS
+        if not public_vcs:
+            return
+
+        before_channel = before.channel if before and before.channel else None
+        after_channel = after.channel if after and after.channel else None
+
+        # Joined a public VC
+        if after_channel and after_channel.id in public_vcs:
+            if not before_channel or before_channel.id != after_channel.id:
+                try:
+                    await after_channel.set_permissions(member, overwrite=discord.PermissionOverwrite(
+                        view_channel=True,
+                        send_messages=True,
+                        read_message_history=True,
+                    ))
+                except discord.HTTPException:
+                    pass
+
+        # Left a public VC
+        if before_channel and before_channel.id in public_vcs:
+            if not after_channel or after_channel.id != before_channel.id:
+                try:
+                    await before_channel.set_permissions(member, overwrite=None)
+                except discord.HTTPException:
+                    pass
+
+    async def sync_public_vc_permissions(self) -> None:
+        """Sync public VC permissions on startup.
+
+        Sets @everyone to no text access and re-grants text
+        to members currently in the VCs.
+        """
+        public_vcs = config.PUBLIC_VC_CHANNELS
+        if not public_vcs:
+            return
+
+        guild = self.bot.get_guild(config.GUILD_ID)
+        if not guild:
+            return
+
+        synced = 0
+        for vc_id in public_vcs:
+            channel = guild.get_channel(vc_id)
+            if not channel:
+                continue
+
+            # Ensure @everyone can't see text
+            everyone = guild.default_role
+            try:
+                await channel.set_permissions(everyone, overwrite=discord.PermissionOverwrite(
+                    view_channel=True,
+                    connect=True,
+                    send_messages=False,
+                    read_message_history=False,
+                ))
+            except discord.HTTPException:
+                pass
+
+            # Clear all stale user overwrites
+            for target, _ in list(channel.overwrites.items()):
+                if isinstance(target, discord.Role):
+                    continue
+                if target.id == guild.me.id:
+                    continue
+                try:
+                    await channel.set_permissions(target, overwrite=None)
+                except discord.HTTPException:
+                    pass
+
+            # Re-grant text to members currently in the VC
+            for member in channel.members:
+                if member.bot:
+                    continue
+                try:
+                    await channel.set_permissions(member, overwrite=discord.PermissionOverwrite(
+                        view_channel=True,
+                        send_messages=True,
+                        read_message_history=True,
+                    ))
+                    synced += 1
+                except discord.HTTPException:
+                    pass
+
+        if synced > 0:
+            logger.tree("Public VC Permissions Synced", [
+                ("Channels", str(len(public_vcs))),
+                ("Members Re-granted", str(synced)),
+            ], emoji="🔊")
 
 
 async def setup(bot: commands.Bot) -> None:
