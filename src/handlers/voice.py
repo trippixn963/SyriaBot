@@ -9,10 +9,11 @@ Server: discord.gg/syria
 """
 
 import asyncio
-from datetime import datetime
+import io
+from datetime import datetime, time as dt_time
 
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 
 from src.core.config import config
 from src.core.constants import TIMEZONE_EST
@@ -46,6 +47,10 @@ class VoiceHandler(commands.Cog):
     async def on_ready(self) -> None:
         """Sync public VC permissions on startup."""
         await self.sync_public_vc_permissions()
+
+        # Start nightly maintenance
+        if not self.public_vc_maintenance.is_running():
+            self.public_vc_maintenance.start()
 
     @commands.Cog.listener()
     async def on_voice_state_update(
@@ -289,6 +294,61 @@ class VoiceHandler(commands.Cog):
                 ("Channels", str(len(public_vcs))),
                 ("Members Re-granted", str(synced)),
             ], emoji="🔊")
+
+    # =========================================================================
+    # Nightly Public VC Maintenance (midnight EST)
+    # =========================================================================
+
+    @tasks.loop(time=dt_time(hour=0, minute=0, tzinfo=TIMEZONE_EST))
+    async def public_vc_maintenance(self) -> None:
+        """Nightly cleanup: purge all messages and resend music guide + divider."""
+        public_vcs = config.PUBLIC_VC_CHANNELS
+        if not public_vcs:
+            return
+
+        guild = self.bot.get_guild(config.GUILD_ID)
+        if not guild:
+            return
+
+        from src.services.tempvoice.graphics import render_music_guide
+        from src.utils.divider import send_divider
+
+        music_bytes = await render_music_guide()
+
+        for vc_id in public_vcs:
+            channel = guild.get_channel(vc_id)
+            if not channel:
+                continue
+
+            try:
+                # Purge all messages
+                deleted = 0
+                async for msg in channel.history(limit=200):
+                    try:
+                        await msg.delete()
+                        deleted += 1
+                    except discord.HTTPException:
+                        pass
+
+                # Resend music guide + divider
+                if music_bytes:
+                    await channel.send(file=discord.File(io.BytesIO(music_bytes), "music_guide.png"))
+                    await send_divider(channel)
+
+                logger.tree("Public VC Maintenance", [
+                    ("Channel", channel.name),
+                    ("Messages Purged", str(deleted)),
+                    ("Guide Resent", "Yes" if music_bytes else "No"),
+                ], emoji="🧹")
+            except Exception as e:
+                logger.error_tree("Public VC Maintenance Failed", e, [
+                    ("Channel", channel.name),
+                ])
+
+    @public_vc_maintenance.before_loop
+    async def before_public_vc_maintenance(self) -> None:
+        """Wait for bot to be ready."""
+        await self.bot.wait_until_ready()
 
 
 async def setup(bot: commands.Bot) -> None:
