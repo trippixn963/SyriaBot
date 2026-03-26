@@ -284,52 +284,46 @@ class XPService:
         # Add XP
         await self._grant_xp(member, xp_amount, "message")
 
-        # Track additional metrics (non-blocking)
+        # Track additional metrics (batched in single thread to avoid blocking event loop)
         try:
             now_est = datetime.now(TIMEZONE_EST)
             today_date = now_est.strftime("%Y-%m-%d")
             current_hour = now_est.hour
+            channel_id = message.channel.id
+            channel_name = message.channel.name
 
-            # User-level tracking
-            db.update_streak(user_id, guild_id, today_date)
-            db.set_first_message_at(user_id, guild_id, now)
-            db.increment_activity_hour(user_id, guild_id, current_hour)
-            db.update_last_active(user_id, guild_id, now)
-
-            # Server-level tracking
-            db.increment_daily_messages(guild_id, today_date)
-            db.increment_user_daily_messages(user_id, guild_id, today_date)
-            db.increment_server_hour_activity(guild_id, current_hour, "message")
-            db.increment_channel_daily(guild_id, message.channel.id, today_date)
-            db.increment_channel_messages(
-                message.channel.id,
-                guild_id,
-                message.channel.name
-            )
-
-            # Per-user-per-channel tracking (for channel activity API)
-            db.increment_user_channel_messages(
-                user_id,
-                message.channel.id,
-                guild_id,
-                message.channel.name
-            )
-
-            # Track DAU (unique users) - use cache to avoid duplicate counts
+            # Check DAU cache before thread (avoid unnecessary DB call)
             dau_key = (user_id, guild_id, today_date)
+            track_dau = False
             async with self._dau_cache_lock:
                 if dau_key not in self._dau_cache:
                     self._dau_cache.add(dau_key)
+                    track_dau = True
+
+            def _batch_track_metrics():
+                db.update_streak(user_id, guild_id, today_date)
+                db.set_first_message_at(user_id, guild_id, now)
+                db.increment_activity_hour(user_id, guild_id, current_hour)
+                db.update_last_active(user_id, guild_id, now)
+                db.increment_daily_messages(guild_id, today_date)
+                db.increment_user_daily_messages(user_id, guild_id, today_date)
+                db.increment_server_hour_activity(guild_id, current_hour, "message")
+                db.increment_channel_daily(guild_id, channel_id, today_date)
+                db.increment_channel_messages(channel_id, guild_id, channel_name)
+                db.increment_user_channel_messages(user_id, channel_id, guild_id, channel_name)
+                if track_dau:
                     db.increment_daily_unique_user(guild_id, today_date)
 
-                    # Clean cache when it gets large (removes stale dates)
-                    if len(self._dau_cache) > 1000:
-                        old_size = len(self._dau_cache)
-                        self._dau_cache = {k for k in self._dau_cache if k[2] == today_date}
-                        logger.tree("DAU Cache Cleanup", [
-                            ("Before", str(old_size)),
-                            ("After", str(len(self._dau_cache))),
-                        ], emoji="🧹")
+            await asyncio.to_thread(_batch_track_metrics)
+
+            # Clean DAU cache when it gets large (removes stale dates)
+            if len(self._dau_cache) > 1000:
+                old_size = len(self._dau_cache)
+                self._dau_cache = {k for k in self._dau_cache if k[2] == today_date}
+                logger.tree("DAU Cache Cleanup", [
+                    ("Before", str(old_size)),
+                    ("After", str(len(self._dau_cache))),
+                ], emoji="🧹")
         except Exception as e:
             logger.tree("Metrics Track Failed", [
                 ("User", f"{member.name} ({member.display_name})"),

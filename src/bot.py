@@ -291,147 +291,75 @@ class SyriaBot(commands.Bot):
 
         initialized = []
 
-        # TempVoice
-        try:
-            self.tempvoice = TempVoiceService(self)
-            await self.tempvoice.setup()
-            initialized.append("TempVoice")
-        except Exception as e:
-            logger.error_tree("TempVoice Init Failed", e)
-
-        # Profile Sync - use first guild or configured guild
-        guild_id = config.GUILD_ID or (self.guilds[0].id if self.guilds else None)
-        if guild_id:
+        # Helper to init a service with error handling
+        async def _init(name: str, setup_fn):
             try:
-                self.profile_sync = ProfileSyncService(self)
-                await self.profile_sync.setup(guild_id)
-                initialized.append("ProfileSync")
+                await setup_fn()
+                initialized.append(name)
             except Exception as e:
-                logger.error_tree("Profile Sync Init Failed", e)
+                logger.error_tree(f"{name} Init Failed", e)
 
-        # XP System
-        try:
-            self.xp_service = XPService(self)
-            await self.xp_service.setup()
-            initialized.append("XP")
-        except Exception as e:
-            logger.error_tree("XP Service Init Failed", e)
+        # Phase 1: Core services (need to be ready before others)
+        self.tempvoice = TempVoiceService(self)
+        self.xp_service = XPService(self)
+        self.stats_api = APIService(self)
 
-        # Stats API (FastAPI, includes /health)
-        try:
-            self.stats_api = APIService(self)
-            await self.stats_api.start()
-            initialized.append("StatsAPI")
-        except Exception as e:
-            logger.error_tree("Stats API Init Failed", e)
+        await asyncio.gather(
+            _init("TempVoice", self.tempvoice.setup),
+            _init("XP", self.xp_service.setup),
+            _init("StatsAPI", self.stats_api.start),
+        )
 
-        # Backup Scheduler
-        try:
-            self.backup_scheduler = BackupScheduler()
-            await self.backup_scheduler.start()
-            initialized.append("Backup")
-        except Exception as e:
-            logger.error_tree("Backup Scheduler Init Failed", e)
+        # Phase 2: Independent services (all run in parallel)
+        guild_id = config.GUILD_ID or (self.guilds[0].id if self.guilds else None)
+        self.profile_sync = ProfileSyncService(self) if guild_id else None
+        self.backup_scheduler = BackupScheduler()
+        self.afk_service = AFKService(self)
+        self.gallery_service = GalleryService(self)
+        self.presence_handler = PresenceService(self)
+        self.confession_service = ConfessionService(self)
+        self.currency_service = CurrencyService()
+        self.birthday_service = get_birthday_service(self)
+        self.actions_panel = ActionsPanelService(self)
+        self.family_panel = FamilyPanelService(self)
 
-        # AFK Service
-        try:
-            self.afk_service = AFKService(self)
-            await self.afk_service.setup()
-            initialized.append("AFK")
-        except Exception as e:
-            logger.error_tree("AFK Service Init Failed", e)
+        phase2_tasks = [
+            _init("Backup", self.backup_scheduler.start),
+            _init("AFK", self.afk_service.setup),
+            _init("Gallery", self.gallery_service.setup),
+            _init("Presence", self.presence_handler.setup),
+            _init("Confessions", self.confession_service.setup),
+            _init("Currency", self.currency_service.setup),
+            _init("Birthdays", self.birthday_service.setup),
+            _init("ActionsPanel", self.actions_panel.setup),
+            _init("FamilyPanel", self.family_panel.setup),
+        ]
 
-        # Gallery Service
-        try:
-            self.gallery_service = GalleryService(self)
-            await self.gallery_service.setup()
-            initialized.append("Gallery")
-        except Exception as e:
-            logger.error_tree("Gallery Service Init Failed", e)
+        if self.profile_sync and guild_id:
+            phase2_tasks.append(_init("ProfileSync", lambda: self.profile_sync.setup(guild_id)))
 
-        # Presence Handler
-        try:
-            self.presence_handler = PresenceService(self)
-            await self.presence_handler.setup()
-            initialized.append("Presence")
-        except Exception as e:
-            logger.error_tree("Presence Handler Init Failed", e)
-
-        # Bump Reminder (Disboard)
         if config.BUMP_CHANNEL_ID and config.MOD_ROLE_ID:
-            try:
+            async def _init_bump():
                 bump_service.setup(self, config.BUMP_CHANNEL_ID, config.MOD_ROLE_ID)
                 bump_service.start()
-                initialized.append("BumpReminder")
-            except Exception as e:
-                logger.error_tree("Bump Reminder Init Failed", e)
+            phase2_tasks.append(_init("BumpReminder", _init_bump))
 
-        # Confessions
-        try:
-            self.confession_service = ConfessionService(self)
-            await self.confession_service.setup()
-            initialized.append("Confessions")
-        except Exception as e:
-            logger.error_tree("Confessions Init Failed", e)
+        from src.services.daily_stats import DailyStatsService
+        self.daily_stats_service = DailyStatsService(self)
+        phase2_tasks.append(_init("DailyStats", self.daily_stats_service.setup))
 
-
-        # Currency (JawdatBot integration)
-        try:
-            self.currency_service = CurrencyService()
-            await self.currency_service.setup()
-            initialized.append("Currency")
-        except Exception as e:
-            logger.error_tree("Currency Service Init Failed", e)
-
-        # Birthdays
-        try:
-            self.birthday_service = get_birthday_service(self)
-            await self.birthday_service.setup()
-            initialized.append("Birthdays")
-        except Exception as e:
-            logger.error_tree("Birthday Service Init Failed", e)
-
-        # Daily Stats (midnight EST summary)
-        try:
-            from src.services.daily_stats import DailyStatsService
-            self.daily_stats_service = DailyStatsService(self)
-            await self.daily_stats_service.setup()
-            initialized.append("DailyStats")
-        except Exception as e:
-            logger.error_tree("Daily Stats Init Failed", e)
-
-        # Actions Panel (persistent actions list in fun channel)
-        try:
-            self.actions_panel = ActionsPanelService(self)
-            await self.actions_panel.setup()
-            initialized.append("ActionsPanel")
-        except Exception as e:
-            logger.error_tree("Actions Panel Init Failed", e)
-
-        # Family Panel (persistent family commands panel in cmds channel)
-        try:
-            self.family_panel = FamilyPanelService(self)
-            await self.family_panel.setup()
-            initialized.append("FamilyPanel")
-        except Exception as e:
-            logger.error_tree("Family Panel Init Failed", e)
-
-        # Social Media Monitor
         if config.SOCIAL_MONITOR_CH:
-            try:
-                self.social_monitor = SocialMonitorService(self)
-                await self.social_monitor.setup()
-                initialized.append("SocialMonitor")
-            except Exception as e:
-                logger.error_tree("Social Monitor Init Failed", e)
+            self.social_monitor = SocialMonitorService(self)
+            phase2_tasks.append(_init("SocialMonitor", self.social_monitor.setup))
 
-        # Roulette Minigame
-        try:
-            self.roulette_service = get_roulette_service(self)
-            await self.roulette_service.setup()
-            initialized.append("Roulette")
-        except Exception as e:
-            logger.error_tree("Roulette Service Init Failed", e)
+        self.roulette_service = get_roulette_service(self)
+        phase2_tasks.append(_init("Roulette", self.roulette_service.setup))
+
+        await asyncio.gather(*phase2_tasks)
+
+        # Pre-warm Playwright browser for fast first /rank card
+        from src.services.xp.card import prewarm as prewarm_rank_card
+        create_safe_task(prewarm_rank_card(), "Rank Card Pre-warm")
 
         # Start connection health monitor
         self._health_task = create_safe_task(self._health_check_loop(), "Health Check Loop")

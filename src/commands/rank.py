@@ -8,6 +8,7 @@ Author: حَـــــنَّـــــا
 Server: discord.gg/syria
 """
 
+import asyncio
 import io
 
 import discord
@@ -91,8 +92,11 @@ class RankCog(commands.Cog):
             ], emoji="⚠️")
             return
 
-        # Get XP data
-        xp_data = db.get_user_xp(member.id, interaction.guild.id)
+        # Get XP data and rank in parallel
+        xp_data, rank = await asyncio.gather(
+            asyncio.to_thread(db.get_user_xp, member.id, interaction.guild.id),
+            asyncio.to_thread(db.get_user_rank, member.id, interaction.guild.id),
+        )
 
         if not xp_data:
             xp_data = {
@@ -109,9 +113,6 @@ class RankCog(commands.Cog):
 
         # Get progress info
         _, xp_into_level, xp_needed, progress = xp_progress(current_xp)
-
-        # Get rank
-        rank = db.get_user_rank(member.id, interaction.guild.id)
 
         # XP needed for next level (total)
         next_level_xp = xp_for_level(level + 1)

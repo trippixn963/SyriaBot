@@ -141,26 +141,21 @@ class GalleryService:
         if not channel_type:
             return False
 
-        # Check for valid image/video attachments (no GIFs)
+        # Single-pass: validate media AND detect type + thumbnail
+        is_video = False
+        thumbnail_url = None
         valid_media = False
         for attachment in message.attachments:
             content_type = attachment.content_type or ""
             filename = attachment.filename.lower()
 
-            # Allow images (but not GIFs)
-            if content_type.startswith("image/") and "gif" not in content_type:
+            if content_type.startswith("video/") or filename.endswith((".mp4", ".mov", ".webm", ".avi", ".mkv")):
                 valid_media = True
+                is_video = True
                 break
-            # Allow videos
-            elif content_type.startswith("video/"):
+            elif (content_type.startswith("image/") and "gif" not in content_type) or filename.endswith((".png", ".jpg", ".jpeg", ".webp", ".bmp")):
                 valid_media = True
-                break
-            # Fallback: check extension (no GIFs)
-            elif filename.endswith((".png", ".jpg", ".jpeg", ".webp", ".bmp")):
-                valid_media = True
-                break
-            elif filename.endswith((".mp4", ".mov", ".webm", ".avi", ".mkv")):
-                valid_media = True
+                thumbnail_url = attachment.url
                 break
 
         if not valid_media:
@@ -175,7 +170,7 @@ class GalleryService:
             ("Attachments", str(len(message.attachments))),
         ], emoji="📸")
 
-        await self._handle_valid_post(message, channel_type)
+        await self._handle_valid_post(message, channel_type, is_video=is_video, thumbnail_url=thumbnail_url)
         return True
 
     async def _delete_invalid(self, message: discord.Message, channel_type: str) -> None:
@@ -194,24 +189,10 @@ class GalleryService:
                 ("User", f"{message.author.name}"),
             ])
 
-    async def _handle_valid_post(self, message: discord.Message, channel_type: str) -> None:
+    async def _handle_valid_post(self, message: discord.Message, channel_type: str, is_video: bool = False, thumbnail_url: str | None = None) -> None:
         """Handle a valid media post - add heart and create thread."""
         channel_name = "Gallery" if channel_type == self.GALLERY else "Memes"
         thread_emoji = "📸" if channel_type == self.GALLERY else "😂"
-
-        # Determine media type and get thumbnail URL
-        is_video = False
-        thumbnail_url = None
-        for attachment in message.attachments:
-            content_type = attachment.content_type or ""
-            filename = attachment.filename.lower()
-
-            if content_type.startswith("video/") or filename.endswith((".mp4", ".mov", ".webm", ".avi", ".mkv")):
-                is_video = True
-                break
-            elif content_type.startswith("image/") or filename.endswith((".png", ".jpg", ".jpeg", ".webp", ".bmp")):
-                thumbnail_url = attachment.url
-                break
 
         # Add heart reaction
         try:

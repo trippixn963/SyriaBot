@@ -197,6 +197,16 @@ async def _return_page(page: "Page") -> None:
                 pass
 
 
+async def prewarm() -> None:
+    """Pre-warm the Playwright browser so the first /rank card is fast."""
+    try:
+        page = await _get_page()
+        await _return_page(page)
+        logger.tree("Rank Card Browser Pre-warmed", [], emoji="🔥")
+    except Exception as e:
+        logger.error_tree("Rank Card Pre-warm Failed", e)
+
+
 def _generate_html(
     display_name: str,
     username: str,

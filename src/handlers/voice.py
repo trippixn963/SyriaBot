@@ -135,14 +135,14 @@ class VoiceHandler(commands.Cog):
                             if not after.channel:
                                 event_logger.log_voice_leave(member, before.channel, minutes)
 
-                # Track peak concurrent voice users
-                if after.channel:
+                # Track peak concurrent voice users (only on joins, not leaves)
+                if after.channel and (not before.channel or before.channel != after.channel):
                     total_voice_users = sum(
-                        1 for vc in member.guild.voice_channels
-                        for m in vc.members if not m.bot
+                        len([m for m in vc.members if not m.bot])
+                        for vc in member.guild.voice_channels
                     )
                     today = datetime.now(TIMEZONE_EST).strftime("%Y-%m-%d")
-                    db.update_voice_peak(member.guild.id, today, total_voice_users)
+                    await asyncio.to_thread(db.update_voice_peak, member.guild.id, today, total_voice_users)
             except Exception as e:
                 logger.error_tree("Voice Stats Track Failed", e, [
                     ("User", f"{member.name} ({member.display_name})"),
