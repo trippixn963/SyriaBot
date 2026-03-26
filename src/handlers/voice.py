@@ -192,6 +192,29 @@ class VoiceHandler(commands.Cog):
                 except discord.HTTPException:
                     pass
 
+                # Delete all messages from this user in the VC text
+                try:
+                    deleted = 0
+                    async for msg in before_channel.history(limit=100):
+                        if msg.author.id == member.id:
+                            try:
+                                await msg.delete()
+                                deleted += 1
+                            except discord.HTTPException:
+                                pass
+                    if deleted > 0:
+                        logger.tree("Public VC Messages Cleaned", [
+                            ("User", f"{member.name} ({member.display_name})"),
+                            ("ID", str(member.id)),
+                            ("Channel", before_channel.name),
+                            ("Deleted", str(deleted)),
+                        ], emoji="🧹")
+                except Exception as e:
+                    logger.error_tree("Public VC Cleanup Failed", e, [
+                        ("User", f"{member.name}"),
+                        ("Channel", before_channel.name),
+                    ])
+
     async def sync_public_vc_permissions(self) -> None:
         """Sync public VC permissions on startup.
 
@@ -224,7 +247,19 @@ class VoiceHandler(commands.Cog):
             except discord.HTTPException:
                 pass
 
-            # Clear all stale user overwrites
+            # Grant mod role full text access (even when not in VC)
+            mod_role = guild.get_role(config.MOD_ROLE_ID) if config.MOD_ROLE_ID else None
+            if mod_role:
+                try:
+                    await channel.set_permissions(mod_role, overwrite=discord.PermissionOverwrite(
+                        view_channel=True,
+                        send_messages=True,
+                        read_message_history=True,
+                    ))
+                except discord.HTTPException:
+                    pass
+
+            # Clear all stale user overwrites (keep roles)
             for target, _ in list(channel.overwrites.items()):
                 if isinstance(target, discord.Role):
                     continue
