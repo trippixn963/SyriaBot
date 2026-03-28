@@ -507,11 +507,12 @@ class TempVoiceService:
         """Send guide images + control panel + welcome message to voice channel."""
         music_guide_id, guide_id = await self._send_guide_images(channel)
 
-        embed = self._build_panel_embed(channel, owner, is_locked=True)
+        is_dev = owner.id == config.OWNER_ID
+        embed = self._build_panel_embed(channel, owner, is_locked=is_dev)
 
         message = await channel.send(
             embed=embed,
-            view=self._build_panel_view(is_locked=True),
+            view=self._build_panel_view(is_locked=is_dev),
         )
 
         # Welcome message with rules reminder and music info
@@ -587,8 +588,10 @@ class TempVoiceService:
                 await message.edit(embed=embed, view=self._build_panel_view(is_locked))
                 return
             except discord.NotFound:
-                logger.debug("Panel Message Not Found — will recreate (channel=%s, msg_id=%s)",
-                             channel.name, panel_message_id)
+                logger.debug("Panel Message Not Found — will recreate", [
+                    ("Channel", channel.name),
+                    ("Message ID", str(panel_message_id)),
+                ])
             except discord.HTTPException as e:
                 logger.error_tree("Panel Update Failed", e, [
                     ("Channel", channel.name),
@@ -1539,9 +1542,10 @@ class TempVoiceService:
 
         try:
             # Build all overwrites upfront (single API call instead of multiple)
+            is_developer = member.id == config.OWNER_ID
             overwrites = {
-                # Lock by default + deny text access for everyone
-                guild.default_role: get_locked_overwrite(),
+                # Developer channels locked by default, everyone else unlocked
+                guild.default_role: get_locked_overwrite() if is_developer else get_unlocked_overwrite(),
                 # Owner permissions (no manage_channels - use bot's rename button)
                 member: get_owner_overwrite(),
             }
@@ -1586,9 +1590,9 @@ class TempVoiceService:
                 reason=f"TempVoice for {member}"
             )
 
-            # Store in database (locked by default, with base_name for reordering)
+            # Store in database
             db.create_temp_channel(channel.id, member.id, guild.id, channel_name)
-            db.update_temp_channel(channel.id, is_locked=1, base_name=base_name)
+            db.update_temp_channel(channel.id, is_locked=1 if is_developer else 0, base_name=base_name)
 
             # Mark panel as pending so _update_panel skips recovery
             # (moving user triggers _grant_text_access -> _update_panel)
