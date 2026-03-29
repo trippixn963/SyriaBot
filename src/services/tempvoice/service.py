@@ -1245,43 +1245,43 @@ class TempVoiceService:
         # Build blocked set for quick lookup
         blocked_ids = set(db.get_blocked_list(new_owner.id))
 
-        # Apply blocked list
+        # Apply blocked list (use Object for uncached members)
         blocked_count = 0
         for blocked_id in blocked_ids:
-            blocked_user = guild.get_member(blocked_id)
-            if blocked_user:
-                if has_vc_mod_role(blocked_user) and new_owner.id != config.OWNER_ID:
-                    continue
-                await channel.set_permissions(blocked_user, overwrite=get_blocked_overwrite())
-                if blocked_user.voice and blocked_user.voice.channel == channel:
-                    try:
-                        await blocked_user.move_to(None)
-                    except discord.HTTPException as e:
-                        logger.error_tree("Blocked User Kick Failed", e, [
+            blocked_member = guild.get_member(blocked_id)
+            if blocked_member and has_vc_mod_role(blocked_member) and new_owner.id != config.OWNER_ID:
+                continue
+            target = blocked_member or discord.Object(id=blocked_id)
+            await channel.set_permissions(target, overwrite=get_blocked_overwrite())
+            if blocked_member and blocked_member.voice and blocked_member.voice.channel == channel:
+                try:
+                    await blocked_member.move_to(None)
+                except discord.HTTPException as e:
+                    logger.error_tree("Blocked User Kick Failed", e, [
                             ("Channel", channel.name),
-                            ("User", f"{blocked_user.name} ({blocked_user.display_name})"),
-                            ("ID", str(blocked_user.id)),
+                            ("User", f"{blocked_member.name} ({blocked_member.display_name})"),
+                            ("ID", str(blocked_id)),
                         ])
                 blocked_count += 1
 
-        # Apply trusted list (connect only, or connect + text if currently in VC)
+        # Apply trusted list (use Object for uncached members)
         trusted_ids = set(db.get_trusted_list(new_owner.id))
         trusted_count = 0
         for trusted_id in trusted_ids:
-            trusted_user = guild.get_member(trusted_id)
-            if trusted_user:
-                if trusted_id in current_member_ids:
-                    # In VC — give connect + text
-                    await channel.set_permissions(trusted_user, overwrite=discord.PermissionOverwrite(
-                        connect=True,
-                        view_channel=True,
-                        send_messages=True,
-                        read_message_history=True,
-                    ))
-                else:
-                    # Not in VC — connect only
-                    await channel.set_permissions(trusted_user, overwrite=get_trusted_overwrite())
-                trusted_count += 1
+            trusted_member = guild.get_member(trusted_id)
+            target = trusted_member or discord.Object(id=trusted_id)
+            if trusted_id in current_member_ids and trusted_member:
+                # In VC — give connect + text
+                await channel.set_permissions(trusted_member, overwrite=discord.PermissionOverwrite(
+                    connect=True,
+                    view_channel=True,
+                    send_messages=True,
+                    read_message_history=True,
+                ))
+            else:
+                # Not in VC or uncached — connect only
+                await channel.set_permissions(target, overwrite=get_trusted_overwrite())
+            trusted_count += 1
 
         # Re-grant text access to members currently in the VC (no connect — they're already in)
         handled_ids = blocked_ids | trusted_ids | {new_owner.id, guild.me.id}
@@ -1557,29 +1557,28 @@ class TempVoiceService:
                     if mod_role:
                         overwrites[mod_role] = get_vc_mod_overwrite()
 
-            # Pre-build blocked user overwrites
+            # Pre-build blocked user overwrites (use Object for uncached members)
             blocked_count = 0
             for blocked_id in db.get_blocked_list(member.id):
-                blocked_user = guild.get_member(blocked_id)
-                if blocked_user:
-                    # Check if user has any VC mod role
-                    if has_vc_mod_role(blocked_user) and member.id != config.OWNER_ID:
-                        logger.tree("Block Skipped", [
-                            ("User", f"{blocked_user.name} ({blocked_user.display_name})"),
-                            ("ID", str(blocked_user.id)),
-                            ("Reason", "Has VC mod role"),
-                        ], emoji="⚠️")
-                        continue
-                    overwrites[blocked_user] = get_blocked_overwrite()
-                    blocked_count += 1
+                blocked_member = guild.get_member(blocked_id)
+                # Check if user has VC mod role (only if cached)
+                if blocked_member and has_vc_mod_role(blocked_member) and member.id != config.OWNER_ID:
+                    logger.tree("Block Skipped", [
+                        ("User", f"{blocked_member.name} ({blocked_member.display_name})"),
+                        ("ID", str(blocked_id)),
+                        ("Reason", "Has VC mod role"),
+                    ], emoji="⚠️")
+                    continue
+                # Use Object so block works even if member isn't cached
+                overwrites[blocked_member or discord.Object(id=blocked_id)] = get_blocked_overwrite()
+                blocked_count += 1
 
-            # Pre-build trusted user overwrites (with permanent text access)
+            # Pre-build trusted user overwrites (use Object for uncached members)
             trusted_count = 0
             for trusted_id in db.get_trusted_list(member.id):
-                trusted_user = guild.get_member(trusted_id)
-                if trusted_user:
-                    overwrites[trusted_user] = get_trusted_overwrite()
-                    trusted_count += 1
+                trusted_member = guild.get_member(trusted_id)
+                overwrites[trusted_member or discord.Object(id=trusted_id)] = get_trusted_overwrite()
+                trusted_count += 1
 
             # Create channel with ALL permissions in one API call
             channel = await guild.create_voice_channel(
