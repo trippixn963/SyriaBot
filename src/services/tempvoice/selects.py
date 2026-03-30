@@ -8,6 +8,7 @@ Author: حَـــــنَّـــــا
 Server: discord.gg/syria
 """
 
+import time
 from typing import TYPE_CHECKING
 
 import discord
@@ -427,8 +428,7 @@ class UserSelect(ui.UserSelect):
             await user.move_to(None)
             # Record kick cooldown so they can't rejoin for 5 minutes
             if self.service:
-                import time as _time
-                self.service._kick_cooldowns[(channel.id, user.id)] = _time.time()
+                self.service._kick_cooldowns[(channel.id, user.id)] = time.time()
             embed = discord.Embed(
                 description=f"👢 **{user.display_name}** kicked from channel\nThey cannot rejoin for **5 minutes**",
                 color=COLOR_ERROR

@@ -18,12 +18,13 @@ from src.core.colors import (
     EMOJI_LOCK, EMOJI_UNLOCK, EMOJI_LIMIT, EMOJI_RENAME, EMOJI_ALLOW,
     EMOJI_BLOCK, EMOJI_KICK, EMOJI_CLAIM, EMOJI_TRANSFER, EMOJI_DELETE,
 )
+from src.core.config import config
 from src.core.constants import CLAIM_APPROVAL_TIMEOUT
 from src.core.logger import logger
 from src.services.database import db
 from .modals import NameModal, LimitModal
 from .selects import UserSelectView
-from .utils import is_booster, set_owner_permissions, get_locked_overwrite, get_unlocked_overwrite
+from .utils import is_booster, has_vc_mod_role, set_owner_permissions, get_locked_overwrite, get_unlocked_overwrite
 
 if TYPE_CHECKING:
     from .service import TempVoiceService
@@ -350,6 +351,30 @@ class TempVoiceControlPanel(ui.View):
             is_locked = channel_info.get("is_locked", 0)
             new_locked = 0 if is_locked else 1
             everyone = interaction.guild.default_role
+
+            # Require level 10 to lock (unlocking always allowed)
+            # Bypass: developer, VC mods, boosters
+            can_bypass = (
+                interaction.user.id == config.OWNER_ID
+                or has_vc_mod_role(interaction.user)
+                or (hasattr(interaction.user, 'premium_since') and interaction.user.premium_since)
+            )
+            if new_locked and not can_bypass:
+                user_data = db.get_user_xp(interaction.user.id, interaction.guild.id)
+                user_level = user_data["level"] if user_data else 0
+                if user_level < 10:
+                    embed = discord.Embed(
+                        description=f"🔒 You need to be **Level 10** to lock your channel\nYou are currently **Level {user_level}**",
+                        color=COLOR_WARNING,
+                    )
+                    await interaction.response.send_message(embed=embed, ephemeral=True)
+                    logger.tree("Lock Denied — Level Too Low", [
+                        ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                        ("ID", str(interaction.user.id)),
+                        ("Level", str(user_level)),
+                        ("Required", "10"),
+                    ], emoji="🔒")
+                    return
 
             # Defer first — set_permissions can be slow
             await interaction.response.defer(ephemeral=True)

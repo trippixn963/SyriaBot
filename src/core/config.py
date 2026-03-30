@@ -152,6 +152,9 @@ class Config:
     PUBLIC_VC_CHANNELS: FrozenSet[int] = field(
         default_factory=lambda: _env_set("SYRIA_PUBLIC_VCS")
     )
+    VC_AUTO_LOCK_USERS: FrozenSet[int] = field(
+        default_factory=lambda: _env_set("SYRIA_VC_AUTO_LOCK_USERS")
+    )
 
     # ==========================================================================
     # XP System

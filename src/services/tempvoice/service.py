@@ -507,12 +507,12 @@ class TempVoiceService:
         """Send guide images + control panel + welcome message to voice channel."""
         music_guide_id, guide_id = await self._send_guide_images(channel)
 
-        is_dev = owner.id == config.OWNER_ID
-        embed = self._build_panel_embed(channel, owner, is_locked=is_dev)
+        auto_lock = owner.id == config.OWNER_ID or owner.id in config.VC_AUTO_LOCK_USERS
+        embed = self._build_panel_embed(channel, owner, is_locked=auto_lock)
 
         message = await channel.send(
             embed=embed,
-            view=self._build_panel_view(is_locked=is_dev),
+            view=self._build_panel_view(is_locked=auto_lock),
         )
 
         # Welcome message with rules reminder and music info
@@ -1543,9 +1543,10 @@ class TempVoiceService:
         try:
             # Build all overwrites upfront (single API call instead of multiple)
             is_developer = member.id == config.OWNER_ID
+            auto_lock = is_developer or member.id in config.VC_AUTO_LOCK_USERS
             overwrites = {
-                # Developer channels locked by default, everyone else unlocked
-                guild.default_role: get_locked_overwrite() if is_developer else get_unlocked_overwrite(),
+                # Auto-lock users get locked by default, everyone else unlocked
+                guild.default_role: get_locked_overwrite() if auto_lock else get_unlocked_overwrite(),
                 # Owner permissions (no manage_channels - use bot's rename button)
                 member: get_owner_overwrite(),
             }
@@ -1591,7 +1592,7 @@ class TempVoiceService:
 
             # Store in database
             db.create_temp_channel(channel.id, member.id, guild.id, channel_name)
-            db.update_temp_channel(channel.id, is_locked=1 if is_developer else 0, base_name=base_name)
+            db.update_temp_channel(channel.id, is_locked=1 if auto_lock else 0, base_name=base_name)
 
             # Mark panel as pending so _update_panel skips recovery
             # (moving user triggers _grant_text_access -> _update_panel)
