@@ -10,9 +10,10 @@ Server: discord.gg/syria
 """
 
 import asyncio
+import io
 import aiohttp
 import random
-from typing import Optional, Dict, List
+from typing import Optional, Tuple, Dict, List
 
 from src.core.logger import logger
 from src.utils.http import http_session, FAST_TIMEOUT
@@ -783,8 +784,38 @@ class ActionService:
         logger.tree("Action GIF Failed", [
             ("Action", action),
             ("Endpoint", endpoint),
-            ("Reason", "Both APIs failed"),
+            ("Reason", "All APIs failed"),
         ], emoji="⚠️")
+        return None
+
+    async def get_action_gif_bytes(self, action: str) -> Optional[Tuple[io.BytesIO, str]]:
+        """
+        Fetch a GIF for the action and download the bytes.
+
+        Returns:
+            Tuple of (BytesIO buffer, filename) or None if failed.
+        """
+        gif_url = await self.get_action_gif(action)
+        if not gif_url:
+            return None
+
+        try:
+            async with http_session.get(gif_url, timeout=FAST_TIMEOUT) as resp:
+                if resp.status == 200:
+                    data = await resp.read()
+                    buf = io.BytesIO(data)
+                    buf.seek(0)
+                    return buf, f"{action}.gif"
+        except asyncio.TimeoutError:
+            logger.tree("Action GIF Download Timeout", [
+                ("Action", action),
+                ("URL", gif_url[:80]),
+            ], emoji="⏳")
+        except Exception as e:
+            logger.error_tree("Action GIF Download Failed", e, [
+                ("Action", action),
+                ("URL", gif_url[:80]),
+            ])
         return None
 
     def get_action_message(self, action: str, user: str, target: Optional[str] = None) -> str:

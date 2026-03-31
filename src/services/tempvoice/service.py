@@ -233,13 +233,56 @@ class TempVoiceService:
         return channel_name
 
     async def _periodic_cleanup(self) -> None:
-        """Periodically clean up empty temp channels."""
+        """Periodically clean up empty temp channels and enforce blocks."""
         while True:
             await asyncio.sleep(config.VC_CLEANUP_INTERVAL)
             try:
                 await self._cleanup_empty_channels()
+                await self._enforce_blocks()
             except Exception as e:
                 logger.error_tree("Periodic Cleanup Failed", e)
+
+    async def _enforce_blocks(self) -> None:
+        """Scan all temp channels and kick any blocked users who slipped through."""
+        channels = db.get_all_temp_channels()
+        kicked = 0
+
+        for channel_data in channels:
+            channel_id = channel_data["channel_id"]
+            owner_id = channel_data["owner_id"]
+            guild_id = channel_data.get("guild_id", config.GUILD_ID)
+
+            guild = self.bot.get_guild(guild_id)
+            if not guild:
+                continue
+
+            channel = guild.get_channel(channel_id)
+            if not channel or not isinstance(channel, discord.VoiceChannel):
+                continue
+
+            blocked_ids = db.get_blocked_list(owner_id)
+            if not blocked_ids:
+                continue
+
+            for member in channel.members:
+                if member.id in blocked_ids:
+                    try:
+                        await channel.set_permissions(member, overwrite=get_blocked_overwrite())
+                        await member.move_to(None)
+                        kicked += 1
+                        logger.tree("Blocked User Enforced", [
+                            ("Channel", channel.name),
+                            ("User", f"{member.name} ({member.display_name})"),
+                            ("ID", str(member.id)),
+                            ("Owner", str(owner_id)),
+                        ], emoji="🚫")
+                    except discord.HTTPException:
+                        pass
+
+        if kicked > 0:
+            logger.tree("Block Enforcement Complete", [
+                ("Kicked", str(kicked)),
+            ], emoji="🔒")
 
     async def _cleanup_empty_channels(self) -> None:
         """Scan and delete empty temp channels (handles missed deletions)."""
@@ -926,8 +969,20 @@ class TempVoiceService:
             if member.id not in self._member_join_times[channel.id]:
                 self._member_join_times[channel.id][member.id] = time.time()
 
-            # Don't override permissions for blocked users
+            # Blocked user joined — re-apply block overwrite and kick
             if member.id in db.get_blocked_list(channel_info["owner_id"]):
+                await channel.set_permissions(member, overwrite=get_blocked_overwrite())
+                if member.voice and member.voice.channel == channel:
+                    try:
+                        await member.move_to(None)
+                        logger.tree("Blocked User Auto-Kicked", [
+                            ("Channel", channel.name),
+                            ("User", f"{member.name} ({member.display_name})"),
+                            ("ID", str(member.id)),
+                            ("Owner", str(channel_info["owner_id"])),
+                        ], emoji="🚫")
+                    except discord.HTTPException:
+                        pass
                 return
 
             # Get current overwrites to preserve other permissions
@@ -1350,13 +1405,36 @@ class TempVoiceService:
                 ("Status", "Waiting for previous creation to complete"),
             ], emoji="⏳")
 
-        # Use lock to prevent race conditions when multiple users join at once
-        async with self._create_lock:
+        # Use lock with timeout to prevent permanent deadlocks (gateway drops)
+        try:
+            acquired = await asyncio.wait_for(self._create_lock.acquire(), timeout=15.0)
+        except asyncio.TimeoutError:
+            logger.tree("Create Lock Timeout", [
+                ("User", f"{member.name} ({member.display_name})"),
+                ("ID", str(member.id)),
+                ("Action", "Forcing lock release"),
+            ], emoji="⚠️")
+            # Force release the stuck lock
+            if self._create_lock.locked():
+                try:
+                    self._create_lock.release()
+                except RuntimeError:
+                    pass
+                # Replace with a fresh lock
+                self._create_lock = asyncio.Lock()
+            acquired = await self._create_lock.acquire()
+
+        try:
             logger.tree("Create Lock Acquired", [
                 ("User", f"{member.name} ({member.display_name})"),
                 ("ID", str(member.id)),
             ], emoji="🔓")
             await self._create_temp_channel_inner(member)
+        finally:
+            try:
+                self._create_lock.release()
+            except RuntimeError:
+                pass
 
     async def _create_temp_channel_inner(self, member: discord.Member) -> None:
         """Inner method for channel creation (called within lock)."""

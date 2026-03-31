@@ -269,17 +269,16 @@ class ActionHandler:
                     ("Action", action),
                 ], emoji="🎬")
 
-            # Fetch GIF (new GIF for each target in combo)
-            gif_url = await action_service.get_action_gif(action)
-            if not gif_url:
+            # Fetch GIF bytes (new GIF for each target in combo)
+            result = await action_service.get_action_gif_bytes(action)
+            if not result:
                 logger.tree("Action GIF Failed", [
                     ("User", f"{message.author.name} ({message.author.display_name})"),
                     ("ID", str(message.author.id)),
                     ("Action", action),
-                    ("Reason", "API returned no URL"),
+                    ("Reason", "API returned no data"),
                 ], emoji="⚠️")
                 if sent_count == 0:
-                    # Only show error if we haven't sent anything
                     embed = discord.Embed(
                         description="Failed to fetch GIF. Please try again.",
                         color=COLOR_ERROR
@@ -288,16 +287,19 @@ class ActionHandler:
                     await msg.delete(delay=DELETE_DELAY_SHORT)
                 continue
 
+            gif_buffer, filename = result
+
             # Build action text
             target_mention = target.mention if target else None
             action_text = action_service.get_action_message(action, user_mention, target_mention)
 
-            # Create embed with GIF
+            # Create embed with attached GIF (always renders, unlike external URLs)
+            file = discord.File(gif_buffer, filename=filename)
             embed = discord.Embed(description=action_text, color=COLOR_GOLD)
-            embed.set_image(url=gif_url)
+            embed.set_image(url=f"attachment://{filename}")
 
-            # Send embed
-            await message.channel.send(embed=embed)
+            # Send embed with file
+            await message.channel.send(embed=embed, file=file)
             sent_count += 1
 
             # Record stats (non-blocking)

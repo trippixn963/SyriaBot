@@ -335,64 +335,69 @@ class UserSelect(ui.UserSelect):
             ], emoji="⚠️")
             return
 
-        # Remove from trusted if was trusted
-        db.remove_trusted(owner_id, user.id)
-        if db.add_blocked(owner_id, user.id):
-            # Set permission to deny connect
-            await channel.set_permissions(user, overwrite=get_blocked_overwrite())
+        # Check if already blocked
+        blocked_list = db.get_blocked_list(owner_id)
+        already_blocked = user.id in blocked_list
 
-            # Kick from channel if currently in it
-            was_kicked = False
-            if user.voice and user.voice.channel == channel:
-                try:
-                    await user.move_to(None)
-                    was_kicked = True
-                except discord.HTTPException as e:
-                    logger.error_tree("Blocked User Kick Failed", e, [
-                        ("Channel", channel.name),
-                        ("User", f"{user.name} ({user.display_name})"),
-                        ("ID", str(user.id)),
-                    ])
-
-            total_blocked = len(db.get_blocked_list(owner_id))
-            if was_kicked:
-                embed = discord.Embed(
-                    description=f"🚫 **{user.display_name}** blocked and kicked\n`{total_blocked}` users blocked",
-                    color=COLOR_ERROR
-                )
-            else:
-                embed = discord.Embed(
-                    description=f"🚫 **{user.display_name}** added to blocked list\n`{total_blocked}` users blocked",
-                    color=COLOR_ERROR
-                )
-            embed.set_thumbnail(url=user.display_avatar.url)
-            await interaction.followup.send(embed=embed, ephemeral=True)
-            logger.tree("User Blocked", [
-                ("Channel", channel.name),
-                ("Target", f"{user.name} ({user.display_name})"),
-                ("Target ID", str(user.id)),
-                ("By", f"{interaction.user.name} ({interaction.user.display_name})"),
-                ("By ID", str(interaction.user.id)),
-                ("Kicked", "Yes" if was_kicked else "No"),
-            ], emoji="🚫")
-        else:
-            # Already blocked - unblock them
-            db.remove_blocked(owner_id, user.id)
-            await channel.set_permissions(user, overwrite=None)
-            total_blocked = len(db.get_blocked_list(owner_id))
+        if already_blocked:
+            # Already blocked — show status instead of auto-unblocking
+            total_blocked = len(blocked_list)
             embed = discord.Embed(
-                description=f"🔓 **{user.display_name}** removed from blocked list\n`{total_blocked}` users remaining",
-                color=COLOR_SUCCESS
+                description=f"🚫 **{user.display_name}** is already blocked\n`{total_blocked}` users blocked\n\n*Use the trust button to unblock them*",
+                color=COLOR_WARNING
             )
             embed.set_thumbnail(url=user.display_avatar.url)
             await interaction.followup.send(embed=embed, ephemeral=True)
-            logger.tree("User Unblocked", [
+            logger.tree("Block Skipped - Already Blocked", [
                 ("Channel", channel.name),
                 ("Target", f"{user.name} ({user.display_name})"),
                 ("Target ID", str(user.id)),
                 ("By", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("By ID", str(interaction.user.id)),
-            ], emoji="🔓")
+            ], emoji="🚫")
+            return
+
+        # Remove from trusted if was trusted, then block
+        db.remove_trusted(owner_id, user.id)
+        db.add_blocked(owner_id, user.id)
+
+        # Set permission to deny connect and view
+        await channel.set_permissions(user, overwrite=get_blocked_overwrite())
+
+        # Kick from channel if currently in it
+        was_kicked = False
+        if user.voice and user.voice.channel == channel:
+            try:
+                await user.move_to(None)
+                was_kicked = True
+            except discord.HTTPException as e:
+                logger.error_tree("Blocked User Kick Failed", e, [
+                    ("Channel", channel.name),
+                    ("User", f"{user.name} ({user.display_name})"),
+                    ("ID", str(user.id)),
+                ])
+
+        total_blocked = len(db.get_blocked_list(owner_id))
+        if was_kicked:
+            embed = discord.Embed(
+                description=f"🚫 **{user.display_name}** blocked and kicked\n`{total_blocked}` users blocked",
+                color=COLOR_ERROR
+            )
+        else:
+            embed = discord.Embed(
+                description=f"🚫 **{user.display_name}** added to blocked list\n`{total_blocked}` users blocked",
+                color=COLOR_ERROR
+            )
+        embed.set_thumbnail(url=user.display_avatar.url)
+        await interaction.followup.send(embed=embed, ephemeral=True)
+        logger.tree("User Blocked", [
+            ("Channel", channel.name),
+            ("Target", f"{user.name} ({user.display_name})"),
+            ("Target ID", str(user.id)),
+            ("By", f"{interaction.user.name} ({interaction.user.display_name})"),
+            ("By ID", str(interaction.user.id)),
+            ("Kicked", "Yes" if was_kicked else "No"),
+        ], emoji="🚫")
 
         # Update panel to reflect new counts
         if self.service:
