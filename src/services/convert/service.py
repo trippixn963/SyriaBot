@@ -132,6 +132,21 @@ class ConvertService:
             ("GIF Engine", "ImageMagick (Wand)" if WAND_AVAILABLE else "Pillow"),
         ], emoji="✅" if WAND_AVAILABLE else "⚠️")
 
+    @staticmethod
+    def _escape_drawtext(text: str) -> str:
+        """Escape text for FFmpeg drawtext filter. Handles : ; ' \\ and other special chars."""
+        # FFmpeg drawtext escaping rules:
+        # 1. Backslash must be escaped first
+        # 2. Single quotes escaped as '\'' (end quote, literal quote, start quote) — but this breaks
+        #    when followed by :key=value options. Instead, remove single quotes entirely.
+        # 3. Colons, semicolons, and backslashes need backslash escaping
+        text = text.replace("\\", "\\\\")
+        text = text.replace("'", "\u2019")  # Replace ' with unicode right single quote (visually identical)
+        text = text.replace(":", "\\:")
+        text = text.replace(";", "\\;")
+        text = text.replace("%", "%%")
+        return text
+
     def _cleanup_orphaned_files(self) -> None:
         """Clean up any leftover temp files from previous runs/crashes."""
         try:
@@ -942,7 +957,7 @@ class ConvertService:
 
             # Font option for drawtext filters
             font_file = self._font_path or ""
-            font_option = f":fontfile='{font_file}'" if font_file else ""
+            font_option = f":fontfile={font_file}" if font_file else ""
 
             # Add text bar if text is provided
             if text:
@@ -977,7 +992,7 @@ class ConvertService:
 
                 if position == "top":
                     filters.append(f"pad=iw:ih+{bar_height}:0:{bar_height}:color={bar_color_hex}")
-                    escaped_text = text.replace("'", "'\\''").replace(":", "\\:")
+                    escaped_text = self._escape_drawtext(text)
                     filters.append(
                         f"drawtext=text='{escaped_text}'{font_option}"
                         f":fontsize={font_size}:fontcolor={text_color_hex}"
@@ -985,7 +1000,7 @@ class ConvertService:
                     )
                 else:
                     filters.append(f"pad=iw:ih+{bar_height}:0:0:color={bar_color_hex}")
-                    escaped_text = text.replace("'", "'\\''").replace(":", "\\:")
+                    escaped_text = self._escape_drawtext(text)
                     filters.append(
                         f"drawtext=text='{escaped_text}'{font_option}"
                         f":fontsize={font_size}:fontcolor={text_color_hex}"
@@ -1003,7 +1018,7 @@ class ConvertService:
                 watermark_size = max(WATERMARK_MIN_FONT, min(WATERMARK_MAX_FONT, int(scale_width * WATERMARK_FONT_SIZE_RATIO)))
                 watermark_padding = max(8, int(scale_width * WATERMARK_PADDING_RATIO))
                 watermark_hex = "#{:02x}{:02x}{:02x}".format(*WATERMARK_COLOR)
-                escaped_watermark = WATERMARK_TEXT.replace("'", "'\\''").replace(":", "\\:")
+                escaped_watermark = self._escape_drawtext(WATERMARK_TEXT)
                 filters.append(
                     f"drawtext=text='{escaped_watermark}'{font_option}"
                     f":fontsize={watermark_size}:fontcolor={watermark_hex}"
