@@ -8,7 +8,8 @@ Author: حَـــــنَّـــــا
 Server: discord.gg/syria
 """
 
-from typing import TYPE_CHECKING
+import time
+from typing import Dict, TYPE_CHECKING
 
 import discord
 from discord import ui
@@ -18,6 +19,10 @@ from src.core.colors import COLOR_SUCCESS, COLOR_ERROR, COLOR_WARNING
 from src.core.logger import logger
 from src.services.database import db
 from .utils import extract_base_name, build_full_name, get_channel_position
+
+# Per-channel rename cooldown: {channel_id: last_rename_timestamp}
+_rename_cooldowns: Dict[int, float] = {}
+_RENAME_COOLDOWN_SECONDS = 300  # 5 minutes between renames per channel
 
 if TYPE_CHECKING:
     from .service import TempVoiceService
@@ -52,6 +57,25 @@ class NameModal(ui.Modal, title="Rename Channel"):
             ("Channel", self.channel.name),
             ("Input", self.name_input.value[:30] if self.name_input.value else "(empty)"),
         ], emoji="✏️")
+
+        # Check per-channel rename cooldown (prevents rate limit stacking)
+        now = time.time()
+        last_rename = _rename_cooldowns.get(self.channel.id, 0)
+        remaining = _RENAME_COOLDOWN_SECONDS - (now - last_rename)
+        if remaining > 0:
+            minutes = int(remaining // 60) + 1
+            logger.tree("Rename Cooldown", [
+                ("User", f"{interaction.user.name} ({interaction.user.id})"),
+                ("Channel", self.channel.name),
+                ("Remaining", f"{remaining:.0f}s"),
+            ], emoji="⏳")
+            embed = discord.Embed(
+                description=f"⏳ Channel was recently renamed.\nPlease wait **{minutes} minute{'s' if minutes != 1 else ''}** and try again.",
+                color=COLOR_WARNING,
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+
         new_base_name = self.name_input.value.strip() if self.name_input.value else None
 
         # Defer first — channel.edit() can be slow (Discord rate limits renames)
@@ -62,17 +86,20 @@ class NameModal(ui.Modal, title="Rename Channel"):
             position = get_channel_position(self.channel)
 
             if new_base_name:
-                # User provided a custom base name - build full name with numeral
                 full_name = build_full_name(position, new_base_name)
                 await self.channel.edit(name=full_name)
 
+                _rename_cooldowns[self.channel.id] = time.time()
                 db.update_temp_channel(self.channel.id, name=full_name, base_name=new_base_name)
                 db.save_user_settings(interaction.user.id, default_name=new_base_name)
                 embed = discord.Embed(
                     description=f"✏️ Renamed to **{full_name}**\n*Saved as default for future VCs*",
                     color=COLOR_SUCCESS
                 )
-                await interaction.followup.send(embed=embed, ephemeral=True)
+                try:
+                    await interaction.followup.send(embed=embed, ephemeral=True)
+                except discord.HTTPException:
+                    pass  # Interaction token may have expired — rename still succeeded
                 logger.tree("Channel Renamed", [
                     ("From", old_name),
                     ("To", full_name),
@@ -82,20 +109,22 @@ class NameModal(ui.Modal, title="Rename Channel"):
                     ("ID", str(interaction.user.id)),
                 ], emoji="✏️")
             else:
-                # Reset to auto-generated name (display name)
                 display_name = self.member.display_name[:80]
                 auto_name = build_full_name(position, display_name)
 
                 await self.channel.edit(name=auto_name)
 
+                _rename_cooldowns[self.channel.id] = time.time()
                 db.update_temp_channel(self.channel.id, name=auto_name, base_name=display_name)
-                # Clear saved default name
                 db.save_user_settings(interaction.user.id, default_name=None)
                 embed = discord.Embed(
                     description=f"🔄 Reset to **{auto_name}**\n*Future VCs will use auto-naming*",
                     color=COLOR_SUCCESS
                 )
-                await interaction.followup.send(embed=embed, ephemeral=True)
+                try:
+                    await interaction.followup.send(embed=embed, ephemeral=True)
+                except discord.HTTPException:
+                    pass  # Interaction token may have expired — rename still succeeded
                 logger.tree("Channel Name Reset", [
                     ("From", old_name),
                     ("To", auto_name),
