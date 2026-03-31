@@ -1110,18 +1110,14 @@ class XPService:
         left_users = db_user_ids - current_member_ids
         active_users = db_user_ids & current_member_ids
 
-        # Batch update inactive users
-        for user_id in left_users:
-            db.set_user_inactive(user_id, config.GUILD_ID)
-
-        # Batch update active users
-        for user_id in active_users:
-            db.set_user_active(user_id, config.GUILD_ID)
+        # Batch update in single queries (no per-user logging)
+        inactive_updated = db.batch_set_inactive(left_users, config.GUILD_ID)
+        active_updated = db.batch_set_active(active_users, config.GUILD_ID)
 
         logger.tree("Active Status Sync Complete", [
             ("Total DB Users", str(len(db_user_ids))),
-            ("Active", str(len(active_users))),
-            ("Inactive", str(len(left_users))),
+            ("Active", f"{len(active_users)} ({active_updated} changed)"),
+            ("Inactive", f"{len(left_users)} ({inactive_updated} changed)"),
         ], emoji="✅")
 
     async def _sync_roles(self) -> None:

@@ -462,16 +462,11 @@ class XPMixin:
         """Mark a user as active (in server) for leaderboard visibility."""
         try:
             with self._get_conn() as conn:
-                cur = conn.cursor()
-                cur.execute("""
-                    UPDATE user_xp SET is_active = 1
-                    WHERE user_id = ? AND guild_id = ?
-                """, (user_id, guild_id))
+                conn.execute(
+                    "UPDATE user_xp SET is_active = 1 WHERE user_id = ? AND guild_id = ?",
+                    (user_id, guild_id),
+                )
                 conn.commit()
-            logger.tree("DB: User Active", [
-                ("ID", str(user_id)),
-                ("Status", "Active"),
-            ], emoji="✅")
         except Exception as e:
             logger.tree("DB: Set Active Error", [
                 ("ID", str(user_id)),
@@ -482,21 +477,58 @@ class XPMixin:
         """Mark a user as inactive (left server) to hide from leaderboard."""
         try:
             with self._get_conn() as conn:
-                cur = conn.cursor()
-                cur.execute("""
-                    UPDATE user_xp SET is_active = 0
-                    WHERE user_id = ? AND guild_id = ?
-                """, (user_id, guild_id))
+                conn.execute(
+                    "UPDATE user_xp SET is_active = 0 WHERE user_id = ? AND guild_id = ?",
+                    (user_id, guild_id),
+                )
                 conn.commit()
-            logger.tree("DB: User Inactive", [
-                ("ID", str(user_id)),
-                ("Status", "Inactive"),
-            ], emoji="👋")
         except Exception as e:
             logger.tree("DB: Set Inactive Error", [
                 ("ID", str(user_id)),
                 ("Error", str(e)[:50]),
             ], emoji="❌")
+
+    def batch_set_active(self, user_ids: set, guild_id: int) -> int:
+        """Batch mark users as active. Returns count updated."""
+        if not user_ids:
+            return 0
+        try:
+            with self._get_conn() as conn:
+                placeholders = ",".join("?" for _ in user_ids)
+                conn.execute(
+                    f"UPDATE user_xp SET is_active = 1 WHERE guild_id = ? AND is_active = 0 AND user_id IN ({placeholders})",
+                    [guild_id, *user_ids],
+                )
+                updated = conn.total_changes
+                conn.commit()
+                return updated
+        except Exception as e:
+            logger.tree("DB: Batch Set Active Error", [
+                ("Count", str(len(user_ids))),
+                ("Error", str(e)[:50]),
+            ], emoji="❌")
+            return 0
+
+    def batch_set_inactive(self, user_ids: set, guild_id: int) -> int:
+        """Batch mark users as inactive. Returns count updated."""
+        if not user_ids:
+            return 0
+        try:
+            with self._get_conn() as conn:
+                placeholders = ",".join("?" for _ in user_ids)
+                conn.execute(
+                    f"UPDATE user_xp SET is_active = 0 WHERE guild_id = ? AND is_active = 1 AND user_id IN ({placeholders})",
+                    [guild_id, *user_ids],
+                )
+                updated = conn.total_changes
+                conn.commit()
+                return updated
+        except Exception as e:
+            logger.tree("DB: Batch Set Inactive Error", [
+                ("Count", str(len(user_ids))),
+                ("Error", str(e)[:50]),
+            ], emoji="❌")
+            return 0
 
     # =========================================================================
     # Extended User Tracking

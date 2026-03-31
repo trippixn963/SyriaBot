@@ -84,7 +84,7 @@ class HTTPSessionManager:
 
     def __init__(self) -> None:
         self._session: Optional[aiohttp.ClientSession] = None
-        self._user_agent: str = "DiscordBot/1.0"
+        self._user_agent: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 
     @property
     def session(self) -> aiohttp.ClientSession:

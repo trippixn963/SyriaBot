@@ -108,6 +108,15 @@ class TempVoiceService:
         self._pending_claims: set[int] = set()  # channel_ids with active claim requests
         self._pending_panels: set[int] = set()  # channel_ids where panel creation is in progress
 
+    def _handle_channel_gone(self, channel_id: int, channel_name: str = "Unknown") -> None:
+        """Clean up all state for a channel that no longer exists on Discord."""
+        db.delete_temp_channel(channel_id)
+        self._cleanup_channel_cache(channel_id)
+        logger.tree("Stale Channel Cleaned", [
+            ("Channel", channel_name),
+            ("ID", str(channel_id)),
+        ], emoji="🗑️")
+
     async def setup(self) -> None:
         """
         Initialize and start the TempVoice service.
@@ -295,6 +304,10 @@ class TempVoiceService:
                         ("Channel", channel_name),
                         ("Reason", "Periodic cleanup"),
                     ], emoji="🧹")
+                except discord.NotFound:
+                    db.delete_temp_channel(channel_id)
+                    self._cleanup_channel_cache(channel_id)
+                    cleaned += 1
                 except discord.HTTPException as e:
                     logger.error_tree("Empty Channel Delete Failed", e, [
                         ("Channel ID", str(channel_id)),
@@ -926,6 +939,8 @@ class TempVoiceService:
             await channel.set_permissions(member, overwrite=overwrites)
             # Update panel to show new member
             await self._update_panel(channel)
+        except discord.NotFound:
+            self._handle_channel_gone(channel.id, channel.name)
         except discord.HTTPException as e:
             logger.error_tree("Text Access Grant Failed", e, [
                 ("Channel", channel.name),
@@ -1031,6 +1046,8 @@ class TempVoiceService:
 
             # Update panel to show member left
             await self._update_panel(channel)
+        except discord.NotFound:
+            self._handle_channel_gone(channel.id, channel.name)
         except discord.HTTPException as e:
             logger.error_tree("Text Access Revoke Failed", e, [
                 ("Channel", channel.name),
@@ -1686,6 +1703,9 @@ class TempVoiceService:
                 # Schedule reorder (debounced, non-blocking)
                 self.schedule_reorder(guild)
 
+            except discord.NotFound:
+                # Already deleted by another path — clean up DB
+                db.delete_temp_channel(channel.id)
             except discord.HTTPException as e:
                 logger.error_tree("Empty Channel Delete Failed", e, [
                     ("Channel", channel_name),
@@ -1782,11 +1802,13 @@ class TempVoiceService:
             ], emoji="↩️")
         except Exception as e:
             logger.error_tree("Transfer Error", e, [
-                ("Channel", channel.name if channel else "Unknown"),
+                ("Channel", getattr(channel, 'name', 'Unknown')),
             ])
         finally:
             # Clean up the pending transfer entry
-            self._pending_transfers.pop(channel.id, None)
+            channel_id = getattr(channel, 'id', None)
+            if channel_id:
+                self._pending_transfers.pop(channel_id, None)
 
     async def _apply_owner_transfer(
         self,
@@ -1838,6 +1860,8 @@ class TempVoiceService:
                 ("To", str(new_owner)),
             ], emoji="🔄")
 
+        except discord.NotFound:
+            self._handle_channel_gone(channel.id, channel.name)
         except discord.HTTPException as e:
             logger.error_tree("Auto-Transfer Failed", e, [
                 ("Channel", channel.name),

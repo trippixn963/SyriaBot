@@ -160,9 +160,12 @@ class UserSelect(ui.UserSelect):
 
     async def _handle_permit(self, interaction: discord.Interaction, channel: discord.VoiceChannel, user: discord.Member, owner_id: int) -> None:
         """Handle permit/unpermit action."""
+        # Defer immediately to avoid 3-second interaction timeout
+        await interaction.response.defer(ephemeral=True)
+
         if user.id == owner_id:
             embed = discord.Embed(description="⚠️ Can't permit yourself", color=COLOR_WARNING)
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            await interaction.followup.send(embed=embed, ephemeral=True)
             logger.tree("Permit Rejected", [
                 ("Channel", channel.name),
                 ("User", f"{user.name} ({user.display_name})"),
@@ -172,7 +175,7 @@ class UserSelect(ui.UserSelect):
             return
         if user.bot:
             embed = discord.Embed(description="⚠️ Can't permit bots", color=COLOR_WARNING)
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            await interaction.followup.send(embed=embed, ephemeral=True)
             logger.tree("Permit Rejected", [
                 ("Channel", channel.name),
                 ("User", f"{user.name} ({user.display_name})"),
@@ -224,7 +227,7 @@ class UserSelect(ui.UserSelect):
                     value="**Boost the server** to unlock unlimited allowed users and custom channel names!",
                     inline=False
                 )
-                await interaction.response.send_message(embed=embed, ephemeral=True)
+                await interaction.followup.send(embed=embed, ephemeral=True)
                 logger.tree("Permit Blocked", [
                     ("Channel", channel.name),
                     ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
@@ -244,7 +247,7 @@ class UserSelect(ui.UserSelect):
                 color=COLOR_SUCCESS
             )
             embed.set_thumbnail(url=user.display_avatar.url)
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            await interaction.followup.send(embed=embed, ephemeral=True)
             logger.tree("User Permitted", [
                 ("Channel", channel.name),
                 ("Target", f"{user.name} ({user.display_name})"),
@@ -272,7 +275,7 @@ class UserSelect(ui.UserSelect):
                 color=COLOR_ERROR
             )
             embed.set_thumbnail(url=user.display_avatar.url)
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            await interaction.followup.send(embed=embed, ephemeral=True)
             logger.tree("User Unpermitted", [
                 ("Channel", channel.name),
                 ("Target", f"{user.name} ({user.display_name})"),
@@ -295,9 +298,11 @@ class UserSelect(ui.UserSelect):
 
     async def _handle_block(self, interaction: discord.Interaction, channel: discord.VoiceChannel, user: discord.Member, owner_id: int) -> None:
         """Handle block/unblock action."""
+        await interaction.response.defer(ephemeral=True)
+
         if user.id == owner_id:
             embed = discord.Embed(description="⚠️ Can't block yourself", color=COLOR_WARNING)
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            await interaction.followup.send(embed=embed, ephemeral=True)
             logger.tree("Block Rejected", [
                 ("Channel", channel.name),
                 ("User", f"{user.name} ({user.display_name})"),
@@ -307,7 +312,7 @@ class UserSelect(ui.UserSelect):
             return
         if user.bot:
             embed = discord.Embed(description="⚠️ Can't block bots", color=COLOR_WARNING)
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            await interaction.followup.send(embed=embed, ephemeral=True)
             logger.tree("Block Rejected", [
                 ("Channel", channel.name),
                 ("User", f"{user.name} ({user.display_name})"),
@@ -319,7 +324,7 @@ class UserSelect(ui.UserSelect):
         # Check if target has VC mod role - can only be blocked by developer
         if has_vc_mod_role(user) and owner_id != config.OWNER_ID:
             embed = discord.Embed(description="⚠️ Can't block moderators", color=COLOR_WARNING)
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            await interaction.followup.send(embed=embed, ephemeral=True)
             logger.tree("Block Rejected", [
                 ("Channel", channel.name),
                 ("Target", f"{user.name} ({user.display_name})"),
@@ -361,7 +366,7 @@ class UserSelect(ui.UserSelect):
                     color=COLOR_ERROR
                 )
             embed.set_thumbnail(url=user.display_avatar.url)
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            await interaction.followup.send(embed=embed, ephemeral=True)
             logger.tree("User Blocked", [
                 ("Channel", channel.name),
                 ("Target", f"{user.name} ({user.display_name})"),
@@ -380,7 +385,7 @@ class UserSelect(ui.UserSelect):
                 color=COLOR_SUCCESS
             )
             embed.set_thumbnail(url=user.display_avatar.url)
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            await interaction.followup.send(embed=embed, ephemeral=True)
             logger.tree("User Unblocked", [
                 ("Channel", channel.name),
                 ("Target", f"{user.name} ({user.display_name})"),
@@ -401,9 +406,11 @@ class UserSelect(ui.UserSelect):
 
     async def _handle_kick(self, interaction: discord.Interaction, channel: discord.VoiceChannel, user: discord.Member, owner_id: int) -> None:
         """Handle kick action."""
+        await interaction.response.defer(ephemeral=True)
+
         if user.id == owner_id:
             embed = discord.Embed(description="⚠️ Can't kick yourself", color=COLOR_WARNING)
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            await interaction.followup.send(embed=embed, ephemeral=True)
             logger.tree("Kick Rejected", [
                 ("Channel", channel.name),
                 ("User", f"{user.name} ({user.display_name})"),
@@ -415,7 +422,7 @@ class UserSelect(ui.UserSelect):
         # Protect VC mod roles from being kicked (developer can kick anyone)
         if has_vc_mod_role(user) and owner_id != config.OWNER_ID:
             embed = discord.Embed(description="⚠️ Can't kick staff members", color=COLOR_WARNING)
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            await interaction.followup.send(embed=embed, ephemeral=True)
             logger.tree("Kick Rejected", [
                 ("Channel", channel.name),
                 ("User", f"{user.name} ({user.display_name})"),
@@ -434,7 +441,7 @@ class UserSelect(ui.UserSelect):
                 color=COLOR_ERROR
             )
             embed.set_thumbnail(url=user.display_avatar.url)
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            await interaction.followup.send(embed=embed, ephemeral=True)
             logger.tree("User Kicked", [
                 ("Channel", channel.name),
                 ("Target", f"{user.name} ({user.display_name})"),
@@ -449,7 +456,7 @@ class UserSelect(ui.UserSelect):
                 color=COLOR_WARNING
             )
             embed.set_thumbnail(url=user.display_avatar.url)
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            await interaction.followup.send(embed=embed, ephemeral=True)
             logger.tree("Kick Rejected", [
                 ("Channel", channel.name),
                 ("Target", f"{user.name} ({user.display_name})"),
