@@ -137,15 +137,51 @@ async def send_guide_images(channel: discord.VoiceChannel) -> tuple[int | None, 
     music_guide_id = None
     guide_id = None
 
-    music_bytes = await render_music_guide()
-    if music_bytes:
-        music_msg = await channel.send(file=discord.File(io.BytesIO(music_bytes), "music_guide.png"))
-        music_guide_id = music_msg.id
+    try:
+        music_bytes = await render_music_guide()
+        if music_bytes:
+            music_msg = await channel.send(file=discord.File(io.BytesIO(music_bytes), "music_guide.png"))
+            music_guide_id = music_msg.id
+        else:
+            logger.tree("Music Guide Skipped", [
+                ("Channel", channel.name),
+                ("Reason", "Render returned empty"),
+            ], emoji="⚠️")
+    except discord.NotFound:
+        logger.tree("Music Guide Send Failed", [
+            ("Channel", channel.name),
+            ("Reason", "Channel not found"),
+        ], emoji="⚠️")
+    except discord.HTTPException as e:
+        logger.error_tree("Music Guide Send Failed", e, [
+            ("Channel", channel.name),
+        ])
 
-    voice_bytes = await render_voice_guide()
-    if voice_bytes:
-        guide_msg = await channel.send(file=discord.File(io.BytesIO(voice_bytes), "voice_guide.png"))
-        guide_id = guide_msg.id
+    try:
+        voice_bytes = await render_voice_guide()
+        if voice_bytes:
+            guide_msg = await channel.send(file=discord.File(io.BytesIO(voice_bytes), "voice_guide.png"))
+            guide_id = guide_msg.id
+        else:
+            logger.tree("Voice Guide Skipped", [
+                ("Channel", channel.name),
+                ("Reason", "Render returned empty"),
+            ], emoji="⚠️")
+    except discord.NotFound:
+        logger.tree("Voice Guide Send Failed", [
+            ("Channel", channel.name),
+            ("Reason", "Channel not found"),
+        ], emoji="⚠️")
+    except discord.HTTPException as e:
+        logger.error_tree("Voice Guide Send Failed", e, [
+            ("Channel", channel.name),
+        ])
+
+    logger.tree("Guide Images Sent", [
+        ("Channel", channel.name),
+        ("Music Guide", "Yes" if music_guide_id else "No"),
+        ("Voice Guide", "Yes" if guide_id else "No"),
+    ], emoji="🖼️")
 
     return music_guide_id, guide_id
 
@@ -192,6 +228,13 @@ async def send_channel_interface(
     if music_guide_id:
         update_kwargs["music_guide_message_id"] = music_guide_id
     db.update_temp_channel(channel.id, **update_kwargs)
+
+    logger.tree("Channel Interface Sent", [
+        ("Channel", channel.name),
+        ("Owner", f"{owner.name} ({owner.display_name})"),
+        ("Panel ID", str(message.id)),
+        ("Auto-Lock", str(auto_lock)),
+    ], emoji="🎛️")
 
     return message
 
@@ -340,10 +383,22 @@ async def resend_sticky_panel(channel: discord.VoiceChannel, service: "TempVoice
                     if is_guide or is_panel:
                         try:
                             await msg.delete()
-                        except (discord.NotFound, discord.HTTPException):
+                        except discord.NotFound:
                             pass
-        except discord.HTTPException:
-            pass
+                        except discord.HTTPException as e:
+                            logger.error_tree("Sticky Panel Old Message Delete Failed", e, [
+                                ("Channel", channel.name),
+                                ("Message ID", str(msg.id)),
+                            ])
+        except discord.NotFound:
+            logger.tree("Sticky Panel Scan Skipped", [
+                ("Channel", channel.name),
+                ("Reason", "Channel not found during history scan"),
+            ], emoji="⚠️")
+        except discord.HTTPException as e:
+            logger.error_tree("Sticky Panel History Scan Failed", e, [
+                ("Channel", channel.name),
+            ])
 
         # Send new guides + panel (no owner ping on resend)
         try:
@@ -384,10 +439,22 @@ async def resend_interface_panel(channel: discord.TextChannel, service: "TempVoi
             if msg.author.id == service.bot.user.id:
                 try:
                     await msg.delete()
-                except discord.HTTPException:
+                except discord.NotFound:
                     pass
-    except discord.HTTPException:
-        pass
+                except discord.HTTPException as e:
+                    logger.error_tree("Interface Panel Old Message Delete Failed", e, [
+                        ("Channel", channel.name),
+                        ("Message ID", str(msg.id)),
+                    ])
+    except discord.NotFound:
+        logger.tree("Interface Panel Scan Skipped", [
+            ("Channel", channel.name),
+            ("Reason", "Channel not found during history scan"),
+        ], emoji="⚠️")
+    except discord.HTTPException as e:
+        logger.error_tree("Interface Panel History Scan Failed", e, [
+            ("Channel", channel.name),
+        ])
 
     # Build and send new interface panel
     embed = discord.Embed(

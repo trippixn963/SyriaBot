@@ -209,6 +209,9 @@ async def sync_all_channels(bot: discord.Client) -> None:
     """
     all_channels = db.get_all_temp_channels()
     if not all_channels:
+        logger.tree("Full Permission Sync Skipped", [
+            ("Reason", "No temp channels in DB"),
+        ], emoji="ℹ️")
         return
 
     synced = 0
@@ -281,12 +284,28 @@ async def grant_text_access(channel: discord.VoiceChannel, member: discord.Membe
                     ("ID", str(member.id)),
                     ("Owner", str(owner_id)),
                 ], emoji="🚫")
-        except discord.HTTPException:
-            pass
+        except discord.NotFound:
+            logger.tree("Blocked Kick Skipped", [
+                ("Channel", channel.name),
+                ("User", f"{member.name} ({member.display_name})"),
+                ("ID", str(member.id)),
+                ("Reason", "Channel or member not found"),
+            ], emoji="⚠️")
+        except discord.HTTPException as e:
+            logger.error_tree("Blocked Kick Failed", e, [
+                ("Channel", channel.name),
+                ("User", f"{member.name} ({member.display_name})"),
+                ("ID", str(member.id)),
+            ])
         return
 
     # Don't override owner permissions
     if member.id == owner_id:
+        logger.tree("Text Access Skipped", [
+            ("Channel", channel.name),
+            ("User", f"{member.name} ({member.display_name})"),
+            ("Reason", "Member is owner"),
+        ], emoji="⏭️")
         return
 
     # Grant text access
@@ -296,8 +315,18 @@ async def grant_text_access(channel: discord.VoiceChannel, member: discord.Membe
         overwrites.send_messages = True
         overwrites.read_message_history = True
         await channel.set_permissions(member, overwrite=overwrites)
+        logger.tree("Text Access Granted", [
+            ("Channel", channel.name),
+            ("User", f"{member.name} ({member.display_name})"),
+            ("ID", str(member.id)),
+        ], emoji="💬")
     except discord.NotFound:
-        pass
+        logger.tree("Text Access Grant Skipped", [
+            ("Channel", channel.name),
+            ("User", f"{member.name} ({member.display_name})"),
+            ("ID", str(member.id)),
+            ("Reason", "Channel or member not found"),
+        ], emoji="⚠️")
     except discord.HTTPException as e:
         logger.error_tree("Text Access Grant Failed", e, [
             ("Channel", channel.name),
@@ -336,8 +365,19 @@ async def revoke_text_access(channel: discord.VoiceChannel, member: discord.Memb
         else:
             # Remove all custom permissions
             await channel.set_permissions(member, overwrite=None)
+        logger.tree("Text Access Revoked", [
+            ("Channel", channel.name),
+            ("User", f"{member.name} ({member.display_name})"),
+            ("ID", str(member.id)),
+            ("Trusted", str(is_trusted)),
+        ], emoji="🔇")
     except discord.NotFound:
-        pass
+        logger.tree("Text Access Revoke Skipped", [
+            ("Channel", channel.name),
+            ("User", f"{member.name} ({member.display_name})"),
+            ("ID", str(member.id)),
+            ("Reason", "Channel or member not found"),
+        ], emoji="⚠️")
     except discord.HTTPException as e:
         logger.error_tree("Text Access Revoke Failed", e, [
             ("Channel", channel.name),

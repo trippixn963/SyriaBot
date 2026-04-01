@@ -366,7 +366,15 @@ async def _create_temp_channel_inner(svc: TempVoiceService, member: discord.Memb
             ], emoji="⏭️")
             svc._pending_panels.discard(channel.id)
             db.delete_temp_channel(channel.id)
-            await channel.delete(reason="User disconnected before move")
+            try:
+                await channel.delete(reason="User disconnected before move")
+            except discord.NotFound:
+                pass
+            except discord.HTTPException as e:
+                logger.error_tree("Cleanup Delete Failed", e, [
+                    ("Channel", channel_name),
+                    ("Reason", "User disconnected before move"),
+                ])
             return
 
         # Move user FIRST for instant response
@@ -380,7 +388,15 @@ async def _create_temp_channel_inner(svc: TempVoiceService, member: discord.Memb
             ])
             svc._pending_panels.discard(channel.id)
             db.delete_temp_channel(channel.id)
-            await channel.delete(reason="Failed to move user")
+            try:
+                await channel.delete(reason="Failed to move user")
+            except discord.NotFound:
+                pass
+            except discord.HTTPException as del_e:
+                logger.error_tree("Cleanup Delete Failed", del_e, [
+                    ("Channel", channel_name),
+                    ("Reason", "Failed to move user"),
+                ])
             return
 
         # Send guide images + control panel after user is already in the channel
@@ -572,6 +588,11 @@ async def apply_owner_transfer(
                 ("Channel", channel.name),
                 ("Reason", "Ownership transfer"),
             ], emoji="🧹")
+        except discord.NotFound:
+            logger.tree("VC Chat Clear Skipped", [
+                ("Channel", channel.name),
+                ("Reason", "Channel not found during purge"),
+            ], emoji="⚠️")
         except discord.HTTPException as e:
             logger.error_tree("VC Chat Clear Failed", e, [
                 ("Channel", channel.name),
@@ -580,6 +601,12 @@ async def apply_owner_transfer(
         # Send fresh control panel for the new owner
         try:
             await svc._send_channel_interface(channel, new_owner)
+        except discord.NotFound:
+            logger.tree("New Panel Send Skipped", [
+                ("Channel", channel.name),
+                ("New Owner", str(new_owner)),
+                ("Reason", "Channel not found"),
+            ], emoji="⚠️")
         except discord.HTTPException as e:
             logger.error_tree("New Panel Send Failed", e, [
                 ("Channel", channel.name),
@@ -593,6 +620,12 @@ async def apply_owner_transfer(
                 f"{new_owner.mention} you are now the owner of this channel.\n"
                 f"*The previous owner left and you were here the longest.*"
             )
+        except discord.NotFound:
+            logger.tree("Transfer Notification Skipped", [
+                ("Channel", channel.name),
+                ("New Owner", str(new_owner)),
+                ("Reason", "Channel not found"),
+            ], emoji="⚠️")
         except discord.HTTPException as e:
             logger.error_tree("Transfer Notification Failed", e, [
                 ("Channel", channel.name),
@@ -721,6 +754,11 @@ async def cleanup_orphaned_channels(svc: TempVoiceService) -> None:
             ("Channels Removed", str(cleaned)),
             ("Reason", "Channel no longer exists"),
         ], emoji="🧹")
+    else:
+        logger.tree("Orphan Cleanup Skipped", [
+            ("Reason", "No orphaned channels found"),
+            ("Total Checked", str(len(channels))),
+        ], emoji="ℹ️")
 
 
 def cleanup_channel_cache(svc: TempVoiceService, channel_id: int) -> None:
