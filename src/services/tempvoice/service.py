@@ -20,14 +20,9 @@ import time
 from typing import TYPE_CHECKING
 
 import discord
-from discord import ui
 
 from src.core.config import config
-from src.core.colors import (
-    EMOJI_LOCK, EMOJI_UNLOCK, EMOJI_LIMIT, EMOJI_RENAME, EMOJI_ALLOW,
-    EMOJI_BLOCK, EMOJI_KICK, EMOJI_CLAIM, EMOJI_TRANSFER, EMOJI_DELETE,
-    COLOR_ERROR, COLOR_SUCCESS,
-)
+from src.core.colors import EMOJI_TRANSFER
 from src.core.constants import (
     TEMPVOICE_JOIN_COOLDOWN,
     TEMPVOICE_OWNER_LEAVE_TRANSFER_DELAY,
@@ -37,6 +32,18 @@ from src.core.constants import (
 from src.core.logger import logger
 from src.services.database import db
 from src.utils.async_utils import create_safe_task
+from .lifecycle import (
+    create_temp_channel as _lifecycle_create_temp_channel,
+    check_empty_channel as _lifecycle_check_empty_channel,
+    schedule_owner_transfer as _lifecycle_schedule_owner_transfer,
+    apply_owner_transfer as _lifecycle_apply_owner_transfer,
+    cleanup_empty_channels as _lifecycle_cleanup_empty_channels,
+    cleanup_orphaned_channels as _lifecycle_cleanup_orphaned_channels,
+    cleanup_channel_cache as _lifecycle_cleanup_channel_cache,
+    schedule_reorder as _lifecycle_schedule_reorder,
+    rename_for_new_owner as _lifecycle_rename_for_new_owner,
+    get_next_position as _lifecycle_get_next_position,
+)
 from .utils import (
     generate_base_name,
     build_full_name,
@@ -53,6 +60,15 @@ from .utils import (
     get_vc_mod_overwrite,
 )
 from .views import TempVoiceControlPanel
+from .panel import (
+    build_panel_embed,
+    build_panel_view,
+    send_guide_images,
+    send_channel_interface,
+    update_panel,
+    resend_sticky_panel,
+    resend_interface_panel,
+)
 
 if TYPE_CHECKING:
     from src.bot import SyriaBot
@@ -65,8 +81,7 @@ OWNER_LEAVE_TRANSFER_DELAY = TEMPVOICE_OWNER_LEAVE_TRANSFER_DELAY
 STICKY_PANEL_MESSAGE_THRESHOLD = TEMPVOICE_STICKY_PANEL_THRESHOLD
 REORDER_DEBOUNCE_DELAY = TEMPVOICE_REORDER_DEBOUNCE_DELAY
 
-# CSS-rendered guide images (transparent PNG, gold/green style)
-from src.services.tempvoice.graphics import render_voice_guide, render_music_guide
+# CSS-rendered guide images moved to panel.py
 
 
 class TempVoiceService:
@@ -102,7 +117,6 @@ class TempVoiceService:
         self._member_join_times: dict[int, dict[int, float]] = {}  # channel_id -> {user_id: join_time}
         self._pending_transfers: dict[int, asyncio.Task] = {}  # channel_id -> pending transfer task
         self._message_counts: dict[int, int] = {}  # channel_id -> message count since last panel
-        self._create_lock = asyncio.Lock()  # Prevents race conditions when multiple users join at once
         self._pending_reorders: dict[int, asyncio.Task] = {}  # guild_id -> pending reorder task (debounced)
         self._panel_locks: dict[int, asyncio.Lock] = {}  # channel_id -> lock for panel updates
         self._pending_claims: set[int] = set()  # channel_ids with active claim requests
@@ -140,9 +154,13 @@ class TempVoiceService:
             ], emoji="⚠️")
 
         self.bot.add_view(self.control_panel)
-        await self._cleanup_orphaned_channels()
-        await self._cleanup_empty_channels()  # Initial cleanup
+        await _lifecycle_cleanup_orphaned_channels(self)
+        await _lifecycle_cleanup_empty_channels(self)  # Initial cleanup
         await self._strip_manage_channels()  # One-time fix for existing channels
+
+        # Sync all channel permissions from DB (fixes drift from restarts/crashes)
+        from .permissions import sync_all_channels
+        await sync_all_channels(self.bot)
 
         # Start periodic cleanup task
         self._cleanup_task = create_safe_task(self._periodic_cleanup(), "TempVoice Cleanup")
@@ -207,13 +225,7 @@ class TempVoiceService:
 
     def _cleanup_channel_cache(self, channel_id: int) -> None:
         """Remove all cached state for a channel."""
-        self._panel_locks.pop(channel_id, None)
-        self._member_join_times.pop(channel_id, None)
-        self._message_counts.pop(channel_id, None)
-        # Clean up kick cooldowns for this channel
-        stale_keys = [k for k in self._kick_cooldowns if k[0] == channel_id]
-        for k in stale_keys:
-            del self._kick_cooldowns[k]
+        _lifecycle_cleanup_channel_cache(self, channel_id)
 
     async def _transfer_ownership(
         self,
@@ -221,24 +233,24 @@ class TempVoiceService:
         old_owner_id: int,
         new_owner: discord.Member,
     ) -> str:
-        """Core transfer: clear old perms, set new perms, DB transfer, rename, apply lists.
+        """Core transfer: DB transfer, rename, full permission sync from DB.
 
         Returns the new channel name.
         """
-        await set_owner_permissions(channel, new_owner)
+        from .permissions import sync_channel_permissions
+
         db.transfer_ownership(channel.id, new_owner.id)
         channel_name = await self._rename_for_new_owner(channel, new_owner)
-        # _apply_owner_lists handles clearing old overwrites — skips current VC members
-        await self._apply_owner_lists(channel, new_owner)
+        # Single atomic permission rebuild from new owner's DB state
+        await sync_channel_permissions(channel)
         return channel_name
 
     async def _periodic_cleanup(self) -> None:
-        """Periodically clean up empty temp channels and enforce blocks."""
+        """Periodically clean up empty temp channels."""
         while True:
             await asyncio.sleep(config.VC_CLEANUP_INTERVAL)
             try:
-                await self._cleanup_empty_channels()
-                await self._enforce_blocks()
+                await _lifecycle_cleanup_empty_channels(self)
             except Exception as e:
                 logger.error_tree("Periodic Cleanup Failed", e)
 
@@ -286,105 +298,11 @@ class TempVoiceService:
 
     async def _cleanup_empty_channels(self) -> None:
         """Scan and delete empty temp channels (handles missed deletions)."""
-        channels = db.get_all_temp_channels()
-        cleaned = 0
-        guilds_affected: set[int] = set()  # Track guilds that need reordering
-
-        # Build protected set: creator channel + any configured protected channels
-        protected = set(config.VC_PROTECTED_CHANNELS)
-        if config.VC_CREATOR_CHANNEL_ID:
-            protected.add(config.VC_CREATOR_CHANNEL_ID)
-
-        for channel_data in channels:
-            channel_id = channel_data["channel_id"]
-            guild_id = channel_data.get("guild_id")
-
-            # Skip protected channels
-            if channel_id in protected:
-                continue
-
-            channel = self.bot.get_channel(channel_id)
-
-            # Channel doesn't exist in Discord - clean up DB
-            if not channel:
-                db.delete_temp_channel(channel_id)
-                self._cleanup_channel_cache(channel_id)
-                cleaned += 1
-                if guild_id:
-                    guilds_affected.add(guild_id)
-                logger.tree("Orphan Channel Cleaned", [
-                    ("Channel ID", str(channel_id)),
-                    ("Reason", "Channel not in Discord"),
-                ], emoji="🧹")
-                continue
-
-            # Channel exists but is empty - delete it
-            # Wrap in try-except to handle stale channel references
-            try:
-                member_count = len(channel.members)
-            except (AttributeError, TypeError):
-                # Channel reference is stale - clean up DB
-                db.delete_temp_channel(channel_id)
-                self._cleanup_channel_cache(channel_id)
-                cleaned += 1
-                logger.tree("Stale Channel Cleaned", [
-                    ("Channel ID", str(channel_id)),
-                    ("Reason", "Stale reference"),
-                ], emoji="🧹")
-                continue
-
-            if member_count == 0:
-                try:
-                    channel_name = channel.name
-                    guild_id_for_reorder = channel.guild.id
-                    await channel.delete(reason="Empty channel cleanup")
-                    # Delete DB record after Discord delete succeeds
-                    db.delete_temp_channel(channel_id)
-                    self._cleanup_channel_cache(channel_id)
-                    cleaned += 1
-                    guilds_affected.add(guild_id_for_reorder)
-                    logger.tree("Empty Channel Cleaned", [
-                        ("Channel", channel_name),
-                        ("Reason", "Periodic cleanup"),
-                    ], emoji="🧹")
-                except discord.NotFound:
-                    db.delete_temp_channel(channel_id)
-                    self._cleanup_channel_cache(channel_id)
-                    cleaned += 1
-                except discord.HTTPException as e:
-                    logger.error_tree("Empty Channel Delete Failed", e, [
-                        ("Channel ID", str(channel_id)),
-                    ])
-
-        if cleaned > 0:
-            logger.tree("Periodic Cleanup Complete", [
-                ("Channels Removed", str(cleaned)),
-            ], emoji="🧹")
-
-            # Schedule reorder for affected guilds (debounced)
-            for guild_id in guilds_affected:
-                guild = self.bot.get_guild(guild_id)
-                if guild:
-                    self.schedule_reorder(guild)
+        await _lifecycle_cleanup_empty_channels(self)
 
     async def _cleanup_orphaned_channels(self) -> None:
         """Clean up temp channels that no longer exist."""
-        channels = db.get_all_temp_channels()
-        cleaned = 0
-
-        for channel_data in channels:
-            channel_id = channel_data["channel_id"]
-            channel = self.bot.get_channel(channel_id)
-            if not channel:
-                db.delete_temp_channel(channel_id)
-                self._cleanup_channel_cache(channel_id)
-                cleaned += 1
-
-        if cleaned > 0:
-            logger.tree("Orphan Cleanup", [
-                ("Channels Removed", str(cleaned)),
-                ("Reason", "Channel no longer exists"),
-            ], emoji="🧹")
+        await _lifecycle_cleanup_orphaned_channels(self)
 
     async def _strip_manage_channels(self) -> None:
         """Strip manage_channels from all channel owners (one-time migration)."""
@@ -447,158 +365,24 @@ class TempVoiceService:
         owner: discord.Member,
         is_locked: bool = True
     ) -> discord.Embed:
-        """Build the control panel embed."""
-        channel_info = db.get_temp_channel(channel.id)
-        owner_id = channel_info["owner_id"] if channel_info else owner.id
-
-        # Get both lists in single DB call (optimization)
-        trusted_list, blocked_list = db.get_user_access_lists(owner_id)
-
-        # Validate trusted users still exist in guild
-        valid_trusted = [
-            (uid, m) for uid in trusted_list
-            if (m := channel.guild.get_member(uid))
-        ]
-
-        member_count = len(channel.members)
-        limit = channel.user_limit or "∞"
-        bitrate = channel.bitrate // 1000  # Convert to kbps
-
-        # Get created_at timestamp for duration (stored as Unix timestamp)
-        created_at = channel_info.get("created_at") if channel_info else None
-        if created_at:
-            try:
-                # created_at is now stored as Unix timestamp (int)
-                unix_ts = int(created_at)
-                duration_text = f"<t:{unix_ts}:R>"  # Relative time (e.g., "2 minutes ago")
-            except (ValueError, TypeError):
-                duration_text = "Unknown"
-        else:
-            duration_text = "Just now"
-
-        # Lock status
-        if is_locked:
-            status = f"{EMOJI_LOCK} Locked"
-            color = COLOR_ERROR
-        else:
-            status = f"{EMOJI_UNLOCK} Unlocked"
-            color = COLOR_SUCCESS
-
-        embed = discord.Embed(
-            title=channel.name,
-            color=color,
-        )
-
-        # Row 1: Owner, Status, Members
-        embed.add_field(name="Owner", value=owner.mention, inline=True)
-        embed.add_field(name="Status", value=status, inline=True)
-        embed.add_field(name="Members", value=f"{member_count}/{limit}", inline=True)
-
-        # Row 2: Created, Bitrate, Allowed
-        embed.add_field(name="Created", value=duration_text, inline=True)
-        embed.add_field(name="Bitrate", value=f"{bitrate} kbps", inline=True)
-        embed.add_field(name="Allowed", value=str(len(valid_trusted)), inline=True)
-
-        # Current members in channel (always show)
-        if channel.members:
-            member_mentions = [m.mention for m in channel.members[:10]]
-            members_text = " ".join(member_mentions)
-            if len(channel.members) > 10:
-                members_text += f" +{len(channel.members) - 10} more"
-        else:
-            members_text = "*No one yet*"
-        embed.add_field(name="In Channel", value=members_text, inline=False)
-
-        # Always show Allowed Users field (from owner's persistent list)
-        if valid_trusted:
-            # Show up to 8 users
-            allowed_mentions = [member.mention for _, member in valid_trusted[:8]]
-            allowed_text = " ".join(allowed_mentions)
-            if len(valid_trusted) > 8:
-                allowed_text += f" +{len(valid_trusted) - 8} more"
-            embed.add_field(name="Allowed Users", value=allowed_text, inline=False)
-        else:
-            embed.add_field(name="Allowed Users", value="*None - use Allow button to add*", inline=False)
-
-        embed.set_thumbnail(url=owner.display_avatar.url)
-
-        return embed
+        """Build the control panel embed. Delegates to panel module."""
+        return build_panel_embed(channel, owner, is_locked)
 
     def _build_panel_view(self, is_locked: bool = True) -> TempVoiceControlPanel:
-        """Build a fresh control panel view with correct lock button state.
-
-        Creates a new TempVoiceControlPanel instance each time to avoid race
-        conditions when multiple channels update concurrently. The persistent
-        view registered via bot.add_view() handles interactions for old messages
-        after restarts; these per-message instances handle live interactions.
-        """
-        view = TempVoiceControlPanel(self)
-        view.lock_button.label = "Locked" if is_locked else "Unlocked"
-        view.lock_button.emoji = EMOJI_LOCK if is_locked else EMOJI_UNLOCK
-        return view
+        """Build a fresh control panel view. Delegates to panel module."""
+        return build_panel_view(self, is_locked)
 
     async def _send_guide_images(self, channel: discord.VoiceChannel) -> tuple[int | None, int | None]:
-        """Send CSS-rendered guide images. Returns (music_guide_id, guide_id)."""
-        import io
-        music_guide_id = None
-        guide_id = None
-
-        music_bytes = await render_music_guide()
-        if music_bytes:
-            music_msg = await channel.send(file=discord.File(io.BytesIO(music_bytes), "music_guide.png"))
-            music_guide_id = music_msg.id
-
-        voice_bytes = await render_voice_guide()
-        if voice_bytes:
-            guide_msg = await channel.send(file=discord.File(io.BytesIO(voice_bytes), "voice_guide.png"))
-            guide_id = guide_msg.id
-
-        return music_guide_id, guide_id
+        """Send CSS-rendered guide images. Delegates to panel module."""
+        return await send_guide_images(channel)
 
     async def _send_channel_interface(
         self,
         channel: discord.VoiceChannel,
         owner: discord.Member,
     ) -> discord.Message:
-        """Send guide images + control panel + welcome message to voice channel."""
-        music_guide_id, guide_id = await self._send_guide_images(channel)
-
-        auto_lock = owner.id == config.OWNER_ID or owner.id in config.VC_AUTO_LOCK_USERS
-        embed = self._build_panel_embed(channel, owner, is_locked=auto_lock)
-
-        message = await channel.send(
-            embed=embed,
-            view=self._build_panel_view(is_locked=auto_lock),
-        )
-
-        # Welcome message with rules reminder and music info
-        welcome = (
-            f"### Welcome to your voice channel, {owner.mention}!\n"
-            f"Use the **control panel** above to manage your channel.\n\n"
-            f"<:rules:1460257117977055283> **Rules**\n"
-            f"- Voice channels are **self-moderated** by the owner\n"
-            f"- Be respectful to everyone in your channel\n"
-            f"- No mic spamming or soundboards abuse\n"
-            f"- Follow all server rules at all times\n"
-            f"- Mods can join locked channels\n\n"
-            f"<:music:1480176122582012097> **Music**\n"
-            f"We use **Boogie Premium** for music! Type `/play` to get started."
-        )
-        await channel.send(welcome)
-
-        # Send divider image to separate setup from chat
-        from src.utils.divider import send_divider
-        await send_divider(channel)
-
-        # Cache all message IDs
-        update_kwargs = {"panel_message_id": message.id}
-        if guide_id:
-            update_kwargs["guide_message_id"] = guide_id
-        if music_guide_id:
-            update_kwargs["music_guide_message_id"] = music_guide_id
-        db.update_temp_channel(channel.id, **update_kwargs)
-
-        return message
+        """Send guide images + control panel + welcome message. Delegates to panel module."""
+        return await send_channel_interface(channel, owner, self)
 
     def _get_panel_lock(self, channel_id: int) -> asyncio.Lock:
         """Get or create a lock for panel updates on a specific channel."""
@@ -607,109 +391,8 @@ class TempVoiceService:
         return self._panel_locks[channel_id]
 
     async def _update_panel(self, channel: discord.VoiceChannel) -> None:
-        """Update the control panel embed in the channel using cached message ID."""
-        # Use per-channel lock to prevent duplicate panels from concurrent updates
-        lock = self._get_panel_lock(channel.id)
-        async with lock:
-            await self._update_panel_inner(channel)
-
-    async def _update_panel_inner(self, channel: discord.VoiceChannel) -> None:
-        """Inner panel update logic (called with lock held)."""
-        # Skip if panel creation is in progress (prevents race with _create_temp_channel)
-        if channel.id in self._pending_panels:
-            return
-
-        channel_info = db.get_temp_channel(channel.id)
-        if not channel_info:
-            # Channel exists in Discord but not in DB - will be cleaned up when empty
-            logger.tree("Panel Update Skipped", [("Channel ID", str(channel.id))], emoji="ℹ️")
-            return
-
-        owner = channel.guild.get_member(channel_info["owner_id"])
-        if not owner:
-            logger.tree("Panel Update Skipped", [
-                ("Channel", channel.name),
-                ("Reason", "Owner not found"),
-            ], emoji="⚠️")
-            return
-
-        is_locked = bool(channel_info.get("is_locked", 0))
-        panel_message_id = channel_info.get("panel_message_id")
-
-        # Try to use cached message ID first (fast path)
-        if panel_message_id:
-            try:
-                message = await channel.fetch_message(panel_message_id)
-                embed = self._build_panel_embed(channel, owner, is_locked)
-                await message.edit(embed=embed, view=self._build_panel_view(is_locked))
-                return
-            except discord.NotFound:
-                logger.debug("Panel Message Not Found — will recreate", [
-                    ("Channel", channel.name),
-                    ("Message ID", str(panel_message_id)),
-                ])
-            except discord.HTTPException as e:
-                logger.error_tree("Panel Update Failed", e, [
-                    ("Channel", channel.name),
-                ])
-
-        # Fallback: Search through recent messages (slow path)
-        panel_found = False
-        try:
-            # Safety check - bot.user can be None during startup
-            if not self.bot.user:
-                logger.tree("Panel Update Skipped", [
-                    ("Channel", channel.name),
-                    ("Reason", "Bot not ready"),
-                ], emoji="⚠️")
-                return
-
-            async for message in channel.history(limit=50):
-                if (message.author.id == self.bot.user.id and message.embeds
-                        and any(f.name == "Owner" for f in message.embeds[0].fields)):
-                    embed = self._build_panel_embed(channel, owner, is_locked)
-                    await message.edit(embed=embed, view=self._build_panel_view(is_locked))
-                    # Cache the message ID for next time
-                    db.update_temp_channel(channel.id, panel_message_id=message.id)
-                    panel_found = True
-                    break
-        except discord.NotFound:
-            # Channel was deleted — clean up DB
-            db.delete_temp_channel(channel.id)
-            logger.tree("Panel Update Aborted", [
-                ("Channel", channel.name),
-                ("Reason", "Channel deleted"),
-                ("Action", "DB entry cleaned up"),
-            ], emoji="🗑️")
-            return
-        except discord.HTTPException as e:
-            logger.error_tree("Panel History Search Failed", e, [
-                ("Channel", channel.name),
-            ])
-
-        # Panel was deleted - recreate panel only (guides are still in channel)
-        if not panel_found:
-            try:
-                embed = self._build_panel_embed(channel, owner, is_locked)
-                message = await channel.send(embed=embed, view=self._build_panel_view(is_locked))
-                db.update_temp_channel(channel.id, panel_message_id=message.id)
-
-                logger.tree("Panel Recovered", [
-                    ("Channel", channel.name),
-                    ("Owner", str(owner)),
-                ], emoji="🔧")
-            except discord.NotFound:
-                # Channel was deleted — clean up DB
-                db.delete_temp_channel(channel.id)
-                logger.tree("Panel Recovery Aborted", [
-                    ("Channel", channel.name),
-                    ("Reason", "Channel deleted"),
-                    ("Action", "DB entry cleaned up"),
-                ], emoji="🗑️")
-            except discord.HTTPException as e:
-                logger.error_tree("Panel Recovery Failed", e, [
-                    ("Channel", channel.name),
-                ])
+        """Update the control panel embed. Delegates to panel module."""
+        await update_panel(channel, self)
 
     async def on_voice_state_update(
         self,
@@ -850,117 +533,19 @@ class TempVoiceService:
             await self._resend_sticky_panel(channel)
 
     async def _resend_sticky_panel(self, channel: discord.VoiceChannel) -> None:
-        """Delete old panel and resend as sticky message."""
-        # Use per-channel lock to prevent races with _update_panel
-        lock = self._get_panel_lock(channel.id)
-        async with lock:
-            channel_info = db.get_temp_channel(channel.id)
-            if not channel_info:
-                return
-
-            owner = channel.guild.get_member(channel_info["owner_id"])
-            if not owner:
-                logger.tree("Sticky Panel Skipped", [
-                    ("Channel", channel.name),
-                    ("Reason", "Owner not found"),
-                ], emoji="⚠️")
-                return
-
-            # Delete old guide images and panel (keep welcome message with owner ping)
-            # Scan all bot messages — delete images (guides) and embeds with "Owner" field (panel)
-            try:
-                bot_id = self.bot.user.id if self.bot.user else None
-                if bot_id:
-                    async for msg in channel.history(limit=50):
-                        if msg.author.id != bot_id:
-                            continue
-                        is_guide = msg.attachments and any(a.filename in ("music_guide.png", "voice_guide.png") for a in msg.attachments)
-                        is_panel = msg.embeds and any(f.name == "Owner" for e in msg.embeds for f in e.fields)
-                        if is_guide or is_panel:
-                            try:
-                                await msg.delete()
-                            except (discord.NotFound, discord.HTTPException):
-                                pass
-            except discord.HTTPException:
-                pass
-
-            # Send new guides + panel (no owner ping on resend)
-            try:
-                is_locked = bool(channel_info.get("is_locked", 0))
-
-                music_guide_id, guide_id = await self._send_guide_images(channel)
-
-                embed = self._build_panel_embed(channel, owner, is_locked)
-                new_message = await channel.send(embed=embed, view=self._build_panel_view(is_locked))
-
-                # Cache new message IDs
-                update_kwargs = {"panel_message_id": new_message.id}
-                if guide_id:
-                    update_kwargs["guide_message_id"] = guide_id
-                if music_guide_id:
-                    update_kwargs["music_guide_message_id"] = music_guide_id
-                db.update_temp_channel(channel.id, **update_kwargs)
-
-                logger.tree("Sticky Panel Resent", [
-                    ("Channel", channel.name),
-                    ("Owner", str(owner)),
-                ], emoji="📌")
-            except discord.HTTPException as e:
-                logger.error_tree("Sticky Panel Failed", e, [
-                    ("Channel", channel.name),
-                ])
+        """Delete old panel and resend as sticky message. Delegates to panel module."""
+        await resend_sticky_panel(channel, self)
 
     async def _resend_interface_panel(self, channel: discord.TextChannel) -> None:
-        """Delete old interface panel and resend as sticky message in interface channel.
-
-        NOTE: Caller (on_message) already holds the panel lock for this channel.
-        Do NOT re-acquire it here or it will deadlock.
-        """
-        # Find and delete ALL bot messages (old panels)
-        try:
-            async for msg in channel.history(limit=50):
-                if msg.author.id == self.bot.user.id:
-                    try:
-                        await msg.delete()
-                    except discord.HTTPException:
-                        pass
-        except discord.HTTPException:
-            pass
-
-        # Build and send new interface panel
-        embed = discord.Embed(
-            title="🎙️ TempVoice",
-            description=(
-                f"Create your own temporary voice channel!\n\n"
-                f"**How to use:**\n"
-                f"Join <#{config.VC_CREATOR_CHANNEL_ID}> to create your channel\n\n"
-                f"**Features:**\n"
-                f"• {EMOJI_LOCK} Lock/Unlock your channel\n"
-                f"• {EMOJI_LIMIT} Set user limit\n"
-                f"• {EMOJI_RENAME} Rename your channel\n"
-                f"• {EMOJI_ALLOW} Allow/Block users\n"
-                f"• {EMOJI_TRANSFER} Transfer ownership\n"
-                f"• {EMOJI_DELETE} Delete your channel"
-            ),
-            color=COLOR_SUCCESS,
-        )
-
-        try:
-            await channel.send(embed=embed)
-            logger.tree("Interface Panel Resent", [
-                ("Channel", channel.name),
-            ], emoji="📌")
-        except discord.HTTPException as e:
-            logger.error_tree("Interface Panel Failed", e, [
-                ("Channel", channel.name),
-            ])
+        """Delete old interface panel and resend as sticky. Delegates to panel module."""
+        await resend_interface_panel(channel, self)
 
     async def _grant_text_access(self, channel: discord.VoiceChannel, member: discord.Member) -> None:
         """Grant text chat access to a member in a temp VC (includes dragged-in users)."""
+        from .permissions import grant_text_access as _grant_text
+
         try:
-            # Only manage permissions for temp channels
-            channel_info = db.get_temp_channel(channel.id)
-            if not channel_info:
+            if not db.is_temp_channel(channel.id):
                 return
 
             # Track join time for this member (for auto-transfer ordering)
@@ -969,39 +554,10 @@ class TempVoiceService:
             if member.id not in self._member_join_times[channel.id]:
                 self._member_join_times[channel.id][member.id] = time.time()
 
-            # Blocked user joined — re-apply block overwrite and kick
-            if member.id in db.get_blocked_list(channel_info["owner_id"]):
-                await channel.set_permissions(member, overwrite=get_blocked_overwrite())
-                if member.voice and member.voice.channel == channel:
-                    try:
-                        await member.move_to(None)
-                        logger.tree("Blocked User Auto-Kicked", [
-                            ("Channel", channel.name),
-                            ("User", f"{member.name} ({member.display_name})"),
-                            ("ID", str(member.id)),
-                            ("Owner", str(channel_info["owner_id"])),
-                        ], emoji="🚫")
-                    except discord.HTTPException:
-                        pass
-                return
-
-            # Get current overwrites to preserve other permissions
-            overwrites = channel.overwrites_for(member)
-            # Text access while in VC
-            overwrites.view_channel = True
-            overwrites.send_messages = True
-            overwrites.read_message_history = True
-            await channel.set_permissions(member, overwrite=overwrites)
-            # Update panel to show new member
+            await _grant_text(channel, member)
             await self._update_panel(channel)
         except discord.NotFound:
             self._handle_channel_gone(channel.id, channel.name)
-        except discord.HTTPException as e:
-            logger.error_tree("Text Access Grant Failed", e, [
-                ("Channel", channel.name),
-                ("User", f"{member.name} ({member.display_name})"),
-                ("ID", str(member.id)),
-            ])
         except Exception as e:
             logger.error_tree("Text Access Grant Error", e, [
                 ("Channel", channel.name),
@@ -1070,45 +626,20 @@ class TempVoiceService:
 
     async def _revoke_text_access(self, channel: discord.VoiceChannel, member: discord.Member) -> None:
         """Revoke text chat access from a member who left a temp VC."""
+        from .permissions import revoke_text_access as _revoke_text
+
         try:
-            channel_info = db.get_temp_channel(channel.id)
-
-            # Only manage permissions for temp channels
-            if not channel_info:
+            if not db.is_temp_channel(channel.id):
                 return
 
-            # Don't revoke from owner - they always have access
-            if member.id == channel_info["owner_id"]:
-                # Still update panel to reflect member left
-                await self._update_panel(channel)
-                return
-
-            # Clean up join time tracking for non-owner
+            # Clean up join time tracking
             if channel.id in self._member_join_times:
                 self._member_join_times[channel.id].pop(member.id, None)
 
-            # Check if user is trusted — they keep connect but lose text
-            is_trusted = member.id in db.get_trusted_list(channel_info["owner_id"])
-
-            if is_trusted:
-                # Trusted: keep connect so they can rejoin, but revoke text access
-                await channel.set_permissions(member, overwrite=discord.PermissionOverwrite(
-                    connect=True,
-                ))
-            else:
-                # Not trusted — remove all custom permissions
-                await channel.set_permissions(member, overwrite=None)
-
-            # Update panel to show member left
+            await _revoke_text(channel, member)
             await self._update_panel(channel)
         except discord.NotFound:
             self._handle_channel_gone(channel.id, channel.name)
-        except discord.HTTPException as e:
-            logger.error_tree("Text Access Revoke Failed", e, [
-                ("Channel", channel.name),
-                ("User", f"{member.name} ({member.display_name})"),
-                ("ID", str(member.id)),
-            ])
         except Exception as e:
             logger.error_tree("Text Access Revoke Error", e, [
                 ("Channel", channel.name),
@@ -1117,175 +648,16 @@ class TempVoiceService:
             ])
 
     def schedule_reorder(self, guild: discord.Guild) -> None:
-        """
-        Schedule a debounced channel reorder for a guild.
-
-        If multiple deletions happen quickly (bulk cleanup), this ensures
-        we only reorder once after all deletions are done.
-
-        Non-blocking - fires and forgets the background task.
-        """
-        guild_id = guild.id
-
-        # Cancel any existing pending reorder for this guild (race-safe)
-        existing_task = self._pending_reorders.pop(guild_id, None)
-        if existing_task:
-            existing_task.cancel()
-            logger.tree("Reorder Rescheduled", [
-                ("Guild", guild.name),
-                ("Reason", "New deletion during debounce"),
-            ], emoji="🔄")
-
-        # Schedule new reorder after debounce delay
-        task = create_safe_task(self._debounced_reorder(guild), "TempVoice Reorder")
-        self._pending_reorders[guild_id] = task
-
-        if not existing_task:
-            logger.tree("Reorder Scheduled", [
-                ("Guild", guild.name),
-                ("Delay", f"{REORDER_DEBOUNCE_DELAY}s"),
-            ], emoji="📋")
-
-    async def _debounced_reorder(self, guild: discord.Guild) -> None:
-        """Wait for debounce delay, then execute reorder."""
-        try:
-            await asyncio.sleep(REORDER_DEBOUNCE_DELAY)
-            await self._reorder_channels(guild)
-        except asyncio.CancelledError:
-            # Another reorder was scheduled, this one is cancelled (already logged in schedule_reorder)
-            pass
-        except Exception as e:
-            logger.error_tree("Debounced Reorder Error", e, [
-                ("Guild", guild.name),
-            ])
-        finally:
-            # Clean up the pending task reference
-            self._pending_reorders.pop(guild.id, None)
-
-    async def _reorder_channels(self, guild: discord.Guild) -> None:
-        """
-        Reorder all temp voice channels in the category by position.
-        Updates channel names to have sequential Roman numerals (I, II, III...).
-
-        Optimized with batch DB query for high-traffic servers.
-        """
-        if not config.VC_CATEGORY_ID:
-            return
-
-        category = guild.get_channel(config.VC_CATEGORY_ID)
-        if not category:
-            return
-
-        # Get all voice channels in category, sorted by position (top to bottom)
-        voice_channels = sorted(
-            [ch for ch in category.voice_channels if ch.id != config.VC_CREATOR_CHANNEL_ID],
-            key=lambda c: c.position
-        )
-
-        if not voice_channels:
-            return
-
-        # OPTIMIZATION: Batch fetch all temp channel data in one DB call
-        all_temp_channels = db.get_all_temp_channels(guild.id)
-        temp_channel_map = {tc["channel_id"]: tc for tc in all_temp_channels}
-
-        # Track channels that need renaming
-        channels_to_rename = []
-
-        # Track position separately - only increment for actual temp channels
-        position = 0
-        for channel in voice_channels:
-            channel_info = temp_channel_map.get(channel.id)
-            if not channel_info:
-                continue  # Skip non-temp channels without consuming a position
-
-            position += 1  # Only count actual temp channels
-
-            # Get or extract base name
-            base_name = channel_info.get("base_name")
-            if not base_name:
-                # Migration: extract from current channel name
-                base_name = extract_base_name(channel.name)
-                db.update_temp_channel(channel.id, base_name=base_name)
-
-            # Build expected name for this position
-            expected_name = build_full_name(position, base_name)
-
-            # Check if rename is needed
-            if channel.name != expected_name:
-                channels_to_rename.append((channel, expected_name, position, base_name))
-
-        if not channels_to_rename:
-            return
-
-        logger.tree("Reordering Channels", [
-            ("Count", str(len(channels_to_rename))),
-            ("Total VCs", str(len(voice_channels))),
-            ("Category", category.name),
-        ], emoji="🔢")
-
-        # Rename channels with small delay to avoid rate limits
-        renamed_count = 0
-        for channel, new_name, position, base_name in channels_to_rename:
-            try:
-                old_name = channel.name
-                await channel.edit(name=new_name)
-                db.update_temp_channel(channel.id, name=new_name)
-                renamed_count += 1
-
-                # Only log individual renames if few channels (avoid log spam)
-                if len(channels_to_rename) <= 3:
-                    logger.tree("Channel Renumbered", [
-                        ("From", old_name),
-                        ("To", new_name),
-                        ("Position", str(position)),
-                    ], emoji="🔢")
-
-                # Discord rate limits channel renames to 2 per 10 min per channel
-                await asyncio.sleep(3)
-
-            except discord.HTTPException as e:
-                logger.error_tree("Reorder Rename Failed", e, [
-                    ("Channel", channel.name),
-                    ("Target", new_name),
-                ])
-            except Exception as e:
-                logger.error_tree("Reorder Error", e, [
-                    ("Channel", channel.name),
-                ])
-
-        # Summary log for bulk renames
-        if len(channels_to_rename) > 3:
-            logger.tree("Reorder Complete", [
-                ("Renamed", f"{renamed_count}/{len(channels_to_rename)}"),
-                ("Category", category.name),
-            ], emoji="✅")
+        """Schedule a debounced channel reorder for a guild."""
+        _lifecycle_schedule_reorder(self, guild)
 
     def _get_next_position(self, guild: discord.Guild) -> int:
         """Get the next position number for a new temp channel."""
-        if not config.VC_CATEGORY_ID:
-            return 1
-
-        category = guild.get_channel(config.VC_CATEGORY_ID)
-        if not category:
-            return 1
-
-        # Count existing temp voice channels (excluding creator channel)
-        temp_channels = [
-            ch for ch in category.voice_channels
-            if ch.id != config.VC_CREATOR_CHANNEL_ID and db.is_temp_channel(ch.id)
-        ]
-
-        return len(temp_channels) + 1
+        return _lifecycle_get_next_position(guild)
 
     async def _rename_for_new_owner(self, channel: discord.VoiceChannel, new_owner: discord.Member) -> str:
         """Rename a channel to the new owner's default name, keeping its position."""
-        base_name, _ = generate_base_name(new_owner)
-        position = get_channel_position(channel)
-        channel_name = build_full_name(position, base_name)
-        await channel.edit(name=channel_name)
-        db.update_temp_channel(channel.id, name=channel_name, base_name=base_name)
-        return channel_name
+        return await _lifecycle_rename_for_new_owner(self, channel, new_owner)
 
     async def _apply_owner_lists(self, channel: discord.VoiceChannel, new_owner: discord.Member) -> tuple[int, int]:
         """Clear stale overwrites and apply the new owner's trusted/blocked lists.
@@ -1300,17 +672,12 @@ class TempVoiceService:
         # Collect IDs of members currently in the voice channel
         current_member_ids = {m.id for m in channel.members if not m.bot}
 
-        # Clear stale permission overwrites (members + left-server users)
-        # Skip current VC members — they'll be handled at the end to avoid losing text mid-transfer
+        # Clear ALL user permission overwrites (fresh slate for new owner)
+        # Only keep roles (@everyone, VC mod) and bot overwrites
         for target, _ in list(channel.overwrites.items()):
-            # Skip roles (e.g. @everyone, VC mod roles) — only clear user overwrites
             if isinstance(target, discord.Role):
                 continue
-            # Keep new owner and bot overwrites
-            if target.id in (new_owner.id, guild.me.id):
-                continue
-            # Don't wipe members currently in the VC — re-grant comes later
-            if target.id in current_member_ids:
+            if target.id == guild.me.id:
                 continue
             await channel.set_permissions(target, overwrite=None)
 
@@ -1397,496 +764,15 @@ class TempVoiceService:
 
     async def _create_temp_channel(self, member: discord.Member) -> None:
         """Create a new temp voice channel for a member."""
-        # Check if lock is already held (someone else is creating)
-        if self._create_lock.locked():
-            logger.tree("Create Queued", [
-                ("User", f"{member.name} ({member.display_name})"),
-                ("ID", str(member.id)),
-                ("Status", "Waiting for previous creation to complete"),
-            ], emoji="⏳")
-
-        # Use lock with timeout to prevent permanent deadlocks (gateway drops)
-        try:
-            acquired = await asyncio.wait_for(self._create_lock.acquire(), timeout=15.0)
-        except asyncio.TimeoutError:
-            logger.tree("Create Lock Timeout", [
-                ("User", f"{member.name} ({member.display_name})"),
-                ("ID", str(member.id)),
-                ("Action", "Forcing lock release"),
-            ], emoji="⚠️")
-            # Force release the stuck lock
-            if self._create_lock.locked():
-                try:
-                    self._create_lock.release()
-                except RuntimeError:
-                    pass
-                # Replace with a fresh lock
-                self._create_lock = asyncio.Lock()
-            acquired = await self._create_lock.acquire()
-
-        try:
-            logger.tree("Create Lock Acquired", [
-                ("User", f"{member.name} ({member.display_name})"),
-                ("ID", str(member.id)),
-            ], emoji="🔓")
-            await self._create_temp_channel_inner(member)
-        finally:
-            try:
-                self._create_lock.release()
-            except RuntimeError:
-                pass
-
-    async def _create_temp_channel_inner(self, member: discord.Member) -> None:
-        """Inner method for channel creation (called within lock)."""
-        guild = member.guild
-        member_id = member.id
-
-        logger.tree("Create Inner Started", [
-            ("User", f"{member.name} ({member.display_name})"),
-            ("ID", str(member.id)),
-            ("Guild", guild.name),
-        ], emoji="🔧")
-
-        # Re-fetch member to get current voice state (cache may be stale after waiting for lock)
-        try:
-            member = guild.get_member(member_id)
-            if not member:
-                logger.tree("Create Skipped", [
-                    ("ID", str(member_id)),
-                    ("Reason", "Member not found in guild"),
-                ], emoji="⏭️")
-                return
-            # Build clean voice state info
-            if member.voice and member.voice.channel:
-                channel_name = member.voice.channel.name
-                states = []
-                if member.voice.self_mute:
-                    states.append("Muted")
-                if member.voice.self_deaf:
-                    states.append("Deafened")
-                state_str = ", ".join(states) if states else "Normal"
-            else:
-                channel_name = "None"
-                state_str = "N/A"
-
-            logger.tree("Member Refetched", [
-                ("User", f"{member.name} ({member.display_name})"),
-                ("ID", str(member.id)),
-                ("Channel", channel_name),
-                ("State", state_str),
-            ], emoji="🔍")
-        except Exception as e:
-            logger.error_tree("Create Member Fetch Failed", e, [
-                ("ID", str(member_id)),
-            ])
-            return
-
-        # Check if user is still in creator channel (they may have left while waiting for lock)
-        if not member.voice or not member.voice.channel:
-            logger.tree("Create Skipped", [
-                ("User", f"{member.name} ({member.display_name})"),
-                ("ID", str(member.id)),
-                ("Reason", "User no longer in any voice channel"),
-            ], emoji="⏭️")
-            return
-
-        if member.voice.channel.id != config.VC_CREATOR_CHANNEL_ID:
-            logger.tree("Create Skipped", [
-                ("User", f"{member.name} ({member.display_name})"),
-                ("ID", str(member.id)),
-                ("Current Channel", member.voice.channel.name),
-                ("Reason", "User moved to different channel while waiting"),
-            ], emoji="⏭️")
-            return
-
-        # Check cooldown to prevent spam
-        now = time.time()
-        last_join = self._join_cooldowns.get(member.id, 0)
-        if now - last_join < JOIN_COOLDOWN:
-            remaining = JOIN_COOLDOWN - (now - last_join)
-            logger.tree("Join Cooldown", [
-                ("User", f"{member.name} ({member.display_name})"),
-                ("ID", str(member.id)),
-                ("Remaining", f"{remaining:.1f}s"),
-            ], emoji="⏳")
-            # Disconnect them from creator channel
-            try:
-                await member.move_to(None)
-            except discord.HTTPException as e:
-                logger.error_tree("Cooldown Disconnect Failed", e, [
-                    ("User", f"{member.name} ({member.display_name})"),
-                    ("ID", str(member.id)),
-                ])
-            return
-
-        # Update cooldown timestamp
-        self._join_cooldowns[member.id] = now
-
-        # Cleanup old cooldown entries (older than 1 minute) to prevent memory leak
-        cutoff = now - 60
-        self._join_cooldowns = {
-            uid: ts for uid, ts in self._join_cooldowns.items()
-            if ts > cutoff
-        }
-
-        # Check if user already owns a channel
-        existing = db.get_owner_channel(member.id, guild.id)
-        if existing:
-            channel = guild.get_channel(existing)
-            if channel:
-                # Cancel pending transfers and claims for this channel
-                task = self._pending_transfers.pop(channel.id, None)
-                if task:
-                    task.cancel()
-                self._pending_claims.discard(channel.id)
-
-                # Transfer ownership to someone else in the channel, or delete if empty
-                existing_owners = {ch["owner_id"] for ch in db.get_all_temp_channels(guild.id)}
-                other_members = [
-                    m for m in channel.members
-                    if m.id != member.id and not m.bot
-                    and m.id not in existing_owners
-                ]
-                if other_members:
-                    # Transfer to first eligible member
-                    new_owner = other_members[0]
-                    try:
-                        channel_name = await self._transfer_ownership(channel, member.id, new_owner)
-                        await self._update_panel(channel)
-
-                        logger.tree("Auto-Transfer", [
-                            ("Channel", channel_name),
-                            ("From", f"{member.name} ({member.display_name})"),
-                            ("From ID", str(member.id)),
-                            ("To", f"{new_owner.name} ({new_owner.display_name})"),
-                            ("To ID", str(new_owner.id)),
-                        ], emoji="🔄")
-                    except discord.HTTPException as e:
-                        logger.error_tree("Auto-Transfer Failed", e, [
-                            ("Channel", channel.name),
-                            ("From", f"{member.name} ({member.display_name})"),
-                            ("From ID", str(member.id)),
-                            ("To", f"{new_owner.name} ({new_owner.display_name})"),
-                            ("To ID", str(new_owner.id)),
-                        ])
-                else:
-                    # Channel is empty, delete it
-                    try:
-                        await channel.delete(reason="Owner left, no other members")
-                        db.delete_temp_channel(channel.id)
-                        logger.tree("Channel Auto-Deleted", [
-                            ("Channel", channel.name),
-                            ("Reason", "Owner creating new VC"),
-                        ], emoji="🗑️")
-                    except discord.HTTPException as e:
-                        logger.error_tree("Auto-Delete Failed", e, [
-                            ("Channel", channel.name),
-                            ("Owner", f"{member.name} ({member.display_name})"),
-                            ("Owner ID", str(member.id)),
-                        ])
-            else:
-                db.delete_temp_channel(existing)
-                logger.tree("Orphan DB Entry Cleaned", [
-                    ("Channel ID", str(existing)),
-                    ("Owner", f"{member.name} ({member.display_name})"),
-                    ("Owner ID", str(member.id)),
-                ], emoji="🧹")
-
-        # Clean up stale trusted/blocked users in background (don't block channel creation)
-        guild_member_ids = {m.id for m in guild.members}
-
-        async def _stale_cleanup() -> None:
-            stale_removed = db.cleanup_stale_users(member.id, guild_member_ids)
-            if stale_removed > 0:
-                logger.tree("Stale User Cleanup", [
-                    ("Owner", f"{member.name} ({member.display_name})"),
-                    ("Owner ID", str(member.id)),
-                    ("Entries Removed", str(stale_removed)),
-                    ("Reason", "Users left server"),
-                ], emoji="🧹")
-
-        create_safe_task(_stale_cleanup(), "TempVoice Stale Cleanup")
-
-        # Get user settings for default limit
-        settings = db.get_user_settings(member.id)
-        default_limit = settings.get("default_limit", 0) if settings else 0
-
-        # Generate channel name with position-based numbering
-        base_name, name_source = generate_base_name(member)
-        position = self._get_next_position(guild)
-        channel_name = build_full_name(position, base_name)
-
-        logger.tree("Creating Channel", [
-            ("Owner", f"{member.name} ({member.display_name})"),
-            ("Owner ID", str(member.id)),
-            ("Name", channel_name),
-            ("Base Name", base_name),
-            ("Position", str(position)),
-            ("Source", name_source),
-        ], emoji="🔧")
-
-        # Get category
-        category = None
-        if config.VC_CATEGORY_ID:
-            category = guild.get_channel(config.VC_CATEGORY_ID)
-            if not category:
-                logger.tree("Category Not Found", [
-                    ("Category ID", str(config.VC_CATEGORY_ID)),
-                    ("Action", "Creating without category"),
-                ], emoji="⚠️")
-
-        try:
-            # Build all overwrites upfront (single API call instead of multiple)
-            is_developer = member.id == config.OWNER_ID
-            auto_lock = is_developer or member.id in config.VC_AUTO_LOCK_USERS
-            overwrites = {
-                # Auto-lock users get locked by default, everyone else unlocked
-                guild.default_role: get_locked_overwrite() if auto_lock else get_unlocked_overwrite(),
-                # Owner permissions (no manage_channels - use bot's rename button)
-                member: get_owner_overwrite(),
-            }
-
-            # Specific mod roles get full access (except developer's channels)
-            if config.VC_MOD_ROLES and member.id != config.OWNER_ID:
-                for role_id in config.VC_MOD_ROLES:
-                    mod_role = guild.get_role(role_id)
-                    if mod_role:
-                        overwrites[mod_role] = get_vc_mod_overwrite()
-
-            # Pre-build blocked user overwrites (use Object for uncached members)
-            blocked_count = 0
-            for blocked_id in db.get_blocked_list(member.id):
-                blocked_member = guild.get_member(blocked_id)
-                # Check if user has VC mod role (only if cached)
-                if blocked_member and has_vc_mod_role(blocked_member) and member.id != config.OWNER_ID:
-                    logger.tree("Block Skipped", [
-                        ("User", f"{blocked_member.name} ({blocked_member.display_name})"),
-                        ("ID", str(blocked_id)),
-                        ("Reason", "Has VC mod role"),
-                    ], emoji="⚠️")
-                    continue
-                # Use Object so block works even if member isn't cached
-                overwrites[blocked_member or discord.Object(id=blocked_id)] = get_blocked_overwrite()
-                blocked_count += 1
-
-            # Pre-build trusted user overwrites (use Object for uncached members)
-            trusted_count = 0
-            for trusted_id in db.get_trusted_list(member.id):
-                trusted_member = guild.get_member(trusted_id)
-                overwrites[trusted_member or discord.Object(id=trusted_id)] = get_trusted_overwrite()
-                trusted_count += 1
-
-            # Create channel with ALL permissions in one API call
-            channel = await guild.create_voice_channel(
-                name=channel_name,
-                category=category,
-                user_limit=default_limit,
-                overwrites=overwrites,
-                reason=f"TempVoice for {member}"
-            )
-
-            # Store in database
-            db.create_temp_channel(channel.id, member.id, guild.id, channel_name)
-            db.update_temp_channel(channel.id, is_locked=1 if auto_lock else 0, base_name=base_name)
-
-            # Mark panel as pending so _update_panel skips recovery
-            # (moving user triggers _grant_text_access -> _update_panel)
-            self._pending_panels.add(channel.id)
-
-            # Re-check voice state right before move (user may have disconnected during channel creation)
-            if not member.voice or not member.voice.channel:
-                logger.tree("Create Skipped", [
-                    ("Channel", channel_name),
-                    ("User", f"{member.name} ({member.display_name})"),
-                    ("ID", str(member.id)),
-                    ("Reason", "User disconnected during channel creation"),
-                ], emoji="⏭️")
-                self._pending_panels.discard(channel.id)
-                db.delete_temp_channel(channel.id)
-                await channel.delete(reason="User disconnected before move")
-                return
-
-            # Move user FIRST for instant response
-            try:
-                await member.move_to(channel)
-            except discord.HTTPException as e:
-                logger.error_tree("Move User Failed", e, [
-                    ("Channel", channel_name),
-                    ("User", f"{member.name} ({member.display_name})"),
-                    ("ID", str(member.id)),
-                ])
-                self._pending_panels.discard(channel.id)
-                db.delete_temp_channel(channel.id)
-                await channel.delete(reason="Failed to move user")
-                return
-
-            # Send guide images + control panel after user is already in the channel
-            try:
-                await self._send_channel_interface(channel, member)
-            except Exception as e:
-                logger.error_tree("Panel Send Failed", e, [
-                    ("Channel", channel_name),
-                ])
-            finally:
-                self._pending_panels.discard(channel.id)
-
-            logger.tree("Channel Created", [
-                ("Channel", channel_name),
-                ("Owner", f"{member.name} ({member.display_name})"),
-                ("Owner ID", str(member.id)),
-                ("Allowed Applied", str(trusted_count)),
-                ("Blocked Applied", str(blocked_count)),
-            ], emoji="🔊")
-
-        except discord.HTTPException as e:
-            logger.error_tree("Channel Creation Failed", e, [
-                ("Owner", f"{member.name} ({member.display_name})"),
-                ("Owner ID", str(member.id)),
-            ])
-        except Exception as e:
-            logger.error_tree("Channel Creation Error", e, [
-                ("Owner", f"{member.name} ({member.display_name})"),
-                ("Owner ID", str(member.id)),
-            ])
+        await _lifecycle_create_temp_channel(self, member)
 
     async def _check_empty_channel(self, channel: discord.VoiceChannel) -> None:
         """Check if channel is empty and should be deleted."""
-        if not db.is_temp_channel(channel.id):
-            return
-
-        if len(channel.members) == 0:
-            channel_name = channel.name
-            channel_info = db.get_temp_channel(channel.id)
-            owner_id = channel_info["owner_id"] if channel_info else "Unknown"
-            guild = channel.guild  # Save before deletion
-
-            # Cancel any pending transfer and claims
-            if channel.id in self._pending_transfers:
-                self._pending_transfers[channel.id].cancel()
-                del self._pending_transfers[channel.id]
-            self._pending_claims.discard(channel.id)
-
-            # Clean up all tracking for this channel
-            self._cleanup_channel_cache(channel.id)
-
-            try:
-                await channel.delete(reason="Empty")
-                # Delete DB record after Discord delete succeeds
-                db.delete_temp_channel(channel.id)
-                logger.tree("Channel Auto-Deleted", [
-                    ("Channel", channel_name),
-                    ("Owner ID", str(owner_id)),
-                ], emoji="🗑️")
-
-                # Schedule reorder (debounced, non-blocking)
-                self.schedule_reorder(guild)
-
-            except discord.NotFound:
-                # Already deleted by another path — clean up DB
-                db.delete_temp_channel(channel.id)
-            except discord.HTTPException as e:
-                logger.error_tree("Empty Channel Delete Failed", e, [
-                    ("Channel", channel_name),
-                ])
+        await _lifecycle_check_empty_channel(self, channel)
 
     async def _schedule_owner_transfer(self, channel: discord.VoiceChannel, old_owner: discord.Member) -> None:
         """Schedule a delayed owner transfer when owner leaves the channel."""
-        # Cancel any existing pending transfer for this channel
-        if channel.id in self._pending_transfers:
-            self._pending_transfers[channel.id].cancel()
-
-        # Get remaining members (non-bot)
-        remaining = [m for m in channel.members if not m.bot]
-        if not remaining:
-            # No one left to transfer to - check empty will handle deletion
-            await self._check_empty_channel(channel)
-            return
-
-        logger.tree("Owner Left Channel", [
-            ("Channel", channel.name),
-            ("Owner", str(old_owner)),
-            ("Remaining Members", str(len(remaining))),
-            ("Transfer Delay", f"{OWNER_LEAVE_TRANSFER_DELAY}s"),
-        ], emoji="⏳")
-
-        # Schedule the transfer
-        task = create_safe_task(self._execute_owner_transfer(channel, old_owner), "TempVoice Owner Transfer")
-        self._pending_transfers[channel.id] = task
-
-    async def _execute_owner_transfer(self, channel: discord.VoiceChannel, old_owner: discord.Member) -> None:
-        """Execute the delayed owner transfer after waiting."""
-        try:
-            # Wait before transferring
-            await asyncio.sleep(OWNER_LEAVE_TRANSFER_DELAY)
-
-            # Re-fetch channel to ensure it still exists
-            channel = old_owner.guild.get_channel(channel.id)
-            if not channel:
-                logger.tree("Transfer Cancelled", [
-                    ("Reason", "Channel no longer exists"),
-                ], emoji="❌")
-                return
-
-            # Check if channel is still a temp channel
-            channel_info = db.get_temp_channel(channel.id)
-            if not channel_info:
-                logger.tree("Transfer Cancelled", [
-                    ("Channel", channel.name),
-                    ("Reason", "No longer a temp channel"),
-                ], emoji="❌")
-                return
-
-            # Check if owner is back
-            if any(m.id == channel_info["owner_id"] for m in channel.members):
-                logger.tree("Transfer Cancelled", [
-                    ("Channel", channel.name),
-                    ("Reason", "Owner is back in channel"),
-                ], emoji="↩️")
-                return
-
-            # Get remaining members (non-bot)
-            remaining = [m for m in channel.members if not m.bot]
-            if not remaining:
-                # No one left - delete channel
-                await self._check_empty_channel(channel)
-                return
-
-            # Find the longest-in-channel member who doesn't already own a channel
-            join_times = self._member_join_times.get(channel.id, {})
-            existing_owners = {ch["owner_id"] for ch in db.get_all_temp_channels(channel.guild.id)}
-            eligible = [m for m in remaining if m.id not in existing_owners]
-            if not eligible:
-                # Everyone already owns a channel - just pick longest anyway
-                eligible = remaining
-
-            if join_times:
-                # Sort by join time (oldest first)
-                sorted_members = sorted(
-                    [(m, join_times.get(m.id, float('inf'))) for m in eligible],
-                    key=lambda x: x[1]
-                )
-                new_owner = sorted_members[0][0]
-            else:
-                # Fallback: first eligible member
-                new_owner = eligible[0]
-
-            # Execute the transfer
-            await self._apply_owner_transfer(channel, old_owner, new_owner)
-
-        except asyncio.CancelledError:
-            logger.tree("Transfer Cancelled", [
-                ("Channel", channel.name if channel else "Unknown"),
-                ("Reason", "Task cancelled (owner likely rejoined)"),
-            ], emoji="↩️")
-        except Exception as e:
-            logger.error_tree("Transfer Error", e, [
-                ("Channel", getattr(channel, 'name', 'Unknown')),
-            ])
-        finally:
-            # Clean up the pending transfer entry
-            channel_id = getattr(channel, 'id', None)
-            if channel_id:
-                self._pending_transfers.pop(channel_id, None)
+        await _lifecycle_schedule_owner_transfer(self, channel, old_owner)
 
     async def _apply_owner_transfer(
         self,
@@ -1895,58 +781,4 @@ class TempVoiceService:
         new_owner: discord.Member
     ) -> None:
         """Apply the ownership transfer to a new owner with their settings."""
-        try:
-            channel_name = await self._transfer_ownership(channel, old_owner.id, new_owner)
-
-            # Clear all messages in the VC chat (fresh start for new owner)
-            try:
-                await channel.purge(limit=500, reason="Ownership transfer - clearing chat")
-                logger.tree("VC Chat Cleared", [
-                    ("Channel", channel.name),
-                    ("Reason", "Ownership transfer"),
-                ], emoji="🧹")
-            except discord.HTTPException as e:
-                logger.error_tree("VC Chat Clear Failed", e, [
-                    ("Channel", channel.name),
-                ])
-
-            # Send fresh control panel for the new owner
-            try:
-                await self._send_channel_interface(channel, new_owner)
-            except discord.HTTPException as e:
-                logger.error_tree("New Panel Send Failed", e, [
-                    ("Channel", channel.name),
-                    ("New Owner", str(new_owner)),
-                ])
-
-            # Notify new owner about the transfer
-            try:
-                await channel.send(
-                    f"{EMOJI_TRANSFER} **Ownership Transferred**\n"
-                    f"{new_owner.mention} you are now the owner of this channel.\n"
-                    f"*The previous owner left and you were here the longest.*"
-                )
-            except discord.HTTPException as e:
-                logger.error_tree("Transfer Notification Failed", e, [
-                    ("Channel", channel.name),
-                    ("New Owner", str(new_owner)),
-                ])
-
-            logger.tree("Auto-Transfer Complete", [
-                ("Channel", channel_name),
-                ("From", str(old_owner)),
-                ("To", str(new_owner)),
-            ], emoji="🔄")
-
-        except discord.NotFound:
-            self._handle_channel_gone(channel.id, channel.name)
-        except discord.HTTPException as e:
-            logger.error_tree("Auto-Transfer Failed", e, [
-                ("Channel", channel.name),
-                ("From", str(old_owner)),
-                ("To", str(new_owner)),
-            ])
-        except Exception as e:
-            logger.error_tree("Auto-Transfer Error", e, [
-                ("Channel", channel.name),
-            ])
+        await _lifecycle_apply_owner_transfer(self, channel, old_owner, new_owner)

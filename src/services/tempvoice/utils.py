@@ -253,9 +253,8 @@ def get_trusted_overwrite() -> discord.PermissionOverwrite:
 
 
 def get_blocked_overwrite() -> discord.PermissionOverwrite:
-    """Get standard permission overwrite for blocked users."""
+    """Get standard permission overwrite for blocked users. Visible but can't join or chat."""
     return discord.PermissionOverwrite(
-        view_channel=False,
         connect=False,
         send_messages=False,
         read_message_history=False,
@@ -263,8 +262,10 @@ def get_blocked_overwrite() -> discord.PermissionOverwrite:
 
 
 def get_locked_overwrite() -> discord.PermissionOverwrite:
-    """Get permission overwrite for @everyone when channel is locked (same as blocked)."""
-    return get_blocked_overwrite()
+    """Get permission overwrite for @everyone when channel is locked. Visible but can't connect."""
+    return discord.PermissionOverwrite(
+        connect=False,
+    )
 
 
 def get_unlocked_overwrite() -> discord.PermissionOverwrite:

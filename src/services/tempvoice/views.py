@@ -376,15 +376,13 @@ class TempVoiceControlPanel(ui.View):
                     ], emoji="🔒")
                     return
 
-            # Defer first — set_permissions can be slow
+            # Defer first — sync can be slow
             await interaction.response.defer(ephemeral=True)
 
-            if new_locked:
-                await channel.set_permissions(everyone, overwrite=get_locked_overwrite())
-            else:
-                await channel.set_permissions(everyone, overwrite=get_unlocked_overwrite())
-
+            # DB first, then atomic permission sync
             db.update_temp_channel(channel.id, is_locked=new_locked)
+            from .permissions import sync_channel_permissions
+            await sync_channel_permissions(channel)
 
             # Respond with actual result after success
             if new_locked:

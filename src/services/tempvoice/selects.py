@@ -28,6 +28,7 @@ from .utils import (
     get_trusted_overwrite,
     get_blocked_overwrite,
 )
+from .permissions import sync_channel_permissions
 
 if TYPE_CHECKING:
     from .service import TempVoiceService
@@ -236,14 +237,13 @@ class UserSelect(ui.UserSelect):
                 ], emoji="💎")
                 return
 
-        # Remove from blocked if was blocked
+        # Remove from blocked if was blocked, then add/remove trusted
         db.remove_blocked(owner_id, user.id)
         if db.add_trusted(owner_id, user.id):
-            # Grant connect + permanent text access (even when not in VC)
-            await channel.set_permissions(user, overwrite=get_trusted_overwrite())
+            await sync_channel_permissions(channel)
             total_allowed = len(db.get_trusted_list(owner_id))
             embed = discord.Embed(
-                description=f"✅ **{user.display_name}** added to allowed list\n`{total_allowed}` users allowed • Can access chat anytime",
+                description=f"✅ **{user.display_name}** added to allowed list\n`{total_allowed}` users allowed",
                 color=COLOR_SUCCESS
             )
             embed.set_thumbnail(url=user.display_avatar.url)
@@ -258,17 +258,7 @@ class UserSelect(ui.UserSelect):
         else:
             # Already permitted - remove them
             db.remove_trusted(owner_id, user.id)
-            # Revoke text access unless they're currently in the channel
-            if user.voice and user.voice.channel == channel:
-                # In channel - keep text access, just remove trusted connect
-                overwrites = channel.overwrites_for(user)
-                overwrites.connect = None
-                await channel.set_permissions(user, overwrite=overwrites)
-                text_status = "Kept (in VC)"
-            else:
-                # Not in channel - revoke all permissions
-                await channel.set_permissions(user, overwrite=None)
-                text_status = "Revoked"
+            await sync_channel_permissions(channel)
             total_allowed = len(db.get_trusted_list(owner_id))
             embed = discord.Embed(
                 description=f"❌ **{user.display_name}** removed from allowed list\n`{total_allowed}` users remaining",
@@ -282,8 +272,6 @@ class UserSelect(ui.UserSelect):
                 ("Target ID", str(user.id)),
                 ("By", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("By ID", str(interaction.user.id)),
-                ("Total Allowed", str(total_allowed)),
-                ("Text Access", text_status),
             ], emoji="❌")
 
         # Update panel to reflect new counts
@@ -361,8 +349,8 @@ class UserSelect(ui.UserSelect):
         db.remove_trusted(owner_id, user.id)
         db.add_blocked(owner_id, user.id)
 
-        # Set permission to deny connect and view
-        await channel.set_permissions(user, overwrite=get_blocked_overwrite())
+        # Rebuild all permissions from DB (atomic)
+        await sync_channel_permissions(channel)
 
         # Kick from channel if currently in it
         was_kicked = False
