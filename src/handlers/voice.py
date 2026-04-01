@@ -53,6 +53,14 @@ class VoiceHandler(commands.Cog):
             self.public_vc_maintenance.start()
 
     @commands.Cog.listener()
+    async def on_resumed(self) -> None:
+        """Re-sync temp channel permissions after gateway reconnect."""
+        if hasattr(self.bot, 'tempvoice') and self.bot.tempvoice:
+            from src.services.tempvoice.permissions import sync_all_channels
+            logger.tree("Gateway Resumed — Syncing TempVoice Permissions", [], emoji="🔄")
+            await sync_all_channels(self.bot)
+
+    @commands.Cog.listener()
     async def on_voice_state_update(
         self,
         member: discord.Member,

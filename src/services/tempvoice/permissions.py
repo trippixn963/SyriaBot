@@ -13,6 +13,7 @@ Author: حَـــــنَّـــــا
 Server: discord.gg/syria
 """
 
+import asyncio
 from typing import Dict, Optional, Set, Union
 
 import discord
@@ -33,6 +34,21 @@ from .utils import (
 
 OverwriteTarget = Union[discord.Role, discord.Member, discord.Object]
 OverwriteDict = Dict[OverwriteTarget, discord.PermissionOverwrite]
+
+# Per-channel locks — prevents concurrent permission mutations on the same channel
+_channel_locks: Dict[int, asyncio.Lock] = {}
+
+
+def get_channel_lock(channel_id: int) -> asyncio.Lock:
+    """Get or create a lock for a specific channel."""
+    if channel_id not in _channel_locks:
+        _channel_locks[channel_id] = asyncio.Lock()
+    return _channel_locks[channel_id]
+
+
+def cleanup_channel_lock(channel_id: int) -> None:
+    """Remove lock for a deleted channel."""
+    _channel_locks.pop(channel_id, None)
 
 
 def compute_overwrites(
@@ -152,34 +168,37 @@ async def sync_channel_permissions(channel: discord.VoiceChannel) -> bool:
     after updating the DB. It computes the full overwrite dict and applies it
     atomically via channel.edit(overwrites=...).
 
+    Serialized per-channel via lock to prevent concurrent syncs racing.
+
     Args:
         channel: The Discord voice channel to sync.
 
     Returns:
         True if sync succeeded, False otherwise.
     """
-    guild = channel.guild
-    current_member_ids = {m.id for m in channel.members if not m.bot}
+    async with get_channel_lock(channel.id):
+        guild = channel.guild
+        current_member_ids = {m.id for m in channel.members if not m.bot}
 
-    overwrites = compute_overwrites(guild, channel.id, current_member_ids)
-    if overwrites is None:
-        return False
+        overwrites = compute_overwrites(guild, channel.id, current_member_ids)
+        if overwrites is None:
+            return False
 
-    try:
-        await channel.edit(overwrites=overwrites)
-        logger.tree("Permissions Synced", [
-            ("Channel", channel.name),
-            ("Overwrites", str(len(overwrites))),
-            ("Members In VC", str(len(current_member_ids))),
-        ], emoji="🔒")
-        return True
-    except discord.HTTPException as e:
-        logger.error_tree("Permission Sync Failed", e, [
-            ("Channel", channel.name),
-            ("Channel ID", str(channel.id)),
-            ("Overwrites", str(len(overwrites))),
-        ])
-        return False
+        try:
+            await channel.edit(overwrites=overwrites)
+            logger.tree("Permissions Synced", [
+                ("Channel", channel.name),
+                ("Overwrites", str(len(overwrites))),
+                ("Members In VC", str(len(current_member_ids))),
+            ], emoji="🔒")
+            return True
+        except discord.HTTPException as e:
+            logger.error_tree("Permission Sync Failed", e, [
+                ("Channel", channel.name),
+                ("Channel ID", str(channel.id)),
+                ("Overwrites", str(len(overwrites))),
+            ])
+            return False
 
 
 async def sync_all_channels(bot: discord.Client) -> None:
