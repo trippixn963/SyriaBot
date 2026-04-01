@@ -202,6 +202,10 @@ async def send_channel_interface(
         view=build_panel_view(service, is_locked=auto_lock),
     )
 
+    # Divider under control panel
+    from src.utils.divider import send_divider
+    await send_divider(channel)
+
     # Welcome message with rules reminder and music info
     welcome = (
         f"### Welcome to your voice channel, {owner.mention}!\n"
