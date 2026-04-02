@@ -764,10 +764,12 @@ async def cleanup_orphaned_channels(svc: TempVoiceService) -> None:
 def cleanup_channel_cache(svc: TempVoiceService, channel_id: int) -> None:
     """Remove all cached state for a channel."""
     from .permissions import cleanup_channel_lock
+    from .panel import clear_voice_status_cache
     svc._panel_locks.pop(channel_id, None)
     svc._member_join_times.pop(channel_id, None)
     svc._message_counts.pop(channel_id, None)
     cleanup_channel_lock(channel_id)
+    clear_voice_status_cache(channel_id)
     # Clean up kick cooldowns for this channel
     stale_keys = [k for k in svc._kick_cooldowns if k[0] == channel_id]
     for k in stale_keys:

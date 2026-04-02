@@ -387,6 +387,27 @@ async def revoke_text_access(channel: discord.VoiceChannel, member: discord.Memb
         else:
             # Remove all custom permissions
             await channel.set_permissions(member, overwrite=None)
+
+        # Delete their messages from the VC text chat
+        try:
+            deleted = 0
+            async for msg in channel.history(limit=100):
+                if msg.author.id == member.id:
+                    try:
+                        await msg.delete()
+                        deleted += 1
+                    except discord.HTTPException:
+                        pass
+            if deleted > 0:
+                logger.tree("VC Messages Cleaned", [
+                    ("Channel", channel.name),
+                    ("User", f"{member.name} ({member.display_name})"),
+                    ("ID", str(member.id)),
+                    ("Deleted", str(deleted)),
+                ], emoji="🧹")
+        except Exception:
+            pass  # Non-critical — don't fail the revoke
+
         logger.tree("Text Access Revoked", [
             ("Channel", channel.name),
             ("User", f"{member.name} ({member.display_name})"),

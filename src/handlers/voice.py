@@ -45,8 +45,19 @@ class VoiceHandler(commands.Cog):
 
     @commands.Cog.listener()
     async def on_ready(self) -> None:
-        """Sync public VC permissions on startup."""
+        """Sync public VC permissions and set creator channel status on startup."""
         await self.sync_public_vc_permissions()
+
+        # Set creator channel status
+        if config.VC_CREATOR_CHANNEL_ID:
+            guild = self.bot.get_guild(config.GUILD_ID)
+            if guild:
+                creator = guild.get_channel(config.VC_CREATOR_CHANNEL_ID)
+                if creator:
+                    try:
+                        await creator.edit(status="🎙️ Join to create ・ Level 10+")
+                    except discord.HTTPException:
+                        pass
 
         # Start nightly maintenance
         if not self.public_vc_maintenance.is_running():
@@ -200,6 +211,7 @@ class VoiceHandler(commands.Cog):
                         ("Channel", after_channel.name),
                         ("Error", str(e)[:80]),
                     ])
+                await self._update_public_vc_status(after_channel)
 
         # Left a public VC
         if before_channel and before_channel.id in public_vcs:
@@ -235,6 +247,36 @@ class VoiceHandler(commands.Cog):
                         ("User", f"{member.name}"),
                         ("Channel", before_channel.name),
                     ])
+                await self._update_public_vc_status(before_channel)
+
+    _public_vc_last_status: dict[int, str] = {}
+
+    async def _update_public_vc_status(self, channel: discord.VoiceChannel) -> None:
+        """Update status text for a public voice channel."""
+        member_count: int = len([m for m in channel.members if not m.bot])
+
+        if member_count == 0:
+            status = "💤 Empty ・ Join to start chatting"
+        elif member_count == 1:
+            status = "🎧 1 person ・ Come keep them company"
+        elif member_count <= 3:
+            status = f"💬 {member_count} people chilling"
+        elif member_count <= 6:
+            status = f"🔥 {member_count} people ・ Getting active"
+        elif member_count <= 10:
+            status = f"🎉 {member_count} people ・ Party time"
+        else:
+            status = f"🚀 {member_count} people ・ It's packed!"
+
+        # Debounce
+        if self._public_vc_last_status.get(channel.id) == status:
+            return
+        self._public_vc_last_status[channel.id] = status
+
+        try:
+            await channel.edit(status=status)
+        except discord.HTTPException:
+            pass
 
     async def sync_public_vc_permissions(self) -> None:
         """Sync public VC permissions on startup.
@@ -304,6 +346,12 @@ class VoiceHandler(commands.Cog):
                     synced += 1
                 except discord.HTTPException:
                     pass
+
+        # Set initial VC status for all public channels
+        for vc_id in public_vcs:
+            channel = guild.get_channel(vc_id)
+            if channel and isinstance(channel, discord.VoiceChannel):
+                await self._update_public_vc_status(channel)
 
         if synced > 0:
             logger.tree("Public VC Permissions Synced", [

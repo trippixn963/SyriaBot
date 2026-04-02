@@ -30,6 +30,61 @@ if TYPE_CHECKING:
     from .service import TempVoiceService
 
 
+_last_status: dict[int, str] = {}  # channel_id -> last status text (debounce)
+
+
+async def update_voice_status(channel: discord.VoiceChannel) -> None:
+    """
+    Update the voice channel status text shown in Discord's channel list.
+
+    Shows a rich status with lock, allowed count, and activity hint.
+    Debounced: skips if status hasn't changed since last update.
+
+    Called after: creation, lock/unlock, member join/leave, limit change, transfer.
+    """
+    channel_info = db.get_temp_channel(channel.id)
+    if not channel_info:
+        return
+
+    is_locked: bool = bool(channel_info.get("is_locked", 0))
+    owner_id: int = channel_info["owner_id"]
+    member_count: int = len([m for m in channel.members if not m.bot])
+
+    # Build status — clean and short
+    lock_text = "🔒 Private" if is_locked else "🔓 Public"
+
+    if member_count == 0:
+        vibe = "💤 Empty"
+    elif member_count == 1:
+        vibe = "🎧 Solo"
+    elif member_count <= 3:
+        vibe = "💬 Chilling"
+    elif member_count <= 6:
+        vibe = "🔥 Active"
+    else:
+        vibe = "🎉 Party"
+
+    status = f"{lock_text} ・ {vibe}"
+
+    # Debounce: skip if unchanged
+    if _last_status.get(channel.id) == status:
+        return
+    _last_status[channel.id] = status
+
+    try:
+        await channel.edit(status=status)
+    except discord.HTTPException as e:
+        logger.error_tree("VC Status Update Failed", e, [
+            ("Channel", channel.name),
+            ("Status", status),
+        ])
+
+
+def clear_voice_status_cache(channel_id: int) -> None:
+    """Remove cached status for a deleted channel."""
+    _last_status.pop(channel_id, None)
+
+
 def build_panel_embed(
     channel: discord.VoiceChannel,
     owner: discord.Member,
@@ -232,6 +287,9 @@ async def send_channel_interface(
     if music_guide_id:
         update_kwargs["music_guide_message_id"] = music_guide_id
     db.update_temp_channel(channel.id, **update_kwargs)
+
+    # Set VC status (visible in Discord's channel list)
+    await update_voice_status(channel)
 
     logger.tree("Channel Interface Sent", [
         ("Channel", channel.name),

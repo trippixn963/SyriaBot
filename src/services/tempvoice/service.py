@@ -66,6 +66,7 @@ from .panel import (
     send_guide_images,
     send_channel_interface,
     update_panel,
+    update_voice_status,
     resend_sticky_panel,
     resend_interface_panel,
 )
@@ -391,8 +392,9 @@ class TempVoiceService:
         return self._panel_locks[channel_id]
 
     async def _update_panel(self, channel: discord.VoiceChannel) -> None:
-        """Update the control panel embed. Delegates to panel module."""
+        """Update the control panel embed and VC status. Delegates to panel module."""
         await update_panel(channel, self)
+        await update_voice_status(channel)
 
     async def on_voice_state_update(
         self,
