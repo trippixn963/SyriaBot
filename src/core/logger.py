@@ -169,6 +169,10 @@ class Logger:
         self._webhook_session: Optional[aiohttp.ClientSession] = None
         self._session_lock: Optional[asyncio.Lock] = None  # Lazy init to avoid event loop issues
 
+        # Webhook batching queue — collects logs and sends every 2 seconds
+        self._webhook_queue: List[str] = []
+        self._flush_task: Optional[asyncio.Task] = None
+
         # Log callbacks for API log storage
         self._log_callbacks: List[Any] = []
 
@@ -499,16 +503,19 @@ class Logger:
     # =========================================================================
 
     def _send_live_log(self, formatted_tree: str) -> None:
-        """Send a single tree log to Discord webhook immediately."""
+        """Queue a tree log for batched Discord webhook delivery."""
         if not self._live_logs_enabled:
             return
 
+        self._webhook_queue.append(formatted_tree)
+
+        # Start the flush loop if not running
         try:
             loop = asyncio.get_running_loop()
-            task = loop.create_task(self._async_send_live_log(formatted_tree))
-            task.add_done_callback(self._handle_webhook_task_exception)
+            if self._flush_task is None or self._flush_task.done():
+                self._flush_task = loop.create_task(self._webhook_flush_loop())
+                self._flush_task.add_done_callback(self._handle_webhook_task_exception)
         except RuntimeError:
-            # No event loop running yet
             pass
 
     def _handle_webhook_task_exception(self, task: asyncio.Task) -> None:
@@ -520,8 +527,40 @@ class Logger:
             # Already logged to file in _async_send_webhook, just consume the exception
             pass
 
+    async def _webhook_flush_loop(self) -> None:
+        """Batch webhook queue and send every 2 seconds. Combines multiple logs into one message."""
+        while self._webhook_queue:
+            await asyncio.sleep(2)  # Collect logs for 2 seconds
+
+            if not self._webhook_queue:
+                break
+
+            # Drain queue (up to 5 logs per message to stay under Discord's 2000 char limit)
+            batch = []
+            total_len = 0
+            while self._webhook_queue and len(batch) < 5:
+                msg = self._webhook_queue[0]
+                # Check if adding this would exceed Discord limit (~1900 to leave room for formatting)
+                if total_len + len(msg) + 10 > 1900 and batch:
+                    break
+                batch.append(self._webhook_queue.pop(0))
+                total_len += len(msg) + 1  # +1 for newline
+
+            if not batch:
+                continue
+
+            combined = "\n".join(batch)
+            payload = {
+                "content": f"```\n{combined}\n```",
+                "username": f"{_get_bot_name()} Logs",
+            }
+            try:
+                await self._async_send_webhook(payload, self._live_logs_webhook_url)
+            except Exception as e:
+                self._write_to_file_only(f"[LIVE LOG WEBHOOK] Batch failed: {type(e).__name__}: {e}")
+
     async def _async_send_live_log(self, formatted_tree: str) -> None:
-        """Send a single tree log to Discord webhook."""
+        """Send a single tree log to Discord webhook (used for direct sends)."""
         payload = {
             "content": f"```\n{formatted_tree}\n```",
             "username": f"{_get_bot_name()} Logs",
@@ -529,7 +568,6 @@ class Logger:
         try:
             await self._async_send_webhook(payload, self._live_logs_webhook_url)
         except Exception as e:
-            # Log to file only to avoid recursion
             self._write_to_file_only(f"[LIVE LOG WEBHOOK] Failed: {type(e).__name__}: {e}")
 
     def _send_error_webhook(

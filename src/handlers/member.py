@@ -187,18 +187,19 @@ class MemberHandler(commands.Cog):
 
         try:
             # Add timeout to prevent hanging
-            invites = await asyncio.wait_for(guild.invites(), timeout=10.0)
+            invites = await asyncio.wait_for(guild.invites(), timeout=30.0)
             self._invite_cache = {inv.code: inv.uses for inv in invites}
             self._invites_cached = True
             logger.tree("Invite Cache Loaded", [
                 ("Guild", guild.name),
                 ("Invites Cached", str(len(self._invite_cache))),
             ], emoji="🔗")
-        except asyncio.TimeoutError as e:
-            logger.error_tree("Invite Cache Timeout", e, [
+        except asyncio.TimeoutError:
+            logger.tree("Invite Cache Timeout", [
                 ("Guild", guild.name),
-                ("Timeout", "10s"),
-            ])
+                ("Timeout", "30s"),
+                ("Impact", "Join tracking unavailable until next cache"),
+            ], emoji="⏳")
         except discord.HTTPException as e:
             logger.error_tree("Invite Cache Failed", e, [
                 ("Guild", guild.name),
