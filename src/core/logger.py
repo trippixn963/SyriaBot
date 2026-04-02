@@ -503,7 +503,7 @@ class Logger:
     # =========================================================================
 
     def _send_live_log(self, formatted_tree: str) -> None:
-        """Queue a tree log for batched Discord webhook delivery."""
+        """Queue a tree log for rate-limited Discord webhook delivery (one per message)."""
         if not self._live_logs_enabled:
             return
 
@@ -528,36 +528,21 @@ class Logger:
             pass
 
     async def _webhook_flush_loop(self) -> None:
-        """Batch webhook queue and send every 2 seconds. Combines multiple logs into one message."""
+        """Send queued logs one at a time with rate-limit spacing. Each tree is its own message."""
         while self._webhook_queue:
-            await asyncio.sleep(2)  # Collect logs for 2 seconds
-
-            if not self._webhook_queue:
-                break
-
-            # Drain queue (up to 5 logs per message to stay under Discord's 2000 char limit)
-            batch = []
-            total_len = 0
-            while self._webhook_queue and len(batch) < 5:
-                msg = self._webhook_queue[0]
-                # Check if adding this would exceed Discord limit (~1900 to leave room for formatting)
-                if total_len + len(msg) + 10 > 1900 and batch:
-                    break
-                batch.append(self._webhook_queue.pop(0))
-                total_len += len(msg) + 1  # +1 for newline
-
-            if not batch:
-                continue
-
-            combined = "\n".join(batch)
+            msg = self._webhook_queue.pop(0)
             payload = {
-                "content": f"```\n{combined}\n```",
+                "content": f"```\n{msg}\n```",
                 "username": f"{_get_bot_name()} Logs",
             }
             try:
                 await self._async_send_webhook(payload, self._live_logs_webhook_url)
             except Exception as e:
-                self._write_to_file_only(f"[LIVE LOG WEBHOOK] Batch failed: {type(e).__name__}: {e}")
+                self._write_to_file_only(f"[LIVE LOG WEBHOOK] Failed: {type(e).__name__}: {e}")
+
+            # Rate limit: wait between sends to avoid 429s
+            if self._webhook_queue:
+                await asyncio.sleep(1)
 
     async def _async_send_live_log(self, formatted_tree: str) -> None:
         """Send a single tree log to Discord webhook (used for direct sends)."""

@@ -14,7 +14,8 @@ Server: discord.gg/syria
 """
 
 import asyncio
-from typing import Dict, Optional, Set, Union
+import time
+from typing import Dict, Optional, Set, Tuple, Union
 
 import discord
 
@@ -37,6 +38,9 @@ OverwriteDict = Dict[OverwriteTarget, discord.PermissionOverwrite]
 
 # Per-channel locks — prevents concurrent permission mutations on the same channel
 _channel_locks: Dict[int, asyncio.Lock] = {}
+
+# Blocked user kick debounce — prevents kick loops when Discord is slow to propagate
+_blocked_kick_cache: Dict[Tuple[int, int], float] = {}  # (channel_id, user_id) -> last_kick_time
 
 
 def get_channel_lock(channel_id: int) -> asyncio.Lock:
@@ -283,12 +287,19 @@ async def grant_text_access(channel: discord.VoiceChannel, member: discord.Membe
 
     owner_id = channel_info["owner_id"]
 
-    # Blocked user — re-apply block overwrite and kick
+    # Blocked user — skip if recently kicked (prevents kick loop), otherwise kick
     if member.id in db.get_blocked_list(owner_id):
+        cache_key = (channel.id, member.id)
+        now = time.time()
+        if cache_key in _blocked_kick_cache and now - _blocked_kick_cache[cache_key] < 10:
+            return  # Already kicked in last 10 seconds, Discord is still propagating
+
         try:
-            await channel.set_permissions(member, overwrite=get_blocked_overwrite())
+            # Full sync ensures connect=False is applied atomically
+            await sync_channel_permissions(channel)
             if member.voice and member.voice.channel == channel:
                 await member.move_to(None)
+                _blocked_kick_cache[cache_key] = now
                 logger.tree("Blocked User Auto-Kicked", [
                     ("Channel", channel.name),
                     ("User", f"{member.name} ({member.display_name})"),

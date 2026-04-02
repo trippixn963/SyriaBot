@@ -306,7 +306,16 @@ class TempVoiceControlPanel(ui.View):
             logger.debug("Control Panel Error Reply Failed", [("Error", str(e)[:50])])
 
     async def _get_user_channel(self, interaction: discord.Interaction, log_context: str = "Action") -> Optional[discord.VoiceChannel]:
-        """Get the user's temp voice channel."""
+        """Get the user's temp voice channel, or the current channel for developer."""
+        is_dev = interaction.user.id == config.OWNER_ID
+
+        if is_dev:
+            # Developer can use any panel — use the channel the interaction is in
+            channel = interaction.channel
+            if isinstance(channel, discord.VoiceChannel) and db.is_temp_channel(channel.id):
+                return channel
+
+        # Normal path: look up user's owned channel
         channel_id = db.get_owner_channel(interaction.user.id, interaction.guild.id)
         if not channel_id:
             embed = discord.Embed(description="⚠️ You don't own a channel", color=COLOR_WARNING)
