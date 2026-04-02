@@ -184,6 +184,9 @@ async def sync_channel_permissions(channel: discord.VoiceChannel) -> bool:
         if overwrites is None:
             return False
 
+        # Filter out any invalid targets (None, invalid Object) to prevent ValueError
+        overwrites = {k: v for k, v in overwrites.items() if k is not None}
+
         try:
             await channel.edit(overwrites=overwrites)
             logger.tree("Permissions Synced", [
@@ -192,6 +195,14 @@ async def sync_channel_permissions(channel: discord.VoiceChannel) -> bool:
                 ("Members In VC", str(len(current_member_ids))),
             ], emoji="🔒")
             return True
+        except ValueError as e:
+            logger.error_tree("Permission Sync ValueError", e, [
+                ("Channel", channel.name),
+                ("Channel ID", str(channel.id)),
+                ("Overwrites", str(len(overwrites))),
+                ("Targets", ", ".join(str(type(k).__name__) for k in overwrites.keys())),
+            ])
+            return False
         except discord.HTTPException as e:
             logger.error_tree("Permission Sync Failed", e, [
                 ("Channel", channel.name),
