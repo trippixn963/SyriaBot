@@ -247,13 +247,51 @@ class TempVoiceService:
         return channel_name
 
     async def _periodic_cleanup(self) -> None:
-        """Periodically clean up empty temp channels."""
+        """Periodically clean up empty temp channels and refresh VC statuses."""
         while True:
             await asyncio.sleep(config.VC_CLEANUP_INTERVAL)
             try:
                 await _lifecycle_cleanup_empty_channels(self)
             except Exception as e:
                 logger.error_tree("Periodic Cleanup Failed", e)
+
+            # Refresh all temp VC statuses (Discord clears them periodically)
+            try:
+                await self._refresh_all_statuses()
+            except Exception as e:
+                logger.error_tree("Status Refresh Failed", e)
+
+    async def _refresh_all_statuses(self) -> None:
+        """Re-set VC status only on channels where Discord cleared it."""
+        from .panel import _last_status
+
+        channels = db.get_all_temp_channels()
+        if not channels:
+            return
+
+        refreshed = 0
+        for channel_data in channels:
+            channel_id = channel_data["channel_id"]
+            guild_id = channel_data.get("guild_id", config.GUILD_ID)
+            guild = self.bot.get_guild(guild_id)
+            if not guild:
+                continue
+            channel = guild.get_channel(channel_id)
+            if not channel or not isinstance(channel, discord.VoiceChannel):
+                continue
+
+            # Only refresh if Discord cleared the status (status is None/empty but we expect one)
+            current_status = channel.status
+            expected = _last_status.get(channel_id)
+            if expected and not current_status:
+                _last_status.pop(channel_id, None)
+                await update_voice_status(channel)
+                refreshed += 1
+
+        if refreshed > 0:
+            logger.tree("VC Statuses Refreshed", [
+                ("Refreshed", str(refreshed)),
+            ], emoji="🔄")
 
     async def _enforce_blocks(self) -> None:
         """Scan all temp channels and kick any blocked users who slipped through."""

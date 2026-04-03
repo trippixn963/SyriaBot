@@ -73,6 +73,12 @@ async def update_voice_status(channel: discord.VoiceChannel) -> None:
 
     try:
         await channel.edit(status=status)
+        logger.tree("VC Status Updated", [
+            ("Channel", channel.name),
+            ("Status", status),
+        ], emoji="📊")
+    except discord.NotFound:
+        _last_status.pop(channel.id, None)
     except discord.HTTPException as e:
         logger.error_tree("VC Status Update Failed", e, [
             ("Channel", channel.name),

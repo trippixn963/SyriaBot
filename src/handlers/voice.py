@@ -49,27 +49,34 @@ class VoiceHandler(commands.Cog):
         await self.sync_public_vc_permissions()
 
         # Set creator channel status
-        if config.VC_CREATOR_CHANNEL_ID:
-            guild = self.bot.get_guild(config.GUILD_ID)
-            if guild:
-                creator = guild.get_channel(config.VC_CREATOR_CHANNEL_ID)
-                if creator:
-                    try:
-                        await creator.edit(status="🎙️ Join to create ・ Level 10+")
-                    except discord.HTTPException:
-                        pass
+        await self._set_creator_status()
 
         # Start nightly maintenance
         if not self.public_vc_maintenance.is_running():
             self.public_vc_maintenance.start()
 
+    async def _set_creator_status(self) -> None:
+        """Set the creator channel status. Called on startup, resume, and periodically."""
+        if not config.VC_CREATOR_CHANNEL_ID:
+            return
+        guild = self.bot.get_guild(config.GUILD_ID)
+        if not guild:
+            return
+        creator = guild.get_channel(config.VC_CREATOR_CHANNEL_ID)
+        if creator:
+            try:
+                await creator.edit(status="🎙️ Join to create ・ Level 10+")
+            except discord.HTTPException:
+                pass
+
     @commands.Cog.listener()
     async def on_resumed(self) -> None:
-        """Re-sync temp channel permissions after gateway reconnect."""
+        """Re-sync temp channel permissions and statuses after gateway reconnect."""
         if hasattr(self.bot, 'tempvoice') and self.bot.tempvoice:
             from src.services.tempvoice.permissions import sync_all_channels
             logger.tree("Gateway Resumed — Syncing TempVoice Permissions", [], emoji="🔄")
             await sync_all_channels(self.bot)
+        await self._set_creator_status()
 
     @commands.Cog.listener()
     async def on_voice_state_update(
@@ -408,6 +415,9 @@ class VoiceHandler(commands.Cog):
                 logger.error_tree("Public VC Maintenance Failed", e, [
                     ("Channel", channel.name),
                 ])
+
+        # Refresh creator channel status (Discord clears VC statuses periodically)
+        await self._set_creator_status()
 
     @public_vc_maintenance.before_loop
     async def before_public_vc_maintenance(self) -> None:
