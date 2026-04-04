@@ -11,7 +11,6 @@ Server: discord.gg/syria
 
 import asyncio
 import shutil
-import sqlite3
 import subprocess
 import tempfile
 from datetime import datetime, timedelta
@@ -22,6 +21,7 @@ from src.core.logger import logger
 from src.core.constants import TIMEZONE_EST
 from src.utils.async_utils import create_safe_task
 from src.utils.http import http_session, FAST_TIMEOUT
+from src.services.backup.integrity import check_and_repair
 DEFAULT_RETENTION_HOURS = 48  # Keep 48 hourly backups (2 days)
 SECONDS_PER_HOUR = 3600
 
@@ -43,30 +43,6 @@ def _format_size(size_bytes: int) -> str:
         return f"{size_bytes / MB_DIVISOR:.1f} MB"
     else:
         return f"{size_bytes / KB_DIVISOR:.1f} KB"
-
-
-def _check_database_integrity(db_path: Path, max_retries: int = 3) -> tuple[bool, str]:
-    """Check SQLite database integrity before backup with retry for transient errors."""
-    import time as time_module
-    transient_errors = ("disk I/O error", "database is locked", "unable to open")
-
-    for attempt in range(max_retries):
-        try:
-            conn = sqlite3.connect(str(db_path), timeout=30)
-            cursor = conn.cursor()
-            cursor.execute("PRAGMA integrity_check;")
-            result = cursor.fetchone()[0]
-            conn.close()
-            return (True, "ok") if result == "ok" else (False, result)
-        except sqlite3.DatabaseError as e:
-            error_str = str(e).lower()
-            if any(te in error_str for te in transient_errors) and attempt < max_retries - 1:
-                time_module.sleep(2 ** attempt)
-                continue
-            return False, f"Database error: {e}"
-        except Exception as e:
-            return False, f"Check failed: {e}"
-    return False, "Max retries exceeded"
 
 
 def _format_tree_log(
@@ -212,14 +188,13 @@ class R2BackupScheduler:
             ], emoji="⚠️")
             return None
 
-        # Check integrity
-        is_healthy, integrity_msg = _check_database_integrity(self._db_path)
+        # Check integrity + auto-repair if needed
+        is_healthy, integrity_msg = check_and_repair(self._db_path)
         if not is_healthy:
-            logger.tree("Backup ABORTED - Corruption", [
+            logger.critical("Backup ABORTED - Corruption", [
                 ("Bot", self._bot_display),
                 ("Integrity", integrity_msg[:100]),
-                ("Path", str(self._db_path)),
-            ], emoji="🚨")
+            ])
             return {**base_result, "success": False, "error": "corruption", "integrity_msg": integrity_msg[:100]}
 
         # Create temp backup file with clean path structure

@@ -21,10 +21,19 @@ from .base import (
     send_backup_notification,
 )
 
+from .integrity import (
+    check_integrity,
+    auto_repair,
+    check_and_repair,
+)
+
 __all__ = [
     "BackupScheduler",
     "R2BackupScheduler",
     "send_backup_notification",
+    "check_integrity",
+    "auto_repair",
+    "check_and_repair",
     "DATABASE_PATH",
     "BOT_NAME",
     "R2_BUCKET",

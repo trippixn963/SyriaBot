@@ -43,7 +43,7 @@ _CACHE_TTL = 30  # Cache cards for 30 seconds
 
 # Track last activity for idle timeout
 _last_activity: float = 0
-_IDLE_TIMEOUT = 120  # Close browser after 2 minutes of inactivity (was 5 min)
+_IDLE_TIMEOUT = 600  # Close browser after 10 minutes of inactivity
 
 # Track renders for periodic browser restart (clears memory leaks)
 _render_count: int = 0
@@ -104,6 +104,40 @@ async def _check_render_restart() -> None:
         _render_count = 0
 
 
+async def _force_reset() -> None:
+    """Force reset all browser state on crash. Closes old processes to prevent leaks."""
+    global _browser, _context, _playwright, _render_count
+
+    logger.tree("Rank Card Browser Force Reset", [
+        ("Reason", "Browser crashed or closed"),
+    ], emoji="🔧")
+
+    async with _page_pool_lock:
+        _page_pool.clear()
+
+    old_browser, old_context, old_playwright = _browser, _context, _playwright
+    _browser = None
+    _context = None
+    _playwright = None
+    _render_count = 0
+
+    for resource, name in [(old_context, "context"), (old_browser, "browser"), (old_playwright, "playwright")]:
+        if resource:
+            try:
+                if name == "playwright":
+                    await resource.stop()
+                else:
+                    await resource.close()
+            except Exception:
+                pass
+
+    try:
+        import subprocess
+        subprocess.run(['pkill', '-f', 'chrome-headless-shell'], capture_output=True, timeout=5)
+    except Exception:
+        pass
+
+
 async def _get_context() -> "BrowserContext":
     """Get or create browser context (reusable)."""
     global _browser, _context, _playwright, _last_activity
@@ -156,26 +190,32 @@ async def _get_context() -> "BrowserContext":
     return _context
 
 
-async def _get_page() -> "Page":
-    """Get a page from pool or create new one."""
-    # First, run cleanup checks BEFORE getting a page
-    # This ensures we don't get a page that's about to become stale
+async def _get_page(retry: bool = True) -> "Page":
+    """Get a page from pool or create new one. Handles browser crashes."""
+    from playwright.async_api import Error as PlaywrightError
+
     await _check_idle_timeout()
     await _check_render_restart()
 
-    async with _page_pool_lock:
-        while _page_pool:
-            page = _page_pool.pop()
-            # Verify page is still connected
-            try:
-                if not page.is_closed():
-                    return page
-            except Exception:
-                pass
-            # Page is stale, discard it
+    try:
+        async with _page_pool_lock:
+            while _page_pool:
+                page = _page_pool.pop()
+                try:
+                    if not page.is_closed():
+                        return page
+                except Exception:
+                    pass
 
-    context = await _get_context()
-    return await context.new_page()
+        context = await _get_context()
+        return await context.new_page()
+
+    except PlaywrightError as e:
+        error_msg = str(e).lower()
+        if ("closed" in error_msg or "target" in error_msg) and retry:
+            await _force_reset()
+            return await _get_page(retry=False)
+        raise
 
 
 async def _return_page(page: "Page") -> None:

@@ -280,8 +280,8 @@ class TempVoiceService:
             if not channel or not isinstance(channel, discord.VoiceChannel):
                 continue
 
-            # Only refresh if Discord cleared the status (status is None/empty but we expect one)
-            current_status = channel.status
+            # Only refresh if we had a status cached (re-set it in case Discord cleared it)
+            current_status = getattr(channel, 'status', None)
             expected = _last_status.get(channel_id)
             if expected and not current_status:
                 _last_status.pop(channel_id, None)
