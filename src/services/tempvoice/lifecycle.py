@@ -92,7 +92,15 @@ async def create_temp_channel(svc: TempVoiceService, member: discord.Member) -> 
                 ("User", f"{member.name} ({member.display_name})"),
                 ("ID", str(user_id)),
             ], emoji="🔓")
-            await _create_temp_channel_inner(svc, member)
+            try:
+                await asyncio.wait_for(_create_temp_channel_inner(svc, member), timeout=30.0)
+            except asyncio.TimeoutError:
+                logger.error("Channel Creation Timed Out", [
+                    ("User", f"{member.name} ({member.display_name})"),
+                    ("ID", str(user_id)),
+                    ("Timeout", "30s"),
+                    ("Action", "Releasing lock, user can retry"),
+                ])
         finally:
             _create_semaphore.release()
     finally:

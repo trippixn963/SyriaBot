@@ -530,6 +530,12 @@ class Logger:
     async def _webhook_flush_loop(self) -> None:
         """Send queued logs one at a time with rate-limit spacing. Each tree is its own message."""
         while self._webhook_queue:
+            # Drop old messages if queue is too long (keep newest 20)
+            if len(self._webhook_queue) > 50:
+                dropped = len(self._webhook_queue) - 20
+                self._webhook_queue = self._webhook_queue[-20:]
+                self._write_to_file_only(f"[WEBHOOK] Queue overflow — dropped {dropped} old messages")
+
             msg = self._webhook_queue.pop(0)
             payload = {
                 "content": f"```\n{msg}\n```",
@@ -540,9 +546,9 @@ class Logger:
             except Exception as e:
                 self._write_to_file_only(f"[LIVE LOG WEBHOOK] Failed: {type(e).__name__}: {e}")
 
-            # Rate limit: wait between sends to avoid 429s
+            # Rate limit: 2s between sends (Discord allows ~30/min per webhook)
             if self._webhook_queue:
-                await asyncio.sleep(1)
+                await asyncio.sleep(2)
 
     async def _async_send_live_log(self, formatted_tree: str) -> None:
         """Send a single tree log to Discord webhook (used for direct sends)."""

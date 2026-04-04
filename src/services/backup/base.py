@@ -11,6 +11,7 @@ Server: discord.gg/syria
 
 import asyncio
 import shutil
+import sqlite3
 import subprocess
 import tempfile
 from datetime import datetime, timedelta
@@ -210,7 +211,12 @@ class R2BackupScheduler:
 
             try:
                 # Copy database to temp
-                shutil.copy2(self._db_path, temp_path)
+                # Use SQLite backup API for consistent snapshot (safe with WAL + concurrent writes)
+                src_conn = sqlite3.connect(str(self._db_path), timeout=30)
+                dst_conn = sqlite3.connect(str(temp_path))
+                src_conn.backup(dst_conn)
+                dst_conn.close()
+                src_conn.close()
                 backup_size = temp_path.stat().st_size
                 size_str = _format_size(backup_size)
 

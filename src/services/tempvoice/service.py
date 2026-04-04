@@ -63,7 +63,6 @@ from .views import TempVoiceControlPanel
 from .panel import (
     build_panel_embed,
     build_panel_view,
-    send_guide_images,
     send_channel_interface,
     update_panel,
     update_voice_status,
@@ -410,10 +409,6 @@ class TempVoiceService:
     def _build_panel_view(self, is_locked: bool = True) -> TempVoiceControlPanel:
         """Build a fresh control panel view. Delegates to panel module."""
         return build_panel_view(self, is_locked)
-
-    async def _send_guide_images(self, channel: discord.VoiceChannel) -> tuple[int | None, int | None]:
-        """Send CSS-rendered guide images. Delegates to panel module."""
-        return await send_guide_images(channel)
 
     async def _send_channel_interface(
         self,

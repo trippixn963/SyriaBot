@@ -23,7 +23,7 @@ from src.core.colors import (
 from src.core.config import config
 from src.core.logger import logger
 from src.services.database import db
-from .graphics import render_voice_guide, render_music_guide
+from .graphics import render_voice_guide
 from .views import TempVoiceControlPanel
 
 if TYPE_CHECKING:
@@ -31,6 +31,56 @@ if TYPE_CHECKING:
 
 
 _last_status: dict[int, str] = {}  # channel_id -> last status text (debounce)
+_voice_guide_url: str | None = None  # Permanent CDN URL for voice guide image
+
+
+async def ensure_voice_guide_url(bot) -> str | None:
+    """Upload voice guide to asset channel once, cache the CDN URL forever."""
+    global _voice_guide_url
+
+    if _voice_guide_url:
+        return _voice_guide_url
+
+    if not config.ASSET_STORAGE_CHANNEL_ID:
+        logger.tree("Voice Guide Skipped", [("Reason", "No asset channel configured")], emoji="⚠️")
+        return None
+
+    guild = bot.get_guild(config.GUILD_ID)
+    if not guild:
+        logger.tree("Voice Guide Skipped", [("Reason", "Guild not cached"), ("ID", str(config.GUILD_ID))], emoji="⚠️")
+        return None
+
+    asset_channel = guild.get_channel(config.ASSET_STORAGE_CHANNEL_ID)
+    if not asset_channel:
+        try:
+            asset_channel = await bot.fetch_channel(config.ASSET_STORAGE_CHANNEL_ID)
+        except Exception:
+            pass
+    if not asset_channel:
+        logger.tree("Voice Guide Skipped", [("Reason", "Asset channel not found"), ("ID", str(config.ASSET_STORAGE_CHANNEL_ID))], emoji="⚠️")
+        return None
+
+    try:
+        import io
+        voice_bytes = await render_voice_guide()
+        if not voice_bytes:
+            logger.tree("Voice Guide Skipped", [("Reason", "Render returned empty")], emoji="⚠️")
+            return None
+
+        msg = await asset_channel.send(
+            content="Voice Guide (permanent asset — do not delete)",
+            file=discord.File(io.BytesIO(voice_bytes), "voice_guide.png"),
+        )
+        if msg.attachments:
+            _voice_guide_url = msg.attachments[0].url
+            logger.tree("Voice Guide Uploaded", [
+                ("URL", _voice_guide_url[:80]),
+            ], emoji="🖼️")
+            return _voice_guide_url
+    except Exception as e:
+        logger.error_tree("Voice Guide Upload Failed", e)
+
+    return None
 
 
 async def update_voice_status(channel: discord.VoiceChannel) -> None:
@@ -136,43 +186,23 @@ def build_panel_embed(
         status = f"{EMOJI_UNLOCK} Unlocked"
         color = COLOR_SUCCESS
 
+    description = (
+        f"**Owner:** {owner.mention} ・ **Status:** {status}\n"
+        f"**Members:** {member_count}/{limit} ・ **Bitrate:** {bitrate} kbps\n"
+        f"**Created:** {duration_text} ・ **Allowed:** {len(valid_trusted)}"
+    )
+
     embed = discord.Embed(
         title=channel.name,
+        description=description,
         color=color,
     )
 
-    # Row 1: Owner, Status, Members
-    embed.add_field(name="Owner", value=owner.mention, inline=True)
-    embed.add_field(name="Status", value=status, inline=True)
-    embed.add_field(name="Members", value=f"{member_count}/{limit}", inline=True)
-
-    # Row 2: Created, Bitrate, Allowed
-    embed.add_field(name="Created", value=duration_text, inline=True)
-    embed.add_field(name="Bitrate", value=f"{bitrate} kbps", inline=True)
-    embed.add_field(name="Allowed", value=str(len(valid_trusted)), inline=True)
-
-    # Current members in channel (always show)
-    if channel.members:
-        member_mentions = [m.mention for m in channel.members[:10]]
-        members_text = " ".join(member_mentions)
-        if len(channel.members) > 10:
-            members_text += f" +{len(channel.members) - 10} more"
-    else:
-        members_text = "*No one yet*"
-    embed.add_field(name="In Channel", value=members_text, inline=False)
-
-    # Always show Allowed Users field (from owner's persistent list)
-    if valid_trusted:
-        # Show up to 8 users
-        allowed_mentions = [member.mention for _, member in valid_trusted[:8]]
-        allowed_text = " ".join(allowed_mentions)
-        if len(valid_trusted) > 8:
-            allowed_text += f" +{len(valid_trusted) - 8} more"
-        embed.add_field(name="Allowed Users", value=allowed_text, inline=False)
-    else:
-        embed.add_field(name="Allowed Users", value="*None - use Allow button to add*", inline=False)
-
     embed.set_thumbnail(url=owner.display_avatar.url)
+
+    # Voice guide as permanent image (CDN URL survives embed edits)
+    if _voice_guide_url:
+        embed.set_image(url=_voice_guide_url)
 
     return embed
 
@@ -191,61 +221,6 @@ def build_panel_view(service: "TempVoiceService", is_locked: bool = True) -> Tem
     return view
 
 
-async def send_guide_images(channel: discord.VoiceChannel) -> tuple[int | None, int | None]:
-    """Send CSS-rendered guide images. Returns (music_guide_id, guide_id)."""
-    import io
-
-    music_guide_id = None
-    guide_id = None
-
-    try:
-        music_bytes = await render_music_guide()
-        if music_bytes:
-            music_msg = await channel.send(file=discord.File(io.BytesIO(music_bytes), "music_guide.png"))
-            music_guide_id = music_msg.id
-        else:
-            logger.tree("Music Guide Skipped", [
-                ("Channel", channel.name),
-                ("Reason", "Render returned empty"),
-            ], emoji="⚠️")
-    except discord.NotFound:
-        logger.tree("Music Guide Send Failed", [
-            ("Channel", channel.name),
-            ("Reason", "Channel not found"),
-        ], emoji="⚠️")
-    except discord.HTTPException as e:
-        logger.error_tree("Music Guide Send Failed", e, [
-            ("Channel", channel.name),
-        ])
-
-    try:
-        voice_bytes = await render_voice_guide()
-        if voice_bytes:
-            guide_msg = await channel.send(file=discord.File(io.BytesIO(voice_bytes), "voice_guide.png"))
-            guide_id = guide_msg.id
-        else:
-            logger.tree("Voice Guide Skipped", [
-                ("Channel", channel.name),
-                ("Reason", "Render returned empty"),
-            ], emoji="⚠️")
-    except discord.NotFound:
-        logger.tree("Voice Guide Send Failed", [
-            ("Channel", channel.name),
-            ("Reason", "Channel not found"),
-        ], emoji="⚠️")
-    except discord.HTTPException as e:
-        logger.error_tree("Voice Guide Send Failed", e, [
-            ("Channel", channel.name),
-        ])
-
-    logger.tree("Guide Images Sent", [
-        ("Channel", channel.name),
-        ("Music Guide", "Yes" if music_guide_id else "No"),
-        ("Voice Guide", "Yes" if guide_id else "No"),
-    ], emoji="🖼️")
-
-    return music_guide_id, guide_id
-
 
 async def send_channel_interface(
     channel: discord.VoiceChannel,
@@ -253,7 +228,8 @@ async def send_channel_interface(
     service: "TempVoiceService",
 ) -> discord.Message:
     """Send guide images + control panel + welcome message to voice channel."""
-    music_guide_id, guide_id = await send_guide_images(channel)
+    # Ensure voice guide CDN URL exists (lazy upload on first use)
+    await ensure_voice_guide_url(service.bot)
 
     auto_lock = owner.id == config.OWNER_ID or owner.id in config.VC_AUTO_LOCK_USERS
     embed = build_panel_embed(channel, owner, is_locked=auto_lock)
@@ -283,16 +259,10 @@ async def send_channel_interface(
     await channel.send(welcome)
 
     # Send divider image to separate setup from chat
-    from src.utils.divider import send_divider
     await send_divider(channel)
 
-    # Cache all message IDs
-    update_kwargs = {"panel_message_id": message.id}
-    if guide_id:
-        update_kwargs["guide_message_id"] = guide_id
-    if music_guide_id:
-        update_kwargs["music_guide_message_id"] = music_guide_id
-    db.update_temp_channel(channel.id, **update_kwargs)
+    # Cache message ID
+    db.update_temp_channel(channel.id, panel_message_id=message.id)
 
     # Set VC status (visible in Discord's channel list)
     await update_voice_status(channel)
@@ -375,7 +345,7 @@ async def _update_panel_inner(channel: discord.VoiceChannel, service: "TempVoice
 
         async for message in channel.history(limit=50):
             if (message.author.id == service.bot.user.id and message.embeds
-                    and any(f.name == "Owner" for f in message.embeds[0].fields)):
+                    and message.embeds[0].description and "**Owner:**" in message.embeds[0].description):
                 embed = build_panel_embed(channel, owner, is_locked)
                 await message.edit(embed=embed, view=build_panel_view(service, is_locked))
                 # Cache the message ID for next time
@@ -446,8 +416,8 @@ async def resend_sticky_panel(channel: discord.VoiceChannel, service: "TempVoice
                 async for msg in channel.history(limit=50):
                     if msg.author.id != bot_id:
                         continue
-                    is_guide = msg.attachments and any(a.filename in ("music_guide.png", "voice_guide.png") for a in msg.attachments)
-                    is_panel = msg.embeds and any(f.name == "Owner" for e in msg.embeds for f in e.fields)
+                    is_guide = msg.attachments and any(a.filename == "voice_guide.png" for a in msg.attachments)
+                    is_panel = msg.embeds and any(e.description and "**Owner:**" in e.description for e in msg.embeds)
                     if is_guide or is_panel:
                         try:
                             await msg.delete()
@@ -472,18 +442,11 @@ async def resend_sticky_panel(channel: discord.VoiceChannel, service: "TempVoice
         try:
             is_locked = bool(channel_info.get("is_locked", 0))
 
-            music_guide_id, guide_id = await send_guide_images(channel)
-
             embed = build_panel_embed(channel, owner, is_locked)
             new_message = await channel.send(embed=embed, view=build_panel_view(service, is_locked))
 
-            # Cache new message IDs
-            update_kwargs = {"panel_message_id": new_message.id}
-            if guide_id:
-                update_kwargs["guide_message_id"] = guide_id
-            if music_guide_id:
-                update_kwargs["music_guide_message_id"] = music_guide_id
-            db.update_temp_channel(channel.id, **update_kwargs)
+            # Cache new message ID
+            db.update_temp_channel(channel.id, panel_message_id=new_message.id)
 
             logger.tree("Sticky Panel Resent", [
                 ("Channel", channel.name),

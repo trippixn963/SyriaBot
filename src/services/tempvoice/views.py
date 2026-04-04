@@ -24,10 +24,315 @@ from src.core.logger import logger
 from src.services.database import db
 from .modals import NameModal, LimitModal
 from .selects import UserSelectView
-from .utils import is_booster, has_vc_mod_role, set_owner_permissions, get_locked_overwrite, get_unlocked_overwrite
+from .utils import is_booster, has_vc_mod_role, set_owner_permissions
 
 if TYPE_CHECKING:
     from .service import TempVoiceService
+
+
+class BlockListView(ui.View):
+    """View showing blocked users with buttons to block or unblock."""
+
+    def __init__(self, channel: discord.VoiceChannel, service: "TempVoiceService") -> None:
+        super().__init__(timeout=60)
+        self.channel = channel
+        self.service = service
+
+    @ui.button(label="Block User", emoji=EMOJI_BLOCK, style=discord.ButtonStyle.secondary)
+    async def block_new(self, interaction: discord.Interaction, button: ui.Button) -> None:
+        """Open user select to block a new user."""
+        try:
+            embed = discord.Embed(description="🚫 Select a user to block", color=COLOR_ERROR)
+            view = UserSelectView(self.channel, "block", self.service)
+            await interaction.response.edit_message(embed=embed, view=view)
+        except discord.HTTPException as e:
+            logger.error_tree("Block New User Failed", e, [
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("ID", str(interaction.user.id)),
+            ])
+
+    @ui.button(label="Unblock User", emoji=EMOJI_ALLOW, style=discord.ButtonStyle.secondary)
+    async def unblock_user(self, interaction: discord.Interaction, button: ui.Button) -> None:
+        """Show dropdown of blocked users to unblock."""
+        try:
+            channel_info = db.get_temp_channel(self.channel.id)
+            if not channel_info:
+                return
+
+            owner_id: int = channel_info["owner_id"]
+            blocked_ids = db.get_blocked_list(owner_id)
+
+            if not blocked_ids:
+                embed = discord.Embed(description="✅ No users to unblock", color=COLOR_SUCCESS)
+                await interaction.response.edit_message(embed=embed, view=None)
+                return
+
+            await interaction.response.defer(ephemeral=True)
+
+            # Resolve names — auto-clean users who left server
+            blocked_users: list = []
+            for uid in blocked_ids[:25]:
+                member = interaction.guild.get_member(uid)
+                if not member:
+                    try:
+                        member = await interaction.guild.fetch_member(uid)
+                    except discord.NotFound:
+                        db.remove_blocked(owner_id, uid)
+                        continue
+                    except discord.HTTPException:
+                        db.remove_blocked(owner_id, uid)
+                        continue
+                blocked_users.append((uid, f"{member.display_name} ({member.name})"))
+
+            if not blocked_users:
+                embed = discord.Embed(description="✅ No users to unblock", color=COLOR_SUCCESS)
+                await interaction.followup.send(embed=embed, ephemeral=True)
+                return
+
+            embed = discord.Embed(description="🔓 Select a user to unblock", color=COLOR_SUCCESS)
+            view = UnblockSelectView(self.channel, self.service, blocked_users)
+            await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+        except discord.HTTPException as e:
+            logger.error_tree("Unblock Button Failed", e, [
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("ID", str(interaction.user.id)),
+            ])
+
+    async def on_timeout(self) -> None:
+        pass
+
+
+class UnblockSelectView(ui.View):
+    """Dropdown of blocked users for easy unblocking."""
+
+    def __init__(
+        self,
+        channel: discord.VoiceChannel,
+        service: "TempVoiceService",
+        blocked_users: list,  # List of (user_id, display_name)
+    ) -> None:
+        super().__init__(timeout=30)
+        self.channel = channel
+        self.service = service
+
+        # Build dropdown options from blocked users
+        options = []
+        for uid, name in blocked_users[:25]:  # Discord max 25 options
+            options.append(discord.SelectOption(
+                label=name[:100],
+                value=str(uid),
+                emoji="🚫",
+            ))
+
+        self.select_menu = ui.Select(
+            placeholder="Select user to unblock",
+            options=options,
+            min_values=1,
+            max_values=1,
+        )
+        self.select_menu.callback = self.on_select
+        self.add_item(self.select_menu)
+
+    async def on_select(self, interaction: discord.Interaction) -> None:
+        """Handle unblock selection."""
+        from .permissions import sync_channel_permissions
+
+        user_id: int = int(self.select_menu.values[0])
+        channel_info = db.get_temp_channel(self.channel.id)
+        if not channel_info:
+            return
+
+        owner_id: int = channel_info["owner_id"]
+
+        await interaction.response.defer(ephemeral=True)
+
+        db.remove_blocked(owner_id, user_id)
+        await sync_channel_permissions(self.channel)
+
+        # Get display name
+        member = interaction.guild.get_member(user_id)
+        if not member:
+            try:
+                member = await interaction.client.fetch_user(user_id)
+            except discord.HTTPException:
+                member = None
+
+        display_name: str = member.display_name if member else str(user_id)
+        remaining: int = len(db.get_blocked_list(owner_id))
+
+        embed = discord.Embed(
+            description=f"🔓 **{display_name}** has been unblocked\n`{remaining}` users still blocked",
+            color=COLOR_SUCCESS,
+        )
+        if member and hasattr(member, 'display_avatar') and member.display_avatar:
+            embed.set_thumbnail(url=member.display_avatar.url)
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
+        if self.service:
+            try:
+                await self.service._update_panel(self.channel)
+            except Exception:
+                pass
+
+        logger.tree("User Unblocked", [
+            ("Channel", self.channel.name),
+            ("Target", f"{display_name} ({user_id})"),
+            ("By", f"{interaction.user.name} ({interaction.user.display_name})"),
+            ("By ID", str(interaction.user.id)),
+            ("Remaining", str(remaining)),
+        ], emoji="🔓")
+
+
+class AllowListView(ui.View):
+    """View showing allowed/trusted users with buttons to add or remove."""
+
+    def __init__(self, channel: discord.VoiceChannel, service: "TempVoiceService") -> None:
+        super().__init__(timeout=60)
+        self.channel = channel
+        self.service = service
+
+    @ui.button(label="Allow User", emoji=EMOJI_ALLOW, style=discord.ButtonStyle.secondary)
+    async def allow_new(self, interaction: discord.Interaction, button: ui.Button) -> None:
+        """Open user select to allow a new user."""
+        try:
+            embed = discord.Embed(description="✅ Select a user to allow", color=COLOR_SUCCESS)
+            view = UserSelectView(self.channel, "permit", self.service)
+            await interaction.response.edit_message(embed=embed, view=view)
+        except discord.HTTPException as e:
+            logger.error_tree("Allow New User Failed", e, [
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("ID", str(interaction.user.id)),
+            ])
+
+    @ui.button(label="Remove User", emoji=EMOJI_BLOCK, style=discord.ButtonStyle.secondary)
+    async def remove_user(self, interaction: discord.Interaction, button: ui.Button) -> None:
+        """Show dropdown of allowed users to remove."""
+        try:
+            channel_info = db.get_temp_channel(self.channel.id)
+            if not channel_info:
+                return
+
+            owner_id: int = channel_info["owner_id"]
+            trusted_ids = db.get_trusted_list(owner_id)
+
+            if not trusted_ids:
+                embed = discord.Embed(description="✅ No allowed users to remove", color=COLOR_SUCCESS)
+                await interaction.response.edit_message(embed=embed, view=None)
+                return
+
+            await interaction.response.defer(ephemeral=True)
+
+            # Resolve names — auto-clean users who left server
+            trusted_users: list = []
+            for uid in trusted_ids[:25]:
+                member = interaction.guild.get_member(uid)
+                if not member:
+                    try:
+                        member = await interaction.guild.fetch_member(uid)
+                    except discord.NotFound:
+                        db.remove_trusted(owner_id, uid)
+                        continue
+                    except discord.HTTPException:
+                        db.remove_trusted(owner_id, uid)
+                        continue
+                trusted_users.append((uid, f"{member.display_name} ({member.name})"))
+
+            if not trusted_users:
+                embed = discord.Embed(description="✅ No allowed users to remove", color=COLOR_SUCCESS)
+                await interaction.followup.send(embed=embed, ephemeral=True)
+                return
+
+            embed = discord.Embed(description="❌ Select a user to remove from allowed list", color=COLOR_ERROR)
+            view = RemoveTrustSelectView(self.channel, self.service, trusted_users)
+            await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+        except discord.HTTPException as e:
+            logger.error_tree("Remove Trust Button Failed", e, [
+                ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
+                ("ID", str(interaction.user.id)),
+            ])
+
+    async def on_timeout(self) -> None:
+        pass
+
+
+class RemoveTrustSelectView(ui.View):
+    """Dropdown of allowed users for easy removal."""
+
+    def __init__(
+        self,
+        channel: discord.VoiceChannel,
+        service: "TempVoiceService",
+        trusted_users: list,  # List of (user_id, display_name)
+    ) -> None:
+        super().__init__(timeout=30)
+        self.channel = channel
+        self.service = service
+
+        options = []
+        for uid, name in trusted_users[:25]:
+            options.append(discord.SelectOption(
+                label=name[:100],
+                value=str(uid),
+                emoji="✅",
+            ))
+
+        self.select_menu = ui.Select(
+            placeholder="Select user to remove",
+            options=options,
+            min_values=1,
+            max_values=1,
+        )
+        self.select_menu.callback = self.on_select
+        self.add_item(self.select_menu)
+
+    async def on_select(self, interaction: discord.Interaction) -> None:
+        """Handle trust removal selection."""
+        from .permissions import sync_channel_permissions
+
+        user_id: int = int(self.select_menu.values[0])
+        channel_info = db.get_temp_channel(self.channel.id)
+        if not channel_info:
+            return
+
+        owner_id: int = channel_info["owner_id"]
+
+        await interaction.response.defer(ephemeral=True)
+
+        db.remove_trusted(owner_id, user_id)
+        await sync_channel_permissions(self.channel)
+
+        # Get display name
+        member = interaction.guild.get_member(user_id)
+        if not member:
+            try:
+                member = await interaction.client.fetch_user(user_id)
+            except discord.HTTPException:
+                member = None
+
+        display_name: str = member.display_name if member else str(user_id)
+        remaining: int = len(db.get_trusted_list(owner_id))
+
+        embed = discord.Embed(
+            description=f"❌ **{display_name}** has been removed from allowed\n`{remaining}` users still allowed",
+            color=COLOR_ERROR,
+        )
+        if member and hasattr(member, 'display_avatar') and member.display_avatar:
+            embed.set_thumbnail(url=member.display_avatar.url)
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
+        if self.service:
+            try:
+                await self.service._update_panel(self.channel)
+            except Exception:
+                pass
+
+        logger.tree("Trust Removed", [
+            ("Channel", self.channel.name),
+            ("Target", f"{display_name} ({user_id})"),
+            ("By", f"{interaction.user.name} ({interaction.user.display_name})"),
+            ("By ID", str(interaction.user.id)),
+            ("Remaining", str(remaining)),
+        ], emoji="❌")
 
 
 class ClaimApprovalView(ui.View):
@@ -359,9 +664,8 @@ class TempVoiceControlPanel(ui.View):
 
             is_locked = channel_info.get("is_locked", 0)
             new_locked = 0 if is_locked else 1
-            everyone = interaction.guild.default_role
 
-            # Require level 10 to lock (unlocking always allowed)
+            # Require level 20 to lock (unlocking always allowed)
             # Bypass: developer, VC mods, boosters
             can_bypass = (
                 interaction.user.id == config.OWNER_ID
@@ -371,9 +675,9 @@ class TempVoiceControlPanel(ui.View):
             if new_locked and not can_bypass:
                 user_data = db.get_user_xp(interaction.user.id, interaction.guild.id)
                 user_level = user_data["level"] if user_data else 0
-                if user_level < 10:
+                if user_level < 20:
                     embed = discord.Embed(
-                        description=f"🔒 You need to be **Level 10** to lock your channel\nYou are currently **Level {user_level}**",
+                        description=f"🔒 You need to be **Level 20** to lock your channel\nYou are currently **Level {user_level}**",
                         color=COLOR_WARNING,
                     )
                     await interaction.response.send_message(embed=embed, ephemeral=True)
@@ -381,7 +685,7 @@ class TempVoiceControlPanel(ui.View):
                         ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                         ("ID", str(interaction.user.id)),
                         ("Level", str(user_level)),
-                        ("Required", "10"),
+                        ("Required", "20"),
                     ], emoji="🔒")
                     return
 
@@ -533,21 +837,74 @@ class TempVoiceControlPanel(ui.View):
     # Row 2: Permit, Block, Kick
     @ui.button(label="Allow", emoji=EMOJI_ALLOW, style=discord.ButtonStyle.secondary, custom_id="tv_permit", row=1)
     async def permit_button(self, interaction: discord.Interaction, button: ui.Button) -> None:
-        """Permit/unpermit a user."""
+        """Show allowed users list with option to add or remove."""
         try:
             channel = await self._get_user_channel(interaction, "Allow")
-            if channel:
-                embed = discord.Embed(description="👤 Select user to allow (select again to remove)", color=COLOR_NEUTRAL)
-                view = UserSelectView(channel, "permit", self.service)
-                await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-                view.message = await interaction.original_response()
+            if not channel:
+                return
+
+            channel_info = db.get_temp_channel(channel.id)
+            if not channel_info:
+                return
+
+            # Defer — fetching uncached users can be slow
+            if not interaction.response.is_done():
+                await interaction.response.defer(ephemeral=True)
+
+            owner_id = channel_info["owner_id"]
+            trusted_ids = db.get_trusted_list(owner_id)
+
+            # Build allowed users list — cache members so <@id> resolves
+            # Auto-remove users who left the server
+            if trusted_ids:
+                trusted_lines = []
+                count = 0
+                for uid in trusted_ids:
+                    member = interaction.guild.get_member(uid)
+                    if not member:
+                        try:
+                            await interaction.guild.fetch_member(uid)
+                        except discord.NotFound:
+                            db.remove_trusted(owner_id, uid)
+                            continue
+                        except discord.HTTPException:
+                            db.remove_trusted(owner_id, uid)
+                            continue
+                    count += 1
+                    if count <= 15:
+                        trusted_lines.append(f"`{count}.` <@{uid}>")
+
+                if count > 0:
+                    trusted_text = "\n".join(trusted_lines)
+                    if count > 15:
+                        trusted_text += f"\n\n*... and {count - 15} more*"
+
+                    embed = discord.Embed(
+                        description=f"**✅ Allowed Users** — `{count}`\n\n{trusted_text}",
+                        color=COLOR_SUCCESS,
+                    )
+                    embed.set_footer(text="Use the buttons below to add or remove users")
+                else:
+                    embed = discord.Embed(
+                        description="**✅ Allowed Users** — `0`\n\n*No one is allowed yet*\n\nUse the button below to allow a user",
+                        color=COLOR_NEUTRAL,
+                    )
+            else:
+                embed = discord.Embed(
+                    description="**✅ Allowed Users** — `0`\n\n*No one is allowed yet*\n\nUse the button below to allow a user",
+                    color=COLOR_NEUTRAL,
+                )
+
+            view = AllowListView(channel, self.service)
+            await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+
         except discord.HTTPException as e:
             logger.error_tree("Allow Button Failed", e, [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
             ])
             if not interaction.response.is_done():
-                embed = discord.Embed(description="❌ Failed to show user select", color=COLOR_ERROR)
+                embed = discord.Embed(description="❌ Failed to show allow list", color=COLOR_ERROR)
                 await interaction.response.send_message(embed=embed, ephemeral=True)
         except Exception as e:
             logger.error_tree("Allow Button Error", e, [
@@ -560,21 +917,75 @@ class TempVoiceControlPanel(ui.View):
 
     @ui.button(label="Block", emoji=EMOJI_BLOCK, style=discord.ButtonStyle.secondary, custom_id="tv_block", row=1)
     async def block_button(self, interaction: discord.Interaction, button: ui.Button) -> None:
-        """Block/unblock a user."""
+        """Show blocked users list with option to block new user."""
         try:
             channel = await self._get_user_channel(interaction, "Block")
-            if channel:
-                embed = discord.Embed(description="🚫 Select user to block (select again to unblock)", color=COLOR_NEUTRAL)
-                view = UserSelectView(channel, "block", self.service)
-                await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-                view.message = await interaction.original_response()
+            if not channel:
+                return
+
+            channel_info = db.get_temp_channel(channel.id)
+            if not channel_info:
+                return
+
+            # Defer — fetching uncached users can be slow
+            if not interaction.response.is_done():
+                await interaction.response.defer(ephemeral=True)
+
+            owner_id = channel_info["owner_id"]
+            blocked_ids = db.get_blocked_list(owner_id)
+
+            # Build blocked users list — cache members so <@id> resolves
+            # Auto-remove users who left the server
+            if blocked_ids:
+                blocked_lines = []
+                count = 0
+                for uid in blocked_ids:
+                    member = interaction.guild.get_member(uid)
+                    if not member:
+                        try:
+                            await interaction.guild.fetch_member(uid)
+                        except discord.NotFound:
+                            # User left server — remove from blocked list
+                            db.remove_blocked(owner_id, uid)
+                            continue
+                        except discord.HTTPException:
+                            db.remove_blocked(owner_id, uid)
+                            continue
+                    count += 1
+                    if count <= 15:
+                        blocked_lines.append(f"`{count}.` <@{uid}>")
+
+                if count > 0:
+                    blocked_text = "\n".join(blocked_lines)
+                    if count > 15:
+                        blocked_text += f"\n\n*... and {count - 15} more*"
+
+                    embed = discord.Embed(
+                        description=f"**🚫 Blocked Users** — `{count}`\n\n{blocked_text}",
+                        color=COLOR_ERROR,
+                    )
+                    embed.set_footer(text="Use the buttons below to block or unblock users")
+                else:
+                    embed = discord.Embed(
+                        description="**🚫 Blocked Users** — `0`\n\n*No one is blocked yet*\n\nUse the button below to block a user",
+                        color=COLOR_NEUTRAL,
+                    )
+            else:
+                embed = discord.Embed(
+                    description="**🚫 Blocked Users** — `0`\n\n*No one is blocked yet*\n\nUse the button below to block a user",
+                    color=COLOR_NEUTRAL,
+                )
+
+            view = BlockListView(channel, self.service)
+            await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+
         except discord.HTTPException as e:
             logger.error_tree("Block Button Failed", e, [
                 ("User", f"{interaction.user.name} ({interaction.user.display_name})"),
                 ("ID", str(interaction.user.id)),
             ])
             if not interaction.response.is_done():
-                embed = discord.Embed(description="❌ Failed to show user select", color=COLOR_ERROR)
+                embed = discord.Embed(description="❌ Failed to show block list", color=COLOR_ERROR)
                 await interaction.response.send_message(embed=embed, ephemeral=True)
         except Exception as e:
             logger.error_tree("Block Button Error", e, [

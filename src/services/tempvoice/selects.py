@@ -331,7 +331,7 @@ class UserSelect(ui.UserSelect):
             # Already blocked — show status instead of auto-unblocking
             total_blocked = len(blocked_list)
             embed = discord.Embed(
-                description=f"🚫 **{user.display_name}** is already blocked\n`{total_blocked}` users blocked\n\n*Use the trust button to unblock them*",
+                description=f"🚫 **{user.display_name}** is already blocked\n`{total_blocked}` users blocked\n\n*Use the Block button → Unblock to remove them*",
                 color=COLOR_WARNING
             )
             embed.set_thumbnail(url=user.display_avatar.url)
